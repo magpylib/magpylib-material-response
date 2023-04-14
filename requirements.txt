@@ -1,0 +1,2 @@
+magpylib>=4.0
+loguru
