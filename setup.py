@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 """The setup script."""
-from setuptools import setup, find_packages
+from setuptools import find_packages
+from setuptools import setup
 
-with open("magpylib_response/__init__.py", "r") as handle:
+with open("magpylib_response/__init__.py") as handle:
     for line in handle:
         if "__version__" in line:
             version = line.split(" = ")[-1].strip('"')
             break
 
-with open("./README.md", "r") as handle:
+with open("./README.md") as handle:
     readme_text = handle.read()
 
-with open("./requirements.txt", "r") as handle:
+with open("./requirements.txt") as handle:
     requirements = [lr.strip() for lr in handle.read().splitlines() if lr.strip()]
 
-with open("./requirements_dev.txt", "r") as handle:
+with open("./requirements_dev.txt") as handle:
     requirements_dev = [lv.strip() for lv in handle.read().splitlines() if lv.strip()]
 
-with open("./requirements_doc.txt", "r") as handle:
+with open("./requirements_doc.txt") as handle:
     requirements_doc = [ld.strip() for ld in handle.read().splitlines() if ld.strip()]
 
 _short_description = (
@@ -32,10 +33,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Alexandre Boisselet",
     author_email="magpylib@gmail.com",
-    url=(
-        "https://github.com/"
-        "magpylib/magpylib-response"
-    ),
+    url=("https://github.com/" "magpylib/magpylib-response"),
     license="MIT",
     packages=find_packages(),
     # include anything specified in Manifest.in
