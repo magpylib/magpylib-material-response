@@ -281,7 +281,7 @@ def apply_demag(
     if style is not None:
         collection.style = style
     srcs = collection.sources_all
-    src_with_paths = [src.position.ndim != 1 for src in srcs]
+    src_with_paths = [src for src in srcs if src.position.ndim != 1]
     if src_with_paths:
         raise ValueError(
             f"{len(src_with_paths)} objects with paths, found. Demagnetization of "
