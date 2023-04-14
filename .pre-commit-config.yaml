@@ -1,23 +1,30 @@
-# Install pre-commit hooks via
-# pre-commit install
-
-exclude: >
-    (?x)^(
-      \.vscode/settings\.json
-    )$
-
 repos:
-
-  - repo: git://github.com/pre-commit/pre-commit-hooks
-    rev: v2.2.3
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
     hooks:
-    - id: check-json
-    - id: check-yaml
-    - id: end-of-file-fixer
-    - id: trailing-whitespace
-    - id: flake8
+      - id: check-yaml
+      - id: end-of-file-fixer
+        types: [file, python]
+      - id: trailing-whitespace
+        types: [file, python]
+      - id: check-added-large-files
+      - id: debug-statements
+        language_version: python3
+
+  - repo: https://github.com/asottile/reorder_python_imports
+    rev: v3.9.0
+    hooks:
+      - id: reorder-python-imports
+        args: [--py37-plus]
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.3.1
+    hooks:
+      - id: pyupgrade
+        args: [--py37-plus]
+
 
   - repo: https://github.com/psf/black
-    rev: stable
+    rev: "23.3.0"
     hooks:
-    - id: black
+      - id: black
