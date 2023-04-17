@@ -2,6 +2,7 @@ from itertools import product
 
 import magpylib as magpy
 import numpy as np
+from loguru import logger
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_response.meshing_utils import cells_from_dimension
@@ -43,9 +44,9 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
         nnn = target_elems
     elems = np.prod(nnn)
     if verbose:
-        print(
-            f"Meshing Cuboid with {nnn[0]}x{nnn[1]}x{nnn[2]}={elems}"
-            f"elements (target={target_elems})"
+        logger.opt(colors=True).info(
+            f"Meshing Cuboid with <blue>{nnn[0]}x{nnn[1]}x{nnn[2]}={elems}</blue>"
+            f" elements (target={target_elems})"
         )
 
     # secure input type
@@ -124,7 +125,7 @@ def mesh_cuboids_with_cuboids(obj, target_elems, inplace=False):
     return obj
 
 
-def mesh_Cylinder_with_CylinderSegments(cylinder, target_elems, verbose=False):
+def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
     """
     Split `Cylinder` or `CylinderSegment` up into small cylindrical or cylinder segment
     cells. In case of the cylinder, the middle cells are cylinders, all other being
@@ -165,6 +166,7 @@ def mesh_Cylinder_with_CylinderSegments(cylinder, target_elems, verbose=False):
     pos = cylinder._position
     rot = cylinder._orientation
     mag = cylinder.magnetization
+    xi = getattr(cylinder, "xi", None)
     al = (r2 + r1) * 3.14 * (phi2 - phi1) / 360  # arclen = D*pi*arcratio
     dim = al, r2 - r1, h
 
@@ -176,8 +178,8 @@ def mesh_Cylinder_with_CylinderSegments(cylinder, target_elems, verbose=False):
         nphi, nr, nh = target_elems
     elems = np.prod([nphi, nr, nh])
     if verbose:
-        print(
-            f"Meshing CylinderSegement with {nphi}x{nr}x{nh}={elems}"
+        logger.opt(colors=True).info(
+            f"Meshing CylinderSegement with <blue>{nphi}x{nr}x{nh}={elems}</blue>"
             f" elements (target={target_elems})"
         )
     r = np.linspace(r1, r2, nr + 1)
@@ -189,13 +191,14 @@ def mesh_Cylinder_with_CylinderSegments(cylinder, target_elems, verbose=False):
         phi = np.linspace(phi1, phi2, nphi_r + 1)
         for h_ind in range(nh):
             pos_h = dh * h_ind - h / 2 + dh / 2
-            # use a cylinder for the innermost cells, cylinder segment otherwise
-            if r[r_ind] == 0 and phi2 - phi1 == 360:
+            # use a cylinder for the innermost cells if there are at least 3 layers,
+            # cylinder segment otherwise
+            if nr >= 3 and r[r_ind] == 0 and phi2 - phi1 == 360:
                 dimension = r[r_ind + 1] * 2, dh
-                cs = magpy.magnet.Cylinder(
+                cell = magpy.magnet.Cylinder(
                     magnetization=mag, dimension=dimension, position=(0, 0, pos_h)
                 )
-                cyl_segs.append(cs)
+                cyl_segs.append(cell)
             else:
                 for phi_ind in range(nphi_r):
                     dimension = (
@@ -205,14 +208,23 @@ def mesh_Cylinder_with_CylinderSegments(cylinder, target_elems, verbose=False):
                         phi[phi_ind],
                         phi[phi_ind + 1],
                     )
-                    cs = magpy.magnet.CylinderSegment(
+                    cell = magpy.magnet.CylinderSegment(
                         magnetization=mag, dimension=dimension, position=(0, 0, pos_h)
                     )
-                    cyl_segs.append(cs)
-    return magpy.Collection(cyl_segs).rotate(rot, anchor=0, start=0).move(pos, start=0)
+                    cyl_segs.append(cell)
+    for cell in cyl_segs:
+        if xi is not None:
+            cell.xi = xi
+    return (
+        magpy.Collection(cyl_segs, **kwargs)
+        .rotate(rot, anchor=0, start=0)
+        .move(pos, start=0)
+    )
 
 
-def mesh_thin_CylinderSegment_with_cuboids(cyl_seg, target_elems, thin_ratio_limit=10):
+def mesh_thin_CylinderSegment_with_cuboids(
+    cyl_seg, target_elems, thin_ratio_limit=10, **kwargs
+):
     """
     Split-up a Magpylib thin-walled cylinder segment into cuboid cells. Over the
     thickness, only one layer of cells is used.
@@ -225,7 +237,7 @@ def mesh_thin_CylinderSegment_with_cuboids(cyl_seg, target_elems, thin_ratio_lim
         If `target_elems` is a  tuple of integers, the cylinder segment is respectively
         divided over circumference and height, if an integer, divisions are infered to
         build cuboids with close to squared faces.
-    strict thin_ratio_limit: positive number,
+    thin_ratio_limit: positive number,
         Sets the r2/(r2-r1) limit to be considered as thin-walled, r1 being the inner
         radius.
 
@@ -236,6 +248,7 @@ def mesh_thin_CylinderSegment_with_cuboids(cyl_seg, target_elems, thin_ratio_lim
     """
 
     r1, r2, h, phi1, phi2 = cyl_seg.dimension
+    xi = getattr(cyl_seg, "xi", None)
     if thin_ratio_limit > r2 / (r2 - r1):
         raise ValueError(
             "This meshing function is intended for thin-walled CylinderSegment objects"
@@ -258,17 +271,19 @@ def mesh_thin_CylinderSegment_with_cuboids(cyl_seg, target_elems, thin_ratio_lim
     )
     poss = np.array([x0 * np.cos(phi_vec), x0 * np.sin(phi_vec), np.zeros(nphi)]).T
     rots = R.from_euler("z", phi_vec)
-    cuboids = [
-        magpy.magnet.Cuboid(
-            cyl_seg.magnetization, (a, b, c), pos + np.array([0, 0, z]), orient
-        )
-        for pos, orient in zip(poss, rots)
-        for z in np.linspace(-h / 2 + dh / 2, h / 2 - dh / 2, nh)
-    ]
-    col = magpy.Collection(cuboids)
-    col.orientation = cyl_seg.orientation
-    col.position = cyl_seg.position
-    return col
+    cuboids = []
+    for z in np.linspace(-h / 2 + dh / 2, h / 2 - dh / 2, nh):
+        for pos, orient in zip(poss, rots):
+            child = magpy.magnet.Cuboid(
+                cyl_seg.magnetization, (a, b, c), pos + np.array([0, 0, z]), orient
+            )
+            if xi is not None:
+                child.xi = xi
+            cuboids.append(child)
+    coll = magpy.Collection(cuboids, **kwargs)
+    coll.orientation = cyl_seg.orientation
+    coll.position = cyl_seg.position
+    return coll
 
 
 def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
@@ -302,7 +317,7 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
         raise ValueError("Shift must be between 0 and 1 (exclusive)")
     dim0 = cuboid.dimension
     mag0 = cuboid.magnetization
-    xi = getattr(magpy, "xi", None)
+    xi = getattr(cuboid, "xi", None)
     ind = "xyz".index(axis)
     dim_k = cuboid.dimension[ind]
     dims_k = dim_k * (1 - shift), dim_k * (shift)
@@ -325,7 +340,7 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
     return coll
 
 
-def mesh_with_cubes(obj, target_elems, strict_inside=True):
+def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     """
     Split-up a Magpylib magnet into a regular grid of identical cells. A grid of
     identical cube cells and containing the object is created. Only the cells with their
@@ -344,6 +359,7 @@ def mesh_with_cubes(obj, target_elems, strict_inside=True):
     -------
     discretization: magpylib.Collection
         Collection of Cylinder and CylinderSegment cells"""
+    xi = getattr(obj, "xi", None)
     vol, containing_cube_edge = get_volume(obj, return_containing_cube_edge=True)
     vol_ratio = (containing_cube_edge**3) / vol
 
@@ -368,13 +384,15 @@ def mesh_with_cubes(obj, target_elems, strict_inside=True):
             raise ValueError("No cuboids left with strict-inside method")
     cube_poss = obj.orientation.apply(grid) + obj.position
 
-    obj_list = [
-        magpy.magnet.Cuboid(
+    obj_list = []
+    for pos in cube_poss:
+        child = magpy.magnet.Cuboid(
             magnetization=obj.magnetization,
             dimension=cube_cell_dim,
             position=pos,
             orientation=obj.orientation,
         )
-        for pos in cube_poss
-    ]
-    return magpy.Collection(obj_list)
+        if xi is not None:
+            child.xi = xi
+        obj_list.append(child)
+    return magpy.Collection(obj_list, **kwargs)
