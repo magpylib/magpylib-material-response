@@ -40,7 +40,7 @@ class ElapsedTimeThread(threading.Thread):
 
 
 @contextmanager
-def loguru_catchtime(msg, min_log_time=1) -> float:
+def timelog(msg, min_log_time=1) -> float:
     """ "Measure and log time with loguru as context manager."""
     start = time.perf_counter()
     end = None

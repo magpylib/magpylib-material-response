@@ -12,7 +12,7 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from magpylib.magnet import Cuboid
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_response.utils import loguru_catchtime
+from magpylib_response.utils import timelog
 
 config = {
     "handlers": [
@@ -98,7 +98,7 @@ def demag_tensor(src_list, pairs_matching=False, split=False, max_dist=0):
     for unit_mag in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
         mag_all = rot0.inv().apply(unit_mag)
         # point matching field and demag tensor
-        with loguru_catchtime(f"getH with unit_mag={unit_mag}"):
+        with timelog(f"getH with unit_mag={unit_mag}"):
             if pairs_matching or max_dist != 0:
                 magnetization = np.repeat(mag_all, len(src_list), axis=0)[mask_inds]
                 H_unique = magpy.getH(
@@ -140,7 +140,7 @@ def demag_tensor(src_list, pairs_matching=False, split=False, max_dist=0):
 
 def filter_distance(src_list, max_dist, return_params=False, return_base_geo=False):
     """filter indices by distance parameter"""
-    with loguru_catchtime("Distance filter"):
+    with timelog("Distance filter"):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
         if not all_cuboids:
             raise ValueError(
@@ -184,7 +184,7 @@ def filter_distance(src_list, max_dist, return_params=False, return_base_geo=Fal
 
 def match_pairs(src_list):
     """match all pairs of sources from `src_list`"""
-    with loguru_catchtime("Pairs matching"):
+    with timelog("Pairs matching"):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
         if not all_cuboids:
             raise ValueError(
@@ -302,12 +302,12 @@ def apply_demag(
         )
     n = len(magnets_list)
     counts = Counter(s.__class__.__name__ for s in magnets_list)
-    inplace_str = f"""{" (inplace) " if inplace else " "}"""
+    inplace_str = f"""{" (inplace)" if inplace else ""}"""
     demag_msg = (
-        f"Demagnetization computation{inplace_str}of <blue>{collection}</blue>"
+        f"Demagnetization{inplace_str} of <blue>{collection}</blue>"
         f" with {n} cells - {counts}"
     )
-    with loguru_catchtime(demag_msg):
+    with timelog(demag_msg):
         # set up mr
         mag_magnets = [
             src.orientation.apply(src.magnetization) for src in magnets_list
@@ -327,7 +327,7 @@ def apply_demag(
         S = np.diag(np.tile(xi, 3))  # shape ii, jj
 
         # set up T (3 mag unit, n cells, n positions, 3 Bxyz)
-        with loguru_catchtime("Demagnetization tensor calculation"):
+        with timelog("Demagnetization tensor calculation"):
             T = demag_tensor(
                 magnets_list,
                 split=split,
@@ -341,7 +341,7 @@ def apply_demag(
         mag_tolal = mag_magnets
 
         if currents_list:
-            with loguru_catchtime(
+            with timelog(
                 "Incorporate magnetic field contributions from current sources",
                 min_log_time=1,
             ):
@@ -354,7 +354,7 @@ def apply_demag(
         Q = np.eye(3 * n) - np.matmul(S, T)
 
         # determine new magnetization vectors
-        with loguru_catchtime("Solving of linear system", min_log_time=1):
+        with timelog("Solving of linear system", min_log_time=1):
             mag_new = np.linalg.solve(Q, mag_tolal)
 
         mag_new = np.reshape(mag_new, (n, 3), order="F")
