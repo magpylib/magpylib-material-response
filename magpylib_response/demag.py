@@ -50,7 +50,13 @@ def get_xis(*sources, xi=None):
     return xis
 
 
-def demag_tensor(src_list, pairs_matching=False, split=False, max_dist=0):
+def demag_tensor(
+    src_list,
+    pairs_matching=False,
+    split=False,
+    max_dist=0,
+    min_log_time=1,
+):
     """
     Compute the demagnetization tensor T based on point matching (see Chadbec 2006)
     for n sources in the input collection.
@@ -67,6 +73,10 @@ def demag_tensor(src_list, pairs_matching=False, split=False, max_dist=0):
     split: int
         Number of times the sources list is splitted before getH calculation ind demag
         tensor calculation
+
+    min_log_time:
+        Minimum logging time in seconds. If computation time is below this value, step
+        will not be logged.
 
     Returns
     -------
@@ -98,7 +108,7 @@ def demag_tensor(src_list, pairs_matching=False, split=False, max_dist=0):
     for unit_mag in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
         mag_all = rot0.inv().apply(unit_mag)
         # point matching field and demag tensor
-        with timelog(f"getH with unit_mag={unit_mag}"):
+        with timelog(f"getH with unit_mag={unit_mag}", min_log_time=min_log_time):
             if pairs_matching or max_dist != 0:
                 magnetization = np.repeat(mag_all, len(src_list), axis=0)[mask_inds]
                 H_unique = magpy.getH(
@@ -138,9 +148,15 @@ def demag_tensor(src_list, pairs_matching=False, split=False, max_dist=0):
     return T
 
 
-def filter_distance(src_list, max_dist, return_params=False, return_base_geo=False):
+def filter_distance(
+    src_list,
+    max_dist,
+    min_log_time=1,
+    return_params=False,
+    return_base_geo=False,
+):
     """filter indices by distance parameter"""
-    with timelog("Distance filter"):
+    with timelog("Distance filter", min_log_time=min_log_time):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
         if not all_cuboids:
             raise ValueError(
@@ -182,9 +198,9 @@ def filter_distance(src_list, max_dist, return_params=False, return_base_geo=Fal
     return tuple(out)
 
 
-def match_pairs(src_list):
+def match_pairs(src_list, min_log_time=1):
     """match all pairs of sources from `src_list`"""
-    with timelog("Pairs matching"):
+    with timelog("Pairs matching", min_log_time=min_log_time):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
         if not all_cuboids:
             raise ValueError(
@@ -234,6 +250,7 @@ def apply_demag(
     pairs_matching=False,
     max_dist=0,
     split=1,
+    min_log_time=1,
     style=None,
 ):
     """
@@ -268,6 +285,10 @@ def apply_demag(
         Number of times the sources list is splitted before getH calculation ind demag
         tensor calculation. This parameter is not compatible with `pairs_matching` or
         `max_dist`.
+
+    min_log_time:
+        Minimum logging time in seconds. If computation time is below this value, step
+        will not be logged.
 
     style: dict
         Set collection style. If `inplace=False` only affects the copied collection
@@ -307,7 +328,7 @@ def apply_demag(
         f"Demagnetization{inplace_str} of <blue>{collection}</blue>"
         f" with {n} cells - {counts}"
     )
-    with timelog(demag_msg):
+    with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr
         mag_magnets = [
             src.orientation.apply(src.magnetization) for src in magnets_list
@@ -327,7 +348,7 @@ def apply_demag(
         S = np.diag(np.tile(xi, 3))  # shape ii, jj
 
         # set up T (3 mag unit, n cells, n positions, 3 Bxyz)
-        with timelog("Demagnetization tensor calculation"):
+        with timelog("Demagnetization tensor calculation", min_log_time=min_log_time):
             T = demag_tensor(
                 magnets_list,
                 split=split,
@@ -342,8 +363,7 @@ def apply_demag(
 
         if currents_list:
             with timelog(
-                "Incorporate magnetic field contributions from current sources",
-                min_log_time=1,
+                "Add current sources contributions", min_log_time=min_log_time
             ):
                 pos = np.array([src.position for src in magnets_list])
                 mag_currents = magpy.getB(currents_list, pos, sumup=True)
