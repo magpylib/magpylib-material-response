@@ -324,8 +324,10 @@ def apply_demag(
     n = len(magnets_list)
     counts = Counter(s.__class__.__name__ for s in magnets_list)
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
+    lbl = collection.style.label
+    coll_str = str(collection) if not lbl else lbl
     demag_msg = (
-        f"Demagnetization{inplace_str} of <blue>{collection}</blue>"
+        f"Demagnetization{inplace_str} of <blue>{coll_str}</blue>"
         f" with {n} cells - {counts}"
     )
     with timelog(demag_msg, min_log_time=min_log_time):
