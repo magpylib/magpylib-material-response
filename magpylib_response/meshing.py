@@ -356,7 +356,14 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     return magpy.Collection(obj_list, **kwargs)
 
 
-def mesh_all(obj, target_elems, min_elems=8, per_child_elems=False, inplace=False):
+def mesh_all(
+    obj,
+    target_elems,
+    min_elems=8,
+    per_child_elems=False,
+    inplace=False,
+    **kwargs,
+):
     """
     Mesh all the supported objects into a Collection of equivalent children, replacing
     them with their meshed version.
@@ -371,8 +378,8 @@ def mesh_all(obj, target_elems, min_elems=8, per_child_elems=False, inplace=Fals
     min_elems : int, optional, default=8
         Minimum number of elements allowed in the mesh.
     per_child_elems : bool, optional, default=False
-        If True, target_elems will be divided among children objects based on their
-        volumes. If False, all children objects will have the same target_elems.
+        If False, target_elems will be divided among children objects based on their
+        volumes. If True, all children objects will have the same target_elems.
     inplace : bool, optional, default=False
         If True, meshing will be performed in-place, modifying the original object.
         If False, a new object will be created.
@@ -390,13 +397,13 @@ def mesh_all(obj, target_elems, min_elems=8, per_child_elems=False, inplace=Fals
     supported = (magpy.magnet.Cuboid, magpy.magnet.Cylinder)
     allowed = supported + (BaseCurrent,)
     if not inplace:
-        obj = obj.copy()
+        obj = obj.copy(**kwargs)
     children = [obj]
     if isinstance(obj, magpy.Collection):
         children = list(obj.sources_all)
     incompatible_objs = [c for c in children if not isinstance(c, allowed)]
     supported_objs = [c for c in children if isinstance(c, supported)]
-    if per_child_elems:
+    if not per_child_elems:
         volumes = np.array([get_volume(c) for c in supported_objs])
         volumes /= volumes.sum()
         target_elems_by_child = (volumes * target_elems).astype(int)
@@ -411,11 +418,13 @@ def mesh_all(obj, target_elems, min_elems=8, per_child_elems=False, inplace=Fals
         )
     for child, target_elems in zip(supported_objs, target_elems_by_child):
         label = child.style.label
-        if isinstance(child, magpy.magnet.Cuboid):
-            child_meshed = mesh_Cuboid(child, target_elems, style_label=label)
-        elif isinstance(child, magpy.magnet.Cylinder):
-            child_meshed = mesh_Cylinder(child, target_elems, style_label=label)
         parent = child.parent
+        kw = {"style_label": label}
+        kw = {**kw, **kwargs} if parent is None else kw
+        if isinstance(child, magpy.magnet.Cuboid):
+            child_meshed = mesh_Cuboid(child, target_elems, **kw)
+        elif isinstance(child, magpy.magnet.Cylinder):
+            child_meshed = mesh_Cylinder(child, target_elems, **kw)
         child.parent = None
         if parent is not None:
             parent.add(child_meshed)
