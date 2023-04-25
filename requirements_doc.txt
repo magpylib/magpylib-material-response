@@ -5,4 +5,5 @@ sphinx-book-theme
 sphinx-design
 myst-nb
 plotly
+pandas
 
