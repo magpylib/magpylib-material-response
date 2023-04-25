@@ -41,7 +41,7 @@ setup(
     package_data={"": ["package_data/datasets/*.json"]},
     install_requires=requirements,
     extras_require={
-        "code_style": ["flake8<3.8.0,>=3.7.0", "black", "pre-commit==1.17.0"],
+        "code_style": ["flake8", "black", "pre-commit"],
         "testing": requirements_dev,
         "docs": requirements_doc,
     },
