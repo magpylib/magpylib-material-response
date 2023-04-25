@@ -157,38 +157,4 @@ fig2.update_yaxes(matches=None, showticklabels=True)
 display(fig1, fig2)
 ```
 
-```{code-cell} ipython3
-px_kwargs = dict(
-    x="Distance [mm]",
-    y=B_cols,
-    facet_col="variable",
-    color="computation",
-    line_dash="computation",
-    height=400,
-    facet_col_spacing=0.05,
-)
-fig1 = px.line(
-    df,
-    title="Methods comparison",
-    **px_kwargs,
-)
-fig1.update_yaxes(matches=None, showticklabels=True)
-
-df_diff = df.copy()
-ref = sim_ANSYS["results"][0]["computation"]
-
-for st in df_diff["computation"].unique():
-    df_diff.loc[df_diff["computation"] == st, B_cols] -= df.loc[
-        df["computation"] == ref, B_cols
-    ].values
-
-fig2 = px.line(
-    df_diff,
-    title=f"Methods comparison - diff vs {ref}",
-    **px_kwargs,
-)
-fig2.update_yaxes(matches=None, showticklabels=True)
-display(fig1, fig2)
-```
-
 As shown above, already with a low number of mesh elements, the result is approaching the reference FEM values.
