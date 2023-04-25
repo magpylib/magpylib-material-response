@@ -31,7 +31,9 @@ master_doc = "index"
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = []
+extensions = [
+    "myst_nb",
+]
 
 # Add any paths that contain templates here, relative to this directory.
 # templates_path = ["_templates"]
@@ -102,4 +104,40 @@ texinfo_documents = [
         "with high precision.",
         "Miscellaneous",
     )
+]
+
+suppress_warnings = ["mystnb.unknown_mime_type"]
+
+html_js_files = [
+    "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js",
+    # "https://unpkg.com/thebe@latest/lib/index.js",
+]
+
+mathjax_path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML"
+mathjax2_config = {
+    "tex2jax": {
+        "inlineMath": [["$", "$"], ["\\(", "\\)"]],
+        "processEscapes": True,
+        "ignoreClass": "document",
+        "processClass": "math|output_area",
+    }
+}
+
+# needed for sphinx >= 4.3
+mathjax_options = {
+    "async": "async",
+}
+
+myst_enable_extensions = [
+    "amsmath",
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "html_admonition",
+    "html_image",
+    # "linkify",
+    "replacements",
+    "smartquotes",
+    "substitution",
+    "tasklist",
 ]
