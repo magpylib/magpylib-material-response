@@ -1,5 +1,8 @@
 sphinx
 sphinx-book-theme
+sphinx-copybutton
+sphinx-book-theme
+sphinx-panels
 myst-nb
 plotly
 
