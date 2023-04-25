@@ -6,7 +6,7 @@ from setuptools import setup
 with open("magpylib_response/__init__.py") as handle:
     for line in handle:
         if "__version__" in line:
-            version = line.split(" = ")[-1].strip('"')
+            version = line.split(" = ")[-1].replace('"', "")
             break
 
 with open("./README.md") as handle:
