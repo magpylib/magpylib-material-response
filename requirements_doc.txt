@@ -2,7 +2,7 @@ sphinx
 sphinx-book-theme
 sphinx-copybutton
 sphinx-book-theme
-sphinx-panels
+sphinx-design
 myst-nb
 plotly
 
