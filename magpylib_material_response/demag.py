@@ -12,7 +12,7 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from magpylib.magnet import Cuboid
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_response.utils import timelog
+from magpylib_material_response.utils import timelog
 
 config = {
     "handlers": [

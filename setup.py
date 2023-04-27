@@ -3,7 +3,7 @@
 from setuptools import find_packages
 from setuptools import setup
 
-with open("magpylib_response/__init__.py") as handle:
+with open("magpylib_material_response/__init__.py") as handle:
     for line in handle:
         if "__version__" in line:
             version = line.split(" = ")[-1].replace('"', "")
@@ -26,14 +26,14 @@ _short_description = (
     "for soft materials and demagnetization of hard magnets."
 )
 setup(
-    name="magpylib-response",
+    name="magpylib-material-response",
     version=version,
     description=_short_description,
     long_description=readme_text,
     long_description_content_type="text/markdown",
     author="Alexandre Boisselet",
     author_email="magpylib@gmail.com",
-    url=("https://github.com/" "magpylib/magpylib-response"),
+    url=("https://github.com/" "magpylib/magpylib-material-response"),
     license="MIT",
     packages=find_packages(),
     # include anything specified in Manifest.in

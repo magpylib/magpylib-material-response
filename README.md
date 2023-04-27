@@ -1,18 +1,18 @@
-# magpylib-response
+# magpylib-material-response
 
 [![Code style: black][black-badge]][black-link]
 
 > **Warning**
 > **This package is experimental and in a very dynamic development phase. Breaking API changes may happen at any time.**
 
-Magpylib-Response is an extension to the Magpylib library, providing magnetic field analysis for soft materials and demagnetization of hard magnets. Leveraging the Method of Moments, it calculates magnetic material response by meshing sources in an arbitrary number of unit elements.
+Magpylib-Material-Response is an extension to the Magpylib library, providing magnetic field analysis for soft materials and demagnetization of hard magnets. Leveraging the Method of Moments, it calculates magnetic material response by meshing sources in an arbitrary number of unit elements.
 
 ## Installation
 
 Install from PyPi (not yet available)
 
 ```console
-$ pip install magpylib-response
+$ pip install magpylib-material-response
 ```
 
 or locally:

@@ -13,11 +13,11 @@ import sys
 
 # Add package to the path so it can be imported without installing it
 sys.path.append(os.path.join(os.path.split(__file__)[0], os.pardir))
-from magpylib_response import __version__  # noqa: E402
+from magpylib_material_response import __version__  # noqa: E402
 
 # -- Project information -----------------------------------------------------
 
-project = "magpylib-response"
+project = "magpylib-material-response"
 copyright = "2023, Alexandre Boisselet"
 author = "Alexandre Boisselet"
 
@@ -63,8 +63,8 @@ html_css_files = ["custom.css"]
 latex_documents = [
     (
         master_doc,
-        "magpylib-response.tex",
-        "magpylib-response Documentation",
+        "magpylib-material-response.tex",
+        "magpylib-material-response Documentation",
         "Alexandre Boisselet",
         "manual",
     )
@@ -78,8 +78,8 @@ latex_documents = [
 man_pages = [
     (
         master_doc,
-        "magpylib-response",
-        "magpylib-response Documentation",
+        "magpylib-material-response",
+        "magpylib-material-response Documentation",
         [author],
         1,
     )
@@ -94,11 +94,11 @@ man_pages = [
 texinfo_documents = [
     (
         master_doc,
-        "magpylib-response",
-        "magpylib-response Documentation",
+        "magpylib-material-response",
+        "magpylib-material-response Documentation",
         author,
-        "magpylib-response",
-        "Magpylib-Response is an extension to the Magpylib library, providing magnetic "
+        "magpylib-material-response",
+        "Magpylib-Material-Response is an extension to the Magpylib library, providing magnetic "
         "field analysis for soft materials and demagnetization of hard magnets. "
         "Leveraging the Method of Moments, it calculates magnetic material response "
         "with high precision.",

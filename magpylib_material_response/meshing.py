@@ -7,9 +7,9 @@ from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_response.meshing_utils import cells_from_dimension
-from magpylib_response.meshing_utils import get_volume
-from magpylib_response.meshing_utils import mask_inside
+from magpylib_material_response.meshing_utils import cells_from_dimension
+from magpylib_material_response.meshing_utils import get_volume
+from magpylib_material_response.meshing_utils import mask_inside
 
 
 def _collection_from_obj_and_cells(obj, cells, **style_kwargs):

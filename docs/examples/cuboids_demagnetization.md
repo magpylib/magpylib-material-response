@@ -16,7 +16,7 @@ kernelspec:
 
 # Cuboids demagnetization
 
-The following example demonstrates how to create magnetic sources with different susceptibilities using the Magpylib library. It defines three cuboid magnets with varying susceptibilities and positions, creates a collection of these magnets, and computes their magnetic field responses using different levels of meshing. The results are then compared to a Finite Element Method (FEM) analysis to evaluate the performance of the Magpylib-Response approach. The comparison is presented in two separate plots, one showing the magnetic field values and the other showing the difference between the Magpylib results and the FEM reference data. The code demonstrates that even with a low number of mesh elements, the Magpylib results quickly approach the reference FEM values.
+The following example demonstrates how to create magnetic sources with different susceptibilities using the Magpylib library. It defines three cuboid magnets with varying susceptibilities and positions, creates a collection of these magnets, and computes their magnetic field responses using different levels of meshing. The results are then compared to a Finite Element Method (FEM) analysis to evaluate the performance of the Magpylib-Material-Response approach. The comparison is presented in two separate plots, one showing the magnetic field values and the other showing the difference between the Magpylib results and the FEM reference data. The code demonstrates that even with a low number of mesh elements, the Magpylib results quickly approach the reference FEM values.
 
 +++ {"user_expressions": []}
 
@@ -29,8 +29,8 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from loguru import logger
-from magpylib_response.demag import apply_demag
-from magpylib_response.meshing import mesh_all
+from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.meshing import mesh_all
 
 magpy.defaults.display.backend = "plotly"
 
@@ -112,7 +112,7 @@ def get_magpylib_dataframe(collection, sensor):
     return df
 
 
-from magpylib_response.data import get_dataset
+from magpylib_material_response.data import get_dataset
 sim_ANSYS = get_dataset("FEMdata_test_cuboids.json")
 
 df = pd.concat(

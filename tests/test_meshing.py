@@ -3,11 +3,11 @@ import magpylib as magpy
 import numpy as np
 import pytest
 
-from magpylib_response.meshing import mesh_all
-from magpylib_response.meshing import mesh_Cuboid
-from magpylib_response.meshing import mesh_Cylinder
-from magpylib_response.meshing import mesh_thin_CylinderSegment_with_cuboids
-from magpylib_response.meshing import slice_Cuboid
+from magpylib_material_response.meshing import mesh_all
+from magpylib_material_response.meshing import mesh_Cuboid
+from magpylib_material_response.meshing import mesh_Cylinder
+from magpylib_material_response.meshing import mesh_thin_CylinderSegment_with_cuboids
+from magpylib_material_response.meshing import slice_Cuboid
 
 
 def test_mesh_Cuboid():
