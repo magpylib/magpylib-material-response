@@ -50,6 +50,9 @@ jobs:
     needs: [pre-commit, tests]
     if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
     runs-on: ubuntu-latest
+    permissions:
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -63,7 +66,4 @@ jobs:
           python setup.py sdist bdist_wheel
       - name: Publish
         uses: pypa/gh-action-pypi-publish@v1.1.0
-        with:
-          user: __token__
-          password: "${{ secrets.PYPI_KEY }}"
 
