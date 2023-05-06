@@ -12,7 +12,8 @@ def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
     r : float
         Radius of the circle.
     max_ratio : float, optional, default: 0.5
-        Maximum allowed ratio of the distance to the tangent point relative to the length of the triangle sides.
+        Maximum allowed ratio of the distance to the tangent point relative to the length of the
+        triangle sides.
 
     Returns
     -------
