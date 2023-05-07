@@ -9,7 +9,7 @@ Magpylib-Material-Response is an extension to the Magpylib library, providing ma
 
 ## Installation
 
-Install from PyPi (not yet available)
+Install from PyPi
 
 ```console
 $ pip install magpylib-material-response
