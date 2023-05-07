@@ -12,11 +12,16 @@ kernelspec:
   name: python3
 ---
 
-# Cuboids demagnetization
++++ {"user_expressions": []}
 
-The following example demonstrates how to create magnetic sources with different susceptibilities using the Magpylib library. It defines three cuboid magnets with varying susceptibilities and positions, creates a collection of these magnets, and computes their magnetic field responses using different levels of meshing. The results are then compared to a Finite Element Method (FEM) analysis to evaluate the performance of the Magpylib-Material-Response approach. The comparison is presented in two separate plots, one showing the magnetic field values and the other showing the difference between the Magpylib results and the FEM reference data. The code demonstrates that even with a low number of mesh elements, the Magpylib results quickly approach the reference FEM values.
+# Soft Magnets
 
 +++
+
+This code demonstrates demagnetization calculations for a hard and a soft cuboid magnet using the Magpylib library.
+Demagnetization is applied using varying numbers of cells for the mesh and compared to the computed magnetic fields from Magpylib withoug demagnetization and with FEM analysis data obtained from an external dataset.
+
++++ {"user_expressions": []}
 
 ## Define magnetic sources with their susceptibilities
 
@@ -33,29 +38,31 @@ from magpylib_material_response.meshing import mesh_all
 
 magpy.defaults.display.backend = "plotly"
 
-# some low quality magnets with different susceptibilities
-cube1 = magpy.magnet.Cuboid(magnetization=(0, 0, 1000), dimension=(1, 1, 1))
-cube1.move((-1.5, 0, 0))
-cube1.xi = 0.3  # µr=1.3
-cube1.style.label = f"Cuboid, xi={cube1.xi}"
+# hard magnet
+cube1 = magpy.magnet.Cuboid(magnetization=(0, 0, 1000), dimension=(1, 1, 2))
+cube1.move((0, 0, 0.5))
+cube1.xi = 0.5  # µr=1.5
+cube1.style.label = f"Hard cuboid magnet, xi={cube1.xi}"
 
-cube2 = magpy.magnet.Cuboid(magnetization=(900, 0, 0), dimension=(1, 1, 1))
-cube2.rotate_from_angax(-45, "y").move((0, 0, 0.2))
-cube2.xi = 1.0  # µr=2.0
-cube2.style.label = f"Cuboid, xi={cube2.xi}"
-
-mx, my = 600 * np.sin(30 / 180 * np.pi), 600 * np.cos(30 / 180 * np.pi)
-cube3 = magpy.magnet.Cuboid(magnetization=(mx, my, 0), dimension=(1, 1, 2))
-cube3.move((1.6, 0, 0.5)).rotate_from_angax(30, "z")
-cube3.xi = 0.5  # µr=1.5
-cube3.style.label = f"Cuboid, xi={cube3.xi}"
+# soft magnet
+cube2 = magpy.magnet.Cuboid(magnetization=(0, 0, 0), dimension=(1, 1, 1))
+cube2.rotate_from_angax(angle=45, axis="y").move((1.5, 0, 0))
+cube2.xi = 3999  # µr=4000
+cube2.style.label = f"Soft cuboid magnet, xi={cube2.xi}"
 
 # collection of all cells
-coll = magpy.Collection(cube1, cube2, cube3, style_label="No demag")
+coll = magpy.Collection(cube1, cube2, style_label="No demag")
 
-sensor = magpy.Sensor(position=np.linspace((-4, 0, -1), (4, 0, -1), 301))
+# add sensors
+sensors = [
+    magpy.Sensor(
+        position=np.linspace((-4, 0, z), (6, 0, z), 1001),
+        style_label=f"Sensor, z={z}mm",
+    )
+    for z in (-1, -3, -5)
+]
 
-magpy.show(*coll, sensor)
+magpy.show(*coll, *sensors)
 ```
 
 ```{code-cell} ipython3
@@ -63,8 +70,10 @@ magpy.show(*coll, sensor)
 coll_meshed = mesh_all(
     coll, target_elems=50, per_child_elems=False, style_label="No demag - meshed"
 )
-coll_meshed.show()
+magpy.show(*coll_meshed)
 ```
+
++++ {"user_expressions": []}
 
 ## Compute material response - demagnetization
 
@@ -83,13 +92,15 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
         colls.append(coll_demag)
 ```
 
++++ {"user_expressions": []}
+
 ## Compare with FEM analysis
 
 ```{code-cell} ipython3
 # compute field before demag
-B_no_demag_df = magpy.getB(coll_meshed, sensor, output="dataframe")
+B_no_demag_df = magpy.getB(coll_meshed, sensors, output="dataframe")
 
-B_cols = ["Bx", "By", "Bz"]
+B_cols = ["Bx", "Bz"]
 
 
 def get_FEM_dataframe(sim):
@@ -109,27 +120,29 @@ def get_magpylib_dataframe(collection, sensors):
 
 from magpylib_material_response.data import get_dataset
 
-sim_ANSYS = get_dataset("FEMdata_test_cuboids")
+sim_ANSYS = get_dataset("FEMdata_test_softmag")  # FEM dataset has only Bx and Bz
 
 df = pd.concat(
     [
         get_FEM_dataframe(sim_ANSYS),
-        *[get_magpylib_dataframe(c, sensor) for c in colls],
+        *[get_magpylib_dataframe(c, sensors) for c in colls],
     ]
 ).sort_values(["computation", "path"])
 
-df["Distance [mm]"] = sensor.position[df["path"]][:, 0]
+
+df["Distance [mm]"] = sensors[0].position[df["path"]][:, 0]
 df["Distance [mm]"] -= df["Distance [mm]"].min()
 ```
 
 ```{code-cell} ipython3
 px_kwargs = dict(
-    x="Distance [mm]",
+    x="path",
     y=B_cols,
-    facet_col="variable",
+    facet_row="variable",
+    facet_col="sensor",
     color="computation",
     line_dash="computation",
-    height=400,
+    height=600,
     facet_col_spacing=0.05,
     labels={Bk: f"{Bk} [mT]" for Bk in B_cols},
 )
@@ -157,4 +170,6 @@ fig2.update_yaxes(matches=None, showticklabels=True)
 display(fig1, fig2)
 ```
 
-As shown above, already with a low number of mesh elements, the result is approaching the reference FEM values.
++++ {"user_expressions": []}
+
+As shown above, the demagnetized collection outputs are approaching the reference FEM values.
