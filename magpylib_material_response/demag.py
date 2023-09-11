@@ -267,7 +267,7 @@ def apply_demag(
         searched at object level or parent level if needed.
 
     inplace: bool
-        If True, applies demagnetization on a copy of the input collection and returns
+        If False, applies demagnetization on a copy of the input collection and returns
         the demagnetized collection
 
     pairs_matching: bool
