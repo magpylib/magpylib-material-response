@@ -1,4 +1,5 @@
 """demag_functions"""
+
 # +
 # pylint: disable=invalid-name, redefined-outer-name, protected-access
 import sys

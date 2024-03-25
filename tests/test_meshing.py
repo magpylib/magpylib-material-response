@@ -1,4 +1,5 @@
 """Test meshing functions"""
+
 import magpylib as magpy
 import numpy as np
 import pytest
