@@ -8,8 +8,7 @@ from collections import Counter
 import magpylib as magpy
 import numpy as np
 from loguru import logger
-from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
-from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
+from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from magpylib.magnet import Cuboid
 from scipy.spatial.transform import Rotation as R
 
