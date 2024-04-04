@@ -11,20 +11,36 @@ repos:
       - id: debug-statements
         language_version: python3
 
-  - repo: https://github.com/asottile/reorder-python-imports
-    rev: v3.12.0
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
     hooks:
-      - id: reorder-python-imports
-        args: [--py37-plus]
+      - id: isort
+        name: isort (python)
 
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.15.2
     hooks:
       - id: pyupgrade
-        args: [--py37-plus]
+        args: [--py38-plus]
 
 
   - repo: https://github.com/psf/black
     rev: "24.3.0"
     hooks:
       - id: black
+
+
+  # - repo: local
+  #   hooks:
+  #     - id: pylint
+  #       name: pylint
+  #       entry: pylint
+  #       language: system
+  #       types: [python]
+  #       files: ^magpylib/
+  #       args: [
+  #           "-rn", # Only display messages
+  #           "-sn", # Don't display the score
+  #           "--rcfile=.pylintrc", # Link to your config file
+  #           #"--load-plugins=pylint.extensions.docparams", # Load an extension
+  #         ]
