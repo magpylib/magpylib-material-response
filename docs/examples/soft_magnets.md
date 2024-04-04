@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.5
+    jupytext_version: 1.16.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -39,14 +39,14 @@ from magpylib_material_response.meshing import mesh_all
 magpy.defaults.display.backend = "plotly"
 
 # hard magnet
-cube1 = magpy.magnet.Cuboid(magnetization=(0, 0, 1000), dimension=(1, 1, 2))
-cube1.move((0, 0, 0.5))
+cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.002))
+cube1.move((0, 0, 0.0005))
 cube1.xi = 0.5  # µr=1.5
 cube1.style.label = f"Hard cuboid magnet, xi={cube1.xi}"
 
 # soft magnet
-cube2 = magpy.magnet.Cuboid(magnetization=(0, 0, 0), dimension=(1, 1, 1))
-cube2.rotate_from_angax(angle=45, axis="y").move((1.5, 0, 0))
+cube2 = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.001, 0.001, 0.001))
+cube2.rotate_from_angax(angle=45, axis="y").move((0.0015, 0, 0))
 cube2.xi = 3999  # µr=4000
 cube2.style.label = f"Soft cuboid magnet, xi={cube2.xi}"
 
@@ -56,10 +56,10 @@ coll = magpy.Collection(cube1, cube2, style_label="No demag")
 # add sensors
 sensors = [
     magpy.Sensor(
-        position=np.linspace((-4, 0, z), (6, 0, z), 1001),
-        style_label=f"Sensor, z={z}mm",
+        position=np.linspace((-0.004, 0, z), (0.006, 0, z), 1001),
+        style_label=f"Sensor, z={z}m",
     )
-    for z in (-1, -3, -5)
+    for z in (-0.001, -0.003, -0.005)
 ]
 
 magpy.show(*coll, *sensors)
@@ -130,8 +130,8 @@ df = pd.concat(
 ).sort_values(["computation", "path"])
 
 
-df["Distance [mm]"] = sensors[0].position[df["path"]][:, 0]
-df["Distance [mm]"] -= df["Distance [mm]"].min()
+df["Distance [m]"] = sensors[0].position[df["path"]][:, 0]
+df["Distance [m]"] -= df["Distance [m]"].min()
 ```
 
 ```{code-cell} ipython3
@@ -144,7 +144,7 @@ px_kwargs = dict(
     line_dash="computation",
     height=600,
     facet_col_spacing=0.05,
-    labels={Bk: f"{Bk} [mT]" for Bk in B_cols},
+    labels={**{Bk: f"{Bk} [T]" for Bk in B_cols}, "value": "value [T]"},
 )
 fig1 = px.line(
     df,
@@ -172,4 +172,4 @@ display(fig1, fig2)
 
 +++ {"user_expressions": []}
 
-As shown above, the demagnetized collection outputs are approaching the reference FEM values.
+As shown above, the demagnetized collection outputs are approaching the reference FEM values while refining the mesh.

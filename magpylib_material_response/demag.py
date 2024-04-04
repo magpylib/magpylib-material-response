@@ -105,44 +105,44 @@ def demag_tensor(
         rot0 = R.from_quat(rotQ0)
 
     H_point = []
-    for unit_mag in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
-        mag_all = rot0.inv().apply(unit_mag)
+    for unit_pol in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
+        pol_all = rot0.inv().apply(unit_pol)
         # point matching field and demag tensor
-        with timelog(f"getH with unit_mag={unit_mag}", min_log_time=min_log_time):
+        with timelog(f"getH with unit_pol={unit_pol}", min_log_time=min_log_time):
             if pairs_matching or max_dist != 0:
-                magnetization = np.repeat(mag_all, len(src_list), axis=0)[mask_inds]
+                polarization = np.repeat(pol_all, len(src_list), axis=0)[mask_inds]
                 H_unique = magpy.getH(
-                    "Cuboid", magnetization=magnetization, **getH_params
+                    "Cuboid", polarization=polarization, **getH_params
                 )
                 if max_dist != 0:
                     H_temp = np.zeros((len(src_list) ** 2, 3))
                     H_temp[mask_inds] = H_unique
-                    H_unit_mag = H_temp
+                    H_unit_pol = H_temp
                 else:
-                    H_unit_mag = H_unique[unique_inv_inds]
+                    H_unit_pol = H_unique[unique_inv_inds]
             else:
-                for src, mag in zip(src_list, mag_all):
-                    src.magnetization = mag
+                for src, pol in zip(src_list, pol_all):
+                    src.polarization = pol
                 if split > 1:
                     src_list_split = np.array_split(src_list, split)
                     with logger.contextualize(
                         task="Splitting field calculation", split=split
                     ):
-                        H_unit_mag = []
+                        H_unit_pol = []
                         for split_ind, src_list_subset in enumerate(src_list_split):
                             logger.info(
                                 f"Sources subset {split_ind+1}/{len(src_list_split)}"
                             )
                             if src_list_subset.size > 0:
-                                H_unit_mag.append(
+                                H_unit_pol.append(
                                     magpy.getH(src_list_subset.tolist(), pos0)
                                 )
-                        H_unit_mag = np.concatenate(H_unit_mag, axis=0)
+                        H_unit_pol = np.concatenate(H_unit_pol, axis=0)
                 else:
-                    H_unit_mag = magpy.getH(src_list, pos0)
-            H_point.append(H_unit_mag)  # shape (n_cells, n_pos, 3_xyz)
+                    H_unit_pol = magpy.getH(src_list, pos0)
+            H_point.append(H_unit_pol)  # shape (n_cells, n_pos, 3_xyz)
 
-    # shape (3_unit_mag, n_cells, n_pos, 3_xyz)
+    # shape (3_unit_pol, n_cells, n_pos, 3_xyz)
     T = np.array(H_point).reshape((3, nof_src, nof_src, 3))
 
     return T
@@ -255,7 +255,7 @@ def apply_demag(
 ):
     """
     Computes the interaction between all collection magnets and fixes their
-    magnetization.
+    polarization.
 
     Parameters
     ----------
@@ -332,11 +332,11 @@ def apply_demag(
     )
     with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr
-        mag_magnets = [
-            src.orientation.apply(src.magnetization) for src in magnets_list
+        pol_magnets = [
+            src.orientation.apply(src.polarization) for src in magnets_list
         ]  # ROTATION CHECK
-        mag_magnets = np.reshape(
-            mag_magnets, (3 * n, 1), order="F"
+        pol_magnets = np.reshape(
+            pol_magnets, (3 * n, 1), order="F"
         )  # shape ii = x1, ... xn, y1, ... yn, z1, ... zn
 
         # set up S
@@ -349,7 +349,7 @@ def apply_demag(
             )
         S = np.diag(np.tile(xi, 3))  # shape ii, jj
 
-        # set up T (3 mag unit, n cells, n positions, 3 Bxyz)
+        # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
         with timelog("Demagnetization tensor calculation", min_log_time=min_log_time):
             T = demag_tensor(
                 magnets_list,
@@ -358,32 +358,32 @@ def apply_demag(
                 max_dist=max_dist,
             )
 
-            T *= 4 * np.pi / 10
+            T *= magpy.mu_0
             T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
 
-        mag_tolal = mag_magnets
+        pol_tolal = pol_magnets
 
         if currents_list:
             with timelog(
                 "Add current sources contributions", min_log_time=min_log_time
             ):
                 pos = np.array([src.position for src in magnets_list])
-                mag_currents = magpy.getB(currents_list, pos, sumup=True)
-                mag_currents = np.reshape(mag_currents, (3 * n, 1), order="F")
-                mag_tolal += np.matmul(S, mag_currents)
+                pol_currents = magpy.getB(currents_list, pos, sumup=True)
+                pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
+                pol_tolal += np.matmul(S, pol_currents)
 
         # set up Q
         Q = np.eye(3 * n) - np.matmul(S, T)
 
-        # determine new magnetization vectors
+        # determine new polarization vectors
         with timelog("Solving of linear system", min_log_time=1):
-            mag_new = np.linalg.solve(Q, mag_tolal)
+            pol_new = np.linalg.solve(Q, pol_tolal)
 
-        mag_new = np.reshape(mag_new, (n, 3), order="F")
-        # mag_new *= .4*np.pi
+        pol_new = np.reshape(pol_new, (n, 3), order="F")
+        # pol_new *= .4*np.pi
 
-        for s, mag in zip(collection.sources_all, mag_new):
-            s.magnetization = s.orientation.inv().apply(mag)  # ROTATION CHECK
+        for s, pol in zip(collection.sources_all, pol_new):
+            s.polarization = s.orientation.inv().apply(pol)  # ROTATION CHECK
 
     if not inplace:
         return collection
