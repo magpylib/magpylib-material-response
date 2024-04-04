@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.5
+    jupytext_version: 1.16.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -28,32 +28,41 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from loguru import logger
+from magpylib_material_response.data import get_dataset
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all
+
+if magpy.__version__.split(".")[0] != "5":
+    raise RuntimeError(
+        f"Magpylib version must be >=5, (installed: {magpy.__version__})"
+    )
 
 magpy.defaults.display.backend = "plotly"
 
 # some low quality magnets with different susceptibilities
-cube1 = magpy.magnet.Cuboid(magnetization=(0, 0, 1000), dimension=(1, 1, 1))
-cube1.move((-1.5, 0, 0))
+cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
+cube1.move((-0.0015, 0, 0))
 cube1.xi = 0.3  # µr=1.3
 cube1.style.label = f"Cuboid, xi={cube1.xi}"
 
-cube2 = magpy.magnet.Cuboid(magnetization=(900, 0, 0), dimension=(1, 1, 1))
-cube2.rotate_from_angax(-45, "y").move((0, 0, 0.2))
+cube2 = magpy.magnet.Cuboid(polarization=(0.9, 0, 0), dimension=(0.001, 0.001, 0.001))
+cube2.rotate_from_angax(-45, "y").move((0, 0, 0.0002))
 cube2.xi = 1.0  # µr=2.0
 cube2.style.label = f"Cuboid, xi={cube2.xi}"
 
-mx, my = 600 * np.sin(30 / 180 * np.pi), 600 * np.cos(30 / 180 * np.pi)
-cube3 = magpy.magnet.Cuboid(magnetization=(mx, my, 0), dimension=(1, 1, 2))
-cube3.move((1.6, 0, 0.5)).rotate_from_angax(30, "z")
+mx = 0.6 * np.sin(np.deg2rad(30))
+my = 0.6 * np.cos(np.deg2rad(30))
+cube3 = magpy.magnet.Cuboid(polarization=(mx, my, 0), dimension=(0.001, 0.001, 0.002))
+cube3.move((0.0016, 0, 0.0005)).rotate_from_angax(30, "z")
 cube3.xi = 0.5  # µr=1.5
 cube3.style.label = f"Cuboid, xi={cube3.xi}"
 
 # collection of all cells
 coll = magpy.Collection(cube1, cube2, cube3, style_label="No demag")
 
-sensor = magpy.Sensor(position=np.linspace((-4, 0, -1), (4, 0, -1), 301))
+sensor = magpy.Sensor(
+    position=np.linspace((-0.004, 0, -0.001), (0.004, 0, -0.001), 301)
+)
 
 magpy.show(*coll, sensor)
 ```
@@ -107,8 +116,6 @@ def get_magpylib_dataframe(collection, sensors):
     return df
 
 
-from magpylib_material_response.data import get_dataset
-
 sim_ANSYS = get_dataset("FEMdata_test_cuboids")
 
 df = pd.concat(
@@ -118,20 +125,20 @@ df = pd.concat(
     ]
 ).sort_values(["computation", "path"])
 
-df["Distance [mm]"] = sensor.position[df["path"]][:, 0]
-df["Distance [mm]"] -= df["Distance [mm]"].min()
+df["Distance [m]"] = sensor.position[df["path"]][:, 0]
+df["Distance [m]"] -= df["Distance [m]"].min()
 ```
 
 ```{code-cell} ipython3
 px_kwargs = dict(
-    x="Distance [mm]",
+    x="Distance [m]",
     y=B_cols,
     facet_col="variable",
     color="computation",
     line_dash="computation",
     height=400,
     facet_col_spacing=0.05,
-    labels={Bk: f"{Bk} [mT]" for Bk in B_cols},
+    labels={**{Bk: f"{Bk} [T]" for Bk in B_cols}, "value": "value [T]"},
 )
 fig1 = px.line(
     df,
@@ -157,4 +164,4 @@ fig2.update_yaxes(matches=None, showticklabels=True)
 display(fig1, fig2)
 ```
 
-As shown above, already with a low number of mesh elements, the result is approaching the reference FEM values.
+As shown above, already with a low number of mesh elements, the result is approaching the reference FEM values and improves while refining the mesh.

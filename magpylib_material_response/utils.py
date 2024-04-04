@@ -69,7 +69,7 @@ def serialize_recursive(obj, parent="warn"):
     dd = {
         "id": id(obj),
         "type": obj.__class__.__name__,
-        "position": {"value": obj.position.tolist(), "unit": "mm"},
+        "position": {"value": obj.position.tolist(), "unit": "m"},
         "orientation": {
             "value": obj.orientation.as_matrix().tolist(),
             "type": "matrix",
@@ -80,19 +80,19 @@ def serialize_recursive(obj, parent="warn"):
     if parent == "warn" and obj.parent is not None:
         warnings.warn(f"object parent ({obj.parent}) not included in serialization")
     if isinstance(obj, BaseMagnet):
-        dd["magnetization"] = {"value": obj.magnetization.tolist(), "unit": "mT"}
+        dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
         xi = getattr(obj, "susceptibility", None)
         xi = getattr(obj, "xi", None) if xi is None else xi
         if xi is not None:
             dd["susceptibility"] = {"value": xi}
     if isinstance(obj, magpy.magnet.Cuboid):
-        dd["dimension"] = {"value": obj.dimension.tolist(), "unit": "mm"}
+        dd["dimension"] = {"value": obj.dimension.tolist(), "unit": "m"}
         xi = getattr(obj, "susceptibility", None)
         xi = getattr(obj, "xi", None) if xi is None else xi
         if xi is not None:
             dd["susceptibility"] = {"value": xi}
     elif isinstance(obj, magpy.Sensor):
-        dd["pixel"] = {"value": obj.pixel.tolist(), "unit": "mm"}
+        dd["pixel"] = {"value": obj.pixel.tolist(), "unit": "m"}
     elif isinstance(obj, magpy.Collection):
         dd["children"] = [
             serialize_recursive(child, parent="ignore") for child in obj.children
@@ -119,8 +119,8 @@ def deserialize_recursive(inp, ids=None):
     # position
     kw["position"] = inp["position"]["value"]
     pos_unit = inp["position"]["unit"]
-    if pos_unit != "mm":
-        raise ValueError(f"Position unit must be `mm`, got {pos_unit!r}")
+    if pos_unit != "m":
+        raise ValueError(f"Position unit must be `m`, got {pos_unit!r}")
 
     # orientation
     orient = inp["orientation"]["value"]
@@ -137,22 +137,20 @@ def deserialize_recursive(inp, ids=None):
         warnings.warn(f"object parent ({inp['parent']}) ignored")
 
     if issubclass(constr, BaseMagnet):
-        # magnetization
-        kw["magnetization"] = inp["magnetization"]["value"]
-        mag_unit = inp["magnetization"]["unit"]
-        if mag_unit != "mT":
-            raise ValueError(f"Magnetization unit must be `mT`, got {mag_unit!r}")
+        kw["polarization"] = inp["polarization"]["value"]
+        pol_unit = inp["polarization"]["unit"]
+        if pol_unit != "T":
+            raise ValueError(f"Polarization unit must be `T`, got {pol_unit!r}")
     if issubclass(constr, magpy.magnet.Cuboid):
-        # dimension
         kw["dimension"] = inp["dimension"]["value"]
         dim_unit = inp["dimension"]["unit"]
-        if dim_unit != "mm":
-            raise ValueError(f"Dimension unit must be `mm`, got {dim_unit!r}")
+        if dim_unit != "m":
+            raise ValueError(f"Dimension unit must be `m`, got {dim_unit!r}")
     elif issubclass(constr, magpy.Sensor):
         kw["pixel"] = inp["pixel"]["value"]
         pix_unit = inp["pixel"]["unit"]
-        if pix_unit != "mm":
-            raise ValueError(f"Pixel unit must be `mm`, got {pix_unit!r}")
+        if pix_unit != "m":
+            raise ValueError(f"Pixel unit must be `m`, got {pix_unit!r}")
     elif not is_coll:
         raise TypeError("Only Collection, Cuboid, Sensor supported")
     obj = constr(**kw)

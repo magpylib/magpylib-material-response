@@ -53,7 +53,7 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
             f"received instead {cuboid.__class__.__name__!r}"
         )
     dim0 = cuboid.dimension
-    mag0 = cuboid.magnetization
+    pol0 = cuboid.polarization
 
     if np.isscalar(target_elems):
         nnn = cells_from_dimension(dim0, target_elems)
@@ -82,7 +82,7 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
     # create cells as magpylib objects and return Collection
     cells = []
     for pp in grid:
-        cell = magpy.magnet.Cuboid(magnetization=mag0, dimension=new_dim, position=pp)
+        cell = magpy.magnet.Cuboid(polarization=pol0, dimension=new_dim, position=pp)
         cells.append(cell)
 
     return _collection_from_obj_and_cells(cuboid, cells, **kwargs)
@@ -128,7 +128,7 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
 
     al = (r2 + r1) * 3.14 * (phi2 - phi1) / 360  # arclen = D*pi*arcratio
     dim = al, r2 - r1, h
-    mag0 = cylinder.magnetization
+    pol0 = cylinder.polarization
     # "unroll" the cylinder and distribute the target number of elemens along the
     # circumference, radius and height.
     if np.isscalar(target_elems):
@@ -155,7 +155,7 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
             if nr >= 3 and r[r_ind] == 0 and phi2 - phi1 == 360:
                 dimension = r[r_ind + 1] * 2, dh
                 cell = magpy.magnet.Cylinder(
-                    magnetization=mag0,
+                    polarization=pol0,
                     dimension=dimension,
                     position=(0, 0, pos_h),
                 )
@@ -170,7 +170,7 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
                         phi[phi_ind + 1],
                     )
                     cell = magpy.magnet.CylinderSegment(
-                        magnetization=mag0,
+                        polarization=pol0,
                         dimension=dimension,
                         position=(0, 0, pos_h),
                     )
@@ -208,7 +208,7 @@ def mesh_thin_CylinderSegment_with_cuboids(
     """
 
     r1, r2, h, phi1, phi2 = cyl_seg.dimension
-    mag0 = cyl_seg.magnetization
+    pol0 = cyl_seg.polarization
     if ratio_limit > r2 / (r2 - r1):
         raise ValueError(
             "This meshing function is intended for thin-walled CylinderSegment objects"
@@ -238,7 +238,7 @@ def mesh_thin_CylinderSegment_with_cuboids(
     for z in np.linspace(-h / 2 + dh / 2, h / 2 - dh / 2, nh):
         for pos, orient in zip(poss, rots):
             child = magpy.magnet.Cuboid(
-                magnetization=orient.inv().apply(mag0),
+                polarization=orient.inv().apply(pol0),
                 dimension=dim,
                 position=pos + np.array([0, 0, z]),
                 orientation=orient,
@@ -282,7 +282,7 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
     if not 0 < shift < 1:
         raise ValueError("Shift must be between 0 and 1 (exclusive)")
     dim0 = cuboid.dimension
-    mag0 = cuboid.magnetization
+    pol0 = cuboid.polarization
     ind = "xyz".index(axis)
     dim_k = cuboid.dimension[ind]
     dims_k = dim_k * (1 - shift), dim_k * (shift)
@@ -294,7 +294,7 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
         position = np.array([0, 0, 0], dtype=float)
         position[ind] = s
         cell = magpy.magnet.Cuboid(
-            magnetization=mag0,
+            polarization=pol0,
             dimension=dimension,
             position=position,
         )
@@ -321,7 +321,7 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     -------
     discretization: magpylib.Collection
         Collection of Cylinder and CylinderSegment cells"""
-    mag0 = obj.magnetization
+    pol0 = obj.polarization
     vol, containing_cube_edge = get_volume(obj, return_containing_cube_edge=True)
     vol_ratio = (containing_cube_edge**3) / vol
 
@@ -348,7 +348,7 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     cells = []
     for pos in grid:
         cell = magpy.magnet.Cuboid(
-            magnetization=mag0,
+            polarization=pol0,
             dimension=cube_cell_dim,
             position=pos,
         )
