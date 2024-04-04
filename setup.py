@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """The setup script."""
-from setuptools import find_packages
-from setuptools import setup
+from setuptools import find_packages, setup
 
 with open("magpylib_material_response/__init__.py") as handle:
     for line in handle:

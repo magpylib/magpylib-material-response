@@ -38,7 +38,7 @@ ERROR ...
 
 **Environment (please complete the following information):**
 
-- Python Version [e.g. 3.7.1]
+- Python Version [e.g. 3.9.1]
 - Package Version [e.g. 0.1.0]
 
 **Additional context**
