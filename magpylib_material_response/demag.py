@@ -31,23 +31,21 @@ config = {
 logger.configure(**config)
 
 
-def get_xis(*sources, xi=None):
-    """Return a list of length (len(sources)) with xi values
+def get_susceptibilities(*sources, susceptibility=None):
+    """Return a list of length (len(sources)) with susceptibility values
     Priority is given at the source level, hovever if value is not found, it is searched
     up the parent tree, if available. Raises an error if no value is found when reached
     the top level of the tree."""
-    xis = []
+    susceptibilities = []
     for src in sources:
-        xi = getattr(src, "xi", None)
-        if xi is None:
+        susceptibility = getattr(src, "susceptibility", None)
+        if susceptibility is None:
             if src.parent is None:
-                raise ValueError(
-                    "No susceptibility `xi` defined in any parent collection"
-                )
-            xis.extend(get_xis(src.parent))
+                raise ValueError("No susceptibility defined in any parent collection")
+            susceptibilities.extend(get_susceptibilities(src.parent))
         else:
-            xis.append(xi)
-    return xis
+            susceptibilities.append(susceptibility)
+    return susceptibilities
 
 
 def demag_tensor(
@@ -245,7 +243,7 @@ def match_pairs(src_list, min_log_time=1):
 
 def apply_demag(
     collection,
-    xi=None,
+    susceptibility=None,
     inplace=False,
     pairs_matching=False,
     max_dist=0,
@@ -262,7 +260,7 @@ def apply_demag(
     collection: magpylib.Collection object with n magnet sources
         Each magnet source in collection is treated as a magnetic cell.
 
-    xi: array_like, shape (n,)
+    susceptibility: array_like, shape (n,)
         Vector of n magnetic susceptibilities of the cells. If not defined, values are
         searched at object level or parent level if needed.
 
@@ -340,14 +338,14 @@ def apply_demag(
         )  # shape ii = x1, ... xn, y1, ... yn, z1, ... zn
 
         # set up S
-        if xi is None:
-            xi = get_xis(*magnets_list)
-        xi = np.array(xi)
-        if len(xi) != n:
+        if susceptibility is None:
+            susceptibility = get_susceptibilities(*magnets_list)
+        susceptibility = np.array(susceptibility)
+        if len(susceptibility) != n:
             raise ValueError(
-                "Apply_demag input collection and xi must have same length."
+                "Apply_demag input collection and susceptibility must have same length."
             )
-        S = np.diag(np.tile(xi, 3))  # shape ii, jj
+        S = np.diag(np.tile(susceptibility, 3))  # shape ii, jj
 
         # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
         with timelog("Demagnetization tensor calculation", min_log_time=min_log_time):

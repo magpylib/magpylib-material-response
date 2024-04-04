@@ -15,10 +15,10 @@ from magpylib_material_response.meshing_utils import (
 
 
 def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
-    xi = getattr(obj, "xi", None)
-    if xi is not None:
+    susceptibility = getattr(obj, "susceptibility", None)
+    if susceptibility is not None:
         for cell in cells:
-            cell.xi = xi
+            cell.susceptibility = susceptibility
     coll = magpy.Collection(cells)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))

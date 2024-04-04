@@ -33,7 +33,7 @@ def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
     tan_theta = np.tan(theta)
     d = r / tan_theta
     if d > norm_bc * max_ratio or d > norm_ab * max_ratio:
-        rold, dold = r, d
+        # rold, dold = r, d
         print("r, d, norm_ab, norm_bc: ", r, d, norm_ab, norm_bc)
         d = min(norm_bc * max_ratio, norm_ab * max_ratio)
         r = d * tan_theta if theta > 0 else 0
@@ -145,8 +145,10 @@ def create_polyline_fillet(polyline, max_radius, N):
             c = filleted_points[1]
         try:
             filleted_points.extend(_create_fillet_segment(a, b, c, radius, N))
-        except ValueError:
-            raise ValueError(f"The radius {radius} on position vertex {i} is too large")
+        except ValueError as exc:
+            raise ValueError(
+                f"The radius {radius} on position vertex {i} is too large"
+            ) from exc
     if closed:
         filleted_points[0] = filleted_points[-1]
     else:
@@ -208,7 +210,7 @@ def _line_plane_intersection(plane_point, plane_normal, line_points, line_direct
     """
     # Calculate the plane equation coefficients A, B, C, and D
     A, B, C = plane_normal
-    x0, y0, z0 = plane_point
+    # x0, y0, z0 = plane_point
     D = -np.dot(plane_normal, plane_point)
 
     # Calculate the parameter t

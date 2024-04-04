@@ -41,14 +41,14 @@ magpy.defaults.display.backend = "plotly"
 # hard magnet
 cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.002))
 cube1.move((0, 0, 0.0005))
-cube1.xi = 0.5  # µr=1.5
-cube1.style.label = f"Hard cuboid magnet, xi={cube1.xi}"
+cube1.susceptibility = 0.5  # µr=1.5
+cube1.style.label = f"Hard cuboid magnet, susceptibility={cube1.susceptibility}"
 
 # soft magnet
 cube2 = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.001, 0.001, 0.001))
 cube2.rotate_from_angax(angle=45, axis="y").move((0.0015, 0, 0))
-cube2.xi = 3999  # µr=4000
-cube2.style.label = f"Soft cuboid magnet, xi={cube2.xi}"
+cube2.susceptibility = 3999  # µr=4000
+cube2.style.label = f"Soft cuboid magnet, susceptibility={cube2.susceptibility}"
 
 # collection of all cells
 coll = magpy.Collection(cube1, cube2, style_label="No demag")
