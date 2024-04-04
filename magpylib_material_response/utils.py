@@ -44,7 +44,7 @@ class ElapsedTimeThread(threading.Thread):
 
 
 @contextmanager
-def timelog(msg, min_log_time=1) -> float:
+def timelog(msg, min_log_time=1):
     """ "Measure and log time with loguru as context manager."""
     start = time.perf_counter()
     end = None
@@ -81,16 +81,24 @@ def serialize_recursive(obj, parent="warn"):
         warnings.warn(f"object parent ({obj.parent}) not included in serialization")
     if isinstance(obj, BaseMagnet):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
-        xi = getattr(obj, "susceptibility", None)
-        xi = getattr(obj, "xi", None) if xi is None else xi
-        if xi is not None:
-            dd["susceptibility"] = {"value": xi}
+        susceptibility = getattr(obj, "susceptibility", None)
+        susceptibility = (
+            getattr(obj, "susceptibility", None)
+            if susceptibility is None
+            else susceptibility
+        )
+        if susceptibility is not None:
+            dd["susceptibility"] = {"value": susceptibility}
     if isinstance(obj, magpy.magnet.Cuboid):
         dd["dimension"] = {"value": obj.dimension.tolist(), "unit": "m"}
-        xi = getattr(obj, "susceptibility", None)
-        xi = getattr(obj, "xi", None) if xi is None else xi
-        if xi is not None:
-            dd["susceptibility"] = {"value": xi}
+        susceptibility = getattr(obj, "susceptibility", None)
+        susceptibility = (
+            getattr(obj, "susceptibility", None)
+            if susceptibility is None
+            else susceptibility
+        )
+        if susceptibility is not None:
+            dd["susceptibility"] = {"value": susceptibility}
     elif isinstance(obj, magpy.Sensor):
         dd["pixel"] = {"value": obj.pixel.tolist(), "unit": "m"}
     elif isinstance(obj, magpy.Collection):
@@ -156,7 +164,7 @@ def deserialize_recursive(inp, ids=None):
     obj = constr(**kw)
     ids[inp["id"]] = obj
     if inp.get("susceptibility", None) is not None:
-        obj.xi = inp["susceptibility"]["value"]
+        obj.susceptibility = inp["susceptibility"]["value"]
     if is_coll:
         obj.add(*[deserialize_recursive(child, ids)[0] for child in inp["children"]])
     return obj, ids

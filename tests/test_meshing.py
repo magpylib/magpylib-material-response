@@ -26,15 +26,15 @@ def test_mesh_Cuboid():
     c.style.opacity = 0  # will be overriden by mesh kwargs lower
     c.rotate_from_angax(np.linspace(0, 76, N), "z", anchor=0, start=0)
     c.move(np.linspace((0, 0, 0), (0, 0, 0.0105), N), start=0)
-    c.xi = 3999
+    c.susceptibility = 3999
 
     cm = mesh_Cuboid(c, target_elems=8, style_opacity=opacity)
 
     # test if meshed cuboid collection provides the same field as original cuboid
     np.testing.assert_allclose(c.getB([0, 0, 0]), cm.getB([0, 0, 0]))
 
-    # test if all children sources got the right xi value
-    assert all(s.xi == c.xi for s in cm.sources_all)
+    # test if all children sources got the right susceptibility value
+    assert all(s.susceptibility == c.susceptibility for s in cm.sources_all)
 
     # test style kwargs
     assert cm.style.label == c.style.label
@@ -66,15 +66,15 @@ def test_slice_Cuboid():
     c.style.opacity = 0  # will be overriden by mesh kwargs lower
     c.rotate_from_angax(np.linspace(0, 76, N), "z", anchor=0, start=0)
     c.move(np.linspace((0, 0, 0), (0, 0, 0.0105), N), start=0)
-    c.xi = 3999
+    c.susceptibility = 3999
 
     cm = slice_Cuboid(c, shift=0.2, axis="y", style_opacity=opacity)
 
     # test if meshed cuboid collection provides the same field as original cuboid
     np.testing.assert_allclose(c.getB([0, 0, 0]), cm.getB([0, 0, 0]))
 
-    # test if all children sources got the right xi value
-    assert all(s.xi == c.xi for s in cm.sources_all)
+    # test if all children sources got the right susceptibility value
+    assert all(s.susceptibility == c.susceptibility for s in cm.sources_all)
 
     # test style kwargs
     assert cm.style.label == c.style.label
@@ -127,15 +127,15 @@ def test_mesh_Cylinder():
     c.rotate_from_angax(np.linspace(0, 90, N), "x", anchor=0, start=0)
     c.move(np.linspace((0, 0, 0), (0, 0, 1), N), start=0)
     c.style.magnetization.show = False
-    c.xi = 3999
+    c.susceptibility = 3999
 
     cm = mesh_Cylinder(c, target_elems=20, style_opacity=opacity)
 
     # test if meshed cuboid collection provides the same field as original cuboid
     np.testing.assert_allclose(c.getB([0, 0, 0]), cm.getB([0, 0, 0]))
 
-    # test if all children sources got the right xi value
-    assert all(s.xi == c.xi for s in cm.sources_all)
+    # test if all children sources got the right susceptibility value
+    assert all(s.susceptibility == c.susceptibility for s in cm.sources_all)
 
     # test style kwargs
     assert cm.style.label == c.style.label
@@ -166,7 +166,7 @@ def test_mesh_thin_CylinderSegment_with_cuboids():
     c.rotate_from_angax(np.linspace(0, 90, N), "z", anchor=0, start=0)
     c.rotate_from_angax(np.linspace(0, 90, N), "x", anchor=0, start=0)
     c.move(np.linspace((0, 0, 0), (0, 0, 1), N), start=0)
-    c.xi = 3999
+    c.susceptibility = 3999
 
     cm = mesh_thin_CylinderSegment_with_cuboids(
         c, target_elems=100, match_volume=False, style_opacity=opacity
@@ -185,8 +185,8 @@ def test_mesh_thin_CylinderSegment_with_cuboids():
     # by default match_volume=True, delivers better accuracy, hence lower rtol
     np.testing.assert_allclose(c.getB([0, 0, 0]), cm.getB([0, 0, 0]), rtol=0.01)
 
-    # test if all children sources got the right xi value
-    assert all(s.xi == c.xi for s in cm.sources_all)
+    # test if all children sources got the right susceptibility value
+    assert all(s.susceptibility == c.susceptibility for s in cm.sources_all)
 
     # test style kwargs
     assert cm.style.label == c.style.label
@@ -197,16 +197,16 @@ def test_mesh_thin_CylinderSegment_with_cuboids():
 
 
 def test_mesh_all():
-    xi = 3999
+    susceptibility = 3999
     c = magpy.magnet.Cuboid(
         polarization=(1, 0, 0),
         dimension=(1, 2, 3),
         position=[4, 5, 6],
         style_label="C1",
     )
-    c.xi = xi
+    c.susceptibility = susceptibility
     cy = magpy.magnet.Cylinder(polarization=(1, 1, 1), dimension=(4, 1))
-    cy.xi = c.xi
+    cy.susceptibility = c.susceptibility
     c2 = magpy.Collection(c.copy(dimension=c.dimension / 2).move((5, 0, 0)))
     c2.style.label = "C2 super"
     # currents and sensors and sensors should be just silently ignored by meshing
@@ -241,13 +241,13 @@ def test_mesh_all():
     # mesh on copy (by default)
     cm = mesh_all(c0, target_elems=20)
     assert cm is not c0
-    # test if all children sources got the right xi value
+    # test if all children sources got the right susceptibility value
     mags = [s for s in cm.sources_all if not isinstance(s, magpy.current.Circle)]
-    assert all(s.xi == c.xi for s in mags)
+    assert all(s.susceptibility == c.susceptibility for s in mags)
 
     # mesh inplace
     cm = mesh_all(c0, target_elems=20, inplace=True)
     assert cm is c0
-    # test if all children sources got the right xi value
+    # test if all children sources got the right susceptibility value
     mags = [s for s in cm.sources_all if not isinstance(s, magpy.current.Circle)]
-    assert all(s.xi == c.xi for s in mags)
+    assert all(s.susceptibility == c.susceptibility for s in mags)

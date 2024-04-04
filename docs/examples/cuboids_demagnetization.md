@@ -42,20 +42,20 @@ magpy.defaults.display.backend = "plotly"
 # some low quality magnets with different susceptibilities
 cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
 cube1.move((-0.0015, 0, 0))
-cube1.xi = 0.3  # µr=1.3
-cube1.style.label = f"Cuboid, xi={cube1.xi}"
+cube1.susceptibility = 0.3  # µr=1.3
+cube1.style.label = f"Cuboid, susceptibility={cube1.susceptibility}"
 
 cube2 = magpy.magnet.Cuboid(polarization=(0.9, 0, 0), dimension=(0.001, 0.001, 0.001))
 cube2.rotate_from_angax(-45, "y").move((0, 0, 0.0002))
-cube2.xi = 1.0  # µr=2.0
-cube2.style.label = f"Cuboid, xi={cube2.xi}"
+cube2.susceptibility = 1.0  # µr=2.0
+cube2.style.label = f"Cuboid, susceptibility={cube2.susceptibility}"
 
 mx = 0.6 * np.sin(np.deg2rad(30))
 my = 0.6 * np.cos(np.deg2rad(30))
 cube3 = magpy.magnet.Cuboid(polarization=(mx, my, 0), dimension=(0.001, 0.001, 0.002))
 cube3.move((0.0016, 0, 0.0005)).rotate_from_angax(30, "z")
-cube3.xi = 0.5  # µr=1.5
-cube3.style.label = f"Cuboid, xi={cube3.xi}"
+cube3.susceptibility = 0.5  # µr=1.5
+cube3.style.label = f"Cuboid, susceptibility={cube3.susceptibility}"
 
 # collection of all cells
 coll = magpy.Collection(cube1, cube2, cube3, style_label="No demag")
