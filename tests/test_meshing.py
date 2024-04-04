@@ -14,11 +14,15 @@ def test_mesh_Cuboid():
     # create cuboid with rotated path
     N = 5
     opacity = 0.5
-    c = magpy.magnet.Cuboid((1000, 0, 0), (1, 2, 3), position=[4, 5, 6])
+    c = magpy.magnet.Cuboid(
+        polarization=(1, 0, 0),
+        dimension=(0.001, 0.002, 0.003),
+        position=[0.004, 0.005, 0.006],
+    )
     c.style.label = "Cuboid 1"
     c.style.opacity = 0  # will be overriden by mesh kwargs lower
     c.rotate_from_angax(np.linspace(0, 76, N), "z", anchor=0, start=0)
-    c.move(np.linspace((0, 0, 0), (0, 0, 10.5), N), start=0)
+    c.move(np.linspace((0, 0, 0), (0, 0, 0.0105), N), start=0)
     c.xi = 3999
 
     cm = mesh_Cuboid(c, target_elems=8, style_opacity=opacity)
@@ -50,11 +54,15 @@ def test_slice_Cuboid():
     # create cuboid with rotated path
     N = 5
     opacity = 0.5
-    c = magpy.magnet.Cuboid((1000, 0, 0), (1, 2, 3), position=[4, 5, 6])
+    c = magpy.magnet.Cuboid(
+        polarization=(1, 0, 0),
+        dimension=(0.001, 0.002, 0.003),
+        position=[0.004, 0.005, 0.006],
+    )
     c.style.label = "Cuboid 1"
     c.style.opacity = 0  # will be overriden by mesh kwargs lower
     c.rotate_from_angax(np.linspace(0, 76, N), "z", anchor=0, start=0)
-    c.move(np.linspace((0, 0, 0), (0, 0, 10.5), N), start=0)
+    c.move(np.linspace((0, 0, 0), (0, 0, 0.0105), N), start=0)
     c.xi = 3999
 
     cm = slice_Cuboid(c, shift=0.2, axis="y", style_opacity=opacity)
@@ -106,7 +114,7 @@ def test_mesh_Cylinder():
     N = 3
     opacity = 0.5
     c = magpy.magnet.CylinderSegment(
-        magnetization=(1000, 0, 0),
+        polarization=(1, 0, 0),
         dimension=(1, 1.1, 1, 0, 270),
         position=[1, 2, 1],
     )
@@ -147,7 +155,10 @@ def test_mesh_thin_CylinderSegment_with_cuboids():
     N = 3
     opacity = 0.5
     c = magpy.magnet.CylinderSegment(
-        (1000, 0, 0), (1, 1.1, 1, 0, 270), position=[1, 2, 1], style_opacity=0.2
+        polarization=(1, 0, 0),
+        dimension=(1, 1.1, 1, 0, 270),
+        position=[1, 2, 1],
+        style_opacity=0.2,
     )
     c.rotate_from_angax(np.linspace(0, 90, N), "z", anchor=0, start=0)
     c.rotate_from_angax(np.linspace(0, 90, N), "x", anchor=0, start=0)
@@ -185,21 +196,24 @@ def test_mesh_thin_CylinderSegment_with_cuboids():
 def test_mesh_all():
     xi = 3999
     c = magpy.magnet.Cuboid(
-        (1000, 0, 0), (1, 2, 3), position=[4, 5, 6], style_label="C1"
+        polarization=(1, 0, 0),
+        dimension=(1, 2, 3),
+        position=[4, 5, 6],
+        style_label="C1",
     )
     c.xi = xi
-    cy = magpy.magnet.Cylinder((1, 1, 1), (4, 1))
+    cy = magpy.magnet.Cylinder(polarization=(1, 1, 1), dimension=(4, 1))
     cy.xi = c.xi
     c2 = magpy.Collection(c.copy(dimension=c.dimension / 2).move((5, 0, 0)))
     c2.style.label = "C2 super"
     # currents and sensors and sensors should be just silently ignored by meshing
-    curr = magpy.current.Loop(current=1, diameter=1)
+    curr = magpy.current.Circle(current=1, diameter=1)
     sens = magpy.Sensor()
     c0 = magpy.Collection(c, c2, cy, sens, curr)
 
     # fail on other unsupported magnets
     c1 = c0.copy()
-    c1.add(magpy.magnet.Sphere((0, 0, 1000), 1))
+    c1.add(magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=1))
     with pytest.raises(TypeError):
         mesh_all(c1, target_elems=20)
 
@@ -225,12 +239,12 @@ def test_mesh_all():
     cm = mesh_all(c0, target_elems=20)
     assert cm is not c0
     # test if all children sources got the right xi value
-    mags = [s for s in cm.sources_all if not isinstance(s, magpy.current.Loop)]
+    mags = [s for s in cm.sources_all if not isinstance(s, magpy.current.Circle)]
     assert all(s.xi == c.xi for s in mags)
 
     # mesh inplace
     cm = mesh_all(c0, target_elems=20, inplace=True)
     assert cm is c0
     # test if all children sources got the right xi value
-    mags = [s for s in cm.sources_all if not isinstance(s, magpy.current.Loop)]
+    mags = [s for s in cm.sources_all if not isinstance(s, magpy.current.Circle)]
     assert all(s.xi == c.xi for s in mags)
