@@ -331,7 +331,10 @@ def apply_demag(
     with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr
         pol_magnets = [
-            src.orientation.apply(src.polarization) for src in magnets_list
+            src.orientation.apply(
+                (0.0, 0.0, 0.0) if src.polarization is None else (src.polarization)
+            )
+            for src in magnets_list
         ]  # ROTATION CHECK
         pol_magnets = np.reshape(
             pol_magnets, (3 * n, 1), order="F"
