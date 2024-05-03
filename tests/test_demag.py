@@ -1,6 +1,8 @@
 import magpylib as magpy
-from meshing import mesh_Cuboid
-from demag import apply_demag
+import magpylib_material_response
+print(magpylib_material_response.__version__)
+from magpylib_material_response.meshing import mesh_Cuboid
+from magpylib_material_response.demag import apply_demag
 import numpy as np
 import matplotlib.pyplot as plt
 
