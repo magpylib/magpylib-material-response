@@ -43,9 +43,31 @@ def get_susceptibilities(*sources, susceptibility=None):
             if src.parent is None:
                 raise ValueError("No susceptibility defined in any parent collection")
             susceptibilities.extend(get_susceptibilities(src.parent))
-        else:
+        elif not hasattr(susceptibility, "__len__"):
+            susceptibilities.append((susceptibility, susceptibility, susceptibility))
+        elif len(susceptibility) == 3:
             susceptibilities.append(susceptibility)
+        else:
+            raise ValueError("susceptibility is not scalar or array fo length 3")
     return susceptibilities
+
+def get_H_ext(*sources, H_ext=None):
+    """Return a list of length (len(sources)) with H_ext values
+    Priority is given at the source level, hovever if value is not found, it is searched up the
+    the parent tree, if available. Sets H_ext to zero if no value is found when reached the top
+    level of the tree"""
+    H_exts = []
+    for src in sources:
+        H_ext = getattr(src, "H_ext", None)
+        if H_ext is None:
+            if src.parent is None:
+                #print("Warning: No value for H_ext defined in any parent collection. H_ext set to zero.")
+                H_exts.append((0.0,0.0,0.0))
+            else:
+                H_exts.extend(get_H_ext(src.parent))
+        else:
+            H_exts.append(H_ext)
+    return H_exts
 
 
 def demag_tensor(
@@ -348,7 +370,19 @@ def apply_demag(
             raise ValueError(
                 "Apply_demag input collection and susceptibility must have same length."
             )
-        S = np.diag(np.tile(susceptibility, 3))  # shape ii, jj
+        susceptibility = np.reshape(
+            susceptibility, 3 * n, order="F"
+        )
+        S = np.diag(susceptibility)  # shape ii, jj
+
+        # set up H_ext
+        H_ext = get_H_ext(*magnets_list)
+        H_ext = np.array(H_ext)
+        if len(H_ext) != n:
+            raise ValueError("Apply_demag input collection and H_ext must have same length.")
+        H_ext = np.reshape(
+            H_ext, (3 * n, 1), order="F"
+        )
 
         # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
         with timelog("Demagnetization tensor calculation", min_log_time=min_log_time):
@@ -362,7 +396,7 @@ def apply_demag(
             T *= magpy.mu_0
             T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
 
-        pol_tolal = pol_magnets
+        pol_total = pol_magnets
 
         if currents_list:
             with timelog(
@@ -371,14 +405,14 @@ def apply_demag(
                 pos = np.array([src.position for src in magnets_list])
                 pol_currents = magpy.getB(currents_list, pos, sumup=True)
                 pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
-                pol_tolal += np.matmul(S, pol_currents)
+                pol_total += np.matmul(S, pol_currents)
 
         # set up Q
         Q = np.eye(3 * n) - np.matmul(S, T)
 
         # determine new polarization vectors
         with timelog("Solving of linear system", min_log_time=1):
-            pol_new = np.linalg.solve(Q, pol_tolal)
+            pol_new = np.linalg.solve(Q, pol_total + np.matmul(S, H_ext))
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
         # pol_new *= .4*np.pi
