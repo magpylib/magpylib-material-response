@@ -51,6 +51,7 @@ def get_susceptibilities(*sources, susceptibility=None):
             raise ValueError("susceptibility is not scalar or array fo length 3")
     return susceptibilities
 
+
 def get_H_ext(*sources, H_ext=None):
     """Return a list of length (len(sources)) with H_ext values
     Priority is given at the source level, hovever if value is not found, it is searched up the
@@ -61,8 +62,8 @@ def get_H_ext(*sources, H_ext=None):
         H_ext = getattr(src, "H_ext", None)
         if H_ext is None:
             if src.parent is None:
-                #print("Warning: No value for H_ext defined in any parent collection. H_ext set to zero.")
-                H_exts.append((0.0,0.0,0.0))
+                # print("Warning: No value for H_ext defined in any parent collection. H_ext set to zero.")
+                H_exts.append((0.0, 0.0, 0.0))
             else:
                 H_exts.extend(get_H_ext(src.parent))
         else:
@@ -370,19 +371,17 @@ def apply_demag(
             raise ValueError(
                 "Apply_demag input collection and susceptibility must have same length."
             )
-        susceptibility = np.reshape(
-            susceptibility, 3 * n, order="F"
-        )
+        susceptibility = np.reshape(susceptibility, 3 * n, order="F")
         S = np.diag(susceptibility)  # shape ii, jj
 
         # set up H_ext
         H_ext = get_H_ext(*magnets_list)
         H_ext = np.array(H_ext)
         if len(H_ext) != n:
-            raise ValueError("Apply_demag input collection and H_ext must have same length.")
-        H_ext = np.reshape(
-            H_ext, (3 * n, 1), order="F"
-        )
+            raise ValueError(
+                "Apply_demag input collection and H_ext must have same length."
+            )
+        H_ext = np.reshape(H_ext, (3 * n, 1), order="F")
 
         # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
         with timelog("Demagnetization tensor calculation", min_log_time=min_log_time):
