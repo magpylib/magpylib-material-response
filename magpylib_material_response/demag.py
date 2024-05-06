@@ -77,8 +77,6 @@ def get_susceptibilities(sources, susceptibility):
     return np.array(susis)
 
 
-
-
 def get_H_ext(*sources, H_ext=None):
     """Return a list of length (len(sources)) with H_ext values
     Priority is given at the source level, hovever if value is not found, it is searched up the
