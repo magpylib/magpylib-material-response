@@ -37,7 +37,7 @@ def get_susceptibilities(sources, susceptibility):
     up the parent tree, if available. Raises an error if no value is found when reached
     the top level of the tree."""
     n = len(sources)
-    
+
     # susceptibilities from source attributes
     if susceptibility is None:
         susis = []
@@ -45,7 +45,9 @@ def get_susceptibilities(sources, susceptibility):
             susceptibility = getattr(src, "susceptibility", None)
             if susceptibility is None:
                 if src.parent is None:
-                    raise ValueError("No susceptibility defined in any parent collection")
+                    raise ValueError(
+                        "No susceptibility defined in any parent collection"
+                    )
                 susis.extend(get_susceptibilities(src.parent))
             elif not hasattr(susceptibility, "__len__"):
                 susis.append((susceptibility, susceptibility, susceptibility))
@@ -56,10 +58,10 @@ def get_susceptibilities(sources, susceptibility):
     else:
         # susceptibilities as input to demag function
         if np.isscalar(susceptibility):
-            susis = np.ones((n,3))*susceptibility
+            susis = np.ones((n, 3)) * susceptibility
         elif len(susceptibility) == 3:
-            susis = np.tile(susceptibility, (n,1))
-            if n==3:
+            susis = np.tile(susceptibility, (n, 1))
+            if n == 3:
                 raise ValueError(
                     "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
                     "Please choose different means of input or change the number of cells in the Collection."
@@ -71,7 +73,7 @@ def get_susceptibilities(sources, susceptibility):
                 )
             susis = np.array(susceptibility)
             if susis.ndim == 1:
-                susis = np.repeat(susis,3).reshape(n,3)
+                susis = np.repeat(susis, 3).reshape(n, 3)
 
     susis = np.reshape(susis, 3 * n, order="F")
     return np.array(susis)
