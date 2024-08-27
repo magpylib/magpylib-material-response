@@ -3,12 +3,16 @@ import numpy as np
 
 cells = 15625
 
-isotropic_results_ansys = np.loadtxt('tests/testdata/isotropic_results_ansys.txt', skiprows=1)
-isotropic_results_ansys = isotropic_results_ansys[:,3:]
-anisotropic_results_ansys = np.loadtxt('tests/testdata/anisotropic_results_ansys.txt', skiprows=1)
-anisotropic_results_ansys = anisotropic_results_ansys[:,3:]
-isotropic_results_magpylib = np.load('isotropic_results_magpylib_%d.npy' % cells)
-anisotropic_results_magpylib = np.load('anisotropic_results_magpylib_%d.npy' % cells)
+isotropic_results_ansys = np.loadtxt(
+    "tests/testdata/isotropic_results_ansys.txt", skiprows=1
+)
+isotropic_results_ansys = isotropic_results_ansys[:, 3:]
+anisotropic_results_ansys = np.loadtxt(
+    "tests/testdata/anisotropic_results_ansys.txt", skiprows=1
+)
+anisotropic_results_ansys = anisotropic_results_ansys[:, 3:]
+isotropic_results_magpylib = np.load("isotropic_results_magpylib_%d.npy" % cells)
+anisotropic_results_magpylib = np.load("anisotropic_results_magpylib_%d.npy" % cells)
 
 
 isotropic_results_ansys = isotropic_results_ansys.reshape((6, -1, 3))
