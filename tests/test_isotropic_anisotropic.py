@@ -48,9 +48,13 @@ def test_negative_susceptibility():
 
     cells = 1000  # should be >=1000, otherwise discretization error too large
 
-    magnet = magpy.magnet.Cuboid(dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, -0.1))
+    magnet = magpy.magnet.Cuboid(
+        dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, -0.1)
+    )
     grid = np.loadtxt("tests/testdata/grid_points.pts")
-    field_ansys = np.loadtxt("tests/testdata/negative_susceptibility_ansys.txt", skiprows=1)
+    field_ansys = np.loadtxt(
+        "tests/testdata/negative_susceptibility_ansys.txt", skiprows=1
+    )
     field_ansys = field_ansys[:, 3:]
 
     # isotropic
