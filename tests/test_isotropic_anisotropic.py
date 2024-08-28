@@ -42,3 +42,23 @@ def test_anisotropic_susceptibility():
     field_magpylib = magnet_meshed.getB(grid)
 
     np.testing.assert_allclose(field_ansys, field_magpylib, rtol=0, atol=0.0012)
+
+
+def test_negative_susceptibility():
+
+    cells = 1000  # should be >=1000, otherwise discretization error too large
+
+    magnet = magpy.magnet.Cuboid(dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, -0.1))
+    grid = np.loadtxt("tests/testdata/grid_points.pts")
+    field_ansys = np.loadtxt("tests/testdata/negative_susceptibility_ansys.txt", skiprows=1)
+    field_ansys = field_ansys[:, 3:]
+
+    # isotropic
+    magnet.susceptibility = -1.1
+    magnet_meshed = meshing.mesh_Cuboid(magnet, cells)
+
+    demag.apply_demag(magnet_meshed, inplace=True)
+
+    field_magpylib = magnet_meshed.getB(grid)
+
+    np.testing.assert_allclose(field_ansys, field_magpylib, rtol=0, atol=0.0065)
