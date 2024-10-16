@@ -10,6 +10,14 @@
     - if susceptiblity input is scalar, isotropic susceptibility is assumed, if it is a 3-vector it can be anisotropic
 * Various tests included of interface and computation, isotropic and anisotropic tests confirm computaiton
 
+# Unreleased
+* Improve internals
+* anisotropic susceptibilities are now allowed.
+* Improve suszeptibility input possibilities:
+    - give susceptibility to parent collection
+    - if susceptiblity input is scalar, isotropic susceptibility is assumed, if it is a 3-vector it can be anisotropic
+* Various tests included of interface and computation, isotropic and anisotropic tests confirm computaiton
+
 # 0.2.1a0
 * Fix null polarization for rotated objects ([#7](https://github.com/magpylib/magpylib-material-response/pull/7))
 * Fix docs not building ([#6](https://github.com/magpylib/magpylib-material-response/pull/6))
