@@ -5,11 +5,7 @@ from loguru import logger
 
 
 def _find_circle_center_and_tangent_points(
-    a: np.ndarray,
-    b: np.ndarray,
-    c: np.ndarray,
-    r: float,
-    max_ratio: float = 1
+    a: np.ndarray, b: np.ndarray, c: np.ndarray, r: float, max_ratio: float = 1
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """
     Find the center of a circle and its tangent points with given vertices and radius.
@@ -59,7 +55,9 @@ def _find_circle_center_and_tangent_points(
     return circle_center, ta, tb
 
 
-def _interpolate_circle(center: np.ndarray, start: np.ndarray, end: np.ndarray, n_points: int) -> list[np.ndarray]:
+def _interpolate_circle(
+    center: np.ndarray, start: np.ndarray, end: np.ndarray, n_points: int
+) -> list[np.ndarray]:
     """
     Interpolate points along a circle arc between two points.
 
@@ -91,11 +89,7 @@ def _interpolate_circle(center: np.ndarray, start: np.ndarray, end: np.ndarray, 
 
 
 def _create_fillet_segment(
-    a: np.ndarray,
-    b: np.ndarray,
-    c: np.ndarray,
-    r: float,
-    N: int
+    a: np.ndarray, b: np.ndarray, c: np.ndarray, r: float, N: int
 ) -> list[np.ndarray]:
     """
     Create a fillet segment with a given radius between three vertices.
@@ -122,7 +116,9 @@ def _create_fillet_segment(
     return _interpolate_circle(circle_center, ta, tb, N)
 
 
-def create_polyline_fillet(polyline: list | np.ndarray, max_radius: float, N: int) -> np.ndarray:
+def create_polyline_fillet(
+    polyline: list | np.ndarray, max_radius: float, N: int
+) -> np.ndarray:
     """
     Create a filleted polyline with specified maximum radius and number of points.
 
@@ -205,7 +201,7 @@ def _line_plane_intersection(
     plane_point: np.ndarray,
     plane_normal: np.ndarray,
     line_points: np.ndarray,
-    line_directions: np.ndarray
+    line_directions: np.ndarray,
 ) -> np.ndarray:
     """
     Find the intersection points of multiple lines and a plane.
