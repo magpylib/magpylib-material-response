@@ -2,20 +2,17 @@
 Built-in datasets for demonstration, educational and test purposes.
 """
 
+from __future__ import annotations
 
 def get_dataset(name):
+    import importlib
     import json
-    import os
     from pathlib import Path
 
-    stem = Path(name).stem
-    name = stem + ".json"
-    file = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "package_data",
-        "datasets",
-        name,
-    )
-    with open(file) as fp:
-        sim = json.load(fp)
+    name = Path(name).with_suffix("").with_suffix(".json")
+    with importlib.resources.path(
+        "magpylib_material_response.package_data", "datasets"
+    ) as resources_path:
+        with open(resources_path / name) as fp:
+            sim = json.load(fp)
     return sim
