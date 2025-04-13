@@ -4,7 +4,13 @@ import numpy as np
 from loguru import logger
 
 
-def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
+def _find_circle_center_and_tangent_points(
+    a: np.ndarray,
+    b: np.ndarray,
+    c: np.ndarray,
+    r: float,
+    max_ratio: float = 1
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """
     Find the center of a circle and its tangent points with given vertices and radius.
 
@@ -31,7 +37,8 @@ def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
 
     dot_babc = np.dot(ba_unit, bc_unit)
     if dot_babc == -1:  # angle is 180°
-        return None
+        msg = "Triangle is flat"
+        raise ValueError(msg)
     theta = np.arccos(dot_babc) / 2
     tan_theta = np.tan(theta)
     d = r / tan_theta
@@ -52,7 +59,7 @@ def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
     return circle_center, ta, tb
 
 
-def _interpolate_circle(center, start, end, n_points):
+def _interpolate_circle(center: np.ndarray, start: np.ndarray, end: np.ndarray, n_points: int) -> list[np.ndarray]:
     """
     Interpolate points along a circle arc between two points.
 
@@ -83,7 +90,13 @@ def _interpolate_circle(center, start, end, n_points):
     ]
 
 
-def _create_fillet_segment(a, b, c, r, N):
+def _create_fillet_segment(
+    a: np.ndarray,
+    b: np.ndarray,
+    c: np.ndarray,
+    r: float,
+    N: int
+) -> list[np.ndarray]:
     """
     Create a fillet segment with a given radius between three vertices.
 
@@ -101,14 +114,15 @@ def _create_fillet_segment(a, b, c, r, N):
     list
         List of NumPy arrays representing the fillet points.
     """
-    res = _find_circle_center_and_tangent_points(a, b, c, r)
-    if res is None:
+    try:
+        res = _find_circle_center_and_tangent_points(a, b, c, r)
+        circle_center, ta, tb = res
+    except ValueError:
         return [b]
-    circle_center, ta, tb = res
     return _interpolate_circle(circle_center, ta, tb, N)
 
 
-def create_polyline_fillet(polyline, max_radius, N):
+def create_polyline_fillet(polyline: list | np.ndarray, max_radius: float, N: int) -> np.ndarray:
     """
     Create a filleted polyline with specified maximum radius and number of points.
 
@@ -157,7 +171,7 @@ def create_polyline_fillet(polyline, max_radius, N):
     return np.array(filleted_points)
 
 
-def _bisectors(polyline):
+def _bisectors(polyline: np.ndarray) -> np.ndarray:
     """
     Calculate and normalize bisectors of the segments in a polyline.
 
@@ -187,7 +201,12 @@ def _bisectors(polyline):
     return bisectors / np.linalg.norm(bisectors, axis=1)[:, np.newaxis]
 
 
-def _line_plane_intersection(plane_point, plane_normal, line_points, line_directions):
+def _line_plane_intersection(
+    plane_point: np.ndarray,
+    plane_normal: np.ndarray,
+    line_points: np.ndarray,
+    line_directions: np.ndarray
+) -> np.ndarray:
     """
     Find the intersection points of multiple lines and a plane.
 
@@ -223,7 +242,22 @@ def _line_plane_intersection(plane_point, plane_normal, line_points, line_direct
     return line_points + np.expand_dims(t, axis=-1) * line_directions
 
 
-def move_grid_along_polyline(verts, grid):
+def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
+    """
+    Move a grid along a polyline, defined by the vertices.
+
+    Parameters
+    ----------
+    verts : np.ndarray, shape (n, d)
+        Array of polyline vertices, where n is the number of vertices and d is the dimension.
+    grid : np.ndarray, shape (m, d)
+        Array of grid points to move along the polyline, where m is the number of points.
+
+    Returns
+    -------
+    np.ndarray, shape (m, n, d)
+        Array of moved grid points along the polyline, with the same dimensions as the input grid.
+    """
     """
     Move a grid along a polyline, defined by the vertices.
 
