@@ -1,13 +1,22 @@
 # magpylib-material-response
 
-```{toctree}
-:maxdepth: 2
-:hidden:
-
-```
 
 ```{include} ../README.md
 :start-after: <!-- SPHINX-START -->
+```
+
+```{toctree}
+:caption: CONTENT
+:glob: true
+:maxdepth: 2
+```
+
+```{toctree}
+:caption: EXAMPLES
+:glob: true
+:maxdepth: 2
+
+examples/*
 ```
 
 ## Indices and tables
