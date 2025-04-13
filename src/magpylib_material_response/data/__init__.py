@@ -2,6 +2,8 @@
 Built-in datasets for demonstration, educational and test purposes.
 """
 
+from __future__ import annotations
+
 
 def get_dataset(name):
     import json

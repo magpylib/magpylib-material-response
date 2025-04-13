@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import threading
 import time
 import warnings
@@ -61,7 +63,7 @@ def timelog(msg, min_log_time=1):
 
     if end > min_log_time:
         logger.opt(colors=True).success(
-            f"{msg} done" f"<green> 🕑 {round(end, 3)}sec</green>"
+            f"{msg} done<green> 🕑 {round(end, 3)}sec</green>"
         )
 
 

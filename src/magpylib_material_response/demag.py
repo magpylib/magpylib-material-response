@@ -2,6 +2,8 @@
 
 # +
 # pylint: disable=invalid-name, redefined-outer-name, protected-access
+from __future__ import annotations
+
 import sys
 from collections import Counter
 
@@ -55,25 +57,24 @@ def get_susceptibilities(sources, susceptibility):
                 susis.append(susceptibility)
             else:
                 raise ValueError("susceptibility is not scalar or array fo length 3")
+    # susceptibilities as input to demag function
+    elif np.isscalar(susceptibility):
+        susis = np.ones((n, 3)) * susceptibility
+    elif len(susceptibility) == 3:
+        susis = np.tile(susceptibility, (n, 1))
+        if n == 3:
+            raise ValueError(
+                "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
+                "Please choose different means of input or change the number of cells in the Collection."
+            )
     else:
-        # susceptibilities as input to demag function
-        if np.isscalar(susceptibility):
-            susis = np.ones((n, 3)) * susceptibility
-        elif len(susceptibility) == 3:
-            susis = np.tile(susceptibility, (n, 1))
-            if n == 3:
-                raise ValueError(
-                    "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
-                    "Please choose different means of input or change the number of cells in the Collection."
-                )
-        else:
-            if len(susceptibility) != n:
-                raise ValueError(
-                    "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
-                )
-            susis = np.array(susceptibility)
-            if susis.ndim == 1:
-                susis = np.repeat(susis, 3).reshape(n, 3)
+        if len(susceptibility) != n:
+            raise ValueError(
+                "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
+            )
+        susis = np.array(susceptibility)
+        if susis.ndim == 1:
+            susis = np.repeat(susis, 3).reshape(n, 3)
 
     susis = np.reshape(susis, 3 * n, order="F")
     return np.array(susis)
@@ -141,7 +142,7 @@ def demag_tensor(
 
     if pairs_matching and split != 1:
         raise ValueError("Pairs matching does not support splitting")
-    elif max_dist != 0:
+    if max_dist != 0:
         mask_inds, getH_params, pos0, rot0 = filter_distance(
             src_list, max_dist, return_params=False, return_base_geo=True
         )
@@ -179,7 +180,7 @@ def demag_tensor(
                         H_unit_pol = []
                         for split_ind, src_list_subset in enumerate(src_list_split):
                             logger.info(
-                                f"Sources subset {split_ind+1}/{len(src_list_split)}"
+                                f"Sources subset {split_ind + 1}/{len(src_list_split)}"
                             )
                             if src_list_subset.size > 0:
                                 H_unit_pol.append(
