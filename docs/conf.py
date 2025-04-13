@@ -10,6 +10,7 @@ version = release = importlib.metadata.version("magpylib_material_response")
 
 extensions = [
     "myst_parser",
+    "myst_nb",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
@@ -62,3 +63,5 @@ nitpick_ignore = [
 ]
 
 always_document_param_types = True
+
+suppress_warnings = ["mystnb.unknown_mime_type"]
