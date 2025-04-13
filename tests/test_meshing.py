@@ -1,5 +1,7 @@
 """Test meshing functions"""
 
+from __future__ import annotations
+
 import magpylib as magpy
 import numpy as np
 import pytest

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import magpylib as magpy
 import numpy as np
 
@@ -5,7 +7,6 @@ from magpylib_material_response import demag, meshing
 
 
 def test_isotropic_susceptibility():
-
     cells = 1000  # should be >=1000, otherwise discretization error too large
 
     magnet = magpy.magnet.Cuboid(dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, 1.1))
@@ -25,7 +26,6 @@ def test_isotropic_susceptibility():
 
 
 def test_anisotropic_susceptibility():
-
     cells = 1000  # should be >=1000, otherwise discretization error too large
 
     magnet = magpy.magnet.Cuboid(dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, 1.1))
@@ -45,7 +45,6 @@ def test_anisotropic_susceptibility():
 
 
 def test_negative_susceptibility():
-
     cells = 1000  # should be >=1000, otherwise discretization error too large
 
     magnet = magpy.magnet.Cuboid(
