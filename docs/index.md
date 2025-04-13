@@ -1,30 +1,16 @@
-
-# Welcome to magpylib-material-response's documentation!
-
-```{warning}
-This package is experimental and in a very dynamic development phase. Breaking API changes may happen at any time!
-```
-
-Magpylib-Material-Response is an extension to the Magpylib library, providing magnetic
-field analysis for soft materials and demagnetization of hard magnets.
-Leveraging the Method of Moments ([Chadebec 2006](https://doi.org/10.1109/TMAG.2006.870929)), it calculates magnetic material response
-with high precision.
+# magpylib-material-response
 
 ```{toctree}
-:caption: CONTENT
-:glob: true
 :maxdepth: 2
+:hidden:
+
 ```
 
-```{toctree}
-:caption: EXAMPLES
-:glob: true
-:maxdepth: 2
-
-examples/*
+```{include} ../README.md
+:start-after: <!-- SPHINX-START -->
 ```
 
-# Indices and tables
+## Indices and tables
 
 - {ref}`genindex`
 - {ref}`modindex`

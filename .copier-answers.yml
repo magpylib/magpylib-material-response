@@ -1,0 +1,13 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 2025.01.22-32-g5e4b0c5
+_src_path: gh:scientific-python/cookie
+backend: hatch
+email: alexabois+magpylib@gmail.com
+full_name: Alexandre Boisselet
+license: BSD
+org: magpylib
+project_name: magpylib-material-response
+project_short_description: Python package extending the Magpylib library by providing
+    magnetic field analysis for soft materials and demagnetization of hard magnets.
+url: https://github.com/magpylib/magpylib-material-response
+vcs: true
