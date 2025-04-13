@@ -1,6 +1,5 @@
 # magpylib-material-response
 
-
 ```{include} ../README.md
 :start-after: <!-- SPHINX-START -->
 ```
