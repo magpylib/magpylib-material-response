@@ -25,7 +25,7 @@ def test_mesh_Cuboid():
         position=[0.004, 0.005, 0.006],
     )
     c.style.label = "Cuboid 1"
-    c.style.opacity = 0  # will be overriden by mesh kwargs lower
+    c.style.opacity = 0  # will be overridden by mesh kwargs lower
     c.rotate_from_angax(np.linspace(0, 76, N), "z", anchor=0, start=0)
     c.move(np.linspace((0, 0, 0), (0, 0, 0.0105), N), start=0)
     c.susceptibility = 3999
@@ -65,7 +65,7 @@ def test_slice_Cuboid():
         position=[0.004, 0.005, 0.006],
     )
     c.style.label = "Cuboid 1"
-    c.style.opacity = 0  # will be overriden by mesh kwargs lower
+    c.style.opacity = 0  # will be overridden by mesh kwargs lower
     c.rotate_from_angax(np.linspace(0, 76, N), "z", anchor=0, start=0)
     c.move(np.linspace((0, 0, 0), (0, 0, 0.0105), N), start=0)
     c.susceptibility = 3999
@@ -110,7 +110,7 @@ def test_slice_Cuboid2():
     np.testing.assert_allclose(cm[0].position, [0.0, 0.0, -0.45])
     np.testing.assert_allclose(cm[1].position, [0.0, 0.0, 0.05])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Shift must be between 0 and 1 (exclusive)"):
         slice_Cuboid(c, shift=0, axis="y")
 
 
@@ -124,7 +124,7 @@ def test_mesh_Cylinder():
         position=[1, 2, 1],
     )
     c.style.label = "CylinderSegment 1"
-    c.style.opacity = 0  # will be overriden by mesh kwargs lower
+    c.style.opacity = 0  # will be overridden by mesh kwargs lower
     c.rotate_from_angax(np.linspace(0, 90, N), "z", anchor=0, start=0)
     c.rotate_from_angax(np.linspace(0, 90, N), "x", anchor=0, start=0)
     c.move(np.linspace((0, 0, 0), (0, 0, 1), N), start=0)

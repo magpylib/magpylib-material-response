@@ -97,18 +97,21 @@ def cells_from_dimension(
     # run all combinations of rounding methods, including parity matching to find the
     # closest triple with the target_elems constrain
     result = [funcs[0](k) for k in (a, b, c)]  # first guess
-    for funcs in product(*[funcs] * 3):
-        res = [f(k) for f, k in zip(funcs, (a, b, c))]
+    for fns in product(*[funcs] * 3):
+        res = [f(k) for f, k in zip(fns, (a, b, c))]
         epsilon_new = elems - np.prod(res)
-        if np.abs(epsilon_new) <= epsilon and all(r >= min_val for r in res):
-            if not strict_max or epsilon_new >= 0:
-                epsilon = np.abs(epsilon_new)
-                result = res
+        if (
+            np.abs(epsilon_new) <= epsilon
+            and all(r >= min_val for r in res)
+            and (not strict_max or epsilon_new >= 0)
+        ):
+            epsilon = np.abs(epsilon_new)
+            result = res
     return np.array(result).astype(int)
 
 
 def get_volume(obj, return_containing_cube_edge=False):
-    """Return object volume in mm^3. The `containting_cube_edge` is the mininum side
+    """Return object volume in mm^3. The `containting_cube_edge` is the minimum side
     length of an unrotated cube centered at the origin containing the object.
     """
     if obj.__class__.__name__ == "Cuboid":
@@ -127,7 +130,8 @@ def get_volume(obj, return_containing_cube_edge=False):
         vol = 4 / 3 * np.pi * (obj.diameter / 2) ** 3
         containing_cube_edge = obj.diameter
     else:
-        raise TypeError("Unsupported object type for volume calculation")
+        msg = "Unsupported object type for volume calculation"
+        raise TypeError(msg)
     if return_containing_cube_edge:
         return vol, containing_cube_edge
     return vol
@@ -147,7 +151,7 @@ def mask_inside_Cylinder(obj, positions, tolerance=1e-14):
     """Return mask of provided positions inside a Cylinder"""
     # transform to Cy CS
     x, y, z = positions.T
-    r, phi = np.sqrt(x**2 + y**2), np.arctan2(y, x)
+    r, _phi = np.sqrt(x**2 + y**2), np.arctan2(y, x)
     r0, z0 = obj.dimension.T / 2
 
     # scale invariance (make dimensionless)
@@ -184,22 +188,16 @@ def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
     # transform dim deg->rad
     phi1 = phi1 / 180 * np.pi
     phi2 = phi2 / 180 * np.pi
-    dim = np.array([r1, r2, phi1, phi2, z1, z2]).T
 
     # transform obs_pos to Cy CS --------------------------------------------
     x, y, z = positions.T
     r, phi = np.sqrt(x**2 + y**2), np.arctan2(y, x)
-    pos_obs_cy = np.concatenate(((r,), (phi,), (z,)), axis=0).T
 
     # determine when points lie inside and on surface of magnet -------------
 
     # phip1 in [-2pi,0], phio2 in [0,2pi]
     phio1 = phi
     phio2 = phi - np.sign(phi) * 2 * np.pi
-
-    # phi=phi1, phi=phi2
-    mask_phi1 = close(phio1, phi1) | close(phio2, phi1)
-    mask_phi2 = close(phio1, phi2) | close(phio2, phi2)
 
     # r, phi ,z lies in-between, avoid numerical fluctuations
     # (e.g. due to rotations) by including tolerance
@@ -210,8 +208,7 @@ def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
     mask_z_in = (z1 - tolerance < z) & (z < z2 + tolerance)
 
     # inside
-    mask_in = mask_r_in & mask_phi_in & mask_z_in
-    return mask_in
+    return mask_r_in & mask_phi_in & mask_z_in
 
 
 def mask_inside(obj, positions, tolerance=1e-14):
@@ -224,5 +221,6 @@ def mask_inside(obj, positions, tolerance=1e-14):
     }
     func = mask_inside_funcs.get(obj.__class__.__name__, None)
     if func is None:
-        raise TypeError("Unsupported object type for inside masking")
+        msg = "Unsupported object type for inside masking"
+        raise TypeError(msg)
     return func(obj, positions, tolerance)

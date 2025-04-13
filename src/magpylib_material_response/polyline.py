@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from loguru import logger
 
 
 def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
@@ -36,7 +37,7 @@ def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
     d = r / tan_theta
     if d > norm_bc * max_ratio or d > norm_ab * max_ratio:
         # rold, dold = r, d
-        print("r, d, norm_ab, norm_bc: ", r, d, norm_ab, norm_bc)
+        logger.debug(f"r: {r}, d: {d}, norm_ab: {norm_ab}, norm_bc: {norm_bc}")
         d = min(norm_bc * max_ratio, norm_ab * max_ratio)
         r = d * tan_theta if theta > 0 else 0
         # warnings.warn(f"Radius {rold:.4g} is too big and has been reduced to {r:.4g}")
@@ -77,10 +78,9 @@ def _interpolate_circle(center, start, end, n_points):
     v = start - center
     w = np.cross(v, end - start)
     w /= np.linalg.norm(w)
-    circle_points = [
+    return [
         center + np.cos(angle) * v + np.sin(angle) * np.cross(w, v) for angle in angles
     ]
-    return circle_points
 
 
 def _create_fillet_segment(a, b, c, r, N):
@@ -148,9 +148,8 @@ def create_polyline_fillet(polyline, max_radius, N):
         try:
             filleted_points.extend(_create_fillet_segment(a, b, c, radius, N))
         except ValueError as exc:
-            raise ValueError(
-                f"The radius {radius} on position vertex {i} is too large"
-            ) from exc
+            msg = f"The radius {radius} on position vertex {i} is too large"
+            raise ValueError(msg) from exc
     if closed:
         filleted_points[0] = filleted_points[-1]
     else:
@@ -185,9 +184,7 @@ def _bisectors(polyline):
     bisectors = normalized_vectors[:-1] + normalized_vectors[1:]
 
     # Normalize the bisectors
-    bisectors_normalized = bisectors / np.linalg.norm(bisectors, axis=1)[:, np.newaxis]
-
-    return bisectors_normalized
+    return bisectors / np.linalg.norm(bisectors, axis=1)[:, np.newaxis]
 
 
 def _line_plane_intersection(plane_point, plane_normal, line_points, line_directions):
@@ -223,9 +220,7 @@ def _line_plane_intersection(plane_point, plane_normal, line_points, line_direct
     )
 
     # Find the intersection points by plugging t back into the parametric line equation
-    intersection_points = line_points + np.expand_dims(t, axis=-1) * line_directions
-
-    return intersection_points
+    return line_points + np.expand_dims(t, axis=-1) * line_directions
 
 
 def move_grid_along_polyline(verts, grid):

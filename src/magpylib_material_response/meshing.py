@@ -52,10 +52,11 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
         Collection of Cuboid cells
     """
     if not isinstance(cuboid, magpy.magnet.Cuboid):
-        raise TypeError(
+        msg = (
             "Object to be meshed must be a Cuboid, "
             f"received instead {cuboid.__class__.__name__!r}"
         )
+        raise TypeError(msg)
     dim0 = cuboid.dimension
     pol0 = cuboid.polarization
 
@@ -128,12 +129,13 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
             360,
         )
     else:
-        raise TypeError("Input must be a Cylinder or CylinderSegment")
+        msg = "Input must be a Cylinder or CylinderSegment"
+        raise TypeError(msg)
 
     al = (r2 + r1) * 3.14 * (phi2 - phi1) / 360  # arclen = D*pi*arcratio
     dim = al, r2 - r1, h
     pol0 = cylinder.polarization
-    # "unroll" the cylinder and distribute the target number of elemens along the
+    # "unroll" the cylinder and distribute the target number of elements along the
     # circumference, radius and height.
     if np.isscalar(target_elems):
         nphi, nr, nh = cells_from_dimension(dim, target_elems)
@@ -195,7 +197,7 @@ def mesh_thin_CylinderSegment_with_cuboids(
         CylinderSegment object to be discretized
     target_elems: int or tuple of int,
         If `target_elems` is a  tuple of integers, the cylinder segment is respectively
-        divided over circumference and height, if an integer, divisions are infered to
+        divided over circumference and height, if an integer, divisions are inferred to
         build cuboids with close to squared faces.
     ratio_limit: positive number,
         Sets the r2/(r2-r1) limit to be considered as thin-walled, r1 being the inner
@@ -214,11 +216,12 @@ def mesh_thin_CylinderSegment_with_cuboids(
     r1, r2, h, phi1, phi2 = cyl_seg.dimension
     pol0 = cyl_seg.polarization
     if ratio_limit > r2 / (r2 - r1):
-        raise ValueError(
+        msg = (
             "This meshing function is intended for thin-walled CylinderSegment objects"
             f" of radii-ratio r2/(r2-r1)>{ratio_limit}, r1 being the inner radius."
             f"\nInstead r2/(r2-r1)={r2 / (r2 - r1)}"
         )
+        raise ValueError(msg)
     # distribute elements -> targeting thin close-to-square surface cells
     circumf = 2 * np.pi * r1
     if np.isscalar(target_elems):
@@ -279,12 +282,14 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
         If the shift value is not between 0 and 1 (exclusive).
     """
     if not isinstance(cuboid, magpy.magnet.Cuboid):
-        raise TypeError(
+        msg = (
             "Object to be sliced must be a Cuboid, "
             f"received instead {cuboid.__class__.__name__!r}"
         )
+        raise TypeError(msg)
     if not 0 < shift < 1:
-        raise ValueError("Shift must be between 0 and 1 (exclusive)")
+        msg = "Shift must be between 0 and 1 (exclusive)"
+        raise ValueError(msg)
     dim0 = cuboid.dimension
     pol0 = cuboid.polarization
     ind = "xyz".index(axis)
@@ -347,7 +352,8 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
         )
         grid = grid[pos_inside_strict_mask]
         if grid.size == 0:
-            raise ValueError("No cuboids left with strict-inside method")
+            msg = "No cuboids left with strict-inside method"
+            raise ValueError(msg)
 
     cells = []
     for pos in grid:
@@ -399,7 +405,7 @@ def mesh_all(
         If there are incompatible objects found.
     """
     supported = (magpy.magnet.Cuboid, magpy.magnet.Cylinder)
-    allowed = supported + (BaseCurrent,)
+    allowed = (*supported, BaseCurrent)
     if not inplace:
         obj = obj.copy(**kwargs)
     children = [obj]
@@ -415,18 +421,19 @@ def mesh_all(
     else:
         target_elems_by_child = [max(min_elems, target_elems)] * len(supported_objs)
     if incompatible_objs:
-        raise TypeError(
+        msg = (
             "Incompatible objects found: "
             f"{Counter(s.__class__.__name__ for s in incompatible_objs)}"
             f"\nSupported: {[s.__name__ for s in supported]}."
         )
-    for child, target_elems in zip(supported_objs, target_elems_by_child):
+        raise TypeError(msg)
+    for child, targ_elems in zip(supported_objs, target_elems_by_child):
         parent = child.parent
         kw = kwargs if parent is None else {}
         if isinstance(child, magpy.magnet.Cuboid):
-            child_meshed = mesh_Cuboid(child, target_elems, **kw)
+            child_meshed = mesh_Cuboid(child, targ_elems, **kw)
         elif isinstance(child, magpy.magnet.Cylinder):
-            child_meshed = mesh_Cylinder(child, target_elems, **kw)
+            child_meshed = mesh_Cylinder(child, targ_elems, **kw)
         child.parent = None
         if parent is not None:
             parent.add(child_meshed)

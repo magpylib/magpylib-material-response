@@ -21,7 +21,7 @@ kernelspec:
 This code demonstrates demagnetization calculations for a hard and a soft cuboid
 magnet using the Magpylib library. Demagnetization is applied using varying
 numbers of cells for the mesh and compared to the computed magnetic fields from
-Magpylib withoug demagnetization and with FEM analysis data obtained from an
+Magpylib without demagnetization and with FEM analysis data obtained from an
 external dataset.
 
 +++ {"user_expressions": []}

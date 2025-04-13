@@ -11,9 +11,10 @@ def get_dataset(name):
     from pathlib import Path
 
     name = Path(name).with_suffix("").with_suffix(".json")
-    with importlib.resources.path(
-        "magpylib_material_response.package_data", "datasets"
-    ) as resources_path:
-        with open(resources_path / name) as fp:
-            sim = json.load(fp)
-    return sim
+    with (
+        importlib.resources.path(
+            "magpylib_material_response.package_data", "datasets"
+        ) as resources_path,
+        (resources_path / name).open() as fp,
+    ):
+        return json.load(fp)
