@@ -66,6 +66,7 @@ build.include = [
   "src/magpylib_material_response/package_data/datasets/*.json",
   "src/magpylib_material_response/package_data/datasets/*.csv",
 ]
+
 [tool.hatch.envs.default]
 features = ["test"]
 scripts.test = "pytest {args}"
