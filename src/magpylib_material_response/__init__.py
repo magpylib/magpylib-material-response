@@ -8,4 +8,6 @@ from __future__ import annotations
 
 from ._version import version as __version__
 
-__all__ = ["__version__"]
+import magpylib_material_response._data as data
+
+__all__ = ["__version__", "data"]
