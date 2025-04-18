@@ -61,7 +61,6 @@ Changelog = "https://github.com/magpylib/magpylib-material-response/releases"
 
 [tool.hatch]
 version.source = "vcs"
-version.path = "src/magpylib_material_response/_version.py"
 build.hooks.vcs.version-file = "src/magpylib_material_response/_version.py"
 build.include = [
   "src/magpylib_material_response/package_data/datasets/*.json",
