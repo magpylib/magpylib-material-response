@@ -68,18 +68,6 @@ build.include = [
 ]
 build.sources = ["src"]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/magpylib_material_response"]
-
-[tool.hatch.build.targets.sdist]
-include = [
-  "src/magpylib_material_response",
-  "README.md",
-  "LICENSE",
-  "pyproject.toml",
-]
-
-
 [tool.hatch.envs.default]
 features = ["test"]
 scripts.test = "pytest {args}"
