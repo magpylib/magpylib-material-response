@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.1
+    jupytext_version: 1.17.0
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -121,7 +121,7 @@ def get_magpylib_dataframe(collection, sensors):
     return df
 
 
-from magpylib_material_response.data import get_dataset
+from magpylib_material_response import get_dataset
 
 sim_ANSYS = get_dataset("FEMdata_test_softmag")  # FEM dataset has only Bx and Bz
 

@@ -6,8 +6,8 @@ magpylib-material-response: Python package extending the Magpylib library by pro
 
 from __future__ import annotations
 
-import magpylib_material_response._data as data
+from magpylib_material_response._data import get_dataset
 
 from ._version import version as __version__
 
-__all__ = ["__version__", "data"]
+__all__ = ["__version__", "get_dataset"]
