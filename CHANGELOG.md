@@ -8,7 +8,7 @@
 - anisotropic susceptibilities are now allowed.
 - Improve susceptibility input possibilities:
   - give susceptibility to parent collection
-  - if susceptiblity input is scalar, isotropic susceptibility is assumed, if it
+  - if susceptibility input is scalar, isotropic susceptibility is assumed, if it
     is a 3-vector it can be anisotropic
 - Various tests included of interface and computation, isotropic and anisotropic
   tests confirm computaiton
