@@ -110,7 +110,7 @@ def test_slice_Cuboid2():
     np.testing.assert_allclose(cm[0].position, [0.0, 0.0, -0.45])
     np.testing.assert_allclose(cm[1].position, [0.0, 0.0, 0.05])
 
-    with pytest.raises(ValueError, match="Shift must be between 0 and 1 (exclusive)"):
+    with pytest.raises(ValueError, match=r"Shift must be between 0 and 1 *."):
         slice_Cuboid(c, shift=0, axis="y")
 
 

@@ -430,13 +430,15 @@ def mesh_all(
     for child, targ_elems in zip(supported_objs, target_elems_by_child):
         parent = child.parent
         kw = kwargs if parent is None else {}
+        child_meshed = None
         if isinstance(child, magpy.magnet.Cuboid):
             child_meshed = mesh_Cuboid(child, targ_elems, **kw)
         elif isinstance(child, magpy.magnet.Cylinder):
             child_meshed = mesh_Cylinder(child, targ_elems, **kw)
-        child.parent = None
-        if parent is not None:
-            parent.add(child_meshed)
-        else:
-            obj = child_meshed
+        if child_meshed is not None:
+            child.parent = None
+            if parent is not None:
+                parent.add(child_meshed)
+            else:
+                obj = child_meshed
     return obj

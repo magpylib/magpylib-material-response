@@ -254,21 +254,6 @@ def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
     np.ndarray, shape (m, n, d)
         Array of moved grid points along the polyline, with the same dimensions as the input grid.
     """
-    """
-    Move a grid along a polyline, defined by the vertices.
-
-    Parameters
-    ----------
-    verts : np.ndarray, shape (n, d)
-        Array of polyline vertices, where n is the number of vertices and d is the dimension.
-    grid : np.ndarray, shape (m, d)
-        Array of grid points to move along the polyline, where m is the number of points.
-
-    Returns
-    -------
-    np.ndarray, shape (m, n, d)
-        Array of moved grid points along the polyline, with the same dimensions as the input grid.
-    """
     grid = grid.copy()
     pts = [grid]
     normals = _bisectors(verts)

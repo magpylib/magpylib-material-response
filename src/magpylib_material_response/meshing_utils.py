@@ -176,9 +176,6 @@ def mask_inside_Sphere(obj, positions, tolerance=1e-14):
 def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
     """Return mask of provided positions inside a CylinderSegment"""
 
-    def close(arg1, arg2):
-        return np.isclose(arg1, arg2, rtol=tolerance, atol=tolerance)
-
     r1, r2, h, phi1, phi2 = obj.dimension.T
     r1 = abs(r1)
     r2 = abs(r2)

@@ -31,7 +31,7 @@ config = {
 logger.configure(**config)
 
 
-def get_susceptibilities(sources, susceptibility):
+def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
     Priority is given at the source level, however if value is not found, it is searched
     up the parent tree, if available. Raises an error if no value is found when reached
@@ -141,6 +141,8 @@ def demag_tensor(
     if pairs_matching and split != 1:
         msg = "Pairs matching does not support splitting"
         raise ValueError(msg)
+    mask_inds = None
+    getH_params = {}
     if max_dist != 0:
         mask_inds, getH_params, pos0, rot0 = filter_distance(
             src_list, max_dist, return_params=False, return_base_geo=True
@@ -158,7 +160,9 @@ def demag_tensor(
         # point matching field and demag tensor
         with timelog(f"getH with unit_pol={unit_pol}", min_log_time=min_log_time):
             if pairs_matching or max_dist != 0:
-                polarization = np.repeat(pol_all, len(src_list), axis=0)[mask_inds]
+                polarization = np.repeat(pol_all, len(src_list), axis=0)
+                if mask_inds is not None:
+                    polarization = polarization[mask_inds]
                 H_unique = magpy.getH(
                     "Cuboid", polarization=polarization, **getH_params
                 )

@@ -166,4 +166,6 @@ messages_control.disable = [
   "missing-module-docstring",
   "missing-function-docstring",
   "wrong-import-position",
+  "invalid-name", # TODO - review later
+  "protected-access", # TODO - review later
 ]
