@@ -9,7 +9,6 @@ author = "Alexandre Boisselet"
 version = release = importlib.metadata.version("magpylib_material_response")
 
 extensions = [
-    "myst_parser",
     "myst_nb",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
@@ -56,7 +55,7 @@ myst_enable_extensions = [
     "dollarmath",
     "html_admonition",
     "html_image",
-    "linkify",
+    #"linkify",
     "replacements",
     "smartquotes",
     "substitution",
