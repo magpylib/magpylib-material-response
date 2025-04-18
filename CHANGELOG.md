@@ -6,7 +6,7 @@
 - FE tests for anisotropic chi and negative chi
 - Improve internals
 - anisotropic susceptibilities are now allowed.
-- Improve suszeptibility input possibilities:
+- Improve susceptibility input possibilities:
   - give susceptibility to parent collection
   - if susceptiblity input is scalar, isotropic susceptibility is assumed, if it
     is a 3-vector it can be anisotropic
