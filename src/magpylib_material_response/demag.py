@@ -173,7 +173,7 @@ def demag_tensor(
                 else:
                     H_unit_pol = H_unique[unique_inv_inds]
             else:
-                for src, pol in zip(src_list, pol_all):
+                for src, pol in zip(src_list, pol_all, strict=False):
                     src.polarization = pol
                 if split > 1:
                     src_list_split = np.array_split(src_list, split)
@@ -439,7 +439,7 @@ def apply_demag(
         pol_new = np.reshape(pol_new, (n, 3), order="F")
         # pol_new *= .4*np.pi
 
-        for s, pol in zip(collection.sources_all, pol_new):
+        for s, pol in zip(collection.sources_all, pol_new, strict=False):
             s.polarization = s.orientation.inv().apply(pol)  # ROTATION CHECK
 
     if not inplace:

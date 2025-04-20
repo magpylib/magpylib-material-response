@@ -98,7 +98,7 @@ def cells_from_dimension(
     # closest triple with the target_elems constrain
     result = [funcs[0](k) for k in (a, b, c)]  # first guess
     for fns in product(*[funcs] * 3):
-        res = [f(k) for f, k in zip(fns, (a, b, c))]
+        res = [f(k) for f, k in zip(fns, (a, b, c), strict=False)]
         epsilon_new = elems - np.prod(res)
         if (
             np.abs(epsilon_new) <= epsilon

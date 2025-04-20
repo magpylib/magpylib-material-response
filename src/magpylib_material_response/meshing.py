@@ -80,7 +80,7 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
     # inside position grid
     xs, ys, zs = (
         np.linspace(d / 2 * (1 / n - 1), d / 2 * (1 - 1 / n), n)
-        for d, n in zip(dim0, nnn)
+        for d, n in zip(dim0, nnn, strict=False)
     )
     grid = np.array([(x, y, z) for x in xs for y in ys for z in zs])
 
@@ -243,7 +243,7 @@ def mesh_thin_CylinderSegment_with_cuboids(
     rots = R.from_euler("z", phi_vec)
     cells = []
     for z in np.linspace(-h / 2 + dh / 2, h / 2 - dh / 2, nh):
-        for pos, orient in zip(poss, rots):
+        for pos, orient in zip(poss, rots, strict=False):
             child = magpy.magnet.Cuboid(
                 polarization=orient.inv().apply(pol0),
                 dimension=dim,
@@ -297,7 +297,7 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
     dims_k = dim_k * (1 - shift), dim_k * (shift)
     shift_k = (dim_k - dims_k[0]) / 2, -(dim_k - dims_k[1]) / 2
     cells = []
-    for d, s in zip(dims_k, shift_k):
+    for d, s in zip(dims_k, shift_k, strict=False):
         dimension = dim0.copy()
         dimension[ind] = d
         position = np.array([0, 0, 0], dtype=float)
@@ -337,7 +337,9 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     grid_elems = [int((vol_ratio * target_elems) ** (1 / 3))] * 3
     grid_dim = [containing_cube_edge] * 3
 
-    slices = [slice(-d / 2, d / 2, N * 1j) for d, N in zip(grid_dim, grid_elems)]
+    slices = [
+        slice(-d / 2, d / 2, N * 1j) for d, N in zip(grid_dim, grid_elems, strict=False)
+    ]
     grid = np.mgrid[slices].reshape(len(slices), -1).T
     grid = grid[mask_inside(obj, grid, tolerance=1e-14)]
     cube_cell_dim = np.array([containing_cube_edge / (grid_elems[0] - 1)] * 3)
@@ -427,7 +429,7 @@ def mesh_all(
             f"\nSupported: {[s.__name__ for s in supported]}."
         )
         raise TypeError(msg)
-    for child, targ_elems in zip(supported_objs, target_elems_by_child):
+    for child, targ_elems in zip(supported_objs, target_elems_by_child, strict=False):
         parent = child.parent
         kw = kwargs if parent is None else {}
         child_meshed = None
