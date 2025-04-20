@@ -364,7 +364,7 @@ def apply_demag(
     others_list = [
         src
         for src in srcs
-        if not isinstance(src, (BaseMagnet, BaseCurrent, magpy.Sensor))
+        if not isinstance(src, BaseMagnet | BaseCurrent | magpy.Sensor)
     ]
     if others_list:
         msg = (

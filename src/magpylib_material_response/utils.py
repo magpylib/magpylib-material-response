@@ -193,7 +193,7 @@ def deserialize_setup(*objs, return_ids=False):
     ids = {}
     for obj in objs:
         obj_list = []
-        if not isinstance(obj, (list, tuple)):
+        if not isinstance(obj, list | tuple):
             obj_list = [obj]
         for sub_obj in obj_list:
             r, i = deserialize_recursive(sub_obj)
