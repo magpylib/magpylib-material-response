@@ -40,7 +40,7 @@ jobs:
         runs-on: [ubuntu-latest, windows-latest, macos-14]
 
         include:
-          - python-version: "pypy-3.10"
+          - python-version: "pypy-3.11"
             runs-on: ubuntu-latest
 
     steps:
