@@ -64,6 +64,7 @@ version.source = "vcs"
 build.hooks.vcs.version-file = "src/magpylib_material_response/_version.py"
 
 [tool.hatch.envs.default]
+installer = "uv"
 features = ["test"]
 scripts.test = "pytest {args}"
 
