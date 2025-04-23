@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import numpy as np
+from loguru import logger
 
 
-def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
+def _find_circle_center_and_tangent_points(
+    a: np.ndarray, b: np.ndarray, c: np.ndarray, r: float, max_ratio: float = 1
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """
     Find the center of a circle and its tangent points with given vertices and radius.
 
@@ -28,13 +33,14 @@ def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
 
     dot_babc = np.dot(ba_unit, bc_unit)
     if dot_babc == -1:  # angle is 180°
-        return None
+        msg = "Triangle is flat"
+        raise ValueError(msg)
     theta = np.arccos(dot_babc) / 2
     tan_theta = np.tan(theta)
     d = r / tan_theta
     if d > norm_bc * max_ratio or d > norm_ab * max_ratio:
         # rold, dold = r, d
-        print("r, d, norm_ab, norm_bc: ", r, d, norm_ab, norm_bc)
+        logger.debug(f"r: {r}, d: {d}, norm_ab: {norm_ab}, norm_bc: {norm_bc}")
         d = min(norm_bc * max_ratio, norm_ab * max_ratio)
         r = d * tan_theta if theta > 0 else 0
         # warnings.warn(f"Radius {rold:.4g} is too big and has been reduced to {r:.4g}")
@@ -49,7 +55,9 @@ def _find_circle_center_and_tangent_points(a, b, c, r, max_ratio=1):
     return circle_center, ta, tb
 
 
-def _interpolate_circle(center, start, end, n_points):
+def _interpolate_circle(
+    center: np.ndarray, start: np.ndarray, end: np.ndarray, n_points: int
+) -> list[np.ndarray]:
     """
     Interpolate points along a circle arc between two points.
 
@@ -75,13 +83,14 @@ def _interpolate_circle(center, start, end, n_points):
     v = start - center
     w = np.cross(v, end - start)
     w /= np.linalg.norm(w)
-    circle_points = [
+    return [
         center + np.cos(angle) * v + np.sin(angle) * np.cross(w, v) for angle in angles
     ]
-    return circle_points
 
 
-def _create_fillet_segment(a, b, c, r, N):
+def _create_fillet_segment(
+    a: np.ndarray, b: np.ndarray, c: np.ndarray, r: float, N: int
+) -> list[np.ndarray]:
     """
     Create a fillet segment with a given radius between three vertices.
 
@@ -99,14 +108,17 @@ def _create_fillet_segment(a, b, c, r, N):
     list
         List of NumPy arrays representing the fillet points.
     """
-    res = _find_circle_center_and_tangent_points(a, b, c, r)
-    if res is None:
+    try:
+        res = _find_circle_center_and_tangent_points(a, b, c, r)
+        circle_center, ta, tb = res
+    except ValueError:
         return [b]
-    circle_center, ta, tb = res
     return _interpolate_circle(circle_center, ta, tb, N)
 
 
-def create_polyline_fillet(polyline, max_radius, N):
+def create_polyline_fillet(
+    polyline: list | np.ndarray, max_radius: float, N: int
+) -> np.ndarray:
     """
     Create a filleted polyline with specified maximum radius and number of points.
 
@@ -146,9 +158,8 @@ def create_polyline_fillet(polyline, max_radius, N):
         try:
             filleted_points.extend(_create_fillet_segment(a, b, c, radius, N))
         except ValueError as exc:
-            raise ValueError(
-                f"The radius {radius} on position vertex {i} is too large"
-            ) from exc
+            msg = f"The radius {radius} on position vertex {i} is too large"
+            raise ValueError(msg) from exc
     if closed:
         filleted_points[0] = filleted_points[-1]
     else:
@@ -156,7 +167,7 @@ def create_polyline_fillet(polyline, max_radius, N):
     return np.array(filleted_points)
 
 
-def _bisectors(polyline):
+def _bisectors(polyline: np.ndarray) -> np.ndarray:
     """
     Calculate and normalize bisectors of the segments in a polyline.
 
@@ -183,12 +194,15 @@ def _bisectors(polyline):
     bisectors = normalized_vectors[:-1] + normalized_vectors[1:]
 
     # Normalize the bisectors
-    bisectors_normalized = bisectors / np.linalg.norm(bisectors, axis=1)[:, np.newaxis]
-
-    return bisectors_normalized
+    return bisectors / np.linalg.norm(bisectors, axis=1)[:, np.newaxis]
 
 
-def _line_plane_intersection(plane_point, plane_normal, line_points, line_directions):
+def _line_plane_intersection(
+    plane_point: np.ndarray,
+    plane_normal: np.ndarray,
+    line_points: np.ndarray,
+    line_directions: np.ndarray,
+) -> np.ndarray:
     """
     Find the intersection points of multiple lines and a plane.
 
@@ -221,12 +235,10 @@ def _line_plane_intersection(plane_point, plane_normal, line_points, line_direct
     )
 
     # Find the intersection points by plugging t back into the parametric line equation
-    intersection_points = line_points + np.expand_dims(t, axis=-1) * line_directions
-
-    return intersection_points
+    return line_points + np.expand_dims(t, axis=-1) * line_directions
 
 
-def move_grid_along_polyline(verts, grid):
+def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
     """
     Move a grid along a polyline, defined by the vertices.
 

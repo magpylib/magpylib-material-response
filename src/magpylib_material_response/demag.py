@@ -1,7 +1,7 @@
 """demag_functions"""
 
-# +
-# pylint: disable=invalid-name, redefined-outer-name, protected-access
+from __future__ import annotations
+
 import sys
 from collections import Counter
 
@@ -16,24 +16,24 @@ from magpylib_material_response.utils import timelog
 
 config = {
     "handlers": [
-        dict(
-            sink=sys.stdout,
-            colorize=True,
-            format=(
+        {
+            "sink": sys.stdout,
+            "colorize": True,
+            "format": (
                 "<magenta>{time:YYYY-MM-DD at HH:mm:ss}</magenta>"
                 " | <level>{level:^8}</level>"
                 " | <cyan>{function}</cyan>"
                 " | <yellow>{extra}</yellow> {level.icon:<2} {message}"
             ),
-        ),
+        },
     ],
 }
 logger.configure(**config)
 
 
-def get_susceptibilities(sources, susceptibility):
+def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
-    Priority is given at the source level, hovever if value is not found, it is searched
+    Priority is given at the source level, however if value is not found, it is searched
     up the parent tree, if available. Raises an error if no value is found when reached
     the top level of the tree."""
     n = len(sources)
@@ -45,35 +45,34 @@ def get_susceptibilities(sources, susceptibility):
             susceptibility = getattr(src, "susceptibility", None)
             if susceptibility is None:
                 if src.parent is None:
-                    raise ValueError(
-                        "No susceptibility defined in any parent collection"
-                    )
+                    msg = "No susceptibility defined in any parent collection"
+                    raise ValueError(msg)
                 susis.extend(get_susceptibilities(src.parent))
             elif not hasattr(susceptibility, "__len__"):
                 susis.append((susceptibility, susceptibility, susceptibility))
             elif len(susceptibility) == 3:
                 susis.append(susceptibility)
             else:
-                raise ValueError("susceptibility is not scalar or array fo length 3")
+                msg = "susceptibility is not scalar or array of length 3"
+                raise ValueError(msg)
+    # susceptibilities as input to demag function
+    elif np.isscalar(susceptibility):
+        susis = np.ones((n, 3)) * susceptibility
+    elif len(susceptibility) == 3:
+        susis = np.tile(susceptibility, (n, 1))
+        if n == 3:
+            msg = (
+                "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
+                "Please choose different means of input or change the number of cells in the Collection."
+            )
+            raise ValueError(msg)
     else:
-        # susceptibilities as input to demag function
-        if np.isscalar(susceptibility):
-            susis = np.ones((n, 3)) * susceptibility
-        elif len(susceptibility) == 3:
-            susis = np.tile(susceptibility, (n, 1))
-            if n == 3:
-                raise ValueError(
-                    "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
-                    "Please choose different means of input or change the number of cells in the Collection."
-                )
-        else:
-            if len(susceptibility) != n:
-                raise ValueError(
-                    "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
-                )
-            susis = np.array(susceptibility)
-            if susis.ndim == 1:
-                susis = np.repeat(susis, 3).reshape(n, 3)
+        if len(susceptibility) != n:
+            msg = "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
+            raise ValueError(msg)
+        susis = np.array(susceptibility)
+        if susis.ndim == 1:
+            susis = np.repeat(susis, 3).reshape(n, 3)
 
     susis = np.reshape(susis, 3 * n, order="F")
     return np.array(susis)
@@ -81,7 +80,7 @@ def get_susceptibilities(sources, susceptibility):
 
 def get_H_ext(*sources, H_ext=None):
     """Return a list of length (len(sources)) with H_ext values
-    Priority is given at the source level, hovever if value is not found, it is searched up the
+    Priority is given at the source level, however if value is not found, it is searched up the
     the parent tree, if available. Sets H_ext to zero if no value is found when reached the top
     level of the tree"""
     H_exts = []
@@ -119,7 +118,7 @@ def demag_tensor(
         calculated only once and copied to duplicates.
 
     split: int
-        Number of times the sources list is splitted before getH calculation ind demag
+        Number of times the sources list is split before getH calculation ind demag
         tensor calculation
 
     min_log_time:
@@ -140,8 +139,11 @@ def demag_tensor(
     nof_src = len(src_list)
 
     if pairs_matching and split != 1:
-        raise ValueError("Pairs matching does not support splitting")
-    elif max_dist != 0:
+        msg = "Pairs matching does not support splitting"
+        raise ValueError(msg)
+    mask_inds = None
+    getH_params = {}
+    if max_dist != 0:
         mask_inds, getH_params, pos0, rot0 = filter_distance(
             src_list, max_dist, return_params=False, return_base_geo=True
         )
@@ -158,7 +160,9 @@ def demag_tensor(
         # point matching field and demag tensor
         with timelog(f"getH with unit_pol={unit_pol}", min_log_time=min_log_time):
             if pairs_matching or max_dist != 0:
-                polarization = np.repeat(pol_all, len(src_list), axis=0)[mask_inds]
+                polarization = np.repeat(pol_all, len(src_list), axis=0)
+                if mask_inds is not None:
+                    polarization = polarization[mask_inds]
                 H_unique = magpy.getH(
                     "Cuboid", polarization=polarization, **getH_params
                 )
@@ -169,7 +173,7 @@ def demag_tensor(
                 else:
                     H_unit_pol = H_unique[unique_inv_inds]
             else:
-                for src, pol in zip(src_list, pol_all):
+                for src, pol in zip(src_list, pol_all, strict=False):
                     src.polarization = pol
                 if split > 1:
                     src_list_split = np.array_split(src_list, split)
@@ -179,7 +183,7 @@ def demag_tensor(
                         H_unit_pol = []
                         for split_ind, src_list_subset in enumerate(src_list_split):
                             logger.info(
-                                f"Sources subset {split_ind+1}/{len(src_list_split)}"
+                                f"Sources subset {split_ind + 1}/{len(src_list_split)}"
                             )
                             if src_list_subset.size > 0:
                                 H_unit_pol.append(
@@ -191,9 +195,7 @@ def demag_tensor(
             H_point.append(H_unit_pol)  # shape (n_cells, n_pos, 3_xyz)
 
     # shape (3_unit_pol, n_cells, n_pos, 3_xyz)
-    T = np.array(H_point).reshape((3, nof_src, nof_src, 3))
-
-    return T
+    return np.array(H_point).reshape((3, nof_src, nof_src, 3))
 
 
 def filter_distance(
@@ -207,9 +209,8 @@ def filter_distance(
     with timelog("Distance filter", min_log_time=min_log_time):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
         if not all_cuboids:
-            raise ValueError(
-                "filter_distance only implemented if all sources are Cuboids"
-            )
+            msg = "filter_distance only implemented if all sources are Cuboids"
+            raise ValueError(msg)
         pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
@@ -221,12 +222,14 @@ def filter_distance(
         maxdim2 = np.concatenate(dim2, axis=1).max(axis=1)
         mask = (dist2 / maxdim2) < max_dist
         if return_params:
-            params = dict(
-                observers=np.tile(pos0, (len(src_list), 1))[mask],
-                position=np.repeat(pos0, len(src_list), axis=0)[mask],
-                orientation=R.from_quat(np.repeat(rotQ0, len(src_list), axis=0))[mask],
-                dimension=np.repeat(dim0, len(src_list), axis=0)[mask],
-            )
+            params = {
+                "observers": np.tile(pos0, (len(src_list), 1))[mask],
+                "position": np.repeat(pos0, len(src_list), axis=0)[mask],
+                "orientation": R.from_quat(np.repeat(rotQ0, len(src_list), axis=0))[
+                    mask
+                ],
+                "dimension": np.repeat(dim0, len(src_list), axis=0)[mask],
+            }
         dsf = sum(mask) / len(mask) * 100
     log_msg = (
         "Interaction pairs left after distance factor filtering: "
@@ -251,9 +254,8 @@ def match_pairs(src_list, min_log_time=1):
     with timelog("Pairs matching", min_log_time=min_log_time):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
         if not all_cuboids:
-            raise ValueError(
-                "Pairs matching only implemented if all sources are Cuboids"
-            )
+            msg = "Pairs matching only implemented if all sources are Cuboids"
+            raise ValueError(msg)
         pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
@@ -282,12 +284,12 @@ def match_pairs(src_list, min_log_time=1):
                 f"<blue>{perc:.2f}%</blue>"
             )
 
-        params = dict(
-            observers=np.tile(pos0, (len(src_list), 1))[unique_inds],
-            position=np.repeat(pos0, len(src_list), axis=0)[unique_inds],
-            orientation=R.from_quat(rotQ2b)[unique_inds],
-            dimension=np.repeat(dim0, len(src_list), axis=0)[unique_inds],
-        )
+        params = {
+            "observers": np.tile(pos0, (len(src_list), 1))[unique_inds],
+            "position": np.repeat(pos0, len(src_list), axis=0)[unique_inds],
+            "orientation": R.from_quat(rotQ2b)[unique_inds],
+            "dimension": np.repeat(dim0, len(src_list), axis=0)[unique_inds],
+        }
     return params, unique_inds, unique_inv_inds, pos0, rot0
 
 
@@ -330,7 +332,7 @@ def apply_demag(
         `pairs_matching` or `split` and applies only cuboid cells.
 
     split: int
-        Number of times the sources list is splitted before getH calculation ind demag
+        Number of times the sources list is split before getH calculation ind demag
         tensor calculation. This parameter is not compatible with `pairs_matching` or
         `max_dist`.
 
@@ -352,28 +354,30 @@ def apply_demag(
     srcs = collection.sources_all
     src_with_paths = [src for src in srcs if src.position.ndim != 1]
     if src_with_paths:
-        raise ValueError(
+        msg = (
             f"{len(src_with_paths)} objects with paths, found. Demagnetization of "
             "objects with paths is not yet supported"
         )
+        raise ValueError(msg)
     magnets_list = [src for src in srcs if isinstance(src, BaseMagnet)]
     currents_list = [src for src in srcs if isinstance(src, BaseCurrent)]
     others_list = [
         src
         for src in srcs
-        if not isinstance(src, (BaseMagnet, BaseCurrent, magpy.Sensor))
+        if not isinstance(src, BaseMagnet | BaseCurrent | magpy.Sensor)
     ]
     if others_list:
-        raise TypeError(
+        msg = (
             "Only Magnet and Current sources supported. "
             "Incompatible objects found: "
             f"{Counter(s.__class__.__name__ for s in others_list)}"
         )
+        raise TypeError(msg)
     n = len(magnets_list)
     counts = Counter(s.__class__.__name__ for s in magnets_list)
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
     lbl = collection.style.label
-    coll_str = str(collection) if not lbl else lbl
+    coll_str = lbl if lbl else str(collection)
     demag_msg = (
         f"Demagnetization{inplace_str} of <blue>{coll_str}</blue>"
         f" with {n} cells - {counts}"
@@ -398,9 +402,8 @@ def apply_demag(
         H_ext = get_H_ext(*magnets_list)
         H_ext = np.array(H_ext)
         if len(H_ext) != n:
-            raise ValueError(
-                "Apply_demag input collection and H_ext must have same length."
-            )
+            msg = "Apply_demag input collection and H_ext must have same length."
+            raise ValueError(msg)
         H_ext = np.reshape(H_ext, (3 * n, 1), order="F")
 
         # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
@@ -436,8 +439,9 @@ def apply_demag(
         pol_new = np.reshape(pol_new, (n, 3), order="F")
         # pol_new *= .4*np.pi
 
-        for s, pol in zip(collection.sources_all, pol_new):
+        for s, pol in zip(collection.sources_all, pol_new, strict=False):
             s.polarization = s.orientation.inv().apply(pol)  # ROTATION CHECK
 
     if not inplace:
         return collection
+    return None

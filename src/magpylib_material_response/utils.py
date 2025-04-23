@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import threading
 import time
 import warnings
@@ -61,7 +63,7 @@ def timelog(msg, min_log_time=1):
 
     if end > min_log_time:
         logger.opt(colors=True).success(
-            f"{msg} done" f"<green> 🕑 {round(end, 3)}sec</green>"
+            f"{msg} done<green> 🕑 {round(end, 3)}sec</green>"
         )
 
 
@@ -78,7 +80,9 @@ def serialize_recursive(obj, parent="warn"):
     if getattr(obj, "_style", None) is not None or obj._style_kwargs:
         dd["style"] = obj.style.as_dict()
     if parent == "warn" and obj.parent is not None:
-        warnings.warn(f"object parent ({obj.parent}) not included in serialization")
+        warnings.warn(
+            f"object parent ({obj.parent}) not included in serialization", stacklevel=2
+        )
     if isinstance(obj, BaseMagnet):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
         susceptibility = getattr(obj, "susceptibility", None)
@@ -106,7 +110,8 @@ def serialize_recursive(obj, parent="warn"):
             serialize_recursive(child, parent="ignore") for child in obj.children
         ]
     else:
-        raise TypeError("Only Cuboid supported")
+        msg = "Only Cuboid supported"
+        raise TypeError(msg)
     return dd
 
 
@@ -128,13 +133,15 @@ def deserialize_recursive(inp, ids=None):
     kw["position"] = inp["position"]["value"]
     pos_unit = inp["position"]["unit"]
     if pos_unit != "m":
-        raise ValueError(f"Position unit must be `m`, got {pos_unit!r}")
+        msg = f"Position unit must be `m`, got {pos_unit!r}"
+        raise ValueError(msg)
 
     # orientation
     orient = inp["orientation"]["value"]
     orient_typ = inp["orientation"]["type"]
     if orient_typ != "matrix":
-        raise ValueError(f"Orientation type must be `matrix`, got {orient_typ!r}")
+        msg = f"Orientation type must be `matrix`, got {orient_typ!r}"
+        raise ValueError(msg)
     kw["orientation"] = Rotation.from_matrix(orient)
 
     style = inp.get("style", None)
@@ -142,25 +149,29 @@ def deserialize_recursive(inp, ids=None):
         kw["style"] = style
 
     if inp.get("parent", None) is not None:
-        warnings.warn(f"object parent ({inp['parent']}) ignored")
+        warnings.warn(f"object parent ({inp['parent']}) ignored", stacklevel=2)
 
     if issubclass(constr, BaseMagnet):
         kw["polarization"] = inp["polarization"]["value"]
         pol_unit = inp["polarization"]["unit"]
         if pol_unit != "T":
-            raise ValueError(f"Polarization unit must be `T`, got {pol_unit!r}")
+            msg = f"Polarization unit must be `T`, got {pol_unit!r}"
+            raise ValueError(msg)
     if issubclass(constr, magpy.magnet.Cuboid):
         kw["dimension"] = inp["dimension"]["value"]
         dim_unit = inp["dimension"]["unit"]
         if dim_unit != "m":
-            raise ValueError(f"Dimension unit must be `m`, got {dim_unit!r}")
+            msg = f"Dimension unit must be `m`, got {dim_unit!r}"
+            raise ValueError(msg)
     elif issubclass(constr, magpy.Sensor):
         kw["pixel"] = inp["pixel"]["value"]
         pix_unit = inp["pixel"]["unit"]
         if pix_unit != "m":
-            raise ValueError(f"Pixel unit must be `m`, got {pix_unit!r}")
+            msg = f"Pixel unit must be `m`, got {pix_unit!r}"
+            raise ValueError(msg)
     elif not is_coll:
-        raise TypeError("Only Collection, Cuboid, Sensor supported")
+        msg = "Only Collection, Cuboid, Sensor supported"
+        raise TypeError(msg)
     obj = constr(**kw)
     ids[inp["id"]] = obj
     if inp.get("susceptibility", None) is not None:
@@ -181,9 +192,10 @@ def deserialize_setup(*objs, return_ids=False):
     res = []
     ids = {}
     for obj in objs:
-        if not isinstance(obj, (list, tuple)):
-            obj = [obj]
-        for sub_obj in obj:
+        obj_list = []
+        if not isinstance(obj, list | tuple):
+            obj_list = [obj]
+        for sub_obj in obj_list:
             r, i = deserialize_recursive(sub_obj)
             res.append(r)
             ids.update(i)

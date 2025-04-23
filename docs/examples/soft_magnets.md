@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.1
+    jupytext_version: 1.17.0
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -18,8 +18,11 @@ kernelspec:
 
 +++
 
-This code demonstrates demagnetization calculations for a hard and a soft cuboid magnet using the Magpylib library.
-Demagnetization is applied using varying numbers of cells for the mesh and compared to the computed magnetic fields from Magpylib withoug demagnetization and with FEM analysis data obtained from an external dataset.
+This code demonstrates demagnetization calculations for a hard and a soft cuboid
+magnet using the Magpylib library. Demagnetization is applied using varying
+numbers of cells for the mesh and compared to the computed magnetic fields from
+Magpylib without demagnetization and with FEM analysis data obtained from an
+external dataset.
 
 +++ {"user_expressions": []}
 
@@ -118,7 +121,7 @@ def get_magpylib_dataframe(collection, sensors):
     return df
 
 
-from magpylib_material_response.data import get_dataset
+from magpylib_material_response import get_dataset
 
 sim_ANSYS = get_dataset("FEMdata_test_softmag")  # FEM dataset has only Bx and Bz
 
@@ -172,4 +175,5 @@ display(fig1, fig2)
 
 +++ {"user_expressions": []}
 
-As shown above, the demagnetized collection outputs are approaching the reference FEM values while refining the mesh.
+As shown above, the demagnetized collection outputs are approaching the
+reference FEM values while refining the mesh.

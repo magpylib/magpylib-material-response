@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.1
+    jupytext_version: 1.17.0
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -14,7 +14,16 @@ kernelspec:
 
 # Cuboids demagnetization
 
-The following example demonstrates how to create magnetic sources with different susceptibilities using the Magpylib library. It defines three cuboid magnets with varying susceptibilities and positions, creates a collection of these magnets, and computes their magnetic field responses using different levels of meshing. The results are then compared to a Finite Element Method (FEM) analysis to evaluate the performance of the Magpylib-Material-Response approach. The comparison is presented in two separate plots, one showing the magnetic field values and the other showing the difference between the Magpylib results and the FEM reference data. The code demonstrates that even with a low number of mesh elements, the Magpylib results quickly approach the reference FEM values.
+The following example demonstrates how to create magnetic sources with different
+susceptibilities using the Magpylib library. It defines three cuboid magnets
+with varying susceptibilities and positions, creates a collection of these
+magnets, and computes their magnetic field responses using different levels of
+meshing. The results are then compared to a Finite Element Method (FEM) analysis
+to evaluate the performance of the Magpylib-Material-Response approach. The
+comparison is presented in two separate plots, one showing the magnetic field
+values and the other showing the difference between the Magpylib results and the
+FEM reference data. The code demonstrates that even with a low number of mesh
+elements, the Magpylib results quickly approach the reference FEM values.
 
 +++
 
@@ -28,7 +37,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from loguru import logger
-from magpylib_material_response.data import get_dataset
+from magpylib_material_response import get_dataset
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all
 
@@ -164,4 +173,5 @@ fig2.update_yaxes(matches=None, showticklabels=True)
 display(fig1, fig2)
 ```
 
-As shown above, already with a low number of mesh elements, the result is approaching the reference FEM values and improves while refining the mesh.
+As shown above, already with a low number of mesh elements, the result is
+approaching the reference FEM values and improves while refining the mesh.
