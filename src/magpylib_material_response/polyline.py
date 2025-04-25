@@ -254,7 +254,8 @@ def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
     np.ndarray, shape (m, n, d)
         Array of moved grid points along the polyline, with the same dimensions as the input grid.
     """
-    grid = grid.copy()
+    verts = np.array(verts)
+    grid = np.array(grid) + verts[0]
     pts = [grid]
     normals = _bisectors(verts)
     closed = np.allclose(verts[0], verts[-1])
