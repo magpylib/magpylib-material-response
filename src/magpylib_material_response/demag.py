@@ -49,7 +49,7 @@ def get_susceptibilities(sources, susceptibility=None):
                     raise ValueError(msg)
                 src_susceptibility = _get_susceptibility_from_hierarchy(src.parent)
             susceptibilities.append(src_susceptibility)
-        
+
         susis = _convert_to_array(susceptibilities, n)
     else:
         # Use function input susceptibility
@@ -63,7 +63,11 @@ def _convert_to_array(susceptibility, n):
     # Handle single values (scalar or 3-vector) applied to all sources
     if np.isscalar(susceptibility):
         return np.ones((n, 3)) * susceptibility
-    elif hasattr(susceptibility, '__len__') and len(susceptibility) == 3 and not isinstance(susceptibility[0], (list, tuple, np.ndarray)):
+    if (
+        hasattr(susceptibility, "__len__")
+        and len(susceptibility) == 3
+        and not isinstance(susceptibility[0], (list, tuple, np.ndarray))
+    ):
         # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
         if n == 3:
@@ -73,25 +77,27 @@ def _convert_to_array(susceptibility, n):
             )
             raise ValueError(msg)
         return susis
-    
+
     # Handle list of susceptibilities (one per source)
-    susceptibility_list = list(susceptibility) if not isinstance(susceptibility, list) else susceptibility
-    
+    susceptibility_list = (
+        list(susceptibility) if not isinstance(susceptibility, list) else susceptibility
+    )
+
     if len(susceptibility_list) != n:
         msg = "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
         raise ValueError(msg)
-    
+
     # Convert each susceptibility to 3-tuple format
     susis = []
     for sus in susceptibility_list:
         if np.isscalar(sus):
             susis.append((float(sus), float(sus), float(sus)))
-        elif hasattr(sus, '__len__') and len(sus) == 3:
+        elif hasattr(sus, "__len__") and len(sus) == 3:
             susis.append(tuple(sus))
         else:
             msg = "susceptibility is not scalar or array of length 3"
             raise ValueError(msg)
-    
+
     return np.array(susis)
 
 
