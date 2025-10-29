@@ -93,7 +93,12 @@ def _convert_to_array(susceptibility, n):
         if np.isscalar(sus):
             susis.append((float(sus), float(sus), float(sus)))
         elif hasattr(sus, "__len__") and len(sus) == 3:
-            susis.append(tuple(sus))
+            try:
+                sus_tuple = tuple(float(x) for x in sus)
+            except Exception as e:
+                msg = f"Each element of susceptibility 3-vector must be numeric. Got: {sus!r} ({e})"
+                raise ValueError(msg)
+            susis.append(sus_tuple)
         else:
             msg = "susceptibility is not scalar or array of length 3"
             raise ValueError(msg)
