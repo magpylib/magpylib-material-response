@@ -33,7 +33,7 @@ def test_apply_demag_integration():
 
 
 @pytest.mark.parametrize(
-    "test_case,susceptibility_input,expected_output",
+    ("test_case", "susceptibility_input", "expected_output"),
     [
         pytest.param(
             "source_scalar",
@@ -115,7 +115,7 @@ def test_get_susceptibilities_hierarchy():
 
 
 @pytest.mark.parametrize(
-    "error_case,setup_func,error_message",
+    ("error_case", "setup_func", "error_message"),
     [
         pytest.param(
             "no_susceptibility",

@@ -66,7 +66,7 @@ def _convert_to_array(susceptibility, n):
     if (
         hasattr(susceptibility, "__len__")
         and len(susceptibility) == 3
-        and not isinstance(susceptibility[0], (list, tuple, np.ndarray))
+        and not isinstance(susceptibility[0], list | tuple | np.ndarray)
     ):
         # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
