@@ -66,7 +66,7 @@ def _convert_to_array(susceptibility, n):
     if (
         hasattr(susceptibility, "__len__")
         and len(susceptibility) == 3
-        and all(not isinstance(x, (list, tuple, np.ndarray)) for x in susceptibility)
+        and all(not isinstance(x, list | tuple | np.ndarray) for x in susceptibility)
     ):
         # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
@@ -97,7 +97,7 @@ def _convert_to_array(susceptibility, n):
                 sus_tuple = tuple(float(x) for x in sus)
             except Exception as e:
                 msg = f"Each element of susceptibility 3-vector must be numeric. Got: {sus!r} ({e})"
-                raise ValueError(msg)
+                raise ValueError(msg) from e
             susis.append(sus_tuple)
         else:
             msg = "susceptibility is not scalar or array of length 3"
