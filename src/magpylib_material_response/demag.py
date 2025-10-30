@@ -396,7 +396,9 @@ def apply_demag(
     ]
     if others_list:
         counts_others = Counter(s.__class__.__name__ for s in others_list)
-        counts_str = ", ".join(f"{count} {name}" for name, count in counts_others.items())
+        counts_str = ", ".join(
+            f"{count} {name}" for name, count in counts_others.items()
+        )
         msg = (
             "Only Magnet and Current sources supported. "
             f"Incompatible objects found: {counts_str}"

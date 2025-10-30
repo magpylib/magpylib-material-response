@@ -430,7 +430,9 @@ def mesh_all(
         target_elems_by_child = [max(min_elems, target_elems)] * len(supported_objs)
     if incompatible_objs:
         counts_incompatible = Counter(s.__class__.__name__ for s in incompatible_objs)
-        counts_str = ", ".join(f"{count} {name}" for name, count in counts_incompatible.items())
+        counts_str = ", ".join(
+            f"{count} {name}" for name, count in counts_incompatible.items()
+        )
         msg = (
             "Incompatible objects found: "
             f"{counts_str}"

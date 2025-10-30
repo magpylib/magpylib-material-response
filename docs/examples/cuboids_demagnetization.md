@@ -97,17 +97,17 @@ coll_meshed.show()
 colls = [coll]
 for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
     logger.info("🔄 Processing demagnetization with {target_elems} target elements", target_elems=target_elems)
-    
+
     coll_meshed = mesh_all(
         coll, target_elems=target_elems, per_child_elems=True, min_elems=1
     )
-    
+
     coll_demag = apply_demag(
         coll_meshed,
         style={"label": f"Coll_demag ({len(coll_meshed.sources_all):3d} cells)"},
     )
     colls.append(coll_demag)
-    
+
     logger.info("✅ Completed demagnetization: {actual_cells} cells created", actual_cells=len(coll_meshed.sources_all))
 ```
 

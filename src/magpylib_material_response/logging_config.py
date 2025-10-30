@@ -87,8 +87,12 @@ def configure_logging(
 
     # Custom format function to display structured data cleanly
     def format_record(record):
-        time_part = f"<green>{record['time'].strftime('%Y-%m-%d %H:%M:%S')}</green> | " if show_time else ""
-        
+        time_part = (
+            f"<green>{record['time'].strftime('%Y-%m-%d %H:%M:%S')}</green> | "
+            if show_time
+            else ""
+        )
+
         # Base format
         base = (
             f"{time_part}"
@@ -96,18 +100,18 @@ def configure_logging(
             f"<cyan>{record['extra'].get('module', 'unknown')}</cyan> | "
             f"{record['level'].icon:<2} {record['message']}"
         )
-        
+
         # Add extra context (excluding 'module' since it's already shown)
         extra_items = []
-        for key, value in record['extra'].items():
-            if key != 'module':
+        for key, value in record["extra"].items():
+            if key != "module":
                 extra_items.append(f"<dim>{key}={value}</dim>")
-        
+
         if extra_items:
             base += " | " + " | ".join(extra_items)
-        
+
         return base + "\n"
-    
+
     format_str = format_record
 
     # Configure the logger
