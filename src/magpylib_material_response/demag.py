@@ -50,15 +50,15 @@ def get_susceptibilities(sources, susceptibility=None):
                 src_susceptibility = _get_susceptibility_from_hierarchy(src.parent)
             susceptibilities.append(src_susceptibility)
 
-        susis = _convert_to_array(susceptibilities, n)
+        susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
     else:
         # Use function input susceptibility
-        susis = _convert_to_array(susceptibility, n)
+        susis = _convert_to_array(susceptibility, n, from_hierarchy=False)
 
     return np.reshape(susis, 3 * n, order="F")
 
 
-def _convert_to_array(susceptibility, n):
+def _convert_to_array(susceptibility, n, from_hierarchy=False):
     """Convert susceptibility input(s) to (n, 3) array format"""
     # Handle single values (scalar or 3-vector) applied to all sources
     if np.isscalar(susceptibility):
@@ -70,7 +70,8 @@ def _convert_to_array(susceptibility, n):
     ):
         # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
-        if n == 3:
+        # Only check for ambiguity when susceptibility comes from user input, not from hierarchy
+        if n == 3 and not from_hierarchy:
             msg = (
                 "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
                 "Please choose different means of input or change the number of cells in the Collection."
