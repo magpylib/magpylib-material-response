@@ -5,15 +5,17 @@ from itertools import product
 
 import magpylib as magpy
 import numpy as np
-from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response.logging_config import get_logger
 from magpylib_material_response.meshing_utils import (
     cells_from_dimension,
     get_volume,
     mask_inside,
 )
+
+logger = get_logger("magpylib_material_response.meshing")
 
 
 def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
@@ -66,9 +68,11 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
         nnn = target_elems
     elems = np.prod(nnn)
     if verbose:
-        logger.opt(colors=True).info(
-            f"Meshing Cuboid with <blue>{nnn[0]}x{nnn[1]}x{nnn[2]}={elems}</blue>"
-            f" elements (target={target_elems})"
+        logger.info(
+            "Meshing Cuboid",
+            dimensions=f"{nnn[0]}x{nnn[1]}x{nnn[2]}",
+            elements=elems,
+            target=target_elems,
         )
 
     # secure input type
@@ -143,9 +147,11 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
         nphi, nr, nh = target_elems
     elems = np.prod([nphi, nr, nh])
     if verbose:
-        logger.opt(colors=True).info(
-            f"Meshing CylinderSegement with <blue>{nphi}x{nr}x{nh}={elems}</blue>"
-            f" elements (target={target_elems})"
+        logger.info(
+            "Meshing CylinderSegment",
+            dimensions=f"{nphi}x{nr}x{nh}",
+            elements=elems,
+            target=target_elems,
         )
     r = np.linspace(r1, r2, nr + 1)
     dh = h / nh
@@ -423,9 +429,13 @@ def mesh_all(
     else:
         target_elems_by_child = [max(min_elems, target_elems)] * len(supported_objs)
     if incompatible_objs:
+        counts_incompatible = Counter(s.__class__.__name__ for s in incompatible_objs)
+        counts_str = ", ".join(
+            f"{count} {name}" for name, count in counts_incompatible.items()
+        )
         msg = (
             "Incompatible objects found: "
-            f"{Counter(s.__class__.__name__ for s in incompatible_objs)}"
+            f"{counts_str}"
             f"\nSupported: {[s.__name__ for s in supported]}."
         )
         raise TypeError(msg)

@@ -6,9 +6,12 @@ import warnings
 from contextlib import contextmanager
 
 import magpylib as magpy
-from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from scipy.spatial.transform import Rotation
+
+from magpylib_material_response.logging_config import get_logger
+
+logger = get_logger("magpylib_material_response.utils")
 
 
 class ElapsedTimeThread(threading.Thread):
@@ -39,7 +42,7 @@ class ElapsedTimeThread(threading.Thread):
                 and time.time() - self.thread_start > self.min_log_time
                 and not self._msg_displayed
             ):
-                logger.opt(colors=True).info(f"Start {self.msg}")
+                logger.info("🔄 Starting: {operation}", operation=self.msg)
                 self._msg_displayed = True
             # include a delay here so the thread doesn't uselessly thrash the CPU
             time.sleep(max(0.01, self.min_log_time / 5))
@@ -59,11 +62,13 @@ def timelog(msg, min_log_time=1):
         thread_timer.stop()
         thread_timer.join()
         if end is None:
-            logger.opt(colors=True).exception(f"{msg} failed")
+            logger.exception("❌ Failed: {operation}", operation=msg)
 
     if end > min_log_time:
-        logger.opt(colors=True).success(
-            f"{msg} done<green> 🕑 {round(end, 3)}sec</green>"
+        logger.info(
+            "✅ Completed: {operation} in {duration}s",
+            operation=msg,
+            duration=round(end, 3),
         )
 
 

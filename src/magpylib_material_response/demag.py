@@ -2,33 +2,18 @@
 
 from __future__ import annotations
 
-import sys
 from collections import Counter
 
 import magpylib as magpy
 import numpy as np
-from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from magpylib.magnet import Cuboid
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response.logging_config import get_logger
 from magpylib_material_response.utils import timelog
 
-config = {
-    "handlers": [
-        {
-            "sink": sys.stdout,
-            "colorize": True,
-            "format": (
-                "<magenta>{time:YYYY-MM-DD at HH:mm:ss}</magenta>"
-                " | <level>{level:^8}</level>"
-                " | <cyan>{function}</cyan>"
-                " | <yellow>{extra}</yellow> {level.icon:<2} {message}"
-            ),
-        },
-    ],
-}
-logger.configure(**config)
+logger = get_logger("magpylib_material_response.demag")
 
 
 def get_susceptibilities(sources, susceptibility=None):
@@ -224,7 +209,9 @@ def demag_tensor(
                         H_unit_pol = []
                         for split_ind, src_list_subset in enumerate(src_list_split):
                             logger.info(
-                                f"Sources subset {split_ind + 1}/{len(src_list_split)}"
+                                "Sources subset {subset_num}/{total_subsets}",
+                                subset_num=split_ind + 1,
+                                total_subsets=len(src_list_split),
                             )
                             if src_list_subset.size > 0:
                                 H_unit_pol.append(
@@ -272,14 +259,16 @@ def filter_distance(
                 "dimension": np.repeat(dim0, len(src_list), axis=0)[mask],
             }
         dsf = sum(mask) / len(mask) * 100
-    log_msg = (
-        "Interaction pairs left after distance factor filtering: "
-        f"<blue>{dsf:.2f}%</blue>"
-    )
     if dsf == 0:
-        logger.opt(colors=True).warning(log_msg)
+        logger.warning(
+            "No interaction pairs left after distance factor filtering",
+            percentage=f"{dsf:.2f}%",
+        )
     else:
-        logger.opt(colors=True).success(log_msg)
+        logger.info(
+            "Interaction pairs left after distance factor filtering",
+            percentage=f"{dsf:.2f}%",
+        )
     out = [mask]
     if return_params:
         out.append(params)
@@ -304,25 +293,25 @@ def match_pairs(src_list, min_log_time=1):
         len_src = len(src_list)
         num_of_pairs = len_src**2
         with logger.contextualize(task="Match interactions pairs"):
-            logger.info("position")
+            logger.debug("Computing position differences")
             pos2 = np.tile(pos0, (len_src, 1)) - np.repeat(pos0, len_src, axis=0)
-            logger.info("orientation")
+            logger.debug("Computing orientation differences")
             rotQ2a = np.tile(rotQ0, (len_src, 1)).reshape((num_of_pairs, -1))
             rotQ2b = np.repeat(rotQ0, len_src, axis=0).reshape((num_of_pairs, -1))
-            logger.info("dimension")
+            logger.debug("Computing dimension differences")
             dim2 = np.tile(dim0, (len_src, 1)) - np.repeat(dim0, len_src, axis=0)
-            logger.info("concatenate properties")
+            logger.debug("Concatenating properties for comparison")
             prop = (np.concatenate([pos2, rotQ2a, rotQ2b, dim2], axis=1) + 1e-9).round(
                 8
             )
-            logger.info("find unique indices")
+            logger.debug("Finding unique interaction pairs")
             _, unique_inds, unique_inv_inds = np.unique(
                 prop, return_index=True, return_inverse=True, axis=0
             )
             perc = len(unique_inds) / len(unique_inv_inds) * 100
-            logger.opt(colors=True).info(
-                "Interaction pairs left after pair matching filtering: "
-                f"<blue>{perc:.2f}%</blue>"
+            logger.info(
+                "Interaction pairs left after pair matching filtering",
+                percentage=f"{perc:.2f}%",
             )
 
         params = {
@@ -408,10 +397,13 @@ def apply_demag(
         if not isinstance(src, BaseMagnet | BaseCurrent | magpy.Sensor)
     ]
     if others_list:
+        counts_others = Counter(s.__class__.__name__ for s in others_list)
+        counts_str = ", ".join(
+            f"{count} {name}" for name, count in counts_others.items()
+        )
         msg = (
             "Only Magnet and Current sources supported. "
-            "Incompatible objects found: "
-            f"{Counter(s.__class__.__name__ for s in others_list)}"
+            f"Incompatible objects found: {counts_str}"
         )
         raise TypeError(msg)
     n = len(magnets_list)
@@ -419,9 +411,11 @@ def apply_demag(
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
     lbl = collection.style.label
     coll_str = lbl if lbl else str(collection)
+    # Create a clean message without problematic formatting characters
+    counts_str = ", ".join(f"{count} {name}" for name, count in counts.items())
     demag_msg = (
         f"Demagnetization{inplace_str} of <blue>{coll_str}</blue>"
-        f" with {n} cells - {counts}"
+        f" with {n} cells ({counts_str})"
     )
     with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr
