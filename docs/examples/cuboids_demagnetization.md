@@ -36,7 +36,6 @@ import magpylib as magpy
 import numpy as np
 import pandas as pd
 import plotly.express as px
-from loguru import logger
 from magpylib_material_response import get_dataset
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all
