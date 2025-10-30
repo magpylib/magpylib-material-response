@@ -209,7 +209,9 @@ def demag_tensor(
                         H_unit_pol = []
                         for split_ind, src_list_subset in enumerate(src_list_split):
                             logger.info(
-                                f"Sources subset {split_ind + 1}/{len(src_list_split)}"
+                                "Sources subset {subset_num}/{total_subsets}",
+                                subset_num=split_ind + 1,
+                                total_subsets=len(src_list_split),
                             )
                             if src_list_subset.size > 0:
                                 H_unit_pol.append(
