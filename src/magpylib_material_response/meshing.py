@@ -429,9 +429,11 @@ def mesh_all(
     else:
         target_elems_by_child = [max(min_elems, target_elems)] * len(supported_objs)
     if incompatible_objs:
+        counts_incompatible = Counter(s.__class__.__name__ for s in incompatible_objs)
+        counts_str = ", ".join(f"{count} {name}" for name, count in counts_incompatible.items())
         msg = (
             "Incompatible objects found: "
-            f"{Counter(s.__class__.__name__ for s in incompatible_objs)}"
+            f"{counts_str}"
             f"\nSupported: {[s.__name__ for s in supported]}."
         )
         raise TypeError(msg)

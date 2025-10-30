@@ -42,7 +42,7 @@ class ElapsedTimeThread(threading.Thread):
                 and time.time() - self.thread_start > self.min_log_time
                 and not self._msg_displayed
             ):
-                logger.info("Starting operation", operation=self.msg)
+                logger.info("🔄 Starting: {operation}", operation=self.msg)
                 self._msg_displayed = True
             # include a delay here so the thread doesn't uselessly thrash the CPU
             time.sleep(max(0.01, self.min_log_time / 5))
@@ -62,11 +62,13 @@ def timelog(msg, min_log_time=1):
         thread_timer.stop()
         thread_timer.join()
         if end is None:
-            logger.exception("Operation failed", operation=msg)
+            logger.exception("❌ Failed: {operation}", operation=msg)
 
     if end > min_log_time:
         logger.info(
-            "Operation completed", operation=msg, duration_seconds=round(end, 3)
+            "✅ Completed: {operation} in {duration}s", 
+            operation=msg, 
+            duration=round(end, 3)
         )
 
 

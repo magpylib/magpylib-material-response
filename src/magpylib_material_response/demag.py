@@ -395,10 +395,11 @@ def apply_demag(
         if not isinstance(src, BaseMagnet | BaseCurrent | magpy.Sensor)
     ]
     if others_list:
+        counts_others = Counter(s.__class__.__name__ for s in others_list)
+        counts_str = ", ".join(f"{count} {name}" for name, count in counts_others.items())
         msg = (
             "Only Magnet and Current sources supported. "
-            "Incompatible objects found: "
-            f"{Counter(s.__class__.__name__ for s in others_list)}"
+            f"Incompatible objects found: {counts_str}"
         )
         raise TypeError(msg)
     n = len(magnets_list)
@@ -406,9 +407,11 @@ def apply_demag(
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
     lbl = collection.style.label
     coll_str = lbl if lbl else str(collection)
+    # Create a clean message without problematic formatting characters
+    counts_str = ", ".join(f"{count} {name}" for name, count in counts.items())
     demag_msg = (
         f"Demagnetization{inplace_str} of <blue>{coll_str}</blue>"
-        f" with {n} cells - {counts}"
+        f" with {n} cells ({counts_str})"
     )
     with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr
