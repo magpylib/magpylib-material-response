@@ -66,9 +66,7 @@ def timelog(msg, min_log_time=1):
 
     if end > min_log_time:
         logger.info(
-            "Operation completed",
-            operation=msg,
-            duration_seconds=round(end, 3)
+            "Operation completed", operation=msg, duration_seconds=round(end, 3)
         )
 
 

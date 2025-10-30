@@ -43,7 +43,9 @@ def _find_circle_center_and_tangent_points(
     d = r / tan_theta
     if d > norm_bc * max_ratio or d > norm_ab * max_ratio:
         # rold, dold = r, d
-        logger.debug("Fillet parameters adjusted", r=r, d=d, norm_ab=norm_ab, norm_bc=norm_bc)
+        logger.debug(
+            "Fillet parameters adjusted", r=r, d=d, norm_ab=norm_ab, norm_bc=norm_bc
+        )
         d = min(norm_bc * max_ratio, norm_ab * max_ratio)
         r = d * tan_theta if theta > 0 else 0
         # warnings.warn(f"Radius {rold:.4g} is too big and has been reduced to {r:.4g}")

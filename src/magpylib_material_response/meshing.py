@@ -72,7 +72,7 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
             "Meshing Cuboid",
             dimensions=f"{nnn[0]}x{nnn[1]}x{nnn[2]}",
             elements=elems,
-            target=target_elems
+            target=target_elems,
         )
 
     # secure input type
@@ -151,7 +151,7 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
             "Meshing CylinderSegment",
             dimensions=f"{nphi}x{nr}x{nh}",
             elements=elems,
-            target=target_elems
+            target=target_elems,
         )
     r = np.linspace(r1, r2, nr + 1)
     dh = h / nh

@@ -260,12 +260,12 @@ def filter_distance(
     if dsf == 0:
         logger.warning(
             "No interaction pairs left after distance factor filtering",
-            percentage=f"{dsf:.2f}%"
+            percentage=f"{dsf:.2f}%",
         )
     else:
         logger.info(
             "Interaction pairs left after distance factor filtering",
-            percentage=f"{dsf:.2f}%"
+            percentage=f"{dsf:.2f}%",
         )
     out = [mask]
     if return_params:
@@ -309,7 +309,7 @@ def match_pairs(src_list, min_log_time=1):
             perc = len(unique_inds) / len(unique_inv_inds) * 100
             logger.info(
                 "Interaction pairs left after pair matching filtering",
-                percentage=f"{perc:.2f}%"
+                percentage=f"{perc:.2f}%",
             )
 
         params = {

@@ -19,12 +19,12 @@ from loguru import logger
 def get_logger(name: str | None = None):
     """
     Get a named logger for the package.
-    
+
     Parameters
     ----------
     name : str, optional
         Logger name. If None, uses the package root logger.
-        
+
     Returns
     -------
     loguru.Logger
@@ -43,11 +43,11 @@ def configure_logging(
 ) -> None:
     """
     Configure logging for the package.
-    
+
     This function should be called by users who want to see logging output
     from the library. By default, the library doesn't output logs unless
     explicitly configured.
-    
+
     Parameters
     ----------
     level : str, optional
@@ -63,20 +63,28 @@ def configure_logging(
     """
     # Remove existing handlers to avoid duplicates
     logger.remove()
-    
+
     # Get configuration from environment or use defaults
     if level is None:
         level = os.getenv("MAGPYLIB_LOG_LEVEL", "INFO")
-    
+
     if enable_colors is None:
-        enable_colors = os.getenv("MAGPYLIB_LOG_COLORS", "true").lower() in ("true", "1", "yes")
-    
+        enable_colors = os.getenv("MAGPYLIB_LOG_COLORS", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
     if show_time is None:
-        show_time = os.getenv("MAGPYLIB_LOG_TIME", "true").lower() in ("true", "1", "yes")
-    
+        show_time = os.getenv("MAGPYLIB_LOG_TIME", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
     if sink is None:
         sink = sys.stderr
-    
+
     # Build format string
     time_part = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | " if show_time else ""
     format_str = (
@@ -85,7 +93,7 @@ def configure_logging(
         "<cyan>{extra[module]}</cyan> | "
         "{level.icon:<2} {message}"
     )
-    
+
     # Configure the logger
     logger.add(
         sink,
@@ -93,9 +101,9 @@ def configure_logging(
         format=format_str,
         colorize=enable_colors,
         filter=lambda record: (
-            record["extra"].get("module", "").startswith("magpylib_material_response") or 
-            record.get("name", "").startswith("magpylib_material_response")
-        )
+            record["extra"].get("module", "").startswith("magpylib_material_response")
+            or record.get("name", "").startswith("magpylib_material_response")
+        ),
     )
 
 

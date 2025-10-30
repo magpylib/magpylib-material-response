@@ -1,10 +1,14 @@
 # Logging Configuration
 
-The magpylib-material-response package uses structured logging with [Loguru](https://loguru.readthedocs.io/) to provide informative messages about computation progress and debugging information.
+The magpylib-material-response package uses structured logging with
+[Loguru](https://loguru.readthedocs.io/) to provide informative messages about
+computation progress and debugging information.
 
 ## Default Behavior
 
-By default, the library **does not output any log messages**. This follows best practices for Python libraries to avoid cluttering user output unless explicitly requested.
+By default, the library **does not output any log messages**. This follows best
+practices for Python libraries to avoid cluttering user output unless explicitly
+requested.
 
 ## Enabling Logging
 
@@ -24,6 +28,7 @@ configure_logging()
 ## Configuration Options
 
 ### Log Level
+
 ```python
 from magpylib_material_response import configure_logging
 
@@ -37,6 +42,7 @@ configure_logging(level="WARNING")
 ```
 
 ### Output Destination
+
 ```python
 import sys
 from magpylib_material_response import configure_logging
@@ -49,6 +55,7 @@ configure_logging(sink="/path/to/logfile.log")
 ```
 
 ### Disable Colors and Time
+
 ```python
 from magpylib_material_response import configure_logging
 
@@ -96,10 +103,7 @@ from magpylib_material_response.meshing import mesh_Cuboid
 configure_logging(level="INFO")
 
 # Create a magnet
-magnet = magpy.magnet.Cuboid(
-    dimension=(0.01, 0.01, 0.02),
-    polarization=(0, 0, 1)
-)
+magnet = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.02), polarization=(0, 0, 1))
 magnet.susceptibility = 0.1
 
 # Mesh the magnet - you'll see meshing progress
@@ -109,9 +113,11 @@ meshed = mesh_Cuboid(magnet, target_elems=1000, verbose=True)
 apply_demag(meshed, inplace=True)
 ```
 
-This will output structured log messages showing the progress of operations, timing information, and any warnings or errors.
+This will output structured log messages showing the progress of operations,
+timing information, and any warnings or errors.
 
 ## See Also
 
 - {doc}`examples/index` - Working examples that demonstrate logging output
-- [Loguru Documentation](https://loguru.readthedocs.io/) - Complete reference for the underlying logging library
+- [Loguru Documentation](https://loguru.readthedocs.io/) - Complete reference
+  for the underlying logging library
