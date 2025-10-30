@@ -38,27 +38,37 @@ def get_susceptibilities(sources, susceptibility=None):
     the top level of the tree."""
     n = len(sources)
 
-    # susceptibilities from source attributes
     if susceptibility is None:
-        susis = []
+        # Get susceptibilities from source attributes
+        susceptibilities = []
         for src in sources:
-            susceptibility = getattr(src, "susceptibility", None)
-            if susceptibility is None:
+            src_susceptibility = getattr(src, "susceptibility", None)
+            if src_susceptibility is None:
                 if src.parent is None:
                     msg = "No susceptibility defined in any parent collection"
                     raise ValueError(msg)
-                susis.extend(get_susceptibilities(src.parent))
-            elif not hasattr(susceptibility, "__len__"):
-                susis.append((susceptibility, susceptibility, susceptibility))
-            elif len(susceptibility) == 3:
-                susis.append(susceptibility)
-            else:
-                msg = "susceptibility is not scalar or array of length 3"
-                raise ValueError(msg)
-    # susceptibilities as input to demag function
-    elif np.isscalar(susceptibility):
-        susis = np.ones((n, 3)) * susceptibility
-    elif len(susceptibility) == 3:
+                src_susceptibility = _get_susceptibility_from_hierarchy(src.parent)
+            susceptibilities.append(src_susceptibility)
+
+        susis = _convert_to_array(susceptibilities, n)
+    else:
+        # Use function input susceptibility
+        susis = _convert_to_array(susceptibility, n)
+
+    return np.reshape(susis, 3 * n, order="F")
+
+
+def _convert_to_array(susceptibility, n):
+    """Convert susceptibility input(s) to (n, 3) array format"""
+    # Handle single values (scalar or 3-vector) applied to all sources
+    if np.isscalar(susceptibility):
+        return np.ones((n, 3)) * susceptibility
+    if (
+        hasattr(susceptibility, "__len__")
+        and len(susceptibility) == 3
+        and all(not isinstance(x, list | tuple | np.ndarray) for x in susceptibility)
+    ):
+        # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
         if n == 3:
             msg = (
@@ -66,16 +76,46 @@ def get_susceptibilities(sources, susceptibility=None):
                 "Please choose different means of input or change the number of cells in the Collection."
             )
             raise ValueError(msg)
-    else:
-        if len(susceptibility) != n:
-            msg = "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
-            raise ValueError(msg)
-        susis = np.array(susceptibility)
-        if susis.ndim == 1:
-            susis = np.repeat(susis, 3).reshape(n, 3)
+        return susis
 
-    susis = np.reshape(susis, 3 * n, order="F")
+    # Handle list of susceptibilities (one per source)
+    susceptibility_list = (
+        list(susceptibility) if not isinstance(susceptibility, list) else susceptibility
+    )
+
+    if len(susceptibility_list) != n:
+        msg = "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
+        raise ValueError(msg)
+
+    # Convert each susceptibility to 3-tuple format
+    susis = []
+    for sus in susceptibility_list:
+        if np.isscalar(sus):
+            susis.append((float(sus), float(sus), float(sus)))
+        elif hasattr(sus, "__len__") and len(sus) == 3:
+            try:
+                sus_tuple = tuple(float(x) for x in sus)
+            except Exception as e:
+                msg = f"Each element of susceptibility 3-vector must be numeric. Got: {sus!r} ({e})"
+                raise ValueError(msg) from e
+            susis.append(sus_tuple)
+        else:
+            msg = "susceptibility is not scalar or array of length 3"
+            raise ValueError(msg)
+
     return np.array(susis)
+
+
+def _get_susceptibility_from_hierarchy(source):
+    """Helper function to get susceptibility value from source or its parent hierarchy.
+    Returns the raw susceptibility value (scalar or 3-tuple), not the reshaped array."""
+    susceptibility = getattr(source, "susceptibility", None)
+    if susceptibility is not None:
+        return susceptibility
+    if source.parent is None:
+        msg = "No susceptibility defined in any parent collection"
+        raise ValueError(msg)
+    return _get_susceptibility_from_hierarchy(source.parent)
 
 
 def get_H_ext(*sources, H_ext=None):
