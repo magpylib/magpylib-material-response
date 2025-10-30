@@ -1,0 +1,24 @@
+/* PyData Sphinx Theme Full Width CSS - Simplest Approach */
+/* Apply full-width to all main containers */
+
+.bd-container,
+.bd-container__inner {
+  max-width: 100% !important;
+}
+
+.bd-main,
+.bd-content {
+  max-width: 100% !important;
+}
+
+.bd-article-container,
+.bd-article {
+  max-width: 100em !important;
+}
+
+/* Ensure notebook cells use full width */
+.cell,
+.cell_input,
+.cell_output {
+  max-width: 100% !important;
+}
