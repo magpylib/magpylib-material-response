@@ -33,8 +33,9 @@ html_theme = "pydata_sphinx_theme"
 html_theme_options: dict[str, Any] = {
     # "announcement": announcement,
     "logo": {
-        "text": "Magpylib",
-        "image_dark": "./_static/images/magpylib_logo.png",
+        "text": "Magpylib-Material-Response",
+        "image_light": "_static/images/magpylib_logo.png",
+        "image_dark": "_static/images/magpylib_logo.png",
     },
     "header_links_before_dropdown": 4,
     "show_version_warning_banner": True,
@@ -94,5 +95,8 @@ suppress_warnings = ["mystnb.unknown_mime_type"]
 
 html_js_files = [
     "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js",
-    # "https://unpkg.com/thebe@latest/lib/index.js",
 ]
+
+# Static files (CSS/JS)
+html_static_path = ["_static"]
+html_css_files = ["fullwidth.css"]
