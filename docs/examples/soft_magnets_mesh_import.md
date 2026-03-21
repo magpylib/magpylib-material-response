@@ -14,7 +14,7 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# Soft Magnets
+# Soft Magnets with Mesh Import
 
 +++
 

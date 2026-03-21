@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import magpylib as magpy
 import meshio
-import os
+from pathlib import Path
 
 import numpy as np
 import magpylib as magpy
@@ -21,13 +21,12 @@ def make_cuboid_global_pol(center, dims, A, J_global):
     # convert desired GLOBAL polarization into LOCAL coordinates
     J_local = rot.inv().apply(J_global)
 
-    cub = magpy.magnet.Cuboid(
+    return  magpy.magnet.Cuboid(
         dimension=tuple(dims),
         position=tuple(center),
         orientation=rot,
         polarization=tuple(J_local),
     )
-    return cub
 
 def frame_and_dims_from_hex_edges(coords, scaling=1,eps=1e-12):
     """
@@ -62,11 +61,11 @@ def frame_and_dims_from_hex_edges(coords, scaling=1,eps=1e-12):
     l3 = np.linalg.norm(v3)
 
     if min(l1, l2, l3) < eps:
-        raise ValueError("Degenerate hex element with zero edge length.")
+        msg = "Degenerate hex element with zero edge length."
+        raise ValueError(msg)
 
     e1 = v1 / l1
     e2 = v2 / l2
-    e3 = v3 / l3
 
     # make orthonormal frame
     # start with e1
@@ -76,14 +75,16 @@ def frame_and_dims_from_hex_edges(coords, scaling=1,eps=1e-12):
     e2p = e2 - np.dot(e2, a1) * a1
     n2 = np.linalg.norm(e2p)
     if n2 < eps:
-        raise ValueError("Hex edges are not linearly independent.")
+        msg = "Hex edges are not linearly independent."
+        raise ValueError(msg)
     a2 = e2p / n2
 
     # third axis from cross product to enforce orthogonality/right-handedness
     a3 = np.cross(a1, a2)
     n3 = np.linalg.norm(a3)
     if n3 < eps:
-        raise ValueError("Failed to build right-handed frame.")
+        msg = "Failed to build right-handed frame."
+        raise ValueError(msg)
     a3 = a3 / n3
 
     A = np.column_stack([a1, a2, a3])
@@ -101,10 +102,11 @@ def make_oriented_cuboids_from_hex(mesh, cell_key="hexahedron", polarization = (
     # Check if requested cell type exists
     if cell_key not in mesh.cells_dict:
         available = list(mesh.cells_dict.keys())
-        raise ValueError(
+        msg = (
             f"Cell type '{cell_key}' not found in mesh. "
             f"Available cell types: {available}"
         )
+        raise ValueError(msg)
     
     cells = mesh.cells_dict[cell_key]
     J_global = np.asarray(polarization, dtype=float)
@@ -131,10 +133,11 @@ def make_oriented_cuboids_from_hex(mesh, cell_key="hexahedron", polarization = (
 def import_mesh(mesh_file, scaling=1, polarization=(0,0,0), succeptibility=None):
     
     valid_extensions = {".inp", ".msh"}
-    ext = os.path.splitext(mesh_file)[1].lower()
+    ext =  Path(mesh_file).suffix.lower()
     
     if ext not in valid_extensions:
-        raise ValueError(f"Unsupported file format '{ext}'. Only .inp and .msh are allowed.")
+        msg = f"Unsupported file format '{ext}'. Only .inp and .msh are allowed."
+        raise ValueError(msg)
     
     mesh = meshio.read(mesh_file)
 

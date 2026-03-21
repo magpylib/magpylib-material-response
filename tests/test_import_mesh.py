@@ -32,7 +32,7 @@ def test_mesh_Cuboid():
     # test if all children sources got the right susceptibility value
     assert all(s.susceptibility == c.susceptibility for s in cm.sources_all)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unsupported file format"):
         import_mesh("cuboid1.stl",scaling=1e-3, polarization=(0,0,1), succeptibility=3999)
 
 def test_mesh_Cuboid2():
