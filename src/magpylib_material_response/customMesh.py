@@ -118,7 +118,7 @@ def make_oriented_cuboids_from_hex(
         )
 <<<<<<< HEAD
         raise ValueError(msg)
-    
+
 =======
 
 >>>>>>> d37a2fae123cf9efc8e7837c506c4d583008a4ef
@@ -149,11 +149,11 @@ def import_mesh(mesh_file, scaling=1, polarization=(0, 0, 0), succeptibility=Non
     valid_extensions = {".inp", ".msh"}
 <<<<<<< HEAD
     ext =  Path(mesh_file).suffix.lower()
-    
+
     if ext not in valid_extensions:
         msg = f"Unsupported file format '{ext}'. Only .inp and .msh are allowed."
         raise ValueError(msg)
-    
+
 =======
     ext = os.path.splitext(mesh_file)[1].lower()
 
