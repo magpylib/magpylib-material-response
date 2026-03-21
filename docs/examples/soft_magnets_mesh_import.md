@@ -18,13 +18,21 @@ kernelspec:
 
 +++
 
-This code demonstrates demagnetization calculations using the Magpylib library, focusing on the analysis of different meshing strategies.
+This code demonstrates demagnetization calculations using the Magpylib library,
+focusing on the analysis of different meshing strategies.
 
-In particular, it compares the built-in *autoMesh* functionality provided by magpylib-material-response with custom meshes generated from external CAD software.
+In particular, it compares the built-in _autoMesh_ functionality provided by
+magpylib-material-response with custom meshes generated from external CAD
+software.
 
-The study evaluates how mesh structure influence the demagnetization results. Custom meshes are imported in `.msh` and `.inp` formats and are restricted to cuboid (hexahedral) elements, which allows direct translation into Magpylib-compatible cuboids.
+The study evaluates how mesh structure influence the demagnetization results.
+Custom meshes are imported in `.msh` and `.inp` formats and are restricted to
+cuboid (hexahedral) elements, which allows direct translation into
+Magpylib-compatible cuboids.
 
-The computed magnetic fields from these meshing approaches are compared to baseline Magpylib results without demagnetization, enabling an assessment of accuracy and consistency across mesh generation methods.
+The computed magnetic fields from these meshing approaches are compared to
+baseline Magpylib results without demagnetization, enabling an assessment of
+accuracy and consistency across mesh generation methods.
 
 +++ {"user_expressions": []}
 
@@ -209,4 +217,6 @@ display(fig1, fig2)
 
 +++ {"user_expressions": []}
 
-As shown above, the demagnetized collection outputs approach the reference FEM values. Notably, the custom mesh provides more accurate results compared to the autoMesh approach, even with the same number of total primitives.
+As shown above, the demagnetized collection outputs approach the reference FEM
+values. Notably, the custom mesh provides more accurate results compared to the
+autoMesh approach, even with the same number of total primitives.

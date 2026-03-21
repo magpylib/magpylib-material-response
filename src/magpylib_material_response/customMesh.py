@@ -1,11 +1,10 @@
-import numpy as np
-from scipy.spatial.transform import Rotation as R
-import magpylib as magpy
-import meshio
+from __future__ import annotations
+
 import os
 
-import numpy as np
 import magpylib as magpy
+import meshio
+import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
@@ -29,7 +28,8 @@ def make_cuboid_global_pol(center, dims, A, J_global):
     )
     return cub
 
-def frame_and_dims_from_hex_edges(coords, scaling=1,eps=1e-12):
+
+def frame_and_dims_from_hex_edges(coords, scaling=1, eps=1e-12):
     """
     coords: (8,3) hexahedron node coordinates
     returns:
@@ -37,7 +37,7 @@ def frame_and_dims_from_hex_edges(coords, scaling=1,eps=1e-12):
         dims   : (3,)  -> edge lengths
         A      : (3,3) rotation matrix, columns are local axes
     """
-    coords = coords*scaling
+    coords = coords * scaling
     coords = np.asarray(coords, dtype=float)
     center = coords.mean(axis=0)
 
@@ -95,7 +95,9 @@ def frame_and_dims_from_hex_edges(coords, scaling=1,eps=1e-12):
     return center, dims, A
 
 
-def make_oriented_cuboids_from_hex(mesh, cell_key="hexahedron", polarization = (0,0,0),scaling=1, eps=1e-9):
+def make_oriented_cuboids_from_hex(
+    mesh, cell_key="hexahedron", polarization=(0, 0, 0), scaling=1, eps=1e-9
+):
     pts = mesh.points
 
     # Check if requested cell type exists
@@ -105,13 +107,13 @@ def make_oriented_cuboids_from_hex(mesh, cell_key="hexahedron", polarization = (
             f"Cell type '{cell_key}' not found in mesh. "
             f"Available cell types: {available}"
         )
-    
+
     cells = mesh.cells_dict[cell_key]
     J_global = np.asarray(polarization, dtype=float)
     mags = []
     for elem in cells:
         coords = pts[elem]
-        center, dims, A = frame_and_dims_from_hex_edges(coords,scaling=scaling)
+        center, dims, A = frame_and_dims_from_hex_edges(coords, scaling=scaling)
 
         rot = R.from_matrix(A)
 
@@ -123,23 +125,27 @@ def make_oriented_cuboids_from_hex(mesh, cell_key="hexahedron", polarization = (
             dimension=tuple(dims.tolist()),
             position=tuple(center.tolist()),
             polarization=tuple(J_local),
-            orientation=R.from_matrix(A)        # Magpylib accepts scipy Rotation
+            orientation=R.from_matrix(A),  # Magpylib accepts scipy Rotation
         )
         mags.append(m)
     return mags
 
-def import_mesh(mesh_file, scaling=1, polarization=(0,0,0), succeptibility=None):
-    
+
+def import_mesh(mesh_file, scaling=1, polarization=(0, 0, 0), succeptibility=None):
     valid_extensions = {".inp", ".msh"}
     ext = os.path.splitext(mesh_file)[1].lower()
-    
+
     if ext not in valid_extensions:
-        raise ValueError(f"Unsupported file format '{ext}'. Only .inp and .msh are allowed.")
-    
+        raise ValueError(
+            f"Unsupported file format '{ext}'. Only .inp and .msh are allowed."
+        )
+
     mesh = meshio.read(mesh_file)
 
-    magnets = make_oriented_cuboids_from_hex(mesh,cell_key="hexahedron",polarization=polarization,scaling=scaling)
+    magnets = make_oriented_cuboids_from_hex(
+        mesh, cell_key="hexahedron", polarization=polarization, scaling=scaling
+    )
     for magnet in magnets:
         magnet.susceptibility = succeptibility
-       # magnet.polarization   = polarization
+    # magnet.polarization   = polarization
     return magpy.Collection(magnets)
