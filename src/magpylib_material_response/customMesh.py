@@ -20,7 +20,7 @@ def make_cuboid_global_pol(center, dims, A, J_global):
     # convert desired GLOBAL polarization into LOCAL coordinates
     J_local = rot.inv().apply(J_global)
 
-    return  magpy.magnet.Cuboid(
+    return magpy.magnet.Cuboid(
         dimension=tuple(dims),
         position=tuple(center),
         orientation=rot,
@@ -109,7 +109,6 @@ def make_oriented_cuboids_from_hex(
             f"Available cell types: {available}"
         )
         raise ValueError(msg)
-    
 
     cells = mesh.cells_dict[cell_key]
     J_global = np.asarray(polarization, dtype=float)
@@ -136,12 +135,12 @@ def make_oriented_cuboids_from_hex(
 
 def import_mesh(mesh_file, scaling=1, polarization=(0, 0, 0), succeptibility=None):
     valid_extensions = {".inp", ".msh"}
-    ext =  Path(mesh_file).suffix.lower()
-    
+    ext = Path(mesh_file).suffix.lower()
+
     if ext not in valid_extensions:
         msg = f"Unsupported file format '{ext}'. Only .inp and .msh are allowed."
         raise ValueError(msg)
-    
+
     ext = os.path.splitext(mesh_file)[1].lower()
 
     if ext not in valid_extensions:
