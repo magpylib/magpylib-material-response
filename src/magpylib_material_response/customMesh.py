@@ -7,6 +7,8 @@ import meshio
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from pathlib import Path
+
 
 def make_cuboid_global_pol(center, dims, A, J_global):
     """
