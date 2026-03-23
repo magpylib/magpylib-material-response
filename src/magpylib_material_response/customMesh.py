@@ -108,6 +108,9 @@ def make_oriented_cuboids_from_hex(
             f"Cell type '{cell_key}' not found in mesh. "
             f"Available cell types: {available}"
         )
+        raise ValueError(msg)
+    
+
     cells = mesh.cells_dict[cell_key]
     J_global = np.asarray(polarization, dtype=float)
     mags = []
@@ -133,6 +136,12 @@ def make_oriented_cuboids_from_hex(
 
 def import_mesh(mesh_file, scaling=1, polarization=(0, 0, 0), succeptibility=None):
     valid_extensions = {".inp", ".msh"}
+    ext =  Path(mesh_file).suffix.lower()
+    
+    if ext not in valid_extensions:
+        msg = f"Unsupported file format '{ext}'. Only .inp and .msh are allowed."
+        raise ValueError(msg)
+    
     ext = os.path.splitext(mesh_file)[1].lower()
 
     if ext not in valid_extensions:
