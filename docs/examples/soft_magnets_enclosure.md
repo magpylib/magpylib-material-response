@@ -44,6 +44,20 @@ assessment of accuracy and consistency across mesh generation methods.
 ## Define magnetic sources with their susceptibilities - Custom Mesh
 
 ```{code-cell} ipython3
+
+import json
+
+import magpylib as magpy
+import numpy as np
+import pandas as pd
+import plotly.express as px
+from loguru import logger
+from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.meshing import mesh_all
+from magpylib_material_response.customMesh import import_mesh
+
+magpy.defaults.display.backend = "plotly"
+
 # soft magnet - mesh import
 cyl_enclosure_meshed = import_mesh("hollow_cyl_enclosure_mm.inp",scaling=1e-3, polarization=(0,0,0), succeptibility=100)
 cyl_enclosure_meshed.style.label = f"Soft hollow cylinder magnet, susceptibility=100"
