@@ -19,25 +19,24 @@ kernelspec:
 +++
 
 This code demonstrates demagnetization calculations using the Magpylib library,
-with a focus on modeling a soft magnetic  hollow cylindrical enclosure.
+with a focus on modeling a soft magnetic hollow cylindrical enclosure.
 
-Currently, the library does not provide native support for cylindrical enclosures.
-To overcome this limitation, this example highlights the use of the mesh import
-functionality to represent and simulate complex geometries with custom meshes generated 
-from external CAD software. These custom meshes enable the approximation of the cylindrical 
-geometry.
+Currently, the library does not provide native support for cylindrical
+enclosures. To overcome this limitation, this example highlights the use of the
+mesh import functionality to represent and simulate complex geometries with
+custom meshes generated from external CAD software. These custom meshes enable
+the approximation of the cylindrical geometry.
 
-The study evaluates how different mesh structures influence the demagnetization results.
-Custom meshes are imported in `.msh` and `.inp` formats and are restricted to
-cuboid (hexahedral) elements, allowing direct translation into
+The study evaluates how different mesh structures influence the demagnetization
+results. Custom meshes are imported in `.msh` and `.inp` formats and are
+restricted to cuboid (hexahedral) elements, allowing direct translation into
 Magpylib-compatible cuboids.
 
-The computed magnetic fields from this meshing are compared to
-baseline Magpylib results without demagnetization and FEMM simulation, enabling an 
-assessment of accuracy and consistency across mesh generation methods.
+The computed magnetic fields from this meshing are compared to baseline Magpylib
+results without demagnetization and FEMM simulation, enabling an assessment of
+accuracy and consistency across mesh generation methods.
 
 ![External Mesh Properties](mesh.png)
-
 
 +++ {"user_expressions": []}
 
@@ -161,4 +160,5 @@ display(fig1)
 +++ {"user_expressions": []}
 
 As shown above, the demagnetized collection outputs approach the reference FEM
-values. Notably, the custom mesh provides accurate results with demagnatization effects included.
+values. Notably, the custom mesh provides accurate results with demagnatization
+effects included.
