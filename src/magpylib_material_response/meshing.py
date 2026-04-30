@@ -244,7 +244,7 @@ def mesh_thin_CylinderSegment_with_cuboids(
         np.deg2rad(phi1) + dphi / 2, np.deg2rad(phi2) - dphi / 2, nphi
     )
     poss = np.array([x0 * np.cos(phi_vec), x0 * np.sin(phi_vec), np.zeros(nphi)]).T
-    rots = R.from_euler("z", phi_vec)
+    rots = R.from_rotvec(np.column_stack([np.zeros((nphi, 2)), phi_vec]))
     cells = []
     for z in np.linspace(-h / 2 + dh / 2, h / 2 - dh / 2, nh):
         for pos, orient in zip(poss, rots, strict=False):
