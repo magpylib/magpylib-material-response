@@ -5,17 +5,15 @@ from itertools import product
 
 import magpylib as magpy
 import numpy as np
+from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response.logging_config import get_logger
 from magpylib_material_response.meshing_utils import (
     cells_from_dimension,
     get_volume,
     mask_inside,
 )
-
-logger = get_logger("magpylib_material_response.meshing")
 
 
 def _collection_from_obj_and_cells(obj, cells, **style_kwargs):

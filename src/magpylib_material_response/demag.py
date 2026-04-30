@@ -6,14 +6,12 @@ from collections import Counter
 
 import magpylib as magpy
 import numpy as np
+from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from magpylib.magnet import Cuboid
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response.logging_config import get_logger
 from magpylib_material_response.utils import timelog
-
-logger = get_logger("magpylib_material_response.demag")
 
 
 def get_susceptibilities(sources, susceptibility=None):
@@ -128,7 +126,7 @@ def demag_tensor(
     pairs_matching=False,
     split=False,
     max_dist=0,
-    min_log_time=1,
+    min_log_time=None,
 ):
     """
     Compute the demagnetization tensor T based on point matching (see Chadbec 2006)
@@ -229,7 +227,7 @@ def demag_tensor(
 def filter_distance(
     src_list,
     max_dist,
-    min_log_time=1,
+    min_log_time=None,
     return_params=False,
     return_base_geo=False,
 ):
@@ -279,7 +277,7 @@ def filter_distance(
     return tuple(out)
 
 
-def match_pairs(src_list, min_log_time=1):
+def match_pairs(src_list, min_log_time=None):
     """match all pairs of sources from `src_list`"""
     with timelog("Pairs matching", min_log_time=min_log_time):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
@@ -330,7 +328,7 @@ def apply_demag(
     pairs_matching=False,
     max_dist=0,
     split=1,
-    min_log_time=1,
+    min_log_time=None,
     style=None,
 ):
     """
@@ -368,7 +366,9 @@ def apply_demag(
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
-        will not be logged.
+        will not be logged. If ``None`` (default), the value set by
+        :func:`magpylib_material_response.configure_logging` is used
+        (``1.0`` s by default).
 
     style: dict
         Set collection style. If `inplace=False` only affects the copied collection
@@ -411,11 +411,9 @@ def apply_demag(
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
     lbl = collection.style.label
     coll_str = lbl if lbl else str(collection)
-    # Create a clean message without problematic formatting characters
     counts_str = ", ".join(f"{count} {name}" for name, count in counts.items())
     demag_msg = (
-        f"Demagnetization{inplace_str} of <blue>{coll_str}</blue>"
-        f" with {n} cells ({counts_str})"
+        f"Demagnetization{inplace_str} of {coll_str} with {n} cells ({counts_str})"
     )
     with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr
@@ -468,7 +466,7 @@ def apply_demag(
         Q = np.eye(3 * n) - np.matmul(S, T)
 
         # determine new polarization vectors
-        with timelog("Solving of linear system", min_log_time=1):
+        with timelog("Solving of linear system", min_log_time=min_log_time):
             pol_new = np.linalg.solve(Q, pol_total + np.matmul(S, H_ext))
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
