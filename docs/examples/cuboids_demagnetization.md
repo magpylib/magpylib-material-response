@@ -36,10 +36,13 @@ import magpylib as magpy
 import numpy as np
 import pandas as pd
 import plotly.express as px
-from loguru import logger
 from magpylib_material_response import get_dataset
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all
+
+# Uncomment to enable logging output from the package (silent by default).
+# from magpylib_material_response import configure_logging
+# configure_logging(min_log_time=5)  # log steps taking longer than 5 s
 
 if magpy.__version__.split(".")[0] != "5":
     raise RuntimeError(
@@ -90,15 +93,19 @@ coll_meshed.show()
 # apply demagnetization with varying number of cells
 colls = [coll]
 for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
-    with logger.contextualize(target_elems=target_elems):
-        coll_meshed = mesh_all(
-            coll, target_elems=target_elems, per_child_elems=True, min_elems=1
-        )
-        coll_demag = apply_demag(
-            coll_meshed,
-            style={"label": f"Coll_demag ({len(coll_meshed.sources_all):3d} cells)"},
-        )
-        colls.append(coll_demag)
+    print(f"Processing demagnetization with {target_elems} target elements")
+
+    coll_meshed = mesh_all(
+        coll, target_elems=target_elems, per_child_elems=True, min_elems=1
+    )
+
+    coll_demag = apply_demag(
+        coll_meshed,
+        style={"label": f"Coll_demag ({len(coll_meshed.sources_all):3d} cells)"},
+    )
+    colls.append(coll_demag)
+
+    print(f"Completed demagnetization: {len(coll_meshed.sources_all)} cells created")
 ```
 
 ## Compare with FEM analysis
