@@ -9,6 +9,7 @@
 :glob: true
 :maxdepth: 2
 
+logging
 examples/index
 ```
 

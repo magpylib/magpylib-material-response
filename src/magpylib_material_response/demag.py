@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from collections import Counter
 
 import magpylib as magpy
@@ -13,22 +12,6 @@ from magpylib.magnet import Cuboid
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.utils import timelog
-
-config = {
-    "handlers": [
-        {
-            "sink": sys.stdout,
-            "colorize": True,
-            "format": (
-                "<magenta>{time:YYYY-MM-DD at HH:mm:ss}</magenta>"
-                " | <level>{level:^8}</level>"
-                " | <cyan>{function}</cyan>"
-                " | <yellow>{extra}</yellow> {level.icon:<2} {message}"
-            ),
-        },
-    ],
-}
-logger.configure(**config)
 
 
 def get_susceptibilities(sources, susceptibility=None):
@@ -143,7 +126,7 @@ def demag_tensor(
     pairs_matching=False,
     split=False,
     max_dist=0,
-    min_log_time=1,
+    min_log_time=None,
 ):
     """
     Compute the demagnetization tensor T based on point matching (see Chadbec 2006)
@@ -224,7 +207,9 @@ def demag_tensor(
                         H_unit_pol = []
                         for split_ind, src_list_subset in enumerate(src_list_split):
                             logger.info(
-                                f"Sources subset {split_ind + 1}/{len(src_list_split)}"
+                                "Sources subset {subset_num}/{total_subsets}",
+                                subset_num=split_ind + 1,
+                                total_subsets=len(src_list_split),
                             )
                             if src_list_subset.size > 0:
                                 H_unit_pol.append(
@@ -242,7 +227,7 @@ def demag_tensor(
 def filter_distance(
     src_list,
     max_dist,
-    min_log_time=1,
+    min_log_time=None,
     return_params=False,
     return_base_geo=False,
 ):
@@ -272,14 +257,16 @@ def filter_distance(
                 "dimension": np.repeat(dim0, len(src_list), axis=0)[mask],
             }
         dsf = sum(mask) / len(mask) * 100
-    log_msg = (
-        "Interaction pairs left after distance factor filtering: "
-        f"<blue>{dsf:.2f}%</blue>"
-    )
     if dsf == 0:
-        logger.opt(colors=True).warning(log_msg)
+        logger.warning(
+            "No interaction pairs left after distance factor filtering",
+            percentage=f"{dsf:.2f}%",
+        )
     else:
-        logger.opt(colors=True).success(log_msg)
+        logger.info(
+            "Interaction pairs left after distance factor filtering",
+            percentage=f"{dsf:.2f}%",
+        )
     out = [mask]
     if return_params:
         out.append(params)
@@ -290,7 +277,7 @@ def filter_distance(
     return tuple(out)
 
 
-def match_pairs(src_list, min_log_time=1):
+def match_pairs(src_list, min_log_time=None):
     """match all pairs of sources from `src_list`"""
     with timelog("Pairs matching", min_log_time=min_log_time):
         all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
@@ -304,25 +291,25 @@ def match_pairs(src_list, min_log_time=1):
         len_src = len(src_list)
         num_of_pairs = len_src**2
         with logger.contextualize(task="Match interactions pairs"):
-            logger.info("position")
+            logger.debug("Computing position differences")
             pos2 = np.tile(pos0, (len_src, 1)) - np.repeat(pos0, len_src, axis=0)
-            logger.info("orientation")
+            logger.debug("Computing orientation differences")
             rotQ2a = np.tile(rotQ0, (len_src, 1)).reshape((num_of_pairs, -1))
             rotQ2b = np.repeat(rotQ0, len_src, axis=0).reshape((num_of_pairs, -1))
-            logger.info("dimension")
+            logger.debug("Computing dimension differences")
             dim2 = np.tile(dim0, (len_src, 1)) - np.repeat(dim0, len_src, axis=0)
-            logger.info("concatenate properties")
+            logger.debug("Concatenating properties for comparison")
             prop = (np.concatenate([pos2, rotQ2a, rotQ2b, dim2], axis=1) + 1e-9).round(
                 8
             )
-            logger.info("find unique indices")
+            logger.debug("Finding unique interaction pairs")
             _, unique_inds, unique_inv_inds = np.unique(
                 prop, return_index=True, return_inverse=True, axis=0
             )
             perc = len(unique_inds) / len(unique_inv_inds) * 100
-            logger.opt(colors=True).info(
-                "Interaction pairs left after pair matching filtering: "
-                f"<blue>{perc:.2f}%</blue>"
+            logger.info(
+                "Interaction pairs left after pair matching filtering",
+                percentage=f"{perc:.2f}%",
             )
 
         params = {
@@ -341,7 +328,7 @@ def apply_demag(
     pairs_matching=False,
     max_dist=0,
     split=1,
-    min_log_time=1,
+    min_log_time=None,
     style=None,
 ):
     """
@@ -379,7 +366,9 @@ def apply_demag(
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
-        will not be logged.
+        will not be logged. If ``None`` (default), the value set by
+        :func:`magpylib_material_response.configure_logging` is used
+        (``1.0`` s by default).
 
     style: dict
         Set collection style. If `inplace=False` only affects the copied collection
@@ -408,10 +397,13 @@ def apply_demag(
         if not isinstance(src, BaseMagnet | BaseCurrent | magpy.Sensor)
     ]
     if others_list:
+        counts_others = Counter(s.__class__.__name__ for s in others_list)
+        counts_str = ", ".join(
+            f"{count} {name}" for name, count in counts_others.items()
+        )
         msg = (
             "Only Magnet and Current sources supported. "
-            "Incompatible objects found: "
-            f"{Counter(s.__class__.__name__ for s in others_list)}"
+            f"Incompatible objects found: {counts_str}"
         )
         raise TypeError(msg)
     n = len(magnets_list)
@@ -419,9 +411,9 @@ def apply_demag(
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
     lbl = collection.style.label
     coll_str = lbl if lbl else str(collection)
+    counts_str = ", ".join(f"{count} {name}" for name, count in counts.items())
     demag_msg = (
-        f"Demagnetization{inplace_str} of <blue>{coll_str}</blue>"
-        f" with {n} cells - {counts}"
+        f"Demagnetization{inplace_str} of {coll_str} with {n} cells ({counts_str})"
     )
     with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr
@@ -474,7 +466,7 @@ def apply_demag(
         Q = np.eye(3 * n) - np.matmul(S, T)
 
         # determine new polarization vectors
-        with timelog("Solving of linear system", min_log_time=1):
+        with timelog("Solving of linear system", min_log_time=min_log_time):
             pol_new = np.linalg.solve(Q, pol_total + np.matmul(S, H_ext))
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
