@@ -8,9 +8,9 @@ computation progress and debugging information.
 
 Following the
 [recommended pattern for libraries](https://loguru.readthedocs.io/en/stable/resources/recipes.html#configuring-loguru-to-be-used-by-a-library-or-an-application),
-the package is **disabled at import time** and produces no output until the
-user opts in. Importing the package never adds, removes or replaces any
-loguru sinks already configured by the host application.
+the package is **disabled at import time** and produces no output until the user
+opts in. Importing the package never adds, removes or replaces any loguru sinks
+already configured by the host application.
 
 ## Enabling Logging
 
@@ -24,10 +24,10 @@ from magpylib_material_response.demag import apply_demag
 configure_logging()
 ```
 
-`configure_logging()` adds a sink that only receives records emitted from
-within the `magpylib_material_response` package. It is safe to call multiple
-times; each call replaces only the sink it added previously, leaving any
-other loguru sinks untouched.
+`configure_logging()` adds a sink that only receives records emitted from within
+the `magpylib_material_response` package. It is safe to call multiple times;
+each call replaces only the sink it added previously, leaving any other loguru
+sinks untouched.
 
 ```{note}
 By default, loguru ships with a pre-installed `sys.stderr` sink (handler id
@@ -46,7 +46,7 @@ remove the default handler before configuring:
 ### Log Level
 
 ```python
-configure_logging(level="DEBUG")    # detailed internal operations
+configure_logging(level="DEBUG")  # detailed internal operations
 configure_logging(level="WARNING")  # only warnings and errors
 # Available: DEBUG, INFO, WARNING, ERROR, CRITICAL
 ```
@@ -56,7 +56,7 @@ configure_logging(level="WARNING")  # only warnings and errors
 ```python
 import sys
 
-configure_logging(sink=sys.stdout)        # stdout instead of stderr
+configure_logging(sink=sys.stdout)  # stdout instead of stderr
 configure_logging(sink="/path/to/file.log")  # log file
 ```
 
@@ -70,8 +70,8 @@ configure_logging(show_time=False)
 ### Step Timing Threshold
 
 The library wraps long-running steps in a `timelog` context that emits a
-"Completed: ..." record when the step exceeds a duration threshold. The
-default is `1.0` second.
+"Completed: ..." record when the step exceeds a duration threshold. The default
+is `1.0` second.
 
 ```python
 # Log every step, regardless of duration:
@@ -82,9 +82,9 @@ configure_logging(min_log_time=10)
 ```
 
 This setting is also picked up by `apply_demag`, `demag_tensor`,
-`filter_distance`, and `match_pairs` whenever their own `min_log_time`
-argument is left at its default (`None`). Passing an explicit value to those
-functions still overrides the global setting for that call.
+`filter_distance`, and `match_pairs` whenever their own `min_log_time` argument
+is left at its default (`None`). Passing an explicit value to those functions
+still overrides the global setting for that call.
 
 ## Environment Variables
 

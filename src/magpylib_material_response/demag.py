@@ -413,8 +413,7 @@ def apply_demag(
     coll_str = lbl if lbl else str(collection)
     counts_str = ", ".join(f"{count} {name}" for name, count in counts.items())
     demag_msg = (
-        f"Demagnetization{inplace_str} of {coll_str}"
-        f" with {n} cells ({counts_str})"
+        f"Demagnetization{inplace_str} of {coll_str} with {n} cells ({counts_str})"
     )
     with timelog(demag_msg, min_log_time=min_log_time):
         # set up mr

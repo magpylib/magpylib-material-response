@@ -22,7 +22,9 @@ class ElapsedTimeThread(threading.Thread):
         self.thread_start = time.time()
         self.msg = msg
         self.min_log_time = (
-            logging_config.DEFAULT_MIN_LOG_TIME if min_log_time is None else min_log_time
+            logging_config.DEFAULT_MIN_LOG_TIME
+            if min_log_time is None
+            else min_log_time
         )
         self._msg_displayed = False
 

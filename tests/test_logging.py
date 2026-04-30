@@ -95,8 +95,9 @@ def test_min_log_time_argument_sets_default():
     `timelog`."""
     from magpylib_material_response import logging_config  # noqa: PLC0415
 
-    configure_logging(level="DEBUG", enable_colors=False, sink=io.StringIO(),
-                      min_log_time=2.5)
+    configure_logging(
+        level="DEBUG", enable_colors=False, sink=io.StringIO(), min_log_time=2.5
+    )
     assert logging_config.DEFAULT_MIN_LOG_TIME == 2.5
 
 
@@ -114,8 +115,7 @@ def test_timelog_uses_default_min_log_time():
     from magpylib_material_response.utils import timelog  # noqa: PLC0415
 
     sink = io.StringIO()
-    configure_logging(level="DEBUG", enable_colors=False, sink=sink,
-                      min_log_time=0.0)
+    configure_logging(level="DEBUG", enable_colors=False, sink=sink, min_log_time=0.0)
     with timelog("quick step"):
         pass
     assert "Completed: quick step" in sink.getvalue()

@@ -38,9 +38,7 @@ _DEFAULT_FORMAT = (
     "<level>{message}</level>"
 )
 _NO_TIME_FORMAT = (
-    "<level>{level: <8}</level> | "
-    "<cyan>{name}</cyan> | "
-    "<level>{message}</level>"
+    "<level>{level: <8}</level> | <cyan>{name}</cyan> | <level>{message}</level>"
 )
 
 # Track sinks added by this module so we can replace them on reconfigure

@@ -12,18 +12,19 @@ and this project adheres to
 
 - **Breaking:** logging is now silent by default. Call
   `magpylib_material_response.configure_logging()` (or
-  `loguru.logger.enable("magpylib_material_response")`) to opt in to log
-  output ([#30](https://github.com/magpylib/magpylib-material-response/pull/30)).
+  `loguru.logger.enable("magpylib_material_response")`) to opt in to log output
+  ([#30](https://github.com/magpylib/magpylib-material-response/pull/30)).
 - Refactored logging to follow the
   [loguru library recipe](https://loguru.readthedocs.io/en/stable/resources/recipes.html#configuring-loguru-to-be-used-by-a-library-or-an-application):
   the package no longer calls `logger.remove()` and never overrides sinks
   configured by the host application.
-- Replaced f-string log calls with structured logging (`logger.info("msg {x}", x=...)`).
+- Replaced f-string log calls with structured logging
+  (`logger.info("msg {x}", x=...)`).
 - Added `MAGPYLIB_LOG_LEVEL`, `MAGPYLIB_LOG_COLORS`, `MAGPYLIB_LOG_TIME`,
   `MAGPYLIB_LOG_MIN_TIME` environment variables.
-- Added a `min_log_time` argument to `configure_logging()` that sets the
-  default duration threshold used by `timelog` (and by the demag functions
-  when their own `min_log_time` argument is left at its default).
+- Added a `min_log_time` argument to `configure_logging()` that sets the default
+  duration threshold used by `timelog` (and by the demag functions when their
+  own `min_log_time` argument is left at its default).
 - Added `docs/logging.md`.
 
 ### Fixed
