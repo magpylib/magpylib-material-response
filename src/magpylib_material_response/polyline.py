@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-
-from magpylib_material_response.logging_config import get_logger
-
-logger = get_logger("magpylib_material_response.polyline")
+from loguru import logger
 
 
 def _find_circle_center_and_tangent_points(

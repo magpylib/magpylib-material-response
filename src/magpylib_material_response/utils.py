@@ -6,23 +6,24 @@ import warnings
 from contextlib import contextmanager
 
 import magpylib as magpy
+from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from scipy.spatial.transform import Rotation
 
-from magpylib_material_response.logging_config import get_logger
-
-logger = get_logger("magpylib_material_response.utils")
+from magpylib_material_response import logging_config
 
 
 class ElapsedTimeThread(threading.Thread):
     """ "Stoppable thread that logs the time elapsed"""
 
-    def __init__(self, msg=None, min_log_time=1):
+    def __init__(self, msg=None, min_log_time=None):
         super().__init__()
         self._stop_event = threading.Event()
         self.thread_start = time.time()
         self.msg = msg
-        self.min_log_time = min_log_time
+        self.min_log_time = (
+            logging_config.DEFAULT_MIN_LOG_TIME if min_log_time is None else min_log_time
+        )
         self._msg_displayed = False
 
     def stop(self):
@@ -42,34 +43,41 @@ class ElapsedTimeThread(threading.Thread):
                 and time.time() - self.thread_start > self.min_log_time
                 and not self._msg_displayed
             ):
-                logger.info("🔄 Starting: {operation}", operation=self.msg)
+                logger.info("Starting: {operation}", operation=self.msg)
                 self._msg_displayed = True
             # include a delay here so the thread doesn't uselessly thrash the CPU
             time.sleep(max(0.01, self.min_log_time / 5))
 
 
 @contextmanager
-def timelog(msg, min_log_time=1):
-    """ "Measure and log time with loguru as context manager."""
+def timelog(msg, min_log_time=None):
+    """Measure and log time with loguru as context manager.
+
+    If ``min_log_time`` is None, the value set by
+    :func:`magpylib_material_response.configure_logging` (default ``1.0`` s)
+    is used.
+    """
+    if min_log_time is None:
+        min_log_time = logging_config.DEFAULT_MIN_LOG_TIME
     start = time.perf_counter()
-    end = None
     thread_timer = ElapsedTimeThread(msg=msg, min_log_time=min_log_time)
     thread_timer.start()
     try:
         yield
+    except Exception:
+        logger.opt(exception=True).error("Failed: {operation}", operation=msg)
+        raise
+    else:
         end = time.perf_counter() - start
+        if end > min_log_time:
+            logger.info(
+                "Completed: {operation} in {duration}s",
+                operation=msg,
+                duration=round(end, 3),
+            )
     finally:
         thread_timer.stop()
         thread_timer.join()
-        if end is None:
-            logger.exception("❌ Failed: {operation}", operation=msg)
-
-    if end > min_log_time:
-        logger.info(
-            "✅ Completed: {operation} in {duration}s",
-            operation=msg,
-            duration=round(end, 3),
-        )
 
 
 def serialize_recursive(obj, parent="warn"):

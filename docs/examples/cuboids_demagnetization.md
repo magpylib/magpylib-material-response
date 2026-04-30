@@ -39,13 +39,9 @@ import plotly.express as px
 from magpylib_material_response import get_dataset, configure_logging
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all
-from magpylib_material_response.logging_config import get_logger
 
-# Configure logging to see progress messages
+# Enable logging output from the package (silent by default).
 configure_logging()
-
-# Initialize logger for contextualized logging
-logger = get_logger("magpylib_material_response.examples.cuboids_demagnetization")
 
 if magpy.__version__.split(".")[0] != "5":
     raise RuntimeError(
@@ -96,7 +92,7 @@ coll_meshed.show()
 # apply demagnetization with varying number of cells
 colls = [coll]
 for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
-    logger.info("🔄 Processing demagnetization with {target_elems} target elements", target_elems=target_elems)
+    print(f"Processing demagnetization with {target_elems} target elements")
 
     coll_meshed = mesh_all(
         coll, target_elems=target_elems, per_child_elems=True, min_elems=1
@@ -108,7 +104,7 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
     )
     colls.append(coll_demag)
 
-    logger.info("✅ Completed demagnetization: {actual_cells} cells created", actual_cells=len(coll_meshed.sources_all))
+    logger.info("Completed demagnetization: {actual_cells} cells created", actual_cells=len(coll_meshed.sources_all))
 ```
 
 ## Compare with FEM analysis
