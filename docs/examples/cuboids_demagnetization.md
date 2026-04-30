@@ -36,12 +36,13 @@ import magpylib as magpy
 import numpy as np
 import pandas as pd
 import plotly.express as px
-from magpylib_material_response import get_dataset, configure_logging
+from magpylib_material_response import get_dataset
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all
 
-# Enable logging output from the package (silent by default).
-configure_logging()
+# Uncomment to enable logging output from the package (silent by default).
+# from magpylib_material_response import configure_logging
+# configure_logging(min_log_time=5)  # log steps taking longer than 5 s
 
 if magpy.__version__.split(".")[0] != "5":
     raise RuntimeError(
