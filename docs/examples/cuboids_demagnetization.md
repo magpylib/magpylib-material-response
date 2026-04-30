@@ -104,7 +104,7 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
     )
     colls.append(coll_demag)
 
-    logger.info("Completed demagnetization: {actual_cells} cells created", actual_cells=len(coll_meshed.sources_all))
+    print(f"Completed demagnetization: {len(coll_meshed.sources_all)} cells created")
 ```
 
 ## Compare with FEM analysis
