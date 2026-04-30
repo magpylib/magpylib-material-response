@@ -216,7 +216,7 @@ def mask_inside(obj, positions, tolerance=1e-14):
         "Sphere": mask_inside_Sphere,
         "CylinderSegment": mask_inside_CylinderSegment,
     }
-    func = mask_inside_funcs.get(obj.__class__.__name__, None)
+    func = mask_inside_funcs.get(obj.__class__.__name__)
     if func is None:
         msg = "Unsupported object type for inside masking"
         raise TypeError(msg)
