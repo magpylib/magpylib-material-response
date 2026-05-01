@@ -158,7 +158,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20"]
-"noxfile.py" = ["T20"]
+"noxfile.py" = ["T20", "EXE001"]
 
 
 [tool.pylint]
