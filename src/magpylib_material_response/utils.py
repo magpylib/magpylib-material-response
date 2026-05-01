@@ -170,7 +170,7 @@ def _serialize_recursive(obj, parent="warn"):
     return dd
 
 
-def _check_unit(field_name, inp, expected):  # noqa: ANN001
+def _check_unit(field_name, inp, expected):
     got = inp.get("unit")
     if got != expected:
         msg = f"{field_name} unit must be {expected!r}, got {got!r}"
@@ -182,10 +182,7 @@ def _deserialize_recursive(inp):
     typ = inp.get("type")
     constr = _CLASS_BY_TYPE.get(typ)
     if constr is None:
-        msg = (
-            f"Unknown type tag {typ!r}. "
-            f"Supported tags: {sorted(_CLASS_BY_TYPE)}"
-        )
+        msg = f"Unknown type tag {typ!r}. Supported tags: {sorted(_CLASS_BY_TYPE)}"
         raise TypeError(msg)
 
     kw = {}

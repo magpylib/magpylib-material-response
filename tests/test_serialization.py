@@ -12,7 +12,6 @@ from magpylib_material_response.utils import (
     _serialize_recursive,
 )
 
-
 PROBE = np.array([(0.001, 0.002, 0.003), (-0.001, 0, 0.005)])
 
 
@@ -92,9 +91,7 @@ def test_roundtrip_sensor():
 
 
 def test_roundtrip_collection_mixed():
-    cube = magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001)
-    )
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     cube.susceptibility = 0.5
     pline = magpy.current.Polyline(
         current=1.0, vertices=[(0, 0, 0), (0.001, 0, 0), (0.001, 0.001, 0)]
@@ -116,9 +113,7 @@ def test_roundtrip_collection_mixed():
 
 
 def test_path_roundtrip():
-    src = magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001)
-    )
+    src = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     src.move(np.linspace((0, 0, 0), (0, 0, 0.005), 5))
     src.rotate_from_angax(np.linspace(0, 90, 5), "z", start=0)
     out = _deserialize_recursive(_serialize_recursive(src))
@@ -130,13 +125,9 @@ def test_path_roundtrip():
 
 
 def test_to_from_json_string():
-    cube = magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001)
-    )
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     cube.susceptibility = 0.3
-    pline = magpy.current.Polyline(
-        current=1.0, vertices=[(0, 0, 0), (0.001, 0, 0)]
-    )
+    pline = magpy.current.Polyline(current=1.0, vertices=[(0, 0, 0), (0.001, 0, 0)])
     coll = magpy.Collection(cube, pline)
 
     s = to_json(coll, indent=2)
@@ -171,9 +162,7 @@ def test_unknown_type_tag_raises():
 
 
 def test_bad_unit_raises():
-    src = magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001)
-    )
+    src = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     dd = _serialize_recursive(src)
     dd["position"]["unit"] = "mm"
     with pytest.raises(ValueError, match="Position unit"):
@@ -181,9 +170,7 @@ def test_bad_unit_raises():
 
 
 def test_bad_orientation_representation_raises():
-    src = magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001)
-    )
+    src = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     dd = _serialize_recursive(src)
     dd["orientation"]["representation"] = "quaternion"
     with pytest.raises(ValueError, match="Orientation representation"):
@@ -191,18 +178,14 @@ def test_bad_orientation_representation_raises():
 
 
 def test_parent_serialization_warns():
-    cube = magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001)
-    )
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     magpy.Collection(cube)  # sets cube.parent
     with pytest.warns(UserWarning, match="parent"):
         _serialize_recursive(cube)
 
 
 def test_from_json_returns_multiple_objects():
-    cube = magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001)
-    )
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     sens = magpy.Sensor()
     out = from_json(to_json(cube, sens))
     assert len(out) == 2
