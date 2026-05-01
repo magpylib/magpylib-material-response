@@ -157,3 +157,7 @@ Thumbs.db
 # Common editor files
 *~
 *.swp
+
+
+# Generated files from doc examples
+docs/examples/demag_collection.json
