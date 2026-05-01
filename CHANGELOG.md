@@ -12,8 +12,8 @@ and this project adheres to
 
 - Serialization API for magpylib objects: `to_json`, `from_json`. Supports
   `magnet.Cuboid`, `magnet.Cylinder`, `magnet.CylinderSegment`,
-  `current.Polyline`, `current.Circle`, `Sensor`, and nested `Collection`.
-  Uses namespaced type discriminators (`"magnet.Cuboid"`, `"current.Polyline"`, …)
+  `current.Polyline`, `current.Circle`, `Sensor`, and nested `Collection`. Uses
+  namespaced type discriminators (`"magnet.Cuboid"`, `"current.Polyline"`, …)
   and is fully JSON round-trippable
   ([#38](https://github.com/magpylib/magpylib-material-response/pull/38)).
 - Added serialization example to docs

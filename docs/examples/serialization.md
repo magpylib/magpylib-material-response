@@ -19,9 +19,9 @@ useful to persist the demagnetized state to disk so that further field analyses
 can be run later without repeating the simulation.
 
 `to_json` serializes any supported magpylib collection to a JSON string;
-`from_json` reconstructs the objects from that string. All geometry
-(position, orientation, paths), magnetic polarizations and susceptibilities
-are preserved exactly.
+`from_json` reconstructs the objects from that string. All geometry (position,
+orientation, paths), magnetic polarizations and susceptibilities are preserved
+exactly.
 
 ## Define sources, mesh and apply demagnetization
 
