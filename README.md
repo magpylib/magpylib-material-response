@@ -9,10 +9,12 @@
 
 [![GitHub Discussion][github-discussions-badge]][github-discussions-link]
 
+[![Coverage][coverage-badge]][coverage-link]
+
 <!-- SPHINX-START -->
 
 <!-- prettier-ignore-start -->
-[actions-badge]:            https://github.com/magpylib/magpylib-material-response/workflows/CI/badge.svg
+[actions-badge]:            https://github.com/magpylib/magpylib-material-response/actions/workflows/ci.yml/badge.svg
 [actions-link]:             https://github.com/magpylib/magpylib-material-response/actions
 [conda-badge]:              https://img.shields.io/conda/vn/conda-forge/magpylib-material-response
 [conda-link]:               https://github.com/conda-forge/magpylib-material-response-feedstock
@@ -23,6 +25,8 @@
 [pypi-version]:             https://img.shields.io/pypi/v/magpylib-material-response
 [rtd-badge]:                https://readthedocs.org/projects/magpylib-material-response/badge/?version=latest
 [rtd-link]:                 https://magpylib-material-response.readthedocs.io/en/latest/?badge=latest
+[coverage-badge]:           https://codecov.io/github/magpylib/magpylib-material-response/branch/main/graph/badge.svg
+[coverage-link]:            https://codecov.io/github/magpylib/magpylib-material-response
 
 <!-- prettier-ignore-end -->
 
