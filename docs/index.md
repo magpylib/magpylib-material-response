@@ -10,6 +10,7 @@
 :maxdepth: 2
 
 logging
+serialization
 examples/index
 ```
 
