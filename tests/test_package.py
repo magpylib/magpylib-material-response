@@ -5,5 +5,5 @@ import importlib.metadata
 import magpylib_material_response as m
 
 
-def test_version():
+def test_version() -> None:
     assert importlib.metadata.version("magpylib_material_response") == m.__version__

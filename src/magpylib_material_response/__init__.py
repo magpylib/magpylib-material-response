@@ -1,5 +1,4 @@
-"""
-Copyright (c) 2025 Alexandre Boisselet. All rights reserved.
+"""Copyright (c) 2026 Alexandre Boisselet. All rights reserved.
 
 magpylib-material-response: Python package extending the Magpylib library by providing magnetic field analysis for soft materials and demagnetization of hard magnets.
 """

@@ -1,3 +1,11 @@
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# dependencies = ["nox>=2025.2.9"]
+# ///
+
+"""Nox runner."""
+
 from __future__ import annotations
 
 import argparse
@@ -7,9 +15,9 @@ from pathlib import Path
 import nox
 
 DIR = Path(__file__).parent.resolve()
+PROJECT = nox.project.load_toml()
 
-nox.needs_version = ">=2024.3.2"
-nox.options.sessions = ["lint", "pylint", "tests"]
+nox.needs_version = ">=2025.2.9"
 nox.options.default_venv_backend = "uv|virtualenv"
 
 
@@ -18,9 +26,9 @@ def lint(session: nox.Session) -> None:
     """
     Run the linter.
     """
-    session.install("pre-commit")
+    session.install("prek")
     session.run(
-        "pre-commit", "run", "--all-files", "--show-diff-on-failure", *session.posargs
+        "prek", "run", "--all-files", "--show-diff-on-failure", *session.posargs
     )
 
 
@@ -40,16 +48,18 @@ def tests(session: nox.Session) -> None:
     """
     Run the unit and regular tests.
     """
-    session.install("-e.[test]")
+    test_deps = nox.project.dependency_groups(PROJECT, "test")
+    session.install("-e.", *test_deps)
     session.run("pytest", *session.posargs)
 
 
-@nox.session(reuse_venv=True)
+@nox.session(reuse_venv=True, default=False)
 def docs(session: nox.Session) -> None:
     """
     Build the docs. Pass --non-interactive to avoid serving. First positional argument is the target directory.
     """
 
+    doc_deps = nox.project.dependency_groups(PROJECT, "docs")
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-b", dest="builder", default="html", help="Build target (default: html)"
@@ -58,7 +68,7 @@ def docs(session: nox.Session) -> None:
     args, posargs = parser.parse_known_args(session.posargs)
     serve = args.builder == "html" and session.interactive
 
-    session.install("-e.[docs]", "sphinx-autobuild")
+    session.install("-e.", *doc_deps, "sphinx-autobuild")
 
     shared_args = (
         "-n",  # nitpicky mode
@@ -75,7 +85,7 @@ def docs(session: nox.Session) -> None:
         session.run("sphinx-build", "--keep-going", *shared_args)
 
 
-@nox.session
+@nox.session(default=False)
 def build_api_docs(session: nox.Session) -> None:
     """
     Build (regenerate) API docs.
@@ -93,7 +103,7 @@ def build_api_docs(session: nox.Session) -> None:
     )
 
 
-@nox.session
+@nox.session(default=False)
 def build(session: nox.Session) -> None:
     """
     Build an SDist and wheel.
@@ -105,3 +115,7 @@ def build(session: nox.Session) -> None:
 
     session.install("build")
     session.run("python", "-m", "build")
+
+
+if __name__ == "__main__":
+    nox.main()
