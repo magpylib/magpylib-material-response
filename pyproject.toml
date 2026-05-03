@@ -32,6 +32,7 @@ dynamic = ["version"]
 dependencies = [
   "magpylib>=5.0",
   "loguru>=0.5.0",
+  "meshio",
 ]
 
 [project.urls]
