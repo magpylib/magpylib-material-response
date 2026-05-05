@@ -134,7 +134,7 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
         msg = "Input must be a Cylinder or CylinderSegment"
         raise TypeError(msg)
 
-    al = (r2 + r1) * 3.14 * (phi2 - phi1) / 360  # arclen = D*pi*arcratio
+    al = (r2 + r1) * np.pi * (phi2 - phi1) / 360  # arclen = D*pi*arcratio
     dim = al, r2 - r1, h
     pol0 = cylinder.polarization
     # "unroll" the cylinder and distribute the target number of elements along the
@@ -333,7 +333,8 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     Returns
     -------
     discretization: magpylib.Collection
-        Collection of Cylinder and CylinderSegment cells"""
+        Collection of Cuboid cells
+    """
     pol0 = obj.polarization
     vol, containing_cube_edge = get_volume(obj, return_containing_cube_edge=True)
     vol_ratio = (containing_cube_edge**3) / vol
@@ -372,6 +373,102 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     return _collection_from_obj_and_cells(obj, cells, **kwargs)
 
 
+def mesh_TriangularMesh(
+    obj,
+    target_elems,
+    minratio=1.5,
+    mindihedral=10.0,
+    quality=True,
+    verbose=False,
+    **kwargs,
+):
+    """
+    Split a TriangularMesh magnet into conforming Tetrahedron cells using TetGen.
+
+    TetGen generates a surface-conforming tetrahedral mesh: all tetrahedra are strictly
+    inside the closed surface and no vertex protrudes outside. Cell sizes are controlled
+    via ``target_elems`` (sets ``maxvolume`` from the object volume). Quality is
+    controlled by ``minratio`` and ``mindihedral``.
+
+    Parameters
+    ----------
+    obj : magpy.magnet.TriangularMesh
+        Input object to be discretized.
+    target_elems : int
+        Target number of tetrahedra. Sets ``maxvolume = obj.volume / target_elems``.
+    minratio : float, default 1.5
+        TetGen quality constraint — maximum radius-edge ratio. Lower values give
+        better-shaped tetrahedra but more cells. 1.0 is near-equilateral; 2.0 is
+        permissive.
+    mindihedral : float, default 10.0
+        TetGen quality constraint — minimum dihedral angle in degrees. Prevents
+        flat/sliver tetrahedra.
+    quality : bool, default True
+        If True, TetGen inserts Steiner points to meet the volume constraint set by
+        ``target_elems`` and improve element quality. If False, only the input surface
+        vertices are tetrahedralized and ``target_elems`` has no effect.
+    verbose : bool
+        If True, prints out meshing information.
+
+    Returns
+    -------
+    discretization : magpy.Collection
+        Collection of Tetrahedron cells.
+    """
+    try:
+        import tetgen  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:
+        msg = (
+            "mesh_TriangularMesh requires the 'tetgen' package, which is an optional "
+            "dependency. Install it with: pip install magpylib-material-response[tetgen]"
+        )
+        raise ImportError(msg) from exc
+
+    if not isinstance(obj, magpy.magnet.TriangularMesh):
+        msg = (
+            "Object to be meshed must be a TriangularMesh, "
+            f"received instead {obj.__class__.__name__!r}"
+        )
+        raise TypeError(msg)
+
+    pol0 = obj.polarization
+    maxvol = obj.volume / target_elems
+
+    tet = tetgen.TetGen(
+        obj.vertices.astype(float),
+        obj.faces.astype(np.int32),
+    )
+    tet.tetrahedralize(
+        order=1,
+        quality=quality,
+        minratio=minratio,
+        mindihedral=mindihedral,
+        fixedvolume=True,
+        maxvolume=maxvol,
+        quiet=not verbose,
+    )
+
+    nodes = tet.node  # (n_nodes, 3)
+    elems = tet.elem  # (n_tets, 4) — node indices, 0-based
+    tet_verts = nodes[elems]  # (n_tets, 4, 3)
+
+    if tet_verts.shape[0] == 0:
+        msg = "TetGen produced no tetrahedra — check surface normals are outward-facing"
+        raise ValueError(msg)
+
+    if verbose:
+        logger.info(
+            "Meshing TriangularMesh (TetGen)",
+            elements=len(tet_verts),
+            target=target_elems,
+        )
+
+    cells = [
+        magpy.magnet.Tetrahedron(polarization=pol0, vertices=tv) for tv in tet_verts
+    ]
+    return _collection_from_obj_and_cells(obj, cells, **kwargs)
+
+
 def mesh_all(
     obj,
     target_elems,
@@ -386,9 +483,9 @@ def mesh_all(
 
     Parameters
     ----------
-    obj : magpy.Collection, magpy.magnet.Cuboid, magpy.magnet.Cylinder, BaseCurrent
-        The object to be meshed. If a magpy.Collection, all its children will be
-        meshed.
+    obj : Collection, magnet.Cuboid, magnet.Cylinder, magnet.CylinderSegment, magnet.TriangularMesh
+        The object to be meshed. If a Collection, all its children will be
+        meshed. BaseCurrent objects are allowed but not meshed.
     target_elems : int
         Target number of elements for the meshing.
     min_elems : int, optional, default=8
@@ -410,7 +507,12 @@ def mesh_all(
     TypeError
         If there are incompatible objects found.
     """
-    supported = (magpy.magnet.Cuboid, magpy.magnet.Cylinder)
+    supported = (
+        magpy.magnet.Cuboid,
+        magpy.magnet.Cylinder,
+        magpy.magnet.CylinderSegment,
+        magpy.magnet.TriangularMesh,
+    )
     allowed = (*supported, BaseCurrent)
     if not inplace:
         obj = obj.copy(**kwargs)
@@ -443,8 +545,10 @@ def mesh_all(
         child_meshed = None
         if isinstance(child, magpy.magnet.Cuboid):
             child_meshed = mesh_Cuboid(child, targ_elems, **kw)
-        elif isinstance(child, magpy.magnet.Cylinder):
+        elif isinstance(child, (magpy.magnet.Cylinder, magpy.magnet.CylinderSegment)):
             child_meshed = mesh_Cylinder(child, targ_elems, **kw)
+        elif isinstance(child, magpy.magnet.TriangularMesh):
+            child_meshed = mesh_TriangularMesh(child, targ_elems, **kw)
         if child_meshed is not None:
             child.parent = None
             if parent is not None:

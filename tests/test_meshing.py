@@ -11,8 +11,10 @@ from magpylib_material_response.meshing import (
     mesh_Cuboid,
     mesh_Cylinder,
     mesh_thin_CylinderSegment_with_cuboids,
+    mesh_TriangularMesh,
     slice_Cuboid,
 )
+from magpylib_material_response.meshing_utils import trimesh_from_model3d
 
 
 def test_mesh_Cuboid():
@@ -253,3 +255,55 @@ def test_mesh_all():
     # test if all children sources got the right susceptibility value
     mags = [s for s in cm.sources_all if not isinstance(s, magpy.current.Circle)]
     assert all(s.susceptibility == c.susceptibility for s in mags)
+
+
+def test_mesh_TriangularMesh():
+    """
+    Build a TriangularMesh from a cuboid surface (via make_Cuboid), mesh it with
+    mesh_TriangularMesh, and compare getB against the original Cuboid.
+    """
+    pytest.importorskip("tetgen", reason="tetgen optional dependency not installed")
+
+    dim = (0.002, 0.003, 0.005)
+    pol = (0.0, 0.0, 1.0)
+    opacity = 0.5
+
+    # Reference cuboid
+    cuboid = magpy.magnet.Cuboid(polarization=pol, dimension=dim)
+    cuboid.style.label = "Cuboid ref"
+    cuboid.style.opacity = 0
+    cuboid.susceptibility = 3999
+
+    # Build a closed TriangularMesh from make_Cuboid surface output
+    trimesh = trimesh_from_model3d("cuboid", pol, dimension=dim)
+    trimesh.style.label = "Cuboid ref"
+    trimesh.style.opacity = 0
+    trimesh.susceptibility = cuboid.susceptibility
+    assert not trimesh.status_open, "TriangularMesh surface must be closed"
+
+    # Mesh into Tetrahedra and check field
+    cm = mesh_TriangularMesh(trimesh, target_elems=50, style_opacity=opacity)
+
+    # A cuboid has only flat faces — no curved surface is approximated — so the
+    # tetrahedral mesh is geometrically exact and the field should match very closely.
+    # Observer is off all symmetry axes so all three B components are non-zero
+    # (avoids rtol instability when the reference value is ~0).
+    obs = [0.01, 0.007, 0.004]
+    np.testing.assert_allclose(
+        cuboid.getB(obs),
+        cm.getB(obs),
+        rtol=1e-3,
+        atol=1e-8,
+        err_msg="mesh_TriangularMesh B-field deviates from reference Cuboid",
+    )
+
+    # Susceptibility propagated to all cells
+    assert all(s.susceptibility == cuboid.susceptibility for s in cm.sources_all)
+
+    # Style propagated
+    assert cm.style.label == trimesh.style.label
+    assert cm.style.opacity == opacity
+
+    # TypeError on wrong input type
+    with pytest.raises(TypeError):
+        mesh_TriangularMesh(cuboid, target_elems=10)

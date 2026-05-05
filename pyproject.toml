@@ -34,6 +34,9 @@ dependencies = [
   "loguru>=0.5.0",
 ]
 
+[project.optional-dependencies]
+tetgen = ["tetgen>=0.8.3"]
+
 [project.urls]
 Homepage = "https://github.com/magpylib/magpylib-material-response"
 "Bug Tracker" = "https://github.com/magpylib/magpylib-material-response/issues"
@@ -45,6 +48,7 @@ Changelog = "https://github.com/magpylib/magpylib-material-response/releases"
 test = [
   "pytest >=9",
   "pytest-cov >=7",
+  "magpylib-material-response[tetgen]",
 ]
 dev = [
   { include-group = "test" },
