@@ -10,6 +10,23 @@ and this project adheres to
 
 ### Added
 
+- `mesh_TriangularMesh()` — meshes a `magnet.TriangularMesh` into conforming
+  tetrahedral cells using [TetGen](https://tetgen.pyvista.org/). Quality and
+  cell count are controlled via `target_elems`, `minratio`, and `mindihedral`.
+  TetGen is an optional dependency:
+  `pip install magpylib-material-response[tetgen]`.
+- `trimesh_from_model3d()` helper in `meshing_utils` — builds a closed
+  `magnet.TriangularMesh` from a magpylib `model3d` shape trace (cuboid,
+  cylinder_segment, ellipsoid, prism, pyramid, tetrahedron).
+- `mesh_all()` now supports `magnet.CylinderSegment` and `magnet.TriangularMesh`
+  in addition to `magnet.Cuboid` and `magnet.Cylinder`.
+- Optional dependency group `tetgen` (`tetgen>=0.8.3`).
+  ([#41](https://github.com/magpylib/magpylib-material-response/pull/41)).
+
+## [0.4.0] - 2026-05-01
+
+### Added
+
 - Serialization API for magpylib objects: `to_json`, `from_json`. Supports
   `magnet.Cuboid`, `magnet.Cylinder`, `magnet.CylinderSegment`,
   `current.Polyline`, `current.Circle`, `Sensor`, and nested `Collection`. Uses
@@ -115,7 +132,9 @@ and this project adheres to
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/v0.3.1...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/v0.4.0...HEAD
+[0.4.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/v0.3.1...v0.4.0
 [0.3.1]:
   https://github.com/magpylib/magpylib-material-response/compare/v0.3.0...v0.3.1
 [0.3.0]:
