@@ -9,8 +9,18 @@ import numpy as np
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from magpylib.magnet import Cuboid
+from scipy.sparse.linalg import LinearOperator, gmres
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response.demag_fft import (
+    build_fft_kernel,
+    demag_fft_matvec,
+    detect_uniform_grid,
+)
+from magpylib_material_response.newell import (
+    demag_tensor_newell,
+    self_demag_factors,
+)
 from magpylib_material_response.utils import timelog
 
 
@@ -165,6 +175,42 @@ def demag_tensor(
     if pairs_matching and split != 1:
         msg = "Pairs matching does not support splitting"
         raise ValueError(msg)
+
+    # Fast Newell path: identical cuboids with a common rotation, no pairs matching / max_dist
+    no_split = split is False or split == 1
+    if not pairs_matching and max_dist == 0 and no_split:
+        all_cuboids = all(isinstance(s, Cuboid) for s in src_list)
+        if all_cuboids and nof_src > 0:
+            dims = np.array([s.dimension for s in src_list])
+            quats = np.array([s.orientation.as_quat() for s in src_list])
+            same_dim = np.allclose(dims, dims[0])
+            q0 = quats[0]
+            same_rot = np.allclose(quats, q0, atol=1e-9) or np.allclose(
+                quats, -q0, atol=1e-9
+            )
+            if same_dim and same_rot:
+                with timelog(
+                    "Newell analytical demag tensor", min_log_time=min_log_time
+                ):
+                    pos0 = np.array(
+                        [getattr(s, "barycenter", s.position) for s in src_list]
+                    )
+                    r_common = R.from_quat(q0)
+                    is_identity = np.allclose(
+                        q0, np.array([0.0, 0.0, 0.0, 1.0]), atol=1e-9
+                    )
+                    if is_identity:
+                        return demag_tensor_newell(pos0, dims[0], magpy.mu_0)
+                    # Rotated grid: transform positions to local frame, compute
+                    # Newell tensor there, then rotate back to global frame.
+                    # Convention: T[K,i,j,M] = field M at j due to unit pol K at i
+                    # H_global[M,j] = R[M,A]*H_local[A,j], pol_local[B] = R[K,B]*pol_global[K]
+                    # → T_global[K,i,j,M] = Σ_{A,B} R[M,A]*T_local[B,i,j,A]*R[K,B]
+                    pos_local = r_common.inv().apply(pos0)
+                    T_local = demag_tensor_newell(pos_local, dims[0], magpy.mu_0)
+                    R_mat = r_common.as_matrix()
+                    return np.einsum("ma,bija,kb->kijm", R_mat, T_local, R_mat)
+
     mask_inds = None
     getH_params = {}
     if max_dist != 0:
@@ -321,6 +367,117 @@ def match_pairs(src_list, min_log_time=None):
     return params, unique_inds, unique_inv_inds, pos0, rot0
 
 
+def _rotate_fortran_flat(v_flat, n, rot):
+    """Apply rotation ``rot`` to each 3-vector in a Fortran-flat (3n,) array.
+
+    The Fortran-flat layout stores component k of cell i at index ``k*n + i``.
+    Equivalent to reshaping to (3, n), transposing to (n, 3), applying rotation,
+    then packing back.
+    """
+    v_array = v_flat.reshape((3, n)).T  # (n, 3)
+    return rot.apply(v_array).T.ravel()  # (3n,)
+
+
+def _build_fft_matvec(n, sus, fft_info):
+    """Return a Fortran-flat matvec ``v -> (I - S T) @ v`` using the FFT path."""
+    Nx, Ny, Nz = fft_info["shape"]
+    order = fft_info["order"]
+    kernel_fft = fft_info["kernel_fft"]
+
+    # Inverse permutation: order maps grid_flat_index -> original_cell_index.
+    inv_order = np.empty_like(order)
+    inv_order[order] = np.arange(order.size)
+
+    def matvec(v_flat):
+        # v_flat shape (3n,); component-major layout [x1..xn, y1..yn, z1..zn].
+        # Reshape (3, n) in C-order so v[k, i] = v_flat[k*n + i] (component k,
+        # original cell i). Note Fortran-order would interleave components.
+        v = v_flat.reshape((3, n))
+        # Build polarisation per grid cell (Nx, Ny, Nz, 3).
+        M_orig = v.T  # (n, 3) per original cell
+        M_grid_flat = M_orig[order]  # reorder to grid-flat layout
+        M_grid = M_grid_flat.reshape((Nx, Ny, Nz, 3))
+        H_grid = demag_fft_matvec(M_grid, kernel_fft, (Nx, Ny, Nz), magpy.mu_0)
+        # H_grid (Nx, Ny, Nz, 3) -> per-original-cell ordering.
+        H_grid_flat = H_grid.reshape((Nx * Ny * Nz, 3))
+        H_orig = np.empty_like(M_orig)
+        H_orig[order] = H_grid_flat
+        # Tv flat (component-major): H_orig[i, m] -> flat[m*n + i].
+        Tv = H_orig.T  # (3, n)
+        Tv_flat = Tv.reshape(3 * n)
+        return v_flat - sus * Tv_flat
+
+    return matvec
+
+
+def _build_dense_matvec(sus, T):
+    """Return matvec ``v -> (I - S T) @ v`` for dense T."""
+
+    def matvec(v_flat):
+        Tv = T @ v_flat
+        return v_flat - sus * Tv
+
+    return matvec
+
+
+def _solve_iterative(
+    *, n, sus, rhs, rhs_shape, T, fft_info, magnets_list, solver_tol, max_iter
+):
+    """GMRES solve of (I - S T) x = rhs with diagonal Jacobi preconditioning.
+
+    Selects the FFT matvec when ``fft_info`` is provided, otherwise falls back
+    to a dense T matvec.
+    """
+    if fft_info is not None:
+        matvec = _build_fft_matvec(n, sus, fft_info)
+    else:
+        matvec = _build_dense_matvec(sus, T)
+
+    Q_op = LinearOperator((3 * n, 3 * n), matvec=matvec, dtype=float)
+
+    # Diagonal Jacobi preconditioner using analytical self-demag factors.
+    # T_post = -N (post-mu_0). Q_diag = 1 - sus * (-N_self)_kk = 1 + sus * N_self_kk.
+    # Cell ordering of sus is Fortran (m-major): [Nxx_1..Nxx_n, Nyy_1..Nyy_n, Nzz_1..Nzz_n].
+    all_cuboids = all(isinstance(s, Cuboid) for s in magnets_list)
+    if all_cuboids and n > 0:
+        dims = np.array([s.dimension for s in magnets_list])
+        # Same dim across all cells? Use one factor; else per-cell.
+        if np.allclose(dims, dims[0]):
+            Nself = self_demag_factors(dims[0])  # (3,)
+            Nself_flat = np.repeat(Nself, n)  # (3n,) Fortran flat
+        else:
+            Nself_per_cell = np.array([self_demag_factors(d) for d in dims])  # (n, 3)
+            Nself_flat = Nself_per_cell.T.ravel()  # (3n,) m-major
+        diag_Q = 1.0 + sus * Nself_flat
+    else:
+        diag_Q = np.ones(3 * n)
+
+    # Avoid division by zero in degenerate cases.
+    safe = np.where(np.abs(diag_Q) > 1e-12, diag_Q, 1.0)
+    M_inv = LinearOperator((3 * n, 3 * n), matvec=lambda v: v / safe, dtype=float)
+
+    x0 = rhs.copy()  # warm start at rhs
+    x, info = gmres(
+        Q_op,
+        rhs,
+        M=M_inv,
+        rtol=solver_tol,
+        atol=0.0,
+        maxiter=max_iter,
+        x0=x0,
+    )
+    if info > 0:
+        logger.warning(
+            "GMRES did not converge after {iters} iterations (tol={tol})",
+            iters=info,
+            tol=solver_tol,
+        )
+    elif info < 0:
+        msg = f"GMRES illegal input or breakdown (info={info})"
+        raise RuntimeError(msg)
+    return x.reshape(rhs_shape)
+
+
 def apply_demag(
     collection,
     susceptibility=None,
@@ -330,6 +487,9 @@ def apply_demag(
     split=1,
     min_log_time=None,
     style=None,
+    solver="direct",
+    solver_tol=1e-6,
+    max_iter=50,
 ):
     """
     Computes the interaction between all collection magnets and fixes their
@@ -373,10 +533,28 @@ def apply_demag(
     style: dict
         Set collection style. If `inplace=False` only affects the copied collection
 
+    solver: {"direct", "iterative"}
+        Linear solver to use. ``"direct"`` (default) builds the dense ``Q`` matrix
+        and calls :func:`numpy.linalg.solve` -- exact within floating-point
+        precision. ``"iterative"`` solves with :func:`scipy.sparse.linalg.gmres`
+        and a diagonal Jacobi preconditioner; if all cells are identical
+        axis-aligned Cuboids on a uniform Cartesian grid, an FFT-accelerated
+        :math:`O(n \\log n)` matvec is used. Defaults to ``"direct"`` to
+        preserve backward-compatible behaviour.
+
+    solver_tol: float
+        Relative residual tolerance passed to GMRES when ``solver="iterative"``.
+
+    max_iter: int
+        Maximum number of GMRES iterations when ``solver="iterative"``.
+
     Returns
     -------
     None
     """
+    if solver not in ("direct", "iterative"):
+        msg = f"solver must be 'direct' or 'iterative'; got {solver!r}"
+        raise ValueError(msg)
     if not inplace:
         collection = collection.copy()
     if style is not None:
@@ -429,7 +607,10 @@ def apply_demag(
 
         # set up S
         sus = get_susceptibilities(magnets_list, susceptibility)
-        S = np.diag(sus)  # shape ii, jj
+        # ``sus`` is a 1-D Fortran-flat (3n,) vector representing the
+        # diagonal of the susceptibility matrix S. We exploit this everywhere
+        # via broadcasting (sus[:, None] * X == np.diag(sus) @ X) to avoid
+        # materialising the (3n, 3n) dense diagonal matrix.
 
         # set up H_ext
         H_ext = get_H_ext(*magnets_list)
@@ -440,16 +621,37 @@ def apply_demag(
         H_ext = np.reshape(H_ext, (3 * n, 1), order="F")
 
         # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
-        with timelog("Demagnetization tensor calculation", min_log_time=min_log_time):
-            T = demag_tensor(
-                magnets_list,
-                split=split,
-                pairs_matching=pairs_matching,
-                max_dist=max_dist,
-            )
+        # Try FFT path first when iterative solver is requested.
+        fft_info = None
+        if solver == "iterative" and not pairs_matching and max_dist == 0:
+            all_cuboids = all(isinstance(s, Cuboid) for s in magnets_list)
+            if all_cuboids and n > 0:
+                positions = np.array(
+                    [getattr(s, "barycenter", s.position) for s in magnets_list]
+                )
+                dimensions = np.array([s.dimension for s in magnets_list])
+                rotations = R.from_quat([s.orientation.as_quat() for s in magnets_list])
+                fft_info = detect_uniform_grid(positions, dimensions, rotations)
 
-            T *= magpy.mu_0
-            T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
+        T = None
+        if fft_info is None:
+            with timelog(
+                "Demagnetization tensor calculation", min_log_time=min_log_time
+            ):
+                T = demag_tensor(
+                    magnets_list,
+                    split=split,
+                    pairs_matching=pairs_matching,
+                    max_dist=max_dist,
+                )
+
+                T *= magpy.mu_0
+                T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
+        else:
+            with timelog("FFT demag kernel build", min_log_time=min_log_time):
+                fft_info["kernel_fft"] = build_fft_kernel(
+                    fft_info["shape"], fft_info["cell"]
+                )
 
         pol_total = pol_magnets
 
@@ -460,14 +662,40 @@ def apply_demag(
                 pos = np.array([src.position for src in magnets_list])
                 pol_currents = magpy.getB(currents_list, pos, sumup=True)
                 pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
-                pol_total += np.matmul(S, pol_currents)
+                # use elementwise multiply because S is diagonal
+                pol_total = pol_total + (sus[:, None] * pol_currents)
 
-        # set up Q
-        Q = np.eye(3 * n) - np.matmul(S, T)
+        rhs = pol_total + (sus[:, None] * H_ext)  # shape (3n, 1)
 
-        # determine new polarization vectors
+        # For the FFT path with a non-identity common rotation the solve runs in
+        # the cuboid's local frame.  Rotate rhs there and rotate result back.
+        r_frame = fft_info["r_common"] if fft_info is not None else None
+        is_rotated_frame = r_frame is not None and not np.allclose(
+            r_frame.as_quat(), [0.0, 0.0, 0.0, 1.0], atol=1e-9
+        )
+
+        rhs_solve = rhs.ravel()
+        if is_rotated_frame:
+            rhs_solve = _rotate_fortran_flat(rhs_solve, n, r_frame.inv())
+
         with timelog("Solving of linear system", min_log_time=min_log_time):
-            pol_new = np.linalg.solve(Q, pol_total + np.matmul(S, H_ext))
+            if solver == "direct":
+                Q = np.eye(3 * n) - (sus[:, None] * T)
+                pol_new = np.linalg.solve(Q, rhs)
+            else:
+                pol_new = _solve_iterative(
+                    n=n,
+                    sus=sus,
+                    rhs=rhs_solve,
+                    rhs_shape=rhs.shape,
+                    T=T,
+                    fft_info=fft_info,
+                    magnets_list=magnets_list,
+                    solver_tol=solver_tol,
+                    max_iter=max_iter,
+                )
+                if is_rotated_frame:
+                    pol_new = _rotate_fortran_flat(pol_new, n, r_frame)
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
         # pol_new *= .4*np.pi
