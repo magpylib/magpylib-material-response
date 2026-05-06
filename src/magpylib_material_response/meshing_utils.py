@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from itertools import product
 
+import magpylib as magpy
+import magpylib.graphics.model3d as _m3d
 import numpy as np
 
 
@@ -129,6 +131,11 @@ def get_volume(obj, return_containing_cube_edge=False):
     elif obj.__class__.__name__ == "Sphere":
         vol = 4 / 3 * np.pi * (obj.diameter / 2) ** 3
         containing_cube_edge = obj.diameter
+    elif obj.__class__.__name__ == "TriangularMesh":
+        vol = obj.volume
+        containing_cube_edge = float(
+            np.max(obj.vertices.max(axis=0) - obj.vertices.min(axis=0))
+        )
     else:
         msg = "Unsupported object type for volume calculation"
         raise TypeError(msg)
@@ -208,6 +215,20 @@ def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
     return mask_r_in & mask_phi_in & mask_z_in
 
 
+def mask_inside_TriangularMesh(obj, positions, tolerance=1e-14):  # noqa: ARG001  # pylint: disable=unused-argument
+    """Return mask of provided positions inside a TriangularMesh (local coordinates).
+
+    Note: uses magpylib._src.fields.field_BH_triangularmesh._mask_inside_trimesh,
+    a private magpylib internal API (requires magpylib>=5.0).
+    """
+    from magpylib._src.fields.field_BH_triangularmesh import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        _mask_inside_trimesh,
+    )
+
+    faces_as_vertices = obj.vertices[obj.faces]  # shape (m, 3, 3)
+    return _mask_inside_trimesh(np.asarray(positions, dtype=float), faces_as_vertices)
+
+
 def mask_inside(obj, positions, tolerance=1e-14):
     """Return mask of provided positions inside a Magpylib object"""
     mask_inside_funcs = {
@@ -215,9 +236,68 @@ def mask_inside(obj, positions, tolerance=1e-14):
         "Cylinder": mask_inside_Cylinder,
         "Sphere": mask_inside_Sphere,
         "CylinderSegment": mask_inside_CylinderSegment,
+        "TriangularMesh": mask_inside_TriangularMesh,
     }
     func = mask_inside_funcs.get(obj.__class__.__name__)
     if func is None:
         msg = "Unsupported object type for inside masking"
         raise TypeError(msg)
     return func(obj, positions, tolerance)
+
+
+def trimesh_from_model3d(shape, polarization, **make_kwargs):
+    """Build a closed ``magpy.magnet.TriangularMesh`` from a magpylib model3d
+    surface trace identified by a short *shape* name.
+
+    The corresponding ``magpylib.graphics.model3d.make_*`` function is called
+    with *make_kwargs*, then shared-edge vertices in the Plotly Mesh3d output
+    are deduplicated and a closed ``TriangularMesh`` is returned.
+
+    Parameters
+    ----------
+    shape : str
+        Short shape name (case-insensitive).  Supported values:
+
+        * ``"cuboid"``
+        * ``"cylinder_segment"``
+        * ``"ellipsoid"``
+        * ``"prism"``
+        * ``"pyramid"``
+        * ``"tetrahedron"``
+
+    polarization : array-like, shape (3,)
+        Polarization vector for the resulting ``TriangularMesh``.
+    **make_kwargs
+        Keyword arguments forwarded to the underlying ``make_*`` function
+        (e.g. ``dimension``).
+
+    Returns
+    -------
+    magpy.magnet.TriangularMesh
+        Closed, consistently-oriented triangular surface mesh.
+    """
+    func_map = {
+        "cuboid": _m3d.make_Cuboid,
+        "cylinder_segment": _m3d.make_CylinderSegment,
+        "ellipsoid": _m3d.make_Ellipsoid,
+        "prism": _m3d.make_Prism,
+        "pyramid": _m3d.make_Pyramid,
+        "tetrahedron": _m3d.make_Tetrahedron,
+    }
+    key = shape.lower()
+    if key not in func_map:
+        msg = f"Unsupported shape {shape!r}. Choose from: {list(func_map)}"
+        raise ValueError(msg)
+    trace = func_map[key](**make_kwargs)
+    kw = trace["kwargs"]
+    verts_raw = np.column_stack([kw["x"], kw["y"], kw["z"]])
+    faces_raw = np.column_stack([kw["i"], kw["j"], kw["k"]])
+    # Deduplicate numerically identical vertices (shared edges produce duplicates)
+    _, inv = np.unique(np.round(verts_raw, 10), axis=0, return_inverse=True)
+    vertices = np.unique(np.round(verts_raw, 10), axis=0)
+    faces = inv[faces_raw]
+    return magpy.magnet.TriangularMesh(
+        polarization=polarization,
+        vertices=vertices,
+        faces=faces,
+    )
