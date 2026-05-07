@@ -6,6 +6,7 @@ from collections import Counter
 
 import magpylib as magpy
 import numpy as np
+import scipy.sparse as sp
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from magpylib.magnet import Cuboid
@@ -451,35 +452,118 @@ def _fft_block_h(v_g_flat, n_g, g):
     )
 
 
-def _compute_cross_block(srcs_b, pos_a):
-    """Build dense cross-block T_{AB} in Fortran-flat matrix form (global frame).
+def _compute_cross_block(srcs_b, pos_a, dims_b, sus_a, sus_b, interaction_tol):
+    """Build a sparse cross-block T_{AB} in Fortran-flat CSR form (global frame).
 
-    ``T_{AB}[m*n_a + j, k*n_b + i] = mu_0 * H_m at pos_a[j] due to unit pol k at srcs_b[i]``
+    Uses a χ-weighted solid-angle triage:
+
+        keep(i, j)  iff  max(χ_i, χ_j) * V_j / |r_ij|³  >  interaction_tol
+
+    Source cells (group B) with no significant influence on any observer in A
+    are pruned before calling ``magpy.getH``; observer rows with no significant
+    source are similarly pruned.  The result is returned as a
+    ``scipy.sparse.csr_matrix`` so each GMRES matvec costs O(nnz) instead of
+    O(n_a * n_b).
+
+    Parameters
+    ----------
+    srcs_b : list of Cuboid, length n_b
+    pos_a  : ndarray (n_a, 3)  — observer positions (barycentres of group A)
+    dims_b : ndarray (n_b, 3)  — cell dimensions of group B
+    sus_a  : ndarray (n_a,)   — per-cell susceptibility of group A (scalar part)
+    sus_b  : ndarray (n_b,)   — per-cell susceptibility of group B
+    interaction_tol : float   — threshold ε for the triage criterion
 
     Returns
     -------
-    T_AB : ndarray, shape (3*n_a, 3*n_b)
+    T_AB : scipy.sparse.csr_matrix, shape (3*n_a, 3*n_b)
+    active_a : ndarray(int) — row indices of observers with ≥1 active source
+    active_b : ndarray(int) — column indices of sources with ≥1 active observer
     """
     n_a = pos_a.shape[0]
     n_b = len(srcs_b)
-    rot_b = R.from_quat([s.orientation.as_quat() for s in srcs_b])
+    pos_b = np.array(
+        [getattr(s, "barycenter", s.position) for s in srcs_b], dtype=float
+    )
+
+    # ── Triage: χ-weighted solid-angle criterion ──────────────────────────────
+    # influence(i, j) ≈ max(χ_i, χ_j) * V_j / |r_ij|³
+    r_vec = pos_a[:, None, :] - pos_b[None, :, :]  # (n_a, n_b, 3)
+    r_sq = np.einsum("ijk,ijk->ij", r_vec, r_vec)  # (n_a, n_b)
+    # Avoid division by zero for coincident cells (shouldn't happen cross-block,
+    # but guard anyway).
+    r_sq = np.where(r_sq > 0, r_sq, np.inf)
+    V_b = np.prod(dims_b, axis=1)  # (n_b,)
+    chi_max = np.maximum(sus_a[:, None], sus_b[None, :])  # (n_a, n_b)
+    influence = chi_max * V_b[None, :] / r_sq**1.5  # (n_a, n_b)
+    mask = influence > interaction_tol  # (n_a, n_b) bool
+
+    # Prune axes: keep only sources/observers that matter to at least one partner.
+    active_b = np.where(mask.any(axis=0))[0]  # source columns to keep
+    active_a = np.where(mask.any(axis=1))[0]  # observer rows to keep
+
+    # If nothing survives triage, return an explicit zero sparse matrix.
+    if active_b.size == 0 or active_a.size == 0:
+        return sp.csr_matrix((3 * n_a, 3 * n_b), dtype=float), active_a, active_b
+
+    srcs_b_active = [srcs_b[i] for i in active_b]
+    pos_a_active = pos_a[active_a]  # (|active_a|, 3)
+    mask_sub = mask[np.ix_(active_a, active_b)]  # (|active_a|, |active_b|)
+    n_a_sub, n_b_sub = len(active_a), len(active_b)
+
+    # ── Build T for the active sub-block ─────────────────────────────────────
+    rot_b_active = R.from_quat(
+        [srcs_b_active[i].orientation.as_quat() for i in range(n_b_sub)]
+    )
     H_point = []
     for unit_pol in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]:
-        pol_all = rot_b.inv().apply(unit_pol)  # (n_b, 3) in cuboid-local frame
-        for src, pol in zip(srcs_b, pol_all, strict=False):
+        pol_all = rot_b_active.inv().apply(unit_pol)
+        for src, pol in zip(srcs_b_active, pol_all, strict=False):
             src.polarization = pol
-        H = magpy.getH(srcs_b, pos_a)  # (n_b, n_a, 3)
+        H = magpy.getH(srcs_b_active, pos_a_active)  # (n_b_sub, n_a_sub, 3)
         H_point.append(H)
-    # T_raw[k, i_b, j_a, m]  (same axis convention as full demag tensor)
-    T_raw = np.array(H_point) * magpy.mu_0  # (3, n_b, n_a, 3)
-    return T_raw.swapaxes(2, 3).reshape((3 * n_b, 3 * n_a)).T  # (3*n_a, 3*n_b)
+    T_raw_sub = np.array(H_point) * magpy.mu_0  # (3, n_b_sub, n_a_sub, 3)
+    # T_sub[row_a, col_b] in Fortran-flat: rows = (m, j), cols = (k, i)
+    T_sub_dense = (
+        T_raw_sub.swapaxes(2, 3).reshape((3 * n_b_sub, 3 * n_a_sub)).T
+    )  # (3*n_a_sub, 3*n_b_sub)
+
+    # ── Zero out below-threshold entries within the sub-block ─────────────────
+    # Expand the cell-level mask to the 3x3 component blocks.
+    mask3 = np.repeat(
+        np.repeat(mask_sub, 3, axis=0), 3, axis=1
+    )  # (3*n_a_sub, 3*n_b_sub)
+    T_sub_dense[~mask3] = 0.0
+
+    # ── Scatter back into the full (3*n_a, 3*n_b) sparse matrix ──────────────
+    # Build (row, col, val) triplets.
+    T_sub_sparse = sp.csr_matrix(T_sub_dense)
+    rows_sub, cols_sub = T_sub_sparse.nonzero()
+    vals = np.asarray(T_sub_sparse[rows_sub, cols_sub]).ravel()
+
+    # Map sub-block indices to full-block indices.
+    # Row m*n_a_sub + j  →  m*n_a + active_a[j]
+    def _expand_idx(flat_sub, n_sub, n_full, active):
+        comp = flat_sub // n_sub
+        local = flat_sub % n_sub
+        return comp * n_full + active[local]
+
+    rows_full = _expand_idx(rows_sub, n_a_sub, n_a, active_a)
+    cols_full = _expand_idx(cols_sub, n_b_sub, n_b, active_b)
+
+    T_AB = sp.csr_matrix(
+        (vals, (rows_full, cols_full)), shape=(3 * n_a, 3 * n_b), dtype=float
+    )
+    return T_AB, active_a, active_b
 
 
 def _build_block_fft_matvec(n, sus, groups, cross_blocks):
     """Return matvec ``v -> (I - S T) @ v`` for a multi-group block structure.
 
     Diagonal blocks (same group) use the FFT kernel via :func:`_fft_block_h`;
-    off-diagonal blocks use precomputed dense T_{AB} matrices.
+    off-diagonal blocks use precomputed sparse T_{AB} matrices
+    (scipy.sparse.csr_matrix), so the matvec cost is O(nnz) rather than
+    O(n_a * n_b).
     """
 
     def matvec(v_flat):
@@ -494,13 +578,13 @@ def _build_block_fft_matvec(n, sus, groups, cross_blocks):
             h_g = _fft_block_h(v_g, n_g, g)
             Tv.reshape(3, n)[:, ia] += h_g.reshape(3, n_g)
 
-        # Cross-blocks via dense matrix multiply
+        # Cross-blocks via sparse matrix-vector multiply (O(nnz))
         for (idx_a, idx_b), T_AB in cross_blocks.items():
             ia = groups[idx_a]["indices"]
             ib = groups[idx_b]["indices"]
-            n_a, _n_b = len(ia), len(ib)
+            n_a = len(ia)
             v_b = v3[:, ib].ravel()
-            h_a = T_AB @ v_b  # (3*n_a,)
+            h_a = np.asarray(T_AB @ v_b).ravel()  # (3*n_a,)
             Tv.reshape(3, n)[:, ia] += h_a.reshape(3, n_a)
 
         return v_flat - sus * Tv
@@ -739,6 +823,11 @@ def apply_demag(
                     # Try multi-group block-FFT (each meshed cuboid gets its own FFT kernel)
                     groups = detect_grid_groups(positions, dimensions, rotations)
 
+        # interaction_tol: threshold for the χ·V/r³ triage in cross-block construction.
+        # Tied to solver_tol with a safety margin so dropped interactions stay below
+        # the GMRES residual target.
+        _interaction_tol = solver_tol * 0.1
+
         T = None
         if fft_info is not None:
             with timelog("FFT demag kernel build", min_log_time=min_log_time):
@@ -757,19 +846,25 @@ def apply_demag(
                         if idx_a != idx_b:
                             ia, ib = g_a["indices"], g_b["indices"]
                             srcs_b = [magnets_list[i] for i in ib]
-                            pos_a = np.array(
-                                [
-                                    getattr(
-                                        magnets_list[i],
-                                        "barycenter",
-                                        magnets_list[i].position,
-                                    )
-                                    for i in ia
-                                ]
+                            dims_b = dimensions[ib]
+                            pos_a = positions[ia]
+                            # Conservative per-cell χ: max over x/y/z components.
+                            # sus is Fortran-flat (3n,): block k is sus[k*n:(k+1)*n].
+                            sus_a_grp = np.maximum.reduce(
+                                [sus[k * n : (k + 1) * n][ia] for k in range(3)]
                             )
-                            cross_blocks[(idx_a, idx_b)] = _compute_cross_block(
-                                srcs_b, pos_a
+                            sus_b_grp = np.maximum.reduce(
+                                [sus[k * n : (k + 1) * n][ib] for k in range(3)]
                             )
+                            T_AB, _, _ = _compute_cross_block(
+                                srcs_b,
+                                pos_a,
+                                dims_b,
+                                sus_a_grp,
+                                sus_b_grp,
+                                _interaction_tol,
+                            )
+                            cross_blocks[(idx_a, idx_b)] = T_AB
         else:
             with timelog(
                 "Demagnetization tensor calculation", min_log_time=min_log_time

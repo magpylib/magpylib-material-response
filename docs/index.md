@@ -9,6 +9,7 @@
 :glob: true
 :maxdepth: 2
 
+method
 logging
 serialization
 examples/index
