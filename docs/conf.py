@@ -93,6 +93,10 @@ always_document_param_types = True
 
 suppress_warnings = ["mystnb.unknown_mime_type"]
 
+nb_mime_priority_overrides = [
+    ("html", "application/vnd.plotly.v1+json", 0),
+]
+
 html_js_files = [
     "https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js",
 ]
