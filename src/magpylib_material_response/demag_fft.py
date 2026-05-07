@@ -13,6 +13,8 @@ components ``(Nxx, Nyy, Nzz, Nxy, Nxz, Nyz)`` are stored.
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 import numpy as np
 
 from magpylib_material_response.newell import demag_block
@@ -20,6 +22,7 @@ from magpylib_material_response.newell import demag_block
 __all__ = [
     "build_fft_kernel",
     "demag_fft_matvec",
+    "detect_grid_groups",
     "detect_uniform_grid",
 ]
 
@@ -233,3 +236,60 @@ def demag_fft_matvec(M, kernel_fft, grid_shape, mu_0):
     # docstring; ``mu_0`` argument retained for future tensor variants.
     del mu_0
     return H[:Nx, :Ny, :Nz, :]
+
+
+def detect_grid_groups(positions, dimensions, rotations, atol=1e-9):
+    """Partition cells into groups that each form a uniform Cartesian grid.
+
+    Cells are first clustered by identical ``(dimension, orientation)``, then
+    each cluster is tested with :func:`detect_uniform_grid`.  Only clusters
+    with ≥ 2 cells that pass the grid check are returned.
+
+    Parameters
+    ----------
+    positions : ndarray, shape (n, 3)
+    dimensions : ndarray, shape (n, 3)
+    rotations : scipy Rotation, length n
+    atol : float
+
+    Returns
+    -------
+    groups : list[dict] | None
+        Each dict has the same keys as :func:`detect_uniform_grid` plus
+        ``'indices'``: ndarray(int) of original cell indices in this group.
+        Returns ``None`` if no group with ≥ 2 cells forms a valid uniform grid.
+    """
+
+    positions = np.asarray(positions, dtype=float)
+    dimensions = np.asarray(dimensions, dtype=float)
+
+    quats = rotations.as_quat()
+    # Canonical quaternion: non-negative w component.
+    quats_can = np.where(quats[:, 3:4] < 0, -quats, quats)
+
+    # Round to a coarser scale so that small floating-point noise doesn't
+    # prevent grouping cells from the same meshed cuboid.
+    group_scale = max(atol, 1e-6)
+
+    def _key(i):
+        d = tuple(np.round(dimensions[i] / group_scale).astype(np.int64).tolist())
+        q = tuple(np.round(quats_can[i] / group_scale).astype(np.int64).tolist())
+        return (d, q)
+
+    raw: dict = defaultdict(list)
+    for i in range(positions.shape[0]):
+        raw[_key(i)].append(i)
+
+    results = []
+    for idxs in raw.values():
+        if len(idxs) < 2:
+            continue
+        ia = np.array(idxs, dtype=np.int64)
+        info = detect_uniform_grid(
+            positions[ia], dimensions[ia], rotations[ia], atol=atol
+        )
+        if info is not None:
+            info["indices"] = ia
+            results.append(info)
+
+    return results or None

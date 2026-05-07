@@ -152,13 +152,13 @@ def demag_block(disp, dim):
     # Permutation identities (verified e.g. against OOMMF):
     #   N_yy(X,Y,Z; a,b,c) = N_xx(Y,X,Z; b,a,c)
     #   N_zz(X,Y,Z; a,b,c) = N_xx(Z,Y,X; c,b,a)
-    Nyy = _N_xx(Y, X, Z, b, a, c)
-    Nzz = _N_xx(Z, Y, X, c, b, a)
+    Nyy = _N_xx(Y, X, Z, b, a, c)  # pylint: disable=arguments-out-of-order
+    Nzz = _N_xx(Z, Y, X, c, b, a)  # pylint: disable=arguments-out-of-order
     Nxy = _N_xy(X, Y, Z, a, b, c)
     #   N_xz(X,Y,Z; a,b,c) = N_xy(X,Z,Y; a,c,b)
     #   N_yz(X,Y,Z; a,b,c) = N_xy(Y,Z,X; b,c,a)
-    Nxz = _N_xy(X, Z, Y, a, c, b)
-    Nyz = _N_xy(Y, Z, X, b, c, a)
+    Nxz = _N_xy(X, Z, Y, a, c, b)  # pylint: disable=arguments-out-of-order
+    Nyz = _N_xy(Y, Z, X, b, c, a)  # pylint: disable=arguments-out-of-order
 
     out = np.empty((*X.shape, 3, 3), dtype=float)
     out[..., 0, 0] = Nxx

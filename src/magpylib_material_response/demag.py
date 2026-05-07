@@ -15,6 +15,7 @@ from scipy.spatial.transform import Rotation as R
 from magpylib_material_response.demag_fft import (
     build_fft_kernel,
     demag_fft_matvec,
+    detect_grid_groups,
     detect_uniform_grid,
 )
 from magpylib_material_response.newell import (
@@ -420,8 +421,106 @@ def _build_dense_matvec(sus, T):
     return matvec
 
 
+def _fft_block_h(v_g_flat, n_g, g):
+    """Apply T_{GG} (self-block) to group G polarizations and return H, both global frame.
+
+    Both input ``v_g_flat`` and returned array are Fortran-flat ``(3*n_g,)``
+    in component-major layout.  Per-group rotation is handled internally.
+    """
+    Nx, Ny, Nz = g["shape"]
+    order = g["order"]
+    kernel_fft = g["kernel_fft"]
+    r_frame = g["r_common"]
+    is_rotated = not np.allclose(r_frame.as_quat(), [0.0, 0.0, 0.0, 1.0], atol=1e-9)
+
+    v_local = (
+        _rotate_fortran_flat(v_g_flat, n_g, r_frame.inv()) if is_rotated else v_g_flat
+    )
+
+    M_orig = v_local.reshape((3, n_g)).T  # (n_g, 3)
+    M_grid_flat = M_orig[order]
+    M_grid = M_grid_flat.reshape((Nx, Ny, Nz, 3))
+    H_grid = demag_fft_matvec(M_grid, kernel_fft, (Nx, Ny, Nz), magpy.mu_0)
+    H_grid_flat = H_grid.reshape((Nx * Ny * Nz, 3))
+    H_local_arr = np.empty_like(M_orig)
+    H_local_arr[order] = H_grid_flat
+    H_local_flat = H_local_arr.T.reshape(3 * n_g)
+
+    return (
+        _rotate_fortran_flat(H_local_flat, n_g, r_frame) if is_rotated else H_local_flat
+    )
+
+
+def _compute_cross_block(srcs_b, pos_a):
+    """Build dense cross-block T_{AB} in Fortran-flat matrix form (global frame).
+
+    ``T_{AB}[m*n_a + j, k*n_b + i] = mu_0 * H_m at pos_a[j] due to unit pol k at srcs_b[i]``
+
+    Returns
+    -------
+    T_AB : ndarray, shape (3*n_a, 3*n_b)
+    """
+    n_a = pos_a.shape[0]
+    n_b = len(srcs_b)
+    rot_b = R.from_quat([s.orientation.as_quat() for s in srcs_b])
+    H_point = []
+    for unit_pol in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]:
+        pol_all = rot_b.inv().apply(unit_pol)  # (n_b, 3) in cuboid-local frame
+        for src, pol in zip(srcs_b, pol_all, strict=False):
+            src.polarization = pol
+        H = magpy.getH(srcs_b, pos_a)  # (n_b, n_a, 3)
+        H_point.append(H)
+    # T_raw[k, i_b, j_a, m]  (same axis convention as full demag tensor)
+    T_raw = np.array(H_point) * magpy.mu_0  # (3, n_b, n_a, 3)
+    return T_raw.swapaxes(2, 3).reshape((3 * n_b, 3 * n_a)).T  # (3*n_a, 3*n_b)
+
+
+def _build_block_fft_matvec(n, sus, groups, cross_blocks):
+    """Return matvec ``v -> (I - S T) @ v`` for a multi-group block structure.
+
+    Diagonal blocks (same group) use the FFT kernel via :func:`_fft_block_h`;
+    off-diagonal blocks use precomputed dense T_{AB} matrices.
+    """
+
+    def matvec(v_flat):
+        Tv = np.zeros(3 * n)
+        v3 = v_flat.reshape(3, n)  # component-major view
+
+        # Self-blocks via FFT
+        for g in groups:
+            ia = g["indices"]
+            n_g = len(ia)
+            v_g = v3[:, ia].ravel()
+            h_g = _fft_block_h(v_g, n_g, g)
+            Tv.reshape(3, n)[:, ia] += h_g.reshape(3, n_g)
+
+        # Cross-blocks via dense matrix multiply
+        for (idx_a, idx_b), T_AB in cross_blocks.items():
+            ia = groups[idx_a]["indices"]
+            ib = groups[idx_b]["indices"]
+            n_a, _n_b = len(ia), len(ib)
+            v_b = v3[:, ib].ravel()
+            h_a = T_AB @ v_b  # (3*n_a,)
+            Tv.reshape(3, n)[:, ia] += h_a.reshape(3, n_a)
+
+        return v_flat - sus * Tv
+
+    return matvec
+
+
 def _solve_iterative(
-    *, n, sus, rhs, rhs_shape, T, fft_info, magnets_list, solver_tol, max_iter
+    *,
+    n,
+    sus,
+    rhs,
+    rhs_shape,
+    T,
+    fft_info,
+    magnets_list,
+    solver_tol,
+    max_iter,
+    groups=None,
+    cross_blocks=None,
 ):
     """GMRES solve of (I - S T) x = rhs with diagonal Jacobi preconditioning.
 
@@ -430,6 +529,8 @@ def _solve_iterative(
     """
     if fft_info is not None:
         matvec = _build_fft_matvec(n, sus, fft_info)
+    elif groups is not None:
+        matvec = _build_block_fft_matvec(n, sus, groups, cross_blocks)
     else:
         matvec = _build_dense_matvec(sus, T)
 
@@ -623,6 +724,8 @@ def apply_demag(
         # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
         # Try FFT path first when iterative solver is requested.
         fft_info = None
+        groups = None
+        cross_blocks = {}
         if solver == "iterative" and not pairs_matching and max_dist == 0:
             all_cuboids = all(isinstance(s, Cuboid) for s in magnets_list)
             if all_cuboids and n > 0:
@@ -632,9 +735,42 @@ def apply_demag(
                 dimensions = np.array([s.dimension for s in magnets_list])
                 rotations = R.from_quat([s.orientation.as_quat() for s in magnets_list])
                 fft_info = detect_uniform_grid(positions, dimensions, rotations)
+                if fft_info is None:
+                    # Try multi-group block-FFT (each meshed cuboid gets its own FFT kernel)
+                    groups = detect_grid_groups(positions, dimensions, rotations)
 
         T = None
-        if fft_info is None:
+        if fft_info is not None:
+            with timelog("FFT demag kernel build", min_log_time=min_log_time):
+                fft_info["kernel_fft"] = build_fft_kernel(
+                    fft_info["shape"], fft_info["cell"]
+                )
+        elif groups is not None:
+            with timelog("Block FFT kernel build", min_log_time=min_log_time):
+                for g in groups:
+                    g["kernel_fft"] = build_fft_kernel(g["shape"], g["cell"])
+            with timelog(
+                "Cross-block demag tensor calculation", min_log_time=min_log_time
+            ):
+                for idx_a, g_a in enumerate(groups):
+                    for idx_b, g_b in enumerate(groups):
+                        if idx_a != idx_b:
+                            ia, ib = g_a["indices"], g_b["indices"]
+                            srcs_b = [magnets_list[i] for i in ib]
+                            pos_a = np.array(
+                                [
+                                    getattr(
+                                        magnets_list[i],
+                                        "barycenter",
+                                        magnets_list[i].position,
+                                    )
+                                    for i in ia
+                                ]
+                            )
+                            cross_blocks[(idx_a, idx_b)] = _compute_cross_block(
+                                srcs_b, pos_a
+                            )
+        else:
             with timelog(
                 "Demagnetization tensor calculation", min_log_time=min_log_time
             ):
@@ -647,11 +783,6 @@ def apply_demag(
 
                 T *= magpy.mu_0
                 T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
-        else:
-            with timelog("FFT demag kernel build", min_log_time=min_log_time):
-                fft_info["kernel_fft"] = build_fft_kernel(
-                    fft_info["shape"], fft_info["cell"]
-                )
 
         pol_total = pol_magnets
 
@@ -693,6 +824,8 @@ def apply_demag(
                     magnets_list=magnets_list,
                     solver_tol=solver_tol,
                     max_iter=max_iter,
+                    groups=groups,
+                    cross_blocks=cross_blocks,
                 )
                 if is_rotated_frame:
                     pol_new = _rotate_fortran_flat(pol_new, n, r_frame)
