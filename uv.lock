@@ -977,11 +977,16 @@ source = { editable = "." }
 dependencies = [
     { name = "loguru" },
     { name = "magpylib" },
+]
+
+[package.optional-dependencies]
+tetgen = [
     { name = "tetgen" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "magpylib-material-response", extra = ["tetgen"] },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -995,6 +1000,7 @@ docs = [
     { name = "sphinx-copybutton" },
 ]
 test = [
+    { name = "magpylib-material-response", extra = ["tetgen"] },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -1003,24 +1009,27 @@ test = [
 requires-dist = [
     { name = "loguru", specifier = ">=0.5.0" },
     { name = "magpylib", specifier = ">=5.0" },
-    { name = "tetgen", specifier = ">=0.8.3" },
+    { name = "tetgen", marker = "extra == 'tetgen'", specifier = ">=0.8.3" },
 ]
+provides-extras = ["tetgen"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "magpylib-material-response", extras = ["tetgen"] },
     { name = "pytest", specifier = ">=9" },
     { name = "pytest-cov", specifier = ">=7" },
 ]
 docs = [
-    { name = "myst-nb" },
+    { name = "myst-nb", specifier = ">=1.4" },
     { name = "pandas" },
-    { name = "plotly", specifier = ">=5.16" },
+    { name = "plotly", specifier = ">=6.7" },
     { name = "pydata-sphinx-theme" },
-    { name = "sphinx", specifier = ">=7.0,<8.0" },
+    { name = "sphinx", specifier = ">=7.0" },
     { name = "sphinx-autodoc-typehints" },
     { name = "sphinx-copybutton" },
 ]
 test = [
+    { name = "magpylib-material-response", extras = ["tetgen"] },
     { name = "pytest", specifier = ">=9" },
     { name = "pytest-cov", specifier = ">=7" },
 ]
