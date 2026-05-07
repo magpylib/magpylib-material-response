@@ -56,12 +56,12 @@ dev = [
 ]
 docs = [
   "pydata-sphinx-theme",
-  "sphinx>=7.0,<8.0",
-  "myst_nb",
+  "sphinx>=7.0",
+  "myst_nb>=1.4",
   "sphinx_copybutton",
   "sphinx_autodoc_typehints",
   "pandas",
-  "plotly>=5.16",
+  "plotly>=6.7",
 ]
 
 [tool.hatch]

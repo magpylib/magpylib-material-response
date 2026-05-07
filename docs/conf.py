@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import importlib.metadata
+import os
 from typing import Any
+
+# Make plotly output self-contained HTML (text/html) instead of
+# application/vnd.plotly.v1+json, which myst-nb cannot render with plotly>=6.
+# This env var is inherited by the notebook execution kernel.
+# See: https://github.com/executablebooks/MyST-NB/issues/667
+os.environ["PLOTLY_RENDERER"] = "sphinx_gallery"
 
 project = "magpylib-material-response"
 copyright = "2025, Alexandre Boisselet"
