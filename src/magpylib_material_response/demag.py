@@ -1,4 +1,29 @@
-"""demag_functions"""
+"""Demagnetization / material-response solver.
+
+The self-consistent polarization of ``n`` interacting cells is the solution
+of ``(I - S T) J = J0 + S mu_0 H_ext`` where ``S`` is the (diagonal)
+susceptibility matrix and ``T`` the demag interaction operator.
+
+A single *pair rule* defines every entry of ``T`` (single source of truth):
+
+- both cells are Cuboids sharing one orientation → analytical volume-averaged
+  Newell tensor (:mod:`magpylib_material_response.newell`), generalized to
+  different cell sizes;
+- anything else → point-matched ``magpy.getH`` (field evaluated at the
+  observer barycentre, see Chadebec 2006).
+
+Two evaluation strategies share that rule, so ``solver="direct"`` and
+``solver="iterative"`` agree to solver tolerance by construction:
+
+- ``"direct"``   materialises the dense ``T`` and calls ``np.linalg.solve``;
+- ``"iterative"`` applies ``T`` matrix-free in GMRES — FFT convolution for
+  uniform-grid clusters (:mod:`magpylib_material_response.demag_fft`), dense
+  or row-sum-bounded sparse blocks for everything else.
+
+All computations run in the global frame; per-cluster rotations are handled
+inside the block builders, so anisotropic susceptibility (diagonal in the
+global frame) is always applied to the correct components.
+"""
 
 from __future__ import annotations
 
@@ -14,16 +39,23 @@ from scipy.sparse.linalg import LinearOperator, gmres
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.demag_fft import (
+    QUAT_ATOL,
+    analyze_structure,
     build_fft_kernel,
+    canonical_quats,
     demag_fft_matvec,
-    detect_grid_groups,
-    detect_uniform_grid,
 )
 from magpylib_material_response.newell import (
-    demag_tensor_newell,
+    demag_block_general,
     self_demag_factors,
 )
 from magpylib_material_response.utils import timelog
+
+#: A pair block with more dense entries than this is built in observer
+#: chunks and stored sparse (with a rigorous row-sum error budget) instead
+#: of dense. 2e7 float64 entries = 160 MB; dense blocks additionally allow
+#: deriving the reverse block by reciprocity (halving the build cost).
+DENSE_BLOCK_MAX_ENTRIES = 20_000_000
 
 
 def get_susceptibilities(sources, susceptibility=None):
@@ -133,6 +165,379 @@ def get_H_ext(*sources, H_ext=None):
     return H_exts
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Structure analysis and geometry helpers
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _cell_positions(srcs):
+    """Barycentre (fallback: position) of each source as an (n, 3) array."""
+    return np.array(
+        [getattr(src, "barycenter", src.position) for src in srcs], dtype=float
+    )
+
+
+def _analyze_collection(magnets_list, atol=QUAT_ATOL):
+    """Run :func:`analyze_structure` on a list of magnet objects."""
+    positions = _cell_positions(magnets_list)
+    is_cuboid = np.array([isinstance(s, Cuboid) for s in magnets_list])
+    dimensions = np.array(
+        [
+            s.dimension if isinstance(s, Cuboid) else (1.0, 1.0, 1.0)
+            for s in magnets_list
+        ],
+        dtype=float,
+    )
+    rotations = R.from_quat([s.orientation.as_quat() for s in magnets_list])
+    clusters = analyze_structure(positions, dimensions, rotations, is_cuboid, atol)
+    counts = Counter(c["kind"] for c in clusters)
+    logger.info(
+        "Cell structure: {n_grid} grid, {n_loose} loose, {n_generic} generic clusters",
+        n_grid=counts.get("grid", 0),
+        n_loose=counts.get("loose", 0),
+        n_generic=counts.get("generic", 0),
+    )
+    return positions, clusters
+
+
+def _pair_uses_newell(cl_a, cl_b, atol=QUAT_ATOL):
+    """True when the analytical Newell tensor applies to this cluster pair:
+    both cuboid clusters, prisms parallel (same orientation up to sign)."""
+    if cl_a["kind"] == "generic" or cl_b["kind"] == "generic":
+        return False
+    qa = canonical_quats(cl_a["r_common"].as_quat()[None])[0]
+    qb = canonical_quats(cl_b["r_common"].as_quat()[None])[0]
+    return bool(np.allclose(qa, qb, atol=atol))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# T blocks — single source of truth for the interaction entries
+#
+# All blocks are (3*n_a, 3*n_b) in Fortran (component-major) layout:
+# ``block[(m, j), (k, i)]`` is the ``m`` component of ``T @ v`` at observer
+# cell ``j`` per unit polarization component ``k`` of source cell ``i``,
+# i.e. ``-N_mk(pos_j - pos_i)`` post-``mu_0``.  Global frame.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _dedup_demag_blocks(disp, dim_src, dim_obs):
+    """Evaluate Newell blocks with duplicate displacements computed once.
+
+    Cells on regular grids share displacements massively (two same-spacing
+    grids have O(N) unique displacements out of N^2 pairs), so the analytical
+    evaluation is gathered from the unique set when that pays off.
+    """
+    flat = disp.reshape(-1, 3)
+    scale = max(np.max(np.abs(dim_src)), np.max(np.abs(dim_obs)))
+    keys = np.round(flat / (1e-9 * scale)).astype(np.int64)
+    uniq, inverse = np.unique(keys, axis=0, return_inverse=True)
+    if uniq.shape[0] > 0.25 * flat.shape[0]:
+        return demag_block_general(disp, dim_src, dim_obs)
+    # Representative displacement per unique key (first occurrence).
+    first = np.zeros(uniq.shape[0], dtype=np.int64)
+    first[inverse[::-1]] = np.arange(flat.shape[0] - 1, -1, -1)
+    N_u = demag_block_general(flat[first], dim_src, dim_obs)
+    return N_u[inverse].reshape((*disp.shape[:-1], 3, 3))
+
+
+def _newell_block_T(pos_a, pos_b, dim_a, dim_b, rot_mat):
+    """Dense Newell T block: observers ``a``, sources ``b``, parallel prisms.
+
+    ``rot_mat`` is the common rotation matrix (``None`` for identity); the
+    displacement is evaluated in the prisms' local frame and the tensor
+    rotated back to the global frame.
+    """
+    n_a, n_b = len(pos_a), len(pos_b)
+    if rot_mat is not None:
+        pos_a = pos_a @ rot_mat  # = rot.inv().apply(pos_a)
+        pos_b = pos_b @ rot_mat
+    disp = pos_a[:, None, :] - pos_b[None, :, :]  # (n_a, n_b, 3) obs - src
+    N = _dedup_demag_blocks(disp, dim_b, dim_a)  # (n_a, n_b, 3m, 3k), local
+    if rot_mat is not None:
+        N = np.einsum("ma,ijab,kb->ijmk", rot_mat, N, rot_mat)
+    return -N.transpose(2, 0, 3, 1).reshape(3 * n_a, 3 * n_b)
+
+
+def _point_block_T(srcs_b, pos_a):
+    """Point-matched T block via ``magpy.getH`` (any magnet types).
+
+    Source polarizations are set to unit vectors during evaluation and
+    restored afterwards.
+    """
+    n_a, n_b = len(pos_a), len(srcs_b)
+    saved = [s.polarization for s in srcs_b]
+    rot_b = R.from_quat([s.orientation.as_quat() for s in srcs_b])
+    try:
+        H_point = []
+        for unit_pol in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]:
+            pol_all = rot_b.inv().apply(unit_pol)
+            for src, pol in zip(srcs_b, pol_all, strict=True):
+                src.polarization = pol
+            H = np.reshape(magpy.getH(srcs_b, pos_a), (n_b, n_a, 3))
+            H_point.append(H)
+    finally:
+        # magpylib does not allow assigning None back; such cells keep the
+        # last unit polarization (matches historical behaviour).
+        for src, pol in zip(srcs_b, saved, strict=True):
+            if pol is not None:
+                src.polarization = pol
+    T_raw = np.array(H_point) * magpy.mu_0  # (3k, n_b, n_a, 3m)
+    return T_raw.swapaxes(2, 3).reshape(3 * n_b, 3 * n_a).T
+
+
+def _row_sparsify(block, row_budget):
+    """Per-row triplets keeping enough entries that the dropped ``|.|`` sum
+    stays below ``row_budget`` in every row (exact, entry-based bound)."""
+    A = np.abs(block)
+    order = np.argsort(A, axis=1)
+    srt = np.take_along_axis(A, order, axis=1)
+    csum = np.cumsum(srt, axis=1)
+    n_drop = (csum <= row_budget).sum(axis=1)  # smallest-k droppable per row
+    rank = np.argsort(order, axis=1)  # rank of each entry in its row
+    keep = rank >= n_drop[:, None]
+    rows, cols = np.nonzero(keep)
+    return rows, cols, block[rows, cols]
+
+
+def _pair_block(cl_a, cl_b, magnets_list, positions, row_budget=None):
+    """Build the T block for a cluster pair via the pair rule.
+
+    Returns a dense ndarray when the block is small (or ``row_budget`` is
+    None), else a CSR matrix with per-row dropped sums below ``row_budget``.
+    """
+    ia, ib = cl_a["indices"], cl_b["indices"]
+    pos_a, pos_b = positions[ia], positions[ib]
+    n_a, n_b = len(ia), len(ib)
+    use_newell = _pair_uses_newell(cl_a, cl_b)
+    sparsify = row_budget is not None and 9 * n_a * n_b > DENSE_BLOCK_MAX_ENTRIES
+
+    rot_mat = None
+    if use_newell and not cl_a["is_identity"]:
+        rot_mat = cl_a["r_common"].as_matrix()
+
+    def _dense_chunk(sl):
+        if use_newell:
+            return _newell_block_T(pos_a[sl], pos_b, cl_a["dim"], cl_b["dim"], rot_mat)
+        return _point_block_T([magnets_list[i] for i in ib], pos_a[sl])
+
+    if not sparsify:
+        return _dense_chunk(slice(None))
+
+    chunk = max(1, DENSE_BLOCK_MAX_ENTRIES // max(9 * n_b, 1))
+    rows_all, cols_all, vals_all = [], [], []
+    for start in range(0, n_a, chunk):
+        stop = min(start + chunk, n_a)
+        block = _dense_chunk(slice(start, stop))
+        r, c, v = _row_sparsify(block, row_budget)
+        # Local rows are m-major over the chunk; map to m-major over n_a.
+        n_ch = stop - start
+        m, i_loc = r // n_ch, r % n_ch
+        rows_all.append(m * n_a + start + i_loc)
+        cols_all.append(c)
+        vals_all.append(v)
+    return sp.csr_matrix(
+        (
+            np.concatenate(vals_all),
+            (np.concatenate(rows_all), np.concatenate(cols_all)),
+        ),
+        shape=(3 * n_a, 3 * n_b),
+    )
+
+
+def _assemble_T_dense(magnets_list, positions, clusters, min_log_time=None):
+    """Assemble the full dense (3n, 3n) T in Fortran layout, global frame."""
+    n = len(magnets_list)
+    T = np.zeros((3 * n, 3 * n))
+    with timelog("Demagnetization tensor assembly", min_log_time=min_log_time):
+        for cl_a in clusters:
+            rows = (np.arange(3)[:, None] * n + cl_a["indices"][None, :]).ravel()
+            for cl_b in clusters:
+                cols = (np.arange(3)[:, None] * n + cl_b["indices"][None, :]).ravel()
+                T[np.ix_(rows, cols)] = _pair_block(cl_a, cl_b, magnets_list, positions)
+    return T
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Matrix-free operator for the iterative solver
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _fft_apply(op, v_flat):
+    """Apply the grid self-block T to component-major ``(3n_g,)`` global-frame
+    polarizations; returns the same layout. Rotation handled internally."""
+    Nx, Ny, Nz = op["shape"]
+    rot_mat = op["rot_mat"]
+    M = v_flat.reshape(3, -1).T  # (n_g, 3) global
+    if rot_mat is not None:
+        M = M @ rot_mat  # to local frame
+    M_grid = M[op["order"]].reshape((Nx, Ny, Nz, 3))
+    H_grid = demag_fft_matvec(M_grid, op["kernel_fft"], (Nx, Ny, Nz))
+    H = np.empty_like(M)
+    H[op["order"]] = H_grid.reshape((Nx * Ny * Nz, 3))
+    if rot_mat is not None:
+        H = H @ rot_mat.T  # back to global frame
+    return H.T.ravel()
+
+
+def _build_operator(magnets_list, positions, clusters, sus, solver_tol, min_log_time):
+    """Build the list of block operators representing T for the matvec.
+
+    Self-blocks of grid clusters are FFT convolutions (exact); every other
+    block is dense when small, else sparsified with a per-row error budget
+    chosen so the total operator perturbation stays below
+    ``0.1 * solver_tol``:  ``|S (T - T~)|_inf <= chi_eff * K * row_budget``.
+    """
+    K = len(clusters)
+    chi_eff = max(1.0, float(np.max(np.abs(sus))) if len(sus) else 1.0)
+    row_budget = 0.1 * solver_tol / (chi_eff * max(K, 1))
+
+    ops = []
+    with timelog("Demag operator build", min_log_time=min_log_time):
+        for idx_a, cl_a in enumerate(clusters):
+            if cl_a["kind"] == "grid":
+                rot_mat = None if cl_a["is_identity"] else cl_a["r_common"].as_matrix()
+                ops.append(
+                    {
+                        "kind": "fft",
+                        "ia": cl_a["indices"],
+                        "ib": cl_a["indices"],
+                        "shape": cl_a["shape"],
+                        "order": cl_a["order"],
+                        "rot_mat": rot_mat,
+                        "kernel_fft": build_fft_kernel(
+                            cl_a["shape"], cl_a["spacing"], cl_a["dim"]
+                        ),
+                    }
+                )
+            else:
+                ops.append(
+                    {
+                        "kind": "mat",
+                        "ia": cl_a["indices"],
+                        "ib": cl_a["indices"],
+                        "M": _pair_block(
+                            cl_a, cl_a, magnets_list, positions, row_budget
+                        ),
+                    }
+                )
+            for idx_b, cl_b in enumerate(clusters):
+                if idx_b <= idx_a:
+                    continue
+                M_ab = _pair_block(cl_a, cl_b, magnets_list, positions, row_budget)
+                ops.append(
+                    {
+                        "kind": "mat",
+                        "ia": cl_a["indices"],
+                        "ib": cl_b["indices"],
+                        "M": M_ab,
+                    }
+                )
+                if _pair_uses_newell(cl_a, cl_b) and not sp.issparse(M_ab):
+                    # Volume-weighted reciprocity: V_a * N_ab = V_b * N_ba^T,
+                    # exact for the volume-averaged tensor.
+                    v_ratio = float(np.prod(cl_a["dim"]) / np.prod(cl_b["dim"]))
+                    M_ba = v_ratio * M_ab.T
+                else:
+                    M_ba = _pair_block(cl_b, cl_a, magnets_list, positions, row_budget)
+                ops.append(
+                    {
+                        "kind": "mat",
+                        "ia": cl_b["indices"],
+                        "ib": cl_a["indices"],
+                        "M": M_ba,
+                    }
+                )
+    return ops
+
+
+def _build_matvec(n, sus, ops):
+    """Return the Fortran-flat matvec ``v -> (I - S T) @ v``."""
+
+    def matvec(v_flat):
+        v3 = v_flat.reshape(3, n)
+        Tv = np.zeros((3, n))
+        for op in ops:
+            v_b = v3[:, op["ib"]].ravel()
+            if op["kind"] == "fft":
+                h = _fft_apply(op, v_b)
+            else:
+                h = np.asarray(op["M"] @ v_b).ravel()
+            Tv[:, op["ia"]] += h.reshape(3, -1)
+        return v_flat - sus * Tv.ravel()
+
+    return matvec
+
+
+def _build_dense_matvec(sus, T):
+    """Return matvec ``v -> (I - S T) @ v`` for dense T."""
+
+    def matvec(v_flat):
+        Tv = T @ v_flat
+        return v_flat - sus * Tv
+
+    return matvec
+
+
+def _self_demag_diagonal(n, clusters):
+    """Fortran-flat (3n,) diagonal of the analytical self-demag factors,
+    rotated to the global frame per cluster (zero for generic cells)."""
+    Nself_flat = np.zeros(3 * n)
+    for cl in clusters:
+        if cl["kind"] == "generic":
+            continue
+        Ns = self_demag_factors(cl["dim"])  # (3,) local frame
+        if cl["is_identity"]:
+            diag_m = Ns
+        else:
+            rot_mat = cl["r_common"].as_matrix()
+            diag_m = (rot_mat**2) @ Ns  # diag of R diag(Ns) R^T
+        for m in range(3):
+            Nself_flat[m * n + cl["indices"]] = diag_m[m]
+    return Nself_flat
+
+
+def _solve_iterative(
+    *, n, sus, rhs, rhs_shape, matvec, Nself_flat, solver_tol, max_iter
+):
+    """GMRES solve of (I - S T) x = rhs with diagonal Jacobi preconditioning.
+
+    Raises ``RuntimeError`` when GMRES does not reach ``solver_tol`` — a
+    partially-converged result would silently be wrong.
+    """
+    Q_op = LinearOperator((3 * n, 3 * n), matvec=matvec, dtype=float)
+
+    # Diagonal Jacobi preconditioner: Q_diag = 1 - sus * (-N_self) = 1 + sus * N_self.
+    diag_Q = 1.0 + sus * Nself_flat
+    safe = np.where(np.abs(diag_Q) > 1e-12, diag_Q, 1.0)
+    M_inv = LinearOperator((3 * n, 3 * n), matvec=lambda v: v / safe, dtype=float)
+
+    x, info = gmres(
+        Q_op,
+        rhs,
+        M=M_inv,
+        rtol=solver_tol,
+        atol=0.0,
+        maxiter=max_iter,
+        x0=rhs.copy(),  # warm start at rhs
+    )
+    if info > 0:
+        msg = (
+            f"GMRES did not converge to tol={solver_tol} within {max_iter} "
+            "iterations. Increase max_iter, loosen solver_tol, or use "
+            "solver='direct'."
+        )
+        raise RuntimeError(msg)
+    if info < 0:
+        msg = f"GMRES illegal input or breakdown (info={info})"
+        raise RuntimeError(msg)
+    return x.reshape(rhs_shape)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Public API
+# ══════════════════════════════════════════════════════════════════════════
+
+
 def demag_tensor(
     src_list,
     pairs_matching=False,
@@ -141,21 +546,31 @@ def demag_tensor(
     min_log_time=None,
 ):
     """
-    Compute the demagnetization tensor T based on point matching (see Chadbec 2006)
-    for n sources in the input collection.
+    Compute the demagnetization tensor T for n sources.
+
+    By default the tensor is assembled with the unified pair rule: the
+    analytical volume-averaged Newell tensor for parallel Cuboid cells
+    (generalized to different sizes) and point matching (see Chadebec 2006)
+    otherwise. The legacy options ``pairs_matching``, ``split`` and
+    ``max_dist`` force the historical point-matching evaluation for all
+    pairs.
 
     Parameters
     ----------
-    collection: magpylib.Collection object with n magnet sources
-        Each magnet source in collection is treated as a magnetic cell.
+    src_list: sequence of magpylib magnet sources
+        Each source is treated as a magnetic cell.
 
     pairs_matching: bool
         If True, equivalent pair of interactions are identified and unique pairs are
-        calculated only once and copied to duplicates.
+        calculated only once and copied to duplicates. Implies point matching.
 
     split: int
         Number of times the sources list is split before getH calculation ind demag
-        tensor calculation
+        tensor calculation. Implies point matching.
+
+    max_dist: float
+        Maximum distance-to-dimension ratio; farther interactions are dropped.
+        Implies point matching.
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
@@ -163,55 +578,30 @@ def demag_tensor(
 
     Returns
     -------
-    Demagnetization tensor: ndarray, shape (3,n,n,3)
+    Demagnetization tensor: ndarray, shape (3,n,n,3), pre-``mu_0``:
+        ``T[k, i, j, m] = -N_mk(pos_j - pos_i) / mu_0``
 
     TODO: allow multi-point matching
     TODO: allow current sources
     TODO: allow external stray fields
-    TODO: status bar when n>1000
-    TODO: Speed up with direct interface for field computation
-    TODO: Use newell formulas for cube-cube interactions
     """
     nof_src = len(src_list)
 
-    if pairs_matching and split != 1:
+    if pairs_matching and split != 1 and split is not False:
         msg = "Pairs matching does not support splitting"
         raise ValueError(msg)
 
-    # Fast Newell path: identical cuboids with a common rotation, no pairs matching / max_dist
     no_split = split is False or split == 1
     if not pairs_matching and max_dist == 0 and no_split:
-        all_cuboids = all(isinstance(s, Cuboid) for s in src_list)
-        if all_cuboids and nof_src > 0:
-            dims = np.array([s.dimension for s in src_list])
-            quats = np.array([s.orientation.as_quat() for s in src_list])
-            same_dim = np.allclose(dims, dims[0])
-            q0 = quats[0]
-            same_rot = np.allclose(quats, q0, atol=1e-9) or np.allclose(
-                quats, -q0, atol=1e-9
-            )
-            if same_dim and same_rot:
-                with timelog(
-                    "Newell analytical demag tensor", min_log_time=min_log_time
-                ):
-                    pos0 = np.array(
-                        [getattr(s, "barycenter", s.position) for s in src_list]
-                    )
-                    r_common = R.from_quat(q0)
-                    is_identity = np.allclose(
-                        q0, np.array([0.0, 0.0, 0.0, 1.0]), atol=1e-9
-                    )
-                    if is_identity:
-                        return demag_tensor_newell(pos0, dims[0], magpy.mu_0)
-                    # Rotated grid: transform positions to local frame, compute
-                    # Newell tensor there, then rotate back to global frame.
-                    # Convention: T[K,i,j,M] = field M at j due to unit pol K at i
-                    # H_global[M,j] = R[M,A]*H_local[A,j], pol_local[B] = R[K,B]*pol_global[K]
-                    # → T_global[K,i,j,M] = Σ_{A,B} R[M,A]*T_local[B,i,j,A]*R[K,B]
-                    pos_local = r_common.inv().apply(pos0)
-                    T_local = demag_tensor_newell(pos_local, dims[0], magpy.mu_0)
-                    R_mat = r_common.as_matrix()
-                    return np.einsum("ma,bija,kb->kijm", R_mat, T_local, R_mat)
+        # Unified assembly (Newell where applicable), returned in the legacy
+        # (3, n, n, 3) pre-mu_0 layout.
+        positions, clusters = _analyze_collection(list(src_list))
+        T2 = _assemble_T_dense(
+            list(src_list), positions, clusters, min_log_time=min_log_time
+        )
+        n = nof_src
+        # T2[(m, j), (k, i)] -> legacy T[k, i, j, m], pre-mu_0.
+        return T2.reshape(3, n, 3, n).transpose(2, 3, 1, 0) / magpy.mu_0
 
     mask_inds = None
     getH_params = {}
@@ -222,32 +612,33 @@ def demag_tensor(
     elif pairs_matching:
         getH_params, mask_inds, unique_inv_inds, pos0, rot0 = match_pairs(src_list)
     else:
-        pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
+        pos0 = _cell_positions(src_list)
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
 
-    H_point = []
-    for unit_pol in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
-        pol_all = rot0.inv().apply(unit_pol)
-        # point matching field and demag tensor
-        with timelog(f"getH with unit_pol={unit_pol}", min_log_time=min_log_time):
-            if pairs_matching or max_dist != 0:
-                polarization = np.repeat(pol_all, len(src_list), axis=0)
-                if mask_inds is not None:
-                    polarization = polarization[mask_inds]
-                H_unique = magpy.getH(
-                    "Cuboid", polarization=polarization, **getH_params
-                )
-                if max_dist != 0:
-                    H_temp = np.zeros((len(src_list) ** 2, 3))
-                    H_temp[mask_inds] = H_unique
-                    H_unit_pol = H_temp
+    saved_pols = [src.polarization for src in src_list]
+    try:
+        H_point = []
+        for unit_pol in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
+            pol_all = rot0.inv().apply(unit_pol)
+            # point matching field and demag tensor
+            with timelog(f"getH with unit_pol={unit_pol}", min_log_time=min_log_time):
+                if pairs_matching or max_dist != 0:
+                    polarization = np.repeat(pol_all, len(src_list), axis=0)
+                    if mask_inds is not None:
+                        polarization = polarization[mask_inds]
+                    H_unique = magpy.getH(
+                        "Cuboid", polarization=polarization, **getH_params
+                    )
+                    if max_dist != 0:
+                        H_temp = np.zeros((len(src_list) ** 2, 3))
+                        H_temp[mask_inds] = H_unique
+                        H_unit_pol = H_temp
+                    else:
+                        H_unit_pol = H_unique[unique_inv_inds]
                 else:
-                    H_unit_pol = H_unique[unique_inv_inds]
-            else:
-                for src, pol in zip(src_list, pol_all, strict=False):
-                    src.polarization = pol
-                if split > 1:
+                    for src, pol in zip(src_list, pol_all, strict=False):
+                        src.polarization = pol
                     src_list_split = np.array_split(src_list, split)
                     with logger.contextualize(
                         task="Splitting field calculation", split=split
@@ -264,9 +655,11 @@ def demag_tensor(
                                     magpy.getH(src_list_subset.tolist(), pos0)
                                 )
                         H_unit_pol = np.concatenate(H_unit_pol, axis=0)
-                else:
-                    H_unit_pol = magpy.getH(src_list, pos0)
-            H_point.append(H_unit_pol)  # shape (n_cells, n_pos, 3_xyz)
+                H_point.append(H_unit_pol)  # shape (n_cells, n_pos, 3_xyz)
+    finally:
+        for src, pol in zip(src_list, saved_pols, strict=False):
+            if pol is not None:
+                src.polarization = pol
 
     # shape (3_unit_pol, n_cells, n_pos, 3_xyz)
     return np.array(H_point).reshape((3, nof_src, nof_src, 3))
@@ -285,7 +678,7 @@ def filter_distance(
         if not all_cuboids:
             msg = "filter_distance only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
+        pos0 = _cell_positions(src_list)
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -332,7 +725,7 @@ def match_pairs(src_list, min_log_time=None):
         if not all_cuboids:
             msg = "Pairs matching only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
+        pos0 = _cell_positions(src_list)
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -369,300 +762,6 @@ def match_pairs(src_list, min_log_time=None):
     return params, unique_inds, unique_inv_inds, pos0, rot0
 
 
-def _rotate_fortran_flat(v_flat, n, rot):
-    """Apply rotation ``rot`` to each 3-vector in a Fortran-flat (3n,) array.
-
-    The Fortran-flat layout stores component k of cell i at index ``k*n + i``.
-    Equivalent to reshaping to (3, n), transposing to (n, 3), applying rotation,
-    then packing back.
-    """
-    v_array = v_flat.reshape((3, n)).T  # (n, 3)
-    return rot.apply(v_array).T.ravel()  # (3n,)
-
-
-def _build_fft_matvec(n, sus, fft_info):
-    """Return a Fortran-flat matvec ``v -> (I - S T) @ v`` using the FFT path."""
-    Nx, Ny, Nz = fft_info["shape"]
-    order = fft_info["order"]
-    kernel_fft = fft_info["kernel_fft"]
-
-    # Inverse permutation: order maps grid_flat_index -> original_cell_index.
-    inv_order = np.empty_like(order)
-    inv_order[order] = np.arange(order.size)
-
-    def matvec(v_flat):
-        # v_flat shape (3n,); component-major layout [x1..xn, y1..yn, z1..zn].
-        # Reshape (3, n) in C-order so v[k, i] = v_flat[k*n + i] (component k,
-        # original cell i). Note Fortran-order would interleave components.
-        v = v_flat.reshape((3, n))
-        # Build polarisation per grid cell (Nx, Ny, Nz, 3).
-        M_orig = v.T  # (n, 3) per original cell
-        M_grid_flat = M_orig[order]  # reorder to grid-flat layout
-        M_grid = M_grid_flat.reshape((Nx, Ny, Nz, 3))
-        H_grid = demag_fft_matvec(M_grid, kernel_fft, (Nx, Ny, Nz), magpy.mu_0)
-        # H_grid (Nx, Ny, Nz, 3) -> per-original-cell ordering.
-        H_grid_flat = H_grid.reshape((Nx * Ny * Nz, 3))
-        H_orig = np.empty_like(M_orig)
-        H_orig[order] = H_grid_flat
-        # Tv flat (component-major): H_orig[i, m] -> flat[m*n + i].
-        Tv = H_orig.T  # (3, n)
-        Tv_flat = Tv.reshape(3 * n)
-        return v_flat - sus * Tv_flat
-
-    return matvec
-
-
-def _build_dense_matvec(sus, T):
-    """Return matvec ``v -> (I - S T) @ v`` for dense T."""
-
-    def matvec(v_flat):
-        Tv = T @ v_flat
-        return v_flat - sus * Tv
-
-    return matvec
-
-
-def _fft_block_h(v_g_flat, n_g, g):
-    """Apply T_{GG} (self-block) to group G polarizations and return H, both global frame.
-
-    Both input ``v_g_flat`` and returned array are Fortran-flat ``(3*n_g,)``
-    in component-major layout.  Per-group rotation is handled internally.
-    """
-    Nx, Ny, Nz = g["shape"]
-    order = g["order"]
-    kernel_fft = g["kernel_fft"]
-    r_frame = g["r_common"]
-    is_rotated = not np.allclose(r_frame.as_quat(), [0.0, 0.0, 0.0, 1.0], atol=1e-9)
-
-    v_local = (
-        _rotate_fortran_flat(v_g_flat, n_g, r_frame.inv()) if is_rotated else v_g_flat
-    )
-
-    M_orig = v_local.reshape((3, n_g)).T  # (n_g, 3)
-    M_grid_flat = M_orig[order]
-    M_grid = M_grid_flat.reshape((Nx, Ny, Nz, 3))
-    H_grid = demag_fft_matvec(M_grid, kernel_fft, (Nx, Ny, Nz), magpy.mu_0)
-    H_grid_flat = H_grid.reshape((Nx * Ny * Nz, 3))
-    H_local_arr = np.empty_like(M_orig)
-    H_local_arr[order] = H_grid_flat
-    H_local_flat = H_local_arr.T.reshape(3 * n_g)
-
-    return (
-        _rotate_fortran_flat(H_local_flat, n_g, r_frame) if is_rotated else H_local_flat
-    )
-
-
-def _compute_cross_block(srcs_b, pos_a, dims_b, sus_a, sus_b, interaction_tol):
-    """Build a sparse cross-block T_{AB} in Fortran-flat CSR form (global frame).
-
-    Uses a χ-weighted solid-angle triage:
-
-        keep(i, j)  iff  max(χ_i, χ_j) * V_j / |r_ij|³  >  interaction_tol
-
-    Source cells (group B) with no significant influence on any observer in A
-    are pruned before calling ``magpy.getH``; observer rows with no significant
-    source are similarly pruned.  The result is returned as a
-    ``scipy.sparse.csr_matrix`` so each GMRES matvec costs O(nnz) instead of
-    O(n_a * n_b).
-
-    Parameters
-    ----------
-    srcs_b : list of Cuboid, length n_b
-    pos_a  : ndarray (n_a, 3)  — observer positions (barycentres of group A)
-    dims_b : ndarray (n_b, 3)  — cell dimensions of group B
-    sus_a  : ndarray (n_a,)   — per-cell susceptibility of group A (scalar part)
-    sus_b  : ndarray (n_b,)   — per-cell susceptibility of group B
-    interaction_tol : float   — threshold ε for the triage criterion
-
-    Returns
-    -------
-    T_AB : scipy.sparse.csr_matrix, shape (3*n_a, 3*n_b)
-    active_a : ndarray(int) — row indices of observers with ≥1 active source
-    active_b : ndarray(int) — column indices of sources with ≥1 active observer
-    """
-    n_a = pos_a.shape[0]
-    n_b = len(srcs_b)
-    pos_b = np.array(
-        [getattr(s, "barycenter", s.position) for s in srcs_b], dtype=float
-    )
-
-    # ── Triage: χ-weighted solid-angle criterion ──────────────────────────────
-    # influence(i, j) ≈ max(χ_i, χ_j) * V_j / |r_ij|³
-    r_vec = pos_a[:, None, :] - pos_b[None, :, :]  # (n_a, n_b, 3)
-    r_sq = np.einsum("ijk,ijk->ij", r_vec, r_vec)  # (n_a, n_b)
-    # Avoid division by zero for coincident cells (shouldn't happen cross-block,
-    # but guard anyway).
-    r_sq = np.where(r_sq > 0, r_sq, np.inf)
-    V_b = np.prod(dims_b, axis=1)  # (n_b,)
-    chi_max = np.maximum(sus_a[:, None], sus_b[None, :])  # (n_a, n_b)
-    influence = chi_max * V_b[None, :] / r_sq**1.5  # (n_a, n_b)
-    mask = influence > interaction_tol  # (n_a, n_b) bool
-
-    # Prune axes: keep only sources/observers that matter to at least one partner.
-    active_b = np.where(mask.any(axis=0))[0]  # source columns to keep
-    active_a = np.where(mask.any(axis=1))[0]  # observer rows to keep
-
-    # If nothing survives triage, return an explicit zero sparse matrix.
-    if active_b.size == 0 or active_a.size == 0:
-        return sp.csr_matrix((3 * n_a, 3 * n_b), dtype=float), active_a, active_b
-
-    srcs_b_active = [srcs_b[i] for i in active_b]
-    pos_a_active = pos_a[active_a]  # (|active_a|, 3)
-    mask_sub = mask[np.ix_(active_a, active_b)]  # (|active_a|, |active_b|)
-    n_a_sub, n_b_sub = len(active_a), len(active_b)
-
-    # ── Build T for the active sub-block ─────────────────────────────────────
-    rot_b_active = R.from_quat(
-        [srcs_b_active[i].orientation.as_quat() for i in range(n_b_sub)]
-    )
-    H_point = []
-    for unit_pol in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]:
-        pol_all = rot_b_active.inv().apply(unit_pol)
-        for src, pol in zip(srcs_b_active, pol_all, strict=False):
-            src.polarization = pol
-        H = magpy.getH(srcs_b_active, pos_a_active)  # (n_b_sub, n_a_sub, 3)
-        H_point.append(H)
-    T_raw_sub = np.array(H_point) * magpy.mu_0  # (3, n_b_sub, n_a_sub, 3)
-    # T_sub[row_a, col_b] in Fortran-flat: rows = (m, j), cols = (k, i)
-    T_sub_dense = (
-        T_raw_sub.swapaxes(2, 3).reshape((3 * n_b_sub, 3 * n_a_sub)).T
-    )  # (3*n_a_sub, 3*n_b_sub)
-
-    # ── Zero out below-threshold entries within the sub-block ─────────────────
-    # Expand the cell-level mask to the 3x3 component blocks.
-    mask3 = np.repeat(
-        np.repeat(mask_sub, 3, axis=0), 3, axis=1
-    )  # (3*n_a_sub, 3*n_b_sub)
-    T_sub_dense[~mask3] = 0.0
-
-    # ── Scatter back into the full (3*n_a, 3*n_b) sparse matrix ──────────────
-    # Build (row, col, val) triplets.
-    T_sub_sparse = sp.csr_matrix(T_sub_dense)
-    rows_sub, cols_sub = T_sub_sparse.nonzero()
-    vals = np.asarray(T_sub_sparse[rows_sub, cols_sub]).ravel()
-
-    # Map sub-block indices to full-block indices.
-    # Row m*n_a_sub + j  →  m*n_a + active_a[j]
-    def _expand_idx(flat_sub, n_sub, n_full, active):
-        comp = flat_sub // n_sub
-        local = flat_sub % n_sub
-        return comp * n_full + active[local]
-
-    rows_full = _expand_idx(rows_sub, n_a_sub, n_a, active_a)
-    cols_full = _expand_idx(cols_sub, n_b_sub, n_b, active_b)
-
-    T_AB = sp.csr_matrix(
-        (vals, (rows_full, cols_full)), shape=(3 * n_a, 3 * n_b), dtype=float
-    )
-    return T_AB, active_a, active_b
-
-
-def _build_block_fft_matvec(n, sus, groups, cross_blocks):
-    """Return matvec ``v -> (I - S T) @ v`` for a multi-group block structure.
-
-    Diagonal blocks (same group) use the FFT kernel via :func:`_fft_block_h`;
-    off-diagonal blocks use precomputed sparse T_{AB} matrices
-    (scipy.sparse.csr_matrix), so the matvec cost is O(nnz) rather than
-    O(n_a * n_b).
-    """
-
-    def matvec(v_flat):
-        Tv = np.zeros(3 * n)
-        v3 = v_flat.reshape(3, n)  # component-major view
-
-        # Self-blocks via FFT
-        for g in groups:
-            ia = g["indices"]
-            n_g = len(ia)
-            v_g = v3[:, ia].ravel()
-            h_g = _fft_block_h(v_g, n_g, g)
-            Tv.reshape(3, n)[:, ia] += h_g.reshape(3, n_g)
-
-        # Cross-blocks via sparse matrix-vector multiply (O(nnz))
-        for (idx_a, idx_b), T_AB in cross_blocks.items():
-            ia = groups[idx_a]["indices"]
-            ib = groups[idx_b]["indices"]
-            n_a = len(ia)
-            v_b = v3[:, ib].ravel()
-            h_a = np.asarray(T_AB @ v_b).ravel()  # (3*n_a,)
-            Tv.reshape(3, n)[:, ia] += h_a.reshape(3, n_a)
-
-        return v_flat - sus * Tv
-
-    return matvec
-
-
-def _solve_iterative(
-    *,
-    n,
-    sus,
-    rhs,
-    rhs_shape,
-    T,
-    fft_info,
-    magnets_list,
-    solver_tol,
-    max_iter,
-    groups=None,
-    cross_blocks=None,
-):
-    """GMRES solve of (I - S T) x = rhs with diagonal Jacobi preconditioning.
-
-    Selects the FFT matvec when ``fft_info`` is provided, otherwise falls back
-    to a dense T matvec.
-    """
-    if fft_info is not None:
-        matvec = _build_fft_matvec(n, sus, fft_info)
-    elif groups is not None:
-        matvec = _build_block_fft_matvec(n, sus, groups, cross_blocks)
-    else:
-        matvec = _build_dense_matvec(sus, T)
-
-    Q_op = LinearOperator((3 * n, 3 * n), matvec=matvec, dtype=float)
-
-    # Diagonal Jacobi preconditioner using analytical self-demag factors.
-    # T_post = -N (post-mu_0). Q_diag = 1 - sus * (-N_self)_kk = 1 + sus * N_self_kk.
-    # Cell ordering of sus is Fortran (m-major): [Nxx_1..Nxx_n, Nyy_1..Nyy_n, Nzz_1..Nzz_n].
-    all_cuboids = all(isinstance(s, Cuboid) for s in magnets_list)
-    if all_cuboids and n > 0:
-        dims = np.array([s.dimension for s in magnets_list])
-        # Same dim across all cells? Use one factor; else per-cell.
-        if np.allclose(dims, dims[0]):
-            Nself = self_demag_factors(dims[0])  # (3,)
-            Nself_flat = np.repeat(Nself, n)  # (3n,) Fortran flat
-        else:
-            Nself_per_cell = np.array([self_demag_factors(d) for d in dims])  # (n, 3)
-            Nself_flat = Nself_per_cell.T.ravel()  # (3n,) m-major
-        diag_Q = 1.0 + sus * Nself_flat
-    else:
-        diag_Q = np.ones(3 * n)
-
-    # Avoid division by zero in degenerate cases.
-    safe = np.where(np.abs(diag_Q) > 1e-12, diag_Q, 1.0)
-    M_inv = LinearOperator((3 * n, 3 * n), matvec=lambda v: v / safe, dtype=float)
-
-    x0 = rhs.copy()  # warm start at rhs
-    x, info = gmres(
-        Q_op,
-        rhs,
-        M=M_inv,
-        rtol=solver_tol,
-        atol=0.0,
-        maxiter=max_iter,
-        x0=x0,
-    )
-    if info > 0:
-        logger.warning(
-            "GMRES did not converge after {iters} iterations (tol={tol})",
-            iters=info,
-            tol=solver_tol,
-        )
-    elif info < 0:
-        msg = f"GMRES illegal input or breakdown (info={info})"
-        raise RuntimeError(msg)
-    return x.reshape(rhs_shape)
-
-
 def apply_demag(
     collection,
     susceptibility=None,
@@ -696,18 +795,20 @@ def apply_demag(
     pairs_matching: bool
         If True, equivalent pair of interactions are identified and unique pairs are
         calculated only once and copied to duplicates. This parameter is not compatible
-        with `max_dist` or `split` and applies only cuboid cells.
+        with `max_dist` or `split` and applies only cuboid cells. Forces the legacy
+        point-matched tensor for all pairs.
 
     max_dist: float
-        Posivive number representing the max_dimension to distance ratio for each pair
+        Positive number representing the max_dimension to distance ratio for each pair
         of interacting cells. This filters out far interactions. If `max_dist=0`, all
         interactions are calculated. This parameter is not compatible with
-        `pairs_matching` or `split` and applies only cuboid cells.
+        `pairs_matching` or `split` and applies only cuboid cells. Forces the legacy
+        point-matched tensor for all pairs.
 
     split: int
         Number of times the sources list is split before getH calculation ind demag
         tensor calculation. This parameter is not compatible with `pairs_matching` or
-        `max_dist`.
+        `max_dist`. Forces the legacy point-matched tensor for all pairs.
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
@@ -719,23 +820,25 @@ def apply_demag(
         Set collection style. If `inplace=False` only affects the copied collection
 
     solver: {"direct", "iterative"}
-        Linear solver to use. ``"direct"`` (default) builds the dense ``Q`` matrix
-        and calls :func:`numpy.linalg.solve` -- exact within floating-point
-        precision. ``"iterative"`` solves with :func:`scipy.sparse.linalg.gmres`
-        and a diagonal Jacobi preconditioner; if all cells are identical
-        axis-aligned Cuboids on a uniform Cartesian grid, an FFT-accelerated
-        :math:`O(n \\log n)` matvec is used. Defaults to ``"direct"`` to
-        preserve backward-compatible behaviour.
+        Linear solver to use. Both solvers share the same interaction model
+        (analytical volume-averaged Newell tensor for parallel cuboid cells,
+        point matching otherwise) and agree to ``solver_tol``.
+        ``"direct"`` (default) builds the dense ``Q`` matrix and calls
+        :func:`numpy.linalg.solve` — exact within floating-point precision.
+        ``"iterative"`` solves matrix-free with :func:`scipy.sparse.linalg.gmres`
+        and a diagonal Jacobi preconditioner; uniform-grid clusters of cells
+        use an FFT-accelerated :math:`O(n \\log n)` matvec.
 
     solver_tol: float
         Relative residual tolerance passed to GMRES when ``solver="iterative"``.
 
     max_iter: int
         Maximum number of GMRES iterations when ``solver="iterative"``.
+        Non-convergence raises ``RuntimeError``.
 
     Returns
     -------
-    None
+    demagnetized collection or None (if ``inplace=True``)
     """
     if solver not in ("direct", "iterative"):
         msg = f"solver must be 'direct' or 'iterative'; got {solver!r}"
@@ -770,6 +873,9 @@ def apply_demag(
         )
         raise TypeError(msg)
     n = len(magnets_list)
+    if n == 0:
+        msg = "Apply_demag input collection contains no magnet sources."
+        raise ValueError(msg)
     counts = Counter(s.__class__.__name__ for s in magnets_list)
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
     lbl = collection.style.label
@@ -790,12 +896,9 @@ def apply_demag(
             pol_magnets, (3 * n, 1), order="F"
         )  # shape ii = x1, ... xn, y1, ... yn, z1, ... zn
 
-        # set up S
+        # set up S: 1-D Fortran-flat (3n,) diagonal of the susceptibility
+        # matrix, applied via broadcasting (sus[:, None] * X == diag(sus) @ X).
         sus = get_susceptibilities(magnets_list, susceptibility)
-        # ``sus`` is a 1-D Fortran-flat (3n,) vector representing the
-        # diagonal of the susceptibility matrix S. We exploit this everywhere
-        # via broadcasting (sus[:, None] * X == np.diag(sus) @ X) to avoid
-        # materialising the (3n, 3n) dense diagonal matrix.
 
         # set up H_ext
         H_ext = get_H_ext(*magnets_list)
@@ -805,67 +908,24 @@ def apply_demag(
             raise ValueError(msg)
         H_ext = np.reshape(H_ext, (3 * n, 1), order="F")
 
-        # set up T (3 pol unit, n cells, n positions, 3 Bxyz)
-        # Try FFT path first when iterative solver is requested.
-        fft_info = None
-        groups = None
-        cross_blocks = {}
-        if solver == "iterative" and not pairs_matching and max_dist == 0:
-            all_cuboids = all(isinstance(s, Cuboid) for s in magnets_list)
-            if all_cuboids and n > 0:
-                positions = np.array(
-                    [getattr(s, "barycenter", s.position) for s in magnets_list]
-                )
-                dimensions = np.array([s.dimension for s in magnets_list])
-                rotations = R.from_quat([s.orientation.as_quat() for s in magnets_list])
-                fft_info = detect_uniform_grid(positions, dimensions, rotations)
-                if fft_info is None:
-                    # Try multi-group block-FFT (each meshed cuboid gets its own FFT kernel)
-                    groups = detect_grid_groups(positions, dimensions, rotations)
+        pol_total = pol_magnets
 
-        # interaction_tol: threshold for the χ·V/r³ triage in cross-block construction.
-        # Tied to solver_tol with a safety margin so dropped interactions stay below
-        # the GMRES residual target.
-        _interaction_tol = solver_tol * 0.1
-
-        T = None
-        if fft_info is not None:
-            with timelog("FFT demag kernel build", min_log_time=min_log_time):
-                fft_info["kernel_fft"] = build_fft_kernel(
-                    fft_info["shape"], fft_info["cell"]
-                )
-        elif groups is not None:
-            with timelog("Block FFT kernel build", min_log_time=min_log_time):
-                for g in groups:
-                    g["kernel_fft"] = build_fft_kernel(g["shape"], g["cell"])
+        if currents_list:
             with timelog(
-                "Cross-block demag tensor calculation", min_log_time=min_log_time
+                "Add current sources contributions", min_log_time=min_log_time
             ):
-                for idx_a, g_a in enumerate(groups):
-                    for idx_b, g_b in enumerate(groups):
-                        if idx_a != idx_b:
-                            ia, ib = g_a["indices"], g_b["indices"]
-                            srcs_b = [magnets_list[i] for i in ib]
-                            dims_b = dimensions[ib]
-                            pos_a = positions[ia]
-                            # Conservative per-cell χ: max over x/y/z components.
-                            # sus is Fortran-flat (3n,): block k is sus[k*n:(k+1)*n].
-                            sus_a_grp = np.maximum.reduce(
-                                [sus[k * n : (k + 1) * n][ia] for k in range(3)]
-                            )
-                            sus_b_grp = np.maximum.reduce(
-                                [sus[k * n : (k + 1) * n][ib] for k in range(3)]
-                            )
-                            T_AB, _, _ = _compute_cross_block(
-                                srcs_b,
-                                pos_a,
-                                dims_b,
-                                sus_a_grp,
-                                sus_b_grp,
-                                _interaction_tol,
-                            )
-                            cross_blocks[(idx_a, idx_b)] = T_AB
-        else:
+                pos = _cell_positions(magnets_list)
+                pol_currents = magpy.getB(currents_list, pos, sumup=True)
+                pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
+                # use elementwise multiply because S is diagonal
+                pol_total = pol_total + (sus[:, None] * pol_currents)
+
+        rhs = pol_total + (sus[:, None] * H_ext)  # shape (3n, 1)
+
+        # ── demag operator: legacy point-matching or unified pair rule ──────
+        no_split = split is False or split == 1
+        legacy = pairs_matching or max_dist != 0 or not no_split
+        if legacy:
             with timelog(
                 "Demagnetization tensor calculation", min_log_time=min_log_time
             ):
@@ -875,61 +935,51 @@ def apply_demag(
                     pairs_matching=pairs_matching,
                     max_dist=max_dist,
                 )
-
                 T *= magpy.mu_0
                 T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
-
-        pol_total = pol_magnets
-
-        if currents_list:
-            with timelog(
-                "Add current sources contributions", min_log_time=min_log_time
-            ):
-                pos = np.array([src.position for src in magnets_list])
-                pol_currents = magpy.getB(currents_list, pos, sumup=True)
-                pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
-                # use elementwise multiply because S is diagonal
-                pol_total = pol_total + (sus[:, None] * pol_currents)
-
-        rhs = pol_total + (sus[:, None] * H_ext)  # shape (3n, 1)
-
-        # For the FFT path with a non-identity common rotation the solve runs in
-        # the cuboid's local frame.  Rotate rhs there and rotate result back.
-        r_frame = fft_info["r_common"] if fft_info is not None else None
-        is_rotated_frame = r_frame is not None and not np.allclose(
-            r_frame.as_quat(), [0.0, 0.0, 0.0, 1.0], atol=1e-9
-        )
-
-        rhs_solve = rhs.ravel()
-        if is_rotated_frame:
-            rhs_solve = _rotate_fortran_flat(rhs_solve, n, r_frame.inv())
+            positions, clusters = None, None
+        else:
+            positions, clusters = _analyze_collection(magnets_list)
+            T = None
+            if solver == "direct":
+                T = _assemble_T_dense(
+                    magnets_list, positions, clusters, min_log_time=min_log_time
+                )
 
         with timelog("Solving of linear system", min_log_time=min_log_time):
             if solver == "direct":
                 Q = np.eye(3 * n) - (sus[:, None] * T)
                 pol_new = np.linalg.solve(Q, rhs)
             else:
+                if T is not None:
+                    matvec = _build_dense_matvec(sus, T)
+                    Nself_flat = np.zeros(3 * n)
+                else:
+                    ops = _build_operator(
+                        magnets_list,
+                        positions,
+                        clusters,
+                        sus,
+                        solver_tol,
+                        min_log_time,
+                    )
+                    matvec = _build_matvec(n, sus, ops)
+                    Nself_flat = _self_demag_diagonal(n, clusters)
                 pol_new = _solve_iterative(
                     n=n,
                     sus=sus,
-                    rhs=rhs_solve,
+                    rhs=rhs.ravel(),
                     rhs_shape=rhs.shape,
-                    T=T,
-                    fft_info=fft_info,
-                    magnets_list=magnets_list,
+                    matvec=matvec,
+                    Nself_flat=Nself_flat,
                     solver_tol=solver_tol,
                     max_iter=max_iter,
-                    groups=groups,
-                    cross_blocks=cross_blocks,
                 )
-                if is_rotated_frame:
-                    pol_new = _rotate_fortran_flat(pol_new, n, r_frame)
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
-        # pol_new *= .4*np.pi
 
-        for s, pol in zip(collection.sources_all, pol_new, strict=False):
-            s.polarization = s.orientation.inv().apply(pol)  # ROTATION CHECK
+        for src, pol in zip(magnets_list, pol_new, strict=True):
+            src.polarization = src.orientation.inv().apply(pol)  # ROTATION CHECK
 
     if not inplace:
         return collection

@@ -107,6 +107,36 @@ $$
 Implemented in [`newell.py`](../src/magpylib_material_response/newell.py)
 (`newell_f`, `newell_g`, `demag_block`).
 
+### Generalization to different-size prisms
+
+For two **parallel prisms of different sizes** $(a_1,b_1,c_1)$ (source) and
+$(a_2,b_2,c_2)$ (observer), the double volume integral collapses per axis to a
+**4-point difference** at offsets $\pm(a_1+a_2)/2$, $\pm(a_1-a_2)/2$ with
+weights $(1,-1,-1,1)$ (which degenerates to the $(1,-2,1)$ second difference
+when $a_1 = a_2$), normalised by the *observer* volume:
+
+$$
+N_{xx}(\mathbf{r}) = -\frac{1}{4\pi\, a_2 b_2 c_2}
+  \sum_{\alpha,\beta,\gamma} w_\alpha w_\beta w_\gamma\,
+  f\!\bigl(\mathbf{r} + (o_\alpha,\, o_\beta,\, o_\gamma)\bigr)
+$$
+
+This satisfies the exact volume-weighted reciprocity
+$V_\text{obs} \mathsf{N}(\mathbf{d}; s, o) = V_\text{src}\,
+\mathsf{N}(\mathbf{d}; o, s)^\mathsf{T}$, used to derive reverse cross-blocks
+by transposition. Implemented in `demag_block_general` and validated against
+Gauss–Legendre volume averages of magpylib's exact cuboid field.
+
+### The unified pair rule
+
+Every entry of $\mathbf{T}$ is defined by one rule, shared by both solvers:
+
+- both cells are Cuboids with a **common orientation** (any relative position,
+  any sizes) → analytical volume-averaged Newell tensor;
+- anything else (non-cuboid magnets, differently-rotated cells) →
+  **point matching**: the field of a unit source polarization evaluated at
+  the observer barycentre via `magpy.getH` (Chadebec 2006).
+
 ### Sign convention in the code
 
 ```text
@@ -145,9 +175,14 @@ below).
 Cost: $O(N^2)$ memory, $O(N^3)$ solve. Exact to floating-point precision.
 Practical for $N \lesssim 3000$.
 
-The tensor $\mathbf{T}$ is built via `magpy.getH` with three orthogonal unit
-polarizations applied to all cells simultaneously (the "3 pol unit" loop in
-`demag_tensor`).
+The tensor $\mathbf{T}$ is assembled block-wise from the unified pair rule
+(`_assemble_T_dense`): analytical Newell blocks for parallel-cuboid cluster
+pairs, `magpy.getH` point matching otherwise. Because the iterative solver
+applies the *same* entries matrix-free, **both solvers agree to solver
+tolerance for any input**.
+
+The legacy options (`pairs_matching`, `max_dist`, `split`) force the
+historical all-point-matching evaluation.
 
 ### 4.2 Iterative solver (`solver="iterative"`) — GMRES
 
@@ -218,153 +253,119 @@ H (3N flat)
     ▼  return  J - S * H     [the (I - ST) matvec result]
 ```
 
-Implemented in `demag_fft_matvec` and `_build_fft_matvec`.
+Implemented in `demag_fft_matvec`; the kernel supports grid spacings larger
+than the cell size (non-touching cells).
 
 ---
 
-### 5.2 Block-FFT for multi-group assemblies
+### 5.2 Structure analysis — clusters with guaranteed coverage
 
-When the input is a collection of **several meshed cuboids** (each with a
-different orientation or size), no single uniform grid spans all cells. Instead,
-`detect_grid_groups` partitions the cells into groups:
+`analyze_structure` partitions the cells into **clusters**; every cell lands
+in exactly one cluster (asserted), so no interaction can be silently dropped:
 
-> **Group**: a maximal subset of cells sharing the same cell dimensions _and_
-> the same orientation (quaternion), whose centres form a valid regular
-> Cartesian grid.
+> - **grid**: identical cuboids with a common orientation whose centres form
+>   a complete uniform grid (per spatially-connected component, so two
+>   separate meshed bodies with identical cells become two grid clusters —
+>   and merge into one when their grids align);
+> - **loose**: identical parallel cuboids without grid structure;
+> - **generic**: everything else — non-cuboid magnets, rotated singletons,
+>   and clusters too small to be worth dedicated bookkeeping.
 
-In practice, each meshed cuboid produces exactly one FFT group.
+Orientation keying uses sign-canonicalized quaternions (largest component
+made positive — stable for 180° rotations where $w \approx 0$) with a
+two-stage bucket-then-merge scheme that is immune to rounding-boundary
+splits.
 
-The full $3N \times 3N$ demag matrix is then naturally split into a **block
-structure**:
-
-```text
- Groups:    G₁        G₂        G₃
-         ┌─────────┬─────────┬─────────┐
-    G₁   │ T₁₁ FFT │ T₁₂ CSR │ T₁₃ CSR │
-         ├─────────┼─────────┼─────────┤
-    G₂   │ T₂₁ CSR │ T₂₂ FFT │ T₂₃ CSR │
-         ├─────────┼─────────┼─────────┤
-    G₃   │ T₃₁ CSR │ T₃₂ CSR │ T₃₃ FFT │
-         └─────────┴─────────┴─────────┘
-
- Diagonal blocks  T_GG  →  handled by group-local FFT kernel
- Off-diagonal blocks T_AB  →  handled by sparse CSR matrices (see §5.3)
-```
-
-The block matvec for one GMRES step is:
+The demag operator becomes a **block structure** over cluster pairs:
 
 ```text
-For each group G:
-    H_G += FFT_self_block(J_G)          ← group-local FFT kernel
-    for each other group A ≠ G:
-        H_G += T_AG (CSR) @ J_A         ← sparse cross-block matvec
+ Clusters:   C₁        C₂        C₃
+          ┌─────────┬─────────┬─────────┐
+     C₁   │ T₁₁ FFT │ T₁₂     │ T₁₃     │   self blocks of grid clusters → FFT
+          ├─────────┼─────────┼─────────┤   all other blocks → pair rule:
+     C₂   │ T₂₁     │ T₂₂ FFT │ T₂₃     │     parallel cuboids → Newell
+          ├─────────┼─────────┼─────────┤     otherwise        → getH
+     C₃   │ T₃₁     │ T₃₂     │ T₃₃     │   (dense if small, sparse if huge)
+          └─────────┴─────────┴─────────┘
 ```
 
-**Rotation handling:** each group may have an arbitrary orientation $R_G$. The
-FFT operates in the group's local frame, so the polarization is rotated into
-that frame before the FFT and the result is rotated back:
+**Rotation handling:** each cluster may have an arbitrary orientation $R_C$.
+The FFT operates in the cluster's local frame — the polarization is rotated
+in and the field rotated back **inside the block** (`_fft_apply`), so the
+GMRES solve itself always runs in the global frame where the susceptibility
+matrix $\mathbf{S}$ is diagonal. Anisotropic susceptibility therefore works
+for arbitrary rotations.
 
-```text
-J_global  →  R_G⁻¹  →  J_local  →  FFT  →  H_local  →  R_G  →  H_global
-```
-
-Implemented in `_fft_block_h` (per-group FFT self-block) and
-`_build_block_fft_matvec` (full block matvec).
+Cross-blocks between parallel cuboid clusters use the generalized Newell
+formula; the reverse block is obtained for free from volume-weighted
+reciprocity, $\mathbf{T}_{BA} = (V_A / V_B)\, \mathbf{T}_{AB}^\mathsf{T}$.
+Displacements are deduplicated before evaluation — for same-spacing grids
+only $O(N)$ of the $N^2$ pair displacements are distinct.
 
 ---
 
-### 5.3 Sparse triage for cross-block interactions
+### 5.3 Bounded sparsification of large blocks
 
-For two groups $A$ and $B$ separated by a large distance, most cell pairs
-$(i \in A,\, j \in B)$ have negligible mutual influence. The
-**$\chi \cdot V / r^3$ triage criterion** exploits this:
+A block with more than `DENSE_BLOCK_MAX_ENTRIES` dense entries is built in
+observer chunks and stored as CSR. Entries are dropped **per observer row,
+smallest first, only while the sum of dropped magnitudes stays below a
+budget** (`_row_sparsify`):
 
-$$\text{keep}(i,j) \iff \max(\chi_i, \chi_j)\,\frac{V_j}{|\mathbf{r}_{ij}|^3} > \varepsilon$$
+$$\sum_{\text{dropped } j} |T_{ij}| \;\le\; \varepsilon_\text{row}
+  = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \chi_{\max})\, K}$$
 
-where
-$\varepsilon = $ `solver_tol * 0.1` and $\mathbf{r}_{ij} = \mathbf{p}_i - \mathbf{p}_j$
-is the cell-centre displacement.
+where $\varepsilon_\text{tol}$ is `solver_tol`. Summing over the $\le K$
+blocks that touch a row, the operator perturbation is rigorously bounded:
 
-**Physical interpretation:** $V_j / r^3$ is proportional to the solid angle
-subtended by cell $j$ as seen from cell $i$. The $\chi$ weighting accounts for
-the fact that a low-susceptibility cell scarcely responds even to a strong
-incident field.
+$$\|\mathbf{S}(\mathbf{T}-\tilde{\mathbf{T}})\|_\infty
+  \;\le\; 0.1\, \varepsilon_\text{tol}$$
 
-The **critical distance** below which no pairs are dropped:
-
-$$r_\text{triage} = \left(\frac{\chi_{\max} \cdot V_\text{cell}}{\varepsilon}\right)^{1/3}$$
-
-For 128-element 1 mm³ cubes with $\chi = 1$ and `solver_tol = 1e-6`:
-$r_\text{triage} \approx 200\,\text{mm}$.
-
-**Algorithm in `_compute_cross_block`:**
-
-```text
-Input: n_a cells in group A, n_b cells in group B
-
-1. Compute influence(i,j) = max(χᵢ,χⱼ) * Vⱼ / |rᵢⱼ|³  for all (i,j)  [O(n_a·n_b)]
-
-2. Build boolean mask = influence > ε
-
-3. Prune active sources:
-     active_b = {j : mask[:,j].any()}   ← columns with ≥1 significant pair
-     active_a = {i : mask[i,:].any()}   ← rows   with ≥1 significant pair
-
-4. Call magpy.getH only for (active_a × active_b) sub-problem          [reduced cost]
-
-5. Zero out remaining below-threshold entries within the sub-block
-
-6. Scatter into full CSR matrix of shape (3·n_a, 3·n_b)
-```
-
-The resulting `T_AB` is stored as a `scipy.sparse.csr_matrix`. Each GMRES matvec
-then costs $O(\text{nnz})$ instead of $O(n_a \cdot n_b)$.
+— the truncation error can never exceed the requested solver accuracy. This
+replaces the earlier point-estimate triage ($\chi V / r^3$ thresholding),
+which bounded individual entries but not their accumulated sum.
 
 ---
 
 ## 6. Complete algorithm flow
 
 ```text
-apply_demag(collection, solver="iterative")
+apply_demag(collection, solver=...)
 │
 ├─ 1. Collect cells: positions, dimensions, orientations, χ
 │
-├─ 2. Detect grid structure
-│      ├─ detect_uniform_grid  → single FFT group?
-│      │     YES → fft_info path
-│      ├─ detect_grid_groups   → multiple FFT groups?
-│      │     YES → block-FFT + sparse cross-blocks path
-│      └─ otherwise            → dense T matrix (magpy.getH)
+├─ 2. analyze_structure → clusters (grid / loose / generic), full coverage
 │
-├─ 3. Build demag operator
-│      ├─ [single group]   build_fft_kernel  →  kernel_fft stored in fft_info
-│      ├─ [multi-group]    build_fft_kernel per group
-│      │                   _compute_cross_block for every (A,B) pair  →  CSR T_AB
-│      └─ [dense]          demag_tensor via magpy.getH  →  T (3N×3N dense)
+├─ 3. Build demag operator from the unified pair rule
+│      ├─ [direct]     _assemble_T_dense: every cluster-pair block scattered
+│      │               into the dense (3N × 3N) T
+│      └─ [iterative]  _build_operator:
+│            · grid self-blocks   → build_fft_kernel (FFT convolution)
+│            · other blocks       → dense (small) or row-budget CSR (large)
+│            · reverse Newell blocks by reciprocity transpose
 │
-├─ 4. Solve linear system  (I - S T) J = J⁽⁰⁾ + S B_ext
+├─ 4. Solve linear system  (I - S T) J = J⁽⁰⁾ + S B_ext   [global frame]
 │      ├─ [direct]     numpy.linalg.solve(Q, rhs)                  O(N³)
-│      └─ [iterative]  GMRES with Jacobi preconditioner
-│             matvec options:
-│               · _build_fft_matvec           (single group)  O(N log N)
-│               · _build_block_fft_matvec     (multi-group)   O(N log N + nnz)
-│               · _build_dense_matvec         (fallback)      O(N²)
+│      └─ [iterative]  GMRES + Jacobi preconditioner (rotated analytical
+│                      self-demag factors); RuntimeError on non-convergence
 │
-└─ 5. Assign self-consistent polarizations back to source objects
+└─ 5. Assign self-consistent polarizations back to the magnet objects
 ```
 
 ---
 
 ## 7. Complexity summary
 
-| Configuration              | Tensor build                  | Matvec per GMRES iteration    |
-| -------------------------- | ----------------------------- | ----------------------------- |
-| Single uniform grid        | $O(N \log N)$                 | $O(N \log N)$                 |
-| $K$ groups, well-separated | $O(N \log N) + O(\text{nnz})$ | $O(N \log N) + O(\text{nnz})$ |
-| $K$ groups, touching       | $O(K^2 N^2 / K^2) = O(N^2)$   | $O(N^2)$                      |
-| Dense fallback             | $O(N^2)$                      | $O(N^2)$                      |
+| Configuration                   | Operator build                  | Matvec per GMRES iteration    |
+| ------------------------------- | ------------------------------- | ----------------------------- |
+| Single uniform grid             | $O(N \log N)$                   | $O(N \log N)$                 |
+| $K$ grid clusters               | $O(N \log N + \sum_{A\neq B} n_A n_B)$ | $O(N \log N + \text{nnz})$ |
+| Loose / generic cells           | $O(n^2)$ for those cells        | $O(n^2)$ or $O(\text{nnz})$   |
+| Legacy (`split`, `max_dist`, …) | $O(N^2)$ dense                  | $O(N^2)$                      |
 
-where nnz $\ll K^2 (N/K)^2$ when groups are separated beyond $r_\text{triage}$.
+Cross-block build cost is halved by reciprocity and reduced further by
+displacement deduplication when cluster grids share their spacing. Indicative
+timings (Apple Silicon, `solver_tol=1e-8`, vs. direct): 16× at $N=3\,375$;
+$N=27\,000$ solves in ~2 s where the dense solver would need ~47 GB.
 
 ---
 

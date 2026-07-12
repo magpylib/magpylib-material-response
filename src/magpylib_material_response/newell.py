@@ -31,6 +31,8 @@ from __future__ import annotations
 import numpy as np
 
 __all__ = [
+    "demag_block",
+    "demag_block_general",
     "demag_tensor_newell",
     "newell_f",
     "newell_g",
@@ -124,6 +126,99 @@ def _N_xx(X, Y, Z, a, b, c):
 
 def _N_xy(X, Y, Z, a, b, c):
     return _double_diff_27(newell_g, X, Y, Z, a, b, c)
+
+
+def _axis_terms(h1, h2):
+    """Offsets/weights of the 4-point double difference for one axis.
+
+    The double integral over source extent ``h1`` and observer extent ``h2``
+    of ``G''`` collapses to::
+
+        G(X+(h1+h2)/2) - G(X+(h1-h2)/2) - G(X-(h1-h2)/2) + G(X-(h1+h2)/2)
+
+    For ``h1 == h2`` this degenerates to the (1, -2, 1) second difference,
+    saving one function evaluation on that axis.
+    """
+    if abs(h1 - h2) <= 1e-12 * max(abs(h1), abs(h2)):
+        return ((+h1, 1.0), (0.0, -2.0), (-h1, 1.0))
+    return (
+        (+(h1 + h2) / 2.0, 1.0),
+        (+(h1 - h2) / 2.0, -1.0),
+        (-(h1 - h2) / 2.0, -1.0),
+        (-(h1 + h2) / 2.0, 1.0),
+    )
+
+
+def _double_diff_64(func, X, Y, Z, dim_src, dim_obs):
+    """64-point double-difference operator for two different-size prisms.
+
+    Generalization of :func:`_double_diff_27` to a source prism with side
+    lengths ``dim_src`` and an observer prism with side lengths ``dim_obs``.
+    Normalised by the *observer* volume so that the far field reduces to a
+    point dipole with moment ``M * V_src``.
+    """
+    a1, b1, c1 = (float(v) for v in dim_src)
+    a2, b2, c2 = (float(v) for v in dim_obs)
+    shape = np.broadcast_shapes(np.shape(X), np.shape(Y), np.shape(Z))
+    acc = np.zeros(shape, dtype=float)
+    for ox, wx in _axis_terms(a1, a2):
+        for oy, wy in _axis_terms(b1, b2):
+            for oz, wz in _axis_terms(c1, c2):
+                acc = acc + (wx * wy * wz) * func(X + ox, Y + oy, Z + oz)
+    return -acc / (4.0 * np.pi * a2 * b2 * c2)
+
+
+def demag_block_general(disp, dim_src, dim_obs):
+    """3x3 volume-averaged demag tensor between two parallel rectangular prisms.
+
+    Generalizes :func:`demag_block` to source and observer prisms of
+    *different* side lengths (both axis-aligned in the same frame).
+
+    Parameters
+    ----------
+    disp : array_like, shape (..., 3)
+        Centre-to-centre displacement ``obs - src``.
+    dim_src : array_like, shape (3,)
+        Source prism side lengths ``(a1, b1, c1)``.
+    dim_obs : array_like, shape (3,)
+        Observer prism side lengths ``(a2, b2, c2)``.
+
+    Returns
+    -------
+    N : ndarray, shape (..., 3, 3)
+        ``N_mk`` such that the H-field volume-averaged over the observer
+        prism per unit magnetization of the source prism is ``H = -N @ M``.
+        Satisfies the volume-weighted reciprocity
+        ``V_obs * N(d; s, o) = V_src * N(d; o, s).T``.
+    """
+    dim_src = np.asarray(dim_src, dtype=float)
+    dim_obs = np.asarray(dim_obs, dtype=float)
+    if np.array_equal(dim_src, dim_obs):
+        return demag_block(disp, dim_src)
+
+    disp = np.asarray(disp, dtype=float)
+    X = disp[..., 0]
+    Y = disp[..., 1]
+    Z = disp[..., 2]
+    a1, b1, c1 = dim_src
+    a2, b2, c2 = dim_obs
+
+    Nxx = _double_diff_64(newell_f, X, Y, Z, (a1, b1, c1), (a2, b2, c2))
+    # Same permutation identities as in demag_block, applied to both dims.
+    Nyy = _double_diff_64(newell_f, Y, X, Z, (b1, a1, c1), (b2, a2, c2))
+    Nzz = _double_diff_64(newell_f, Z, Y, X, (c1, b1, a1), (c2, b2, a2))
+    Nxy = _double_diff_64(newell_g, X, Y, Z, (a1, b1, c1), (a2, b2, c2))
+    Nxz = _double_diff_64(newell_g, X, Z, Y, (a1, c1, b1), (a2, c2, b2))
+    Nyz = _double_diff_64(newell_g, Y, Z, X, (b1, c1, a1), (b2, c2, a2))
+
+    out = np.empty((*np.shape(Nxx), 3, 3), dtype=float)
+    out[..., 0, 0] = Nxx
+    out[..., 1, 1] = Nyy
+    out[..., 2, 2] = Nzz
+    out[..., 0, 1] = out[..., 1, 0] = Nxy
+    out[..., 0, 2] = out[..., 2, 0] = Nxz
+    out[..., 1, 2] = out[..., 2, 1] = Nyz
+    return out
 
 
 def demag_block(disp, dim):
