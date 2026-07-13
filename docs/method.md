@@ -365,7 +365,8 @@ apply_demag(collection, solver=...)
 Cross-block build cost is halved by reciprocity and reduced further by
 displacement deduplication when cluster grids share their spacing. Indicative
 timings (Apple Silicon, `solver_tol=1e-8`, vs. direct): 16× at $N=3\,375$;
-$N=27\,000$ solves in ~2 s where the dense solver would need ~47 GB.
+$N=27\,000$ solves in ~2 s where the dense solver would need ~50 GB
+($(3N)^2 \times 8$ bytes).
 
 ---
 

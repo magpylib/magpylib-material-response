@@ -40,7 +40,7 @@ from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.demag_fft import (
     QUAT_ATOL,
-    analyze_structure,
+    analyze_collection,
     build_fft_kernel,
     canonical_quats,
     demag_fft_matvec,
@@ -178,18 +178,8 @@ def _cell_positions(srcs):
 
 
 def _analyze_collection(magnets_list, atol=QUAT_ATOL):
-    """Run :func:`analyze_structure` on a list of magnet objects."""
-    positions = _cell_positions(magnets_list)
-    is_cuboid = np.array([isinstance(s, Cuboid) for s in magnets_list])
-    dimensions = np.array(
-        [
-            s.dimension if isinstance(s, Cuboid) else (1.0, 1.0, 1.0)
-            for s in magnets_list
-        ],
-        dtype=float,
-    )
-    rotations = R.from_quat([s.orientation.as_quat() for s in magnets_list])
-    clusters = analyze_structure(positions, dimensions, rotations, is_cuboid, atol)
+    """Run :func:`analyze_collection` on a list of magnet objects, with logging."""
+    positions, clusters = analyze_collection(magnets_list, atol)
     counts = Counter(c["kind"] for c in clusters)
     logger.info(
         "Cell structure: {n_grid} grid, {n_loose} loose, {n_generic} generic clusters",

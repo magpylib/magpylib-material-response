@@ -17,6 +17,7 @@ from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.demag import apply_demag, demag_tensor
 from magpylib_material_response.demag_fft import (
+    analyze_collection,
     analyze_structure,
     build_fft_kernel,
     demag_fft_matvec,
@@ -137,17 +138,16 @@ def test_analyze_structure_full_coverage():
     assert kinds == ["generic", "grid"]
 
 
-def test_analyze_structure_two_identical_meshes():
-    """Two separate meshed bodies with identical cells become two grid clusters."""
+def test_analyze_collection_two_identical_meshes():
+    """The collection-level wrapper detects two separate meshed bodies with
+    identical cells as two grid clusters."""
     c1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1, 1, 1))
     c2 = magpy.magnet.Cuboid(
         polarization=(0, 0, 1), dimension=(1, 1, 1), position=(2.5, 0.3, 0)
     )
     cells = [*mesh_Cuboid(c1, 27).sources_all, *mesh_Cuboid(c2, 27).sources_all]
-    pos = np.array([s.position for s in cells])
-    dims = np.array([s.dimension for s in cells])
-    rots = R.from_quat([s.orientation.as_quat() for s in cells])
-    clusters = analyze_structure(pos, dims, rots, np.ones(len(cells), dtype=bool))
+    positions, clusters = analyze_collection(cells)
+    assert positions.shape == (len(cells), 3)
     assert [c["kind"] for c in clusters] == ["grid", "grid"]
 
 

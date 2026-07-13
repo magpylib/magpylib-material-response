@@ -136,24 +136,29 @@ allocations) in a separate run, since tracing skews wall time.
 
 ```{code-cell} ipython3
 def measure_solve(target_elems, solver):
-    def build():
-        cube = magpy.magnet.Cuboid(
-            polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3)
-        )
-        return magpy.Collection(mesh_Cuboid(cube, target_elems=target_elems))
-
-    coll = build()
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3))
+    coll = magpy.Collection(mesh_Cuboid(cube, target_elems=target_elems))
     n = len(coll.sources_all)
     t0 = time.perf_counter()
     apply_demag(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
     dt = time.perf_counter() - t0
 
+    # separate traced run (tracing skews wall time); apply_demag works on a
+    # copy, so the same collection can be reused
     tracemalloc.start()
-    apply_demag(build(), susceptibility=3.0, solver=solver, solver_tol=1e-8)
+    apply_demag(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     return {"solver": solver, "cells": n, "time": dt, "peak_mb": peak / 1e6}
 
+
+# warm-up both solvers once, so one-time costs (imports, BLAS/FFT
+# initialisation) do not leak into the first timed measurement
+warmup = magpy.Collection(
+    mesh_Cuboid(magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3)), 64)
+)
+apply_demag(warmup, susceptibility=3.0, solver="direct")
+apply_demag(warmup, susceptibility=3.0, solver="iterative", solver_tol=1e-8)
 
 sizes_direct = [216, 512, 1000, 1728]
 sizes_iterative = [216, 512, 1000, 1728, 4096, 8000]
@@ -165,7 +170,10 @@ records = [measure_solve(s, "direct") for s in sizes_direct]
 records += [measure_solve(s, "iterative") for s in sizes_iterative]
 
 perf_df = pd.DataFrame(records)
-t_ref = perf_df.query("solver == 'direct'")["time"].iloc[0]  # smallest direct solve
+n_ref = int(perf_df["cells"].min())
+t_ref = perf_df[(perf_df["solver"] == "direct") & (perf_df["cells"] == n_ref)][
+    "time"
+].iloc[0]
 perf_df["rel_time"] = perf_df["time"] / t_ref
 perf_df.pivot(index="cells", columns="solver", values=["rel_time", "peak_mb"]).round(2)
 ```
@@ -227,7 +235,7 @@ for solver, style in series_style.items():
 
 fig.update_xaxes(title_text="number of cells", type="log")
 fig.update_yaxes(type="log")
-fig.update_yaxes(title_text=f"wall time (× direct at {sizes_direct[0]} cells)", row=1, col=1)
+fig.update_yaxes(title_text=f"wall time (× direct at {n_ref} cells)", row=1, col=1)
 fig.update_yaxes(title_text="peak memory (MB)", row=1, col=2)
 fig.update_layout(
     title="apply_demag scaling — single meshed cuboid",
@@ -243,7 +251,7 @@ The direct solver's N³ time slope and (3N)² memory slope take over in the low
 thousands of cells, while the FFT-accelerated iterative solver stays almost
 flat in both panels. Beyond the crossover the gap widens rapidly — the dense
 matrix becomes the hard limit (extrapolating the right panel, N = 27 000
-would already need a ~47 GB matrix, while the iterative solver handles it in
+would already need a ~50 GB matrix, while the iterative solver handles it in
 seconds within a few hundred MB).
 
 ## Model topology matters
@@ -253,27 +261,19 @@ The solvers assemble the interaction operator from *structure clusters*
 everything else → point-matched `magpy.getH`), so the model topology decides
 which paths do the work — and how much the solver choice matters. Here the
 same comparison runs on characteristic topologies of similar total cell
-count.
+count (single-run timings — indicative, not statistics).
 
 ```{code-cell} ipython3
 from collections import Counter
 
-from scipy.spatial.transform import Rotation as R
-
-from magpylib_material_response.demag_fft import analyze_structure
+from magpylib_material_response.demag_fft import analyze_collection
 from magpylib_material_response.meshing import mesh_Cylinder
 
 
 def structure_kinds(coll):
     """Summarize the structure clusters the solvers will work with."""
-    cells = coll.sources_all
-    pos = np.array([getattr(s, "barycenter", s.position) for s in cells])
-    isc = np.array([isinstance(s, magpy.magnet.Cuboid) for s in cells])
-    dims = np.array(
-        [s.dimension if isinstance(s, magpy.magnet.Cuboid) else (1, 1, 1) for s in cells]
-    )
-    rots = R.from_quat([s.orientation.as_quat() for s in cells])
-    kinds = Counter(c["kind"] for c in analyze_structure(pos, dims, rots, isc))
+    _, clusters = analyze_collection(coll.sources_all)
+    kinds = Counter(c["kind"] for c in clusters)
     return " + ".join(f"{v} {k}" for k, v in sorted(kinds.items()))
 
 
@@ -365,9 +365,10 @@ What the rows show:
   oriented bodies fall back to point matching, which both solvers share:
   expect near parity. The self-blocks of each body still use their own
   rotated FFT grid.
-- **Meshed cylinder** — non-cuboid cells (here CylinderSegment, likewise
-  tetrahedra from `mesh_TriangularMesh`) take the point-matched generic
-  path. Both solvers spend nearly all time evaluating the cells' analytical
+- **Meshed cylinder** — non-cuboid cells (here Cylinder and CylinderSegment,
+  likewise tetrahedra from `mesh_TriangularMesh` — see the
+  [tetrahedral mesh example](tetrahedral_meshes.md)) take the point-matched
+  generic path. Both solvers spend nearly all time evaluating the cells' analytical
   fields, so the solver choice barely matters — the cell *type* is the cost
   driver. Prefer cuboid meshes when the geometry allows it.
 
@@ -375,7 +376,7 @@ What the rows show:
 
 | Model topology | Interaction paths | Recommendation |
 | --- | --- | --- |
-| One meshed body, up to ~2000 cells | FFT / analytical | either; `direct` (default) is exact and tuning-free |
+| One meshed body, up to a few thousand cells (~2000–3000) | FFT / analytical | either; `direct` (default) is exact and tuning-free |
 | One meshed body, large | FFT self-block | `iterative` — O(N log N); only option for N ≳ 10⁴ (memory) |
 | Few parallel bodies | FFT + analytical cross-blocks | `iterative` — cross-blocks are analytical and cheap |
 | Dozens of bodies | cross-blocks dominate the build | `iterative`, but advantage shrinks with body count |

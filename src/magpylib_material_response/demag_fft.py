@@ -26,13 +26,16 @@ cells are supported.
 from __future__ import annotations
 
 import numpy as np
+from magpylib.magnet import Cuboid
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
+from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.newell import demag_block
 
 __all__ = [
+    "analyze_collection",
     "analyze_structure",
     "build_fft_kernel",
     "canonical_quats",
@@ -196,6 +199,34 @@ def _split_components(positions):
     graph = coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), shape=(n, n))
     n_comp, labels = connected_components(graph, directed=False)
     return [np.nonzero(labels == c)[0] for c in range(n_comp)]
+
+
+def analyze_collection(sources, atol=QUAT_ATOL):
+    """Partition magnet objects into structure clusters (see
+    :func:`analyze_structure`).
+
+    Convenience wrapper that extracts positions (barycentre when available),
+    dimensions, orientations and the cuboid mask from a sequence of magpylib
+    magnet objects (e.g. ``collection.sources_all``) and returns the cluster
+    list together with the extracted positions.
+
+    Returns
+    -------
+    positions : ndarray (n, 3)
+    clusters : list[dict]  — see :func:`analyze_structure`
+    """
+    sources = list(sources)
+    positions = np.array(
+        [getattr(src, "barycenter", src.position) for src in sources], dtype=float
+    )
+    is_cuboid = np.array([isinstance(s, Cuboid) for s in sources])
+    dimensions = np.array(
+        [s.dimension if isinstance(s, Cuboid) else (1.0, 1.0, 1.0) for s in sources],
+        dtype=float,
+    )
+    rotations = R.from_quat([s.orientation.as_quat() for s in sources])
+    clusters = analyze_structure(positions, dimensions, rotations, is_cuboid, atol)
+    return positions, clusters
 
 
 def analyze_structure(positions, dimensions, rotations, is_cuboid, atol=QUAT_ATOL):
