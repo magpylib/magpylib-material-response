@@ -62,6 +62,7 @@ docs = [
   "sphinx_autodoc_typehints",
   "pandas",
   "plotly>=6.7",
+  "magpylib-material-response[tetgen]",
 ]
 
 [tool.hatch]
