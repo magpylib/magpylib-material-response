@@ -595,7 +595,7 @@ def demag_tensor(
         )
         n = nof_src
         # T2[(m, j), (k, i)] -> legacy T[k, i, j, m], pre-mu_0.
-        return T2.reshape(3, n, 3, n).transpose((2, 3, 1, 0)) / magpy.mu_0
+        return T2.reshape((3, n, 3, n)).transpose((2, 3, 1, 0)) / magpy.mu_0
 
     mask_inds = None
     getH_params = {}
