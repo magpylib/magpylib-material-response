@@ -16,14 +16,14 @@ kernelspec:
 
 # Quickstart
 
-Magpylib treats magnet polarization as fixed. This package adds the
-**material response**: mesh the magnets into cells, assign a magnetic
-susceptibility, and `apply_demag` computes the self-consistent polarization
-of every cell — including the demagnetization of the magnets themselves and
-the response of soft magnetic parts nearby.
+Magpylib treats magnet polarization as fixed. This package adds the **material
+response**: mesh the magnets into cells, assign a magnetic susceptibility, and
+`apply_demag` computes the self-consistent polarization of every cell —
+including the demagnetization of the magnets themselves and the response of soft
+magnetic parts nearby.
 
-The minimal workflow has three steps: **mesh → susceptibility →
-`apply_demag`**. All quantities are SI (meters, Tesla).
+The minimal workflow has three steps: **mesh → susceptibility → `apply_demag`**.
+All quantities are SI (meters, Tesla).
 
 ```{code-cell} ipython3
 import magpylib as magpy
@@ -47,15 +47,15 @@ print("B with demagnetization      :", magpy.getB(mesh_demag, observer))
 
 +++ {"user_expressions": []}
 
-The z-field drops by several percent — that is the magnet demagnetizing
-itself. Refining the mesh (`target_elems`) converges the result; the
+The z-field drops by several percent — that is the magnet demagnetizing itself.
+Refining the mesh (`target_elems`) converges the result; the
 [cuboid example](examples/cuboids_demagnetization.md) compares against FEM.
 
 ## Setting material properties
 
-Susceptibility can be attached to objects — searched up the parent
-`Collection` tree when not set on the object itself — or passed explicitly
-to `apply_demag`, which then takes precedence:
+Susceptibility can be attached to objects — searched up the parent `Collection`
+tree when not set on the object itself — or passed explicitly to `apply_demag`,
+which then takes precedence:
 
 ```{code-cell} ipython3
 magnet.susceptibility = 0.3  # isotropic
@@ -66,8 +66,8 @@ magnet.susceptibility = (0.3, 0.1, 0.0)  # anisotropic, global frame
 coll = apply_demag(mesh, susceptibility=0.3)
 ```
 
-A uniform external field can be applied through the `H_ext` attribute,
-given as flux density in Tesla units (i.e. $\mu_0 H_\text{ext}$):
+A uniform external field can be applied through the `H_ext` attribute, given as
+flux density in Tesla units (i.e. $\mu_0 H_\text{ext}$):
 
 ```{code-cell} ipython3
 soft = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(1e-3, 1e-3, 1e-3))
@@ -81,8 +81,8 @@ print(soft_demag.sources_all[0].polarization)
 
 ## Meshing helpers
 
-- `mesh_Cuboid` / `slice_Cuboid` — uniform grids of cuboid cells (fastest
-  solver path),
+- `mesh_Cuboid` / `slice_Cuboid` — uniform grids of cuboid cells (fastest solver
+  path),
 - `mesh_Cylinder` — cylinder / cylinder-segment cells,
 - `mesh_TriangularMesh` — tetrahedral cells for arbitrary closed surfaces
   (optional [TetGen](https://tetgen.pyvista.org/) dependency, see the
@@ -91,8 +91,8 @@ print(soft_demag.sources_all[0].polarization)
 
 ## Where to go next
 
-- [Solvers and performance](examples/solver_performance.md) — choosing
-  between the exact dense solver and the FFT-accelerated iterative solver
-  as models grow.
+- [Solvers and performance](examples/solver_performance.md) — choosing between
+  the exact dense solver and the FFT-accelerated iterative solver as models
+  grow.
 - [Method of Moments](method.md) — the physics and the numerical method.
 - [API reference](api.md) — all public functions.

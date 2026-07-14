@@ -9,9 +9,9 @@ Worked, executable examples — in suggested reading order:
 - [Solvers and performance](solver_performance.md) — direct vs. iterative
   solver: agreement guarantee, scaling of wall time and memory, and how the
   model topology decides which interaction paths do the work.
-- [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) —
-  meshing a `TriangularMesh` magnet with TetGen, validated against the exact
-  soft-sphere solution.
+- [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
+  `TriangularMesh` magnet with TetGen, validated against the exact soft-sphere
+  solution.
 
 ```{toctree}
 :maxdepth: 1

@@ -18,20 +18,19 @@ kernelspec:
 
 +++
 
-`apply_demag` offers two solvers that share the **same interaction model**
-(the analytical volume-averaged Newell tensor for parallel cuboid cells,
-point matching otherwise) and therefore agree to solver tolerance for any
-input:
+`apply_demag` offers two solvers that share the **same interaction model** (the
+analytical volume-averaged Newell tensor for parallel cuboid cells, point
+matching otherwise) and therefore agree to solver tolerance for any input:
 
-- `solver="direct"` (default) — assembles the dense system matrix and solves
-  it exactly with LAPACK. Memory grows as (3N)² and time as N³, so it
-  is the right choice up to a few thousand cells.
-- `solver="iterative"` — solves the same system matrix-free with GMRES.
-  Cells on uniform grids (the output of `mesh_Cuboid`) are handled by an
-  O(N log N) FFT convolution, so meshes with tens of thousands of cells
-  stay fast and memory-light. If GMRES cannot reach `solver_tol` within
-  `max_iter` iterations, a `RuntimeError` is raised — a partially converged
-  result is never returned silently.
+- `solver="direct"` (default) — assembles the dense system matrix and solves it
+  exactly with LAPACK. Memory grows as (3N)² and time as N³, so it is the right
+  choice up to a few thousand cells.
+- `solver="iterative"` — solves the same system matrix-free with GMRES. Cells on
+  uniform grids (the output of `mesh_Cuboid`) are handled by an O(N log N) FFT
+  convolution, so meshes with tens of thousands of cells stay fast and
+  memory-light. If GMRES cannot reach `solver_tol` within `max_iter` iterations,
+  a `RuntimeError` is raised — a partially converged result is never returned
+  silently.
 
 This example verifies the agreement on typical use cases and measures the
 performance crossover.
@@ -63,9 +62,9 @@ def max_rel_diff(coll_a, coll_b):
 
 ## Both solvers agree — typical use cases
 
-Three configurations that exercise all interaction paths: a single meshed
-magnet (FFT grid), several bodies with different cell sizes plus a standalone
-magnet (grid + cross + generic blocks), and a rotated mesh with anisotropic
+Three configurations that exercise all interaction paths: a single meshed magnet
+(FFT grid), several bodies with different cell sizes plus a standalone magnet
+(grid + cross + generic blocks), and a rotated mesh with anisotropic
 susceptibility (rotation handling).
 
 ```{code-cell} ipython3
@@ -123,15 +122,15 @@ pd.DataFrame(rows)
 
 +++ {"user_expressions": []}
 
-The two solvers match to the requested `solver_tol` in every configuration —
-the choice between them is purely a performance trade-off.
+The two solvers match to the requested `solver_tol` in every configuration — the
+choice between them is purely a performance trade-off.
 
 ## Performance scaling
 
 Wall time and peak memory for a single meshed cuboid magnet of growing cell
 count. Absolute seconds depend heavily on the machine, so times are reported
-**relative to the direct solve of the smallest mesh** — the ratios are much
-more portable. Peak memory is measured with `tracemalloc` (which tracks NumPy
+**relative to the direct solve of the smallest mesh** — the ratios are much more
+portable. Peak memory is measured with `tracemalloc` (which tracks NumPy
 allocations) in a separate run, since tracing skews wall time.
 
 ```{code-cell} ipython3
@@ -248,20 +247,20 @@ fig.show()
 +++ {"user_expressions": []}
 
 The direct solver's N³ time slope and (3N)² memory slope take over in the low
-thousands of cells, while the FFT-accelerated iterative solver stays almost
-flat in both panels. Beyond the crossover the gap widens rapidly — the dense
-matrix becomes the hard limit (extrapolating the right panel, N = 27 000
-would already need a ~50 GB matrix, while the iterative solver handles it in
-seconds within a few hundred MB).
+thousands of cells, while the FFT-accelerated iterative solver stays almost flat
+in both panels. Beyond the crossover the gap widens rapidly — the dense matrix
+becomes the hard limit (extrapolating the right panel, N = 27 000 would already
+need a ~50 GB matrix, while the iterative solver handles it in seconds within a
+few hundred MB).
 
 ## Model topology matters
 
-The solvers assemble the interaction operator from *structure clusters*
-(uniform grids of identical parallel cells → FFT / analytical blocks,
-everything else → point-matched `magpy.getH`), so the model topology decides
-which paths do the work — and how much the solver choice matters. Here the
-same comparison runs on characteristic topologies of similar total cell
-count (single-run timings — indicative, not statistics).
+The solvers assemble the interaction operator from _structure clusters_ (uniform
+grids of identical parallel cells → FFT / analytical blocks, everything else →
+point-matched `magpy.getH`), so the model topology decides which paths do the
+work — and how much the solver choice matters. Here the same comparison runs on
+characteristic topologies of similar total cell count (single-run timings —
+indicative, not statistics).
 
 ```{code-cell} ipython3
 from collections import Counter
@@ -356,36 +355,35 @@ pd.DataFrame(topo_rows)
 What the rows show:
 
 - **Single body / a few parallel bodies** — everything runs on the FFT and
-  analytical Newell paths; the iterative solver is ahead and scales far
-  better (previous section).
-- **Dozens of bodies** — the pairwise cross-blocks (one per body pair)
-  start to dominate the operator build. The iterative solver still wins,
-  but its advantage shrinks as the body count grows at fixed total cells.
-- **Bodies rotated individually** — cross-blocks between differently
-  oriented bodies fall back to point matching, which both solvers share:
-  expect near parity. The self-blocks of each body still use their own
-  rotated FFT grid.
+  analytical Newell paths; the iterative solver is ahead and scales far better
+  (previous section).
+- **Dozens of bodies** — the pairwise cross-blocks (one per body pair) start to
+  dominate the operator build. The iterative solver still wins, but its
+  advantage shrinks as the body count grows at fixed total cells.
+- **Bodies rotated individually** — cross-blocks between differently oriented
+  bodies fall back to point matching, which both solvers share: expect near
+  parity. The self-blocks of each body still use their own rotated FFT grid.
 - **Meshed cylinder** — non-cuboid cells (here Cylinder and CylinderSegment,
   likewise tetrahedra from `mesh_TriangularMesh` — see the
   [tetrahedral mesh example](tetrahedral_meshes.md)) take the point-matched
-  generic path. Both solvers spend nearly all time evaluating the cells' analytical
-  fields, so the solver choice barely matters — the cell *type* is the cost
-  driver. Prefer cuboid meshes when the geometry allows it.
+  generic path. Both solvers spend nearly all time evaluating the cells'
+  analytical fields, so the solver choice barely matters — the cell _type_ is
+  the cost driver. Prefer cuboid meshes when the geometry allows it.
 
 ## Choosing a solver
 
-| Model topology | Interaction paths | Recommendation |
-| --- | --- | --- |
-| One meshed body, up to a few thousand cells (~2000–3000) | FFT / analytical | either; `direct` (default) is exact and tuning-free |
-| One meshed body, large | FFT self-block | `iterative` — O(N log N); only option for N ≳ 10⁴ (memory) |
-| Few parallel bodies | FFT + analytical cross-blocks | `iterative` — cross-blocks are analytical and cheap |
-| Dozens of bodies | cross-blocks dominate the build | `iterative`, but advantage shrinks with body count |
-| Bodies rotated differently | point-matched cross-blocks | either — build cost is shared, expect parity |
-| Non-cuboid cells (cylinder, tetrahedra) | point-matched, dense | either — cell field evaluation dominates; keep counts moderate |
+| Model topology                                           | Interaction paths               | Recommendation                                                 |
+| -------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| One meshed body, up to a few thousand cells (~2000–3000) | FFT / analytical                | either; `direct` (default) is exact and tuning-free            |
+| One meshed body, large                                   | FFT self-block                  | `iterative` — O(N log N); only option for N ≳ 10⁴ (memory)     |
+| Few parallel bodies                                      | FFT + analytical cross-blocks   | `iterative` — cross-blocks are analytical and cheap            |
+| Dozens of bodies                                         | cross-blocks dominate the build | `iterative`, but advantage shrinks with body count             |
+| Bodies rotated differently                               | point-matched cross-blocks      | either — build cost is shared, expect parity                   |
+| Non-cuboid cells (cylinder, tetrahedra)                  | point-matched, dense            | either — cell field evaluation dominates; keep counts moderate |
 
-Two knobs control the iterative solver: `solver_tol` (relative residual,
-default `1e-6`) and `max_iter` (default 50). Non-convergence raises a
-`RuntimeError` with guidance rather than returning an inaccurate result. To
-see the detected structure for your own model, enable the package logging
+Two knobs control the iterative solver: `solver_tol` (relative residual, default
+`1e-6`) and `max_iter` (default 50). Non-convergence raises a `RuntimeError`
+with guidance rather than returning an inaccurate result. To see the detected
+structure for your own model, enable the package logging
 (`magpylib_material_response.configure_logging()`) — the cluster summary is
 logged at the start of every solve.

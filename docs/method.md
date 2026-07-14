@@ -29,8 +29,8 @@ The total field seen by a cell has three contributions:
 | Demagnetizing flux    | $\mathbf{B}_\text{demag}$ | The cell's own magnetization (and neighbors') acts back |
 
 Current sources (`magpylib.current.*`) in the collection contribute an
-additional applied-field term: their field at the cell barycentres is added
-to the right-hand side just like $\mathbf{B}_\text{ext}$.
+additional applied-field term: their field at the cell barycentres is added to
+the right-hand side just like $\mathbf{B}_\text{ext}$.
 
 Self-consistency requires that the polarization **satisfies this equation
 simultaneously for every cell**:
@@ -118,7 +118,7 @@ For two **parallel prisms of different sizes** $(a_1,b_1,c_1)$ (source) and
 $(a_2,b_2,c_2)$ (observer), the double volume integral collapses per axis to a
 **4-point difference** at offsets $\pm(a_1+a_2)/2$, $\pm(a_1-a_2)/2$ with
 weights $(1,-1,-1,1)$ (which degenerates to the $(1,-2,1)$ second difference
-when $a_1 = a_2$), normalised by the *observer* volume:
+when $a_1 = a_2$), normalised by the _observer_ volume:
 
 $$
 N_{xx}(\mathbf{r}) = -\frac{1}{4\pi\, a_2 b_2 c_2}
@@ -128,9 +128,10 @@ $$
 
 This satisfies the exact volume-weighted reciprocity
 $V_\text{obs} \mathsf{N}(\mathbf{d}; s, o) = V_\text{src}\,
-\mathsf{N}(\mathbf{d}; o, s)^\mathsf{T}$, used to derive reverse cross-blocks
-by transposition. Implemented in `demag_block_general` and validated against
-Gauss–Legendre volume averages of magpylib's exact cuboid field.
+\mathsf{N}(\mathbf{d}; o, s)^\mathsf{T}$,
+used to derive reverse cross-blocks by transposition. Implemented in
+`demag_block_general` and validated against Gauss–Legendre volume averages of
+magpylib's exact cuboid field.
 
 ### The unified pair rule
 
@@ -138,9 +139,9 @@ Every entry of $\mathbf{T}$ is defined by one rule, shared by both solvers:
 
 - both cells are Cuboids with a **common orientation** (any relative position,
   any sizes) → analytical volume-averaged Newell tensor;
-- anything else (non-cuboid magnets, differently-rotated cells) →
-  **point matching**: the field of a unit source polarization evaluated at
-  the observer barycentre via `magpy.getH` (Chadebec 2006).
+- anything else (non-cuboid magnets, differently-rotated cells) → **point
+  matching**: the field of a unit source polarization evaluated at the observer
+  barycentre via `magpy.getH` (Chadebec 2006).
 
 ### Sign convention in the code
 
@@ -151,12 +152,11 @@ directly, block by block, in the Fortran (component-major) layout:
 T[(m, j), (k, i)]  =  -N_mk( pos[j] - pos[i] )
 ```
 
-so ``T`` maps a polarization $\mathbf{J}$ (Tesla) to the demagnetizing flux
+so `T` maps a polarization $\mathbf{J}$ (Tesla) to the demagnetizing flux
 $\mathbf{B}_\text{demag}$ (Tesla). The public :func:`demag_tensor` and the
-legacy point-matching path use the historical *pre*-``mu_0`` 4-index layout
-``T[k, i, j, m] = -N_mk(pos[j] - pos[i]) / mu_0``, promoted by a ``T *=
-mu_0`` step inside ``apply_demag``; both conventions describe the same
-operator.
+legacy point-matching path use the historical _pre_-`mu_0` 4-index layout
+`T[k, i, j, m] = -N_mk(pos[j] - pos[i]) / mu_0`, promoted by a `T *= mu_0` step
+inside `apply_demag`; both conventions describe the same operator.
 
 ### Self-demagnetization
 
@@ -188,11 +188,11 @@ Practical for $N \lesssim 3000$.
 The tensor $\mathbf{T}$ is assembled block-wise from the unified pair rule
 (`_assemble_T_dense`): analytical Newell blocks for parallel-cuboid cluster
 pairs, `magpy.getH` point matching otherwise. Because the iterative solver
-applies the *same* entries matrix-free, **both solvers agree to solver
-tolerance for any input**.
+applies the _same_ entries matrix-free, **both solvers agree to solver tolerance
+for any input**.
 
-The legacy options (`pairs_matching`, `max_dist`, `split`) force the
-historical all-point-matching evaluation.
+The legacy options (`pairs_matching`, `max_dist`, `split`) force the historical
+all-point-matching evaluation.
 
 ### 4.2 Iterative solver (`solver="iterative"`) — GMRES
 
@@ -208,11 +208,11 @@ $$[\mathbf{M}_\text{prec}]_{ii} = 1 + \chi_i \, N_{ii}^{(\text{self})}$$
 which approximates the diagonal of $\mathbf{Q}$ and dramatically reduces the
 number of GMRES iterations needed for high-susceptibility materials.
 
-Two implementation details worth knowing: the solve is **warm-started** at
-the right-hand side (`x0 = rhs`), and `max_iter` counts scipy's *restart
-cycles* (default restart length 20), so the worst-case matvec budget is
-about `20 * max_iter`. Non-convergence raises a `RuntimeError` rather than
-returning a partially converged result.
+Two implementation details worth knowing: the solve is **warm-started** at the
+right-hand side (`x0 = rhs`), and `max_iter` counts scipy's _restart cycles_
+(default restart length 20), so the worst-case matvec budget is about
+`20 * max_iter`. Non-convergence raises a `RuntimeError` rather than returning a
+partially converged result.
 
 ---
 
@@ -269,28 +269,27 @@ H (3N flat)
     ▼  return  J - S * H     [the (I - ST) matvec result]
 ```
 
-Implemented in `demag_fft_matvec`; the kernel supports grid spacings larger
-than the cell size (non-touching cells).
+Implemented in `demag_fft_matvec`; the kernel supports grid spacings larger than
+the cell size (non-touching cells).
 
 ---
 
 ### 5.2 Structure analysis — clusters with guaranteed coverage
 
-`analyze_structure` partitions the cells into **clusters**; every cell lands
-in exactly one cluster (asserted), so no interaction can be silently dropped:
+`analyze_structure` partitions the cells into **clusters**; every cell lands in
+exactly one cluster (asserted), so no interaction can be silently dropped:
 
-> - **grid**: identical cuboids with a common orientation whose centres form
->   a complete uniform grid (per spatially-connected component, so two
->   separate meshed bodies with identical cells become two grid clusters —
->   and merge into one when their grids align);
+> - **grid**: identical cuboids with a common orientation whose centres form a
+>   complete uniform grid (per spatially-connected component, so two separate
+>   meshed bodies with identical cells become two grid clusters — and merge into
+>   one when their grids align);
 > - **loose**: identical parallel cuboids without grid structure;
-> - **generic**: everything else — non-cuboid magnets, rotated singletons,
->   and clusters too small to be worth dedicated bookkeeping.
+> - **generic**: everything else — non-cuboid magnets, rotated singletons, and
+>   clusters too small to be worth dedicated bookkeeping.
 
-Orientation keying uses sign-canonicalized quaternions (largest component
-made positive — stable for 180° rotations where $w \approx 0$) with a
-two-stage bucket-then-merge scheme that is immune to rounding-boundary
-splits.
+Orientation keying uses sign-canonicalized quaternions (largest component made
+positive — stable for 180° rotations where $w \approx 0$) with a two-stage
+bucket-then-merge scheme that is immune to rounding-boundary splits.
 
 The demag operator becomes a **block structure** over cluster pairs:
 
@@ -305,25 +304,26 @@ The demag operator becomes a **block structure** over cluster pairs:
           └─────────┴─────────┴─────────┘
 ```
 
-**Rotation handling:** each cluster may have an arbitrary orientation $R_C$.
-The FFT operates in the cluster's local frame — the polarization is rotated
-in and the field rotated back **inside the block** (`_fft_apply`), so the
-GMRES solve itself always runs in the global frame where the susceptibility
-matrix $\mathbf{S}$ is diagonal. Anisotropic susceptibility therefore works
-for arbitrary rotations.
+**Rotation handling:** each cluster may have an arbitrary orientation $R_C$. The
+FFT operates in the cluster's local frame — the polarization is rotated in and
+the field rotated back **inside the block** (`_fft_apply`), so the GMRES solve
+itself always runs in the global frame where the susceptibility matrix
+$\mathbf{S}$ is diagonal. Anisotropic susceptibility therefore works for
+arbitrary rotations.
 
-Two size gates keep the bookkeeping proportionate: a detected grid smaller
-than `MIN_GRID_CELLS` (16) is handled as a dense *loose* block instead of an
-FFT kernel, and a geometry cluster smaller than `MIN_CLUSTER_CELLS` (8) is
-folded into the point-matched *generic* cluster.
+Two size gates keep the bookkeeping proportionate: a detected grid smaller than
+`MIN_GRID_CELLS` (16) is handled as a dense _loose_ block instead of an FFT
+kernel, and a geometry cluster smaller than `MIN_CLUSTER_CELLS` (8) is folded
+into the point-matched _generic_ cluster.
 
 Cross-blocks between parallel cuboid clusters use the generalized Newell
 formula; for dense blocks the reverse block is obtained for free from
-volume-weighted reciprocity, $\mathbf{T}_{BA} = (V_A / V_B)\,
-\mathbf{T}_{AB}^\mathsf{T}$ (sparsified blocks are rebuilt per direction to
-preserve their row-sum error bound). Displacements are deduplicated before
-evaluation when fewer than 25 % are distinct — for same-spacing grids only
-$O(N)$ of the $N^2$ pair displacements are.
+volume-weighted reciprocity,
+$\mathbf{T}_{BA} = (V_A / V_B)\,
+\mathbf{T}_{AB}^\mathsf{T}$ (sparsified blocks
+are rebuilt per direction to preserve their row-sum error bound). Displacements
+are deduplicated before evaluation when fewer than 25 % are distinct — for
+same-spacing grids only $O(N)$ of the $N^2$ pair displacements are.
 
 ---
 
@@ -331,10 +331,10 @@ $O(N)$ of the $N^2$ pair displacements are.
 
 A block with more than `DENSE_BLOCK_MAX_ENTRIES` dense entries is built in
 observer chunks and stored as CSR. Entries are dropped **per observer row,
-smallest first, only while the sum of dropped magnitudes stays below a
-budget** (`_row_sparsify`):
+smallest first, only while the sum of dropped magnitudes stays below a budget**
+(`_row_sparsify`):
 
-$$\sum_{\text{dropped } j} |T_{ij}| \;\le\; \varepsilon_\text{row}
+$$ \sum_{\text{dropped } j} |T_{ij}| ;\le; \varepsilon_\text{row}
   = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \chi_{\max})\, K}$$
 
 where $\varepsilon_\text{tol}$ is `solver_tol`. Summing over the $\le K$
@@ -406,3 +406,4 @@ $N=27\,000$ solves in ~2 s where the dense solver would need ~50 GB
 2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of
    magnetostatic moment method._ IEEE Transactions on Magnetics, 42(4),
    515–520.
+$$

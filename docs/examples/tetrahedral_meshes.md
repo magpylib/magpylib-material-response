@@ -21,17 +21,17 @@ kernelspec:
 Shapes that cannot be meshed into cuboid or cylinder cells are handled through
 `magpylib.magnet.TriangularMesh`: any closed triangular surface can be
 discretized into conforming `Tetrahedron` cells with `mesh_TriangularMesh`,
-which drives [TetGen](https://tetgen.org) under the hood. TetGen is an
-optional dependency:
+which drives [TetGen](https://tetgen.org) under the hood. TetGen is an optional
+dependency:
 
 ```bash
 pip install magpylib-material-response[tetgen]
 ```
 
-Tetrahedral cells take the point-matched *generic* interaction path (see the
-[solver performance example](solver_performance.md)): both solvers share it
-and agree to solver tolerance, and the computation cost is dominated by the
-cells' analytical field evaluation rather than by the solver choice.
+Tetrahedral cells take the point-matched _generic_ interaction path (see the
+[solver performance example](solver_performance.md)): both solvers share it and
+agree to solver tolerance, and the computation cost is dominated by the cells'
+analytical field evaluation rather than by the solver choice.
 
 This example validates the whole chain on a case with an exact analytical
 answer: a **soft magnetic sphere**, for which the demagnetizing factor is
@@ -130,13 +130,13 @@ and volume meshes.
 
 ## Practical notes
 
-- The generic path builds a dense point-matched interaction matrix, so cost
-  and memory grow as N² regardless of solver — keep tetrahedra counts
-  moderate (thousands, not tens of thousands), and prefer cuboid meshes when
-  the geometry allows them.
+- The generic path builds a dense point-matched interaction matrix, so cost and
+  memory grow as N² regardless of solver — keep tetrahedra counts moderate
+  (thousands, not tens of thousands), and prefer cuboid meshes when the geometry
+  allows them.
 - `target_elems` is a lower-bound hint: TetGen inserts Steiner points to meet
-  its quality constraints, so the resulting cell count is typically larger.
-  The `minratio` and `mindihedral` arguments trade cell count against element
+  its quality constraints, so the resulting cell count is typically larger. The
+  `minratio` and `mindihedral` arguments trade cell count against element
   quality.
 - Everything shown in the [solver performance example](solver_performance.md)
   (agreement guarantee, `solver_tol`, `max_iter`, non-convergence raising)
