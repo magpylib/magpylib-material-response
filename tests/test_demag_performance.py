@@ -306,6 +306,23 @@ def test_mixed_with_sphere_matches_direct():
     _assert_solvers_agree(coll, susceptibility=[0.5] * n)
 
 
+def test_h_ext_propagates_through_meshing():
+    """susceptibility and H_ext set on a magnet carry over to its mesh cells
+    and drive the material response."""
+    soft = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(1, 1, 1))
+    soft.susceptibility = 3999.0
+    soft.H_ext = (0, 0, 0.1)
+    mesh = mesh_Cuboid(soft, 27)
+    for cell in mesh.sources_all:
+        assert cell.susceptibility == 3999.0
+        assert cell.H_ext == (0, 0, 0.1)
+    out = apply_demag(mesh)
+    pol = np.array([s.polarization for s in out.sources_all])
+    # chi >> 1 soft cube in 0.1 T: J_mean ~ B_ext / N_eff with N_eff near the
+    # uniform-magnetization value 1/3 (exact only for ellipsoids)
+    assert 0.25 < pol[:, 2].mean() < 0.45
+
+
 def test_gmres_nonconvergence_raises():
     """A partially-converged iterative result must never be returned silently."""
     coll = _build_uniform_collection(27, susceptibility=1000.0)

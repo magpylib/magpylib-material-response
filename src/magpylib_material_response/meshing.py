@@ -17,10 +17,12 @@ from magpylib_material_response.meshing_utils import (
 
 
 def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
-    susceptibility = getattr(obj, "susceptibility", None)
-    if susceptibility is not None:
-        for cell in cells:
-            cell.susceptibility = susceptibility
+    # material attributes carry over from the meshed object to its cells
+    for attr in ("susceptibility", "H_ext"):
+        value = getattr(obj, attr, None)
+        if value is not None:
+            for cell in cells:
+                setattr(cell, attr, value)
     coll = magpy.Collection(cells)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
