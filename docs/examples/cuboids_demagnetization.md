@@ -30,8 +30,6 @@ elements, the Magpylib results quickly approach the reference FEM values.
 ## Define magnetic sources with their susceptibilities
 
 ```{code-cell} ipython3
-import json
-
 import magpylib as magpy
 import numpy as np
 import pandas as pd
@@ -51,7 +49,7 @@ if magpy.__version__.split(".")[0] != "5":
 
 magpy.defaults.display.backend = "plotly"
 
-# some low quality magnets with different susceptibilities
+# some low quality magnets with different susceptibilities, SI units (m, T)
 cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
 cube1.move((-0.0015, 0, 0))
 cube1.susceptibility = 0.3  # µr=1.3
@@ -182,3 +180,7 @@ display(fig1, fig2)
 
 As shown above, already with a low number of mesh elements, the result is
 approaching the reference FEM values and improves while refining the mesh.
+
+For larger meshes the default dense solver becomes the bottleneck — see
+[solvers and performance](solver_performance.md) for the FFT-accelerated
+iterative solver and guidance on choosing between them.

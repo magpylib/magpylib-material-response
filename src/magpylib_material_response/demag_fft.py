@@ -1,4 +1,4 @@
-"""FFT-accelerated demagnetisation matvec and cell-structure analysis.
+"""FFT-accelerated demagnetization matvec and cell-structure analysis.
 
 For a regular grid of identical, identically-oriented cuboids, the demag
 tensor is translation-invariant: ``T[i, j]`` depends only on the cell-index
@@ -403,7 +403,7 @@ def demag_fft_matvec(M, kernel_fft, grid_shape):
     Parameters
     ----------
     M : ndarray, shape (Nx, Ny, Nz, 3)
-        Polarisation per cell, in the grid's local (axis-aligned) frame.
+        Polarization per cell, in the grid's local (axis-aligned) frame.
     kernel_fft : ndarray
         Output of :func:`build_fft_kernel`.
     grid_shape : tuple (Nx, Ny, Nz)

@@ -28,6 +28,10 @@ The total field seen by a cell has three contributions:
 | External applied flux | $\mathbf{B}_\text{ext}$   | User-specified `H_ext` on the object                    |
 | Demagnetizing flux    | $\mathbf{B}_\text{demag}$ | The cell's own magnetization (and neighbors') acts back |
 
+Current sources (`magpylib.current.*`) in the collection contribute an
+additional applied-field term: their field at the cell barycentres is added
+to the right-hand side just like $\mathbf{B}_\text{ext}$.
+
 Self-consistency requires that the polarization **satisfies this equation
 simultaneously for every cell**:
 
@@ -104,7 +108,8 @@ N_{xx}(\mathbf{r};\,a,b,c) =
   f\!\bigl(\mathbf{r} + (ia,\, jb,\, kc)\bigr), \quad w_{\pm1}=1,\; w_0=-2
 $$
 
-Implemented in [`newell.py`](../src/magpylib_material_response/newell.py)
+Implemented in
+[`newell.py`](https://github.com/magpylib/magpylib-material-response/blob/main/src/magpylib_material_response/newell.py)
 (`newell_f`, `newell_g`, `demag_block`).
 
 ### Generalization to different-size prisms
@@ -139,14 +144,19 @@ Every entry of $\mathbf{T}$ is defined by one rule, shared by both solvers:
 
 ### Sign convention in the code
 
+The default assembly builds the dimensionless $(3N \times 3N)$ operator
+directly, block by block, in the Fortran (component-major) layout:
+
 ```text
-T_code[k, i, j, m]  =  -(1/mu_0) * N_mk( pos[j] - pos[i] )
+T[(m, j), (k, i)]  =  -N_mk( pos[j] - pos[i] )
 ```
 
-After the `T *= mu_0` step in `apply_demag` (which promotes from H-field units
-to B-field units), `T_code` becomes dimensionless: it maps a polarization
-$\mathbf{J}$ (Tesla) to the demagnetizing flux $\mathbf{B}_\text{demag}$
-(Tesla).
+so ``T`` maps a polarization $\mathbf{J}$ (Tesla) to the demagnetizing flux
+$\mathbf{B}_\text{demag}$ (Tesla). The public :func:`demag_tensor` and the
+legacy point-matching path use the historical *pre*-``mu_0`` 4-index layout
+``T[k, i, j, m] = -N_mk(pos[j] - pos[i]) / mu_0``, promoted by a ``T *=
+mu_0`` step inside ``apply_demag``; both conventions describe the same
+operator.
 
 ### Self-demagnetization
 
@@ -197,6 +207,12 @@ $$[\mathbf{M}_\text{prec}]_{ii} = 1 + \chi_i \, N_{ii}^{(\text{self})}$$
 
 which approximates the diagonal of $\mathbf{Q}$ and dramatically reduces the
 number of GMRES iterations needed for high-susceptibility materials.
+
+Two implementation details worth knowing: the solve is **warm-started** at
+the right-hand side (`x0 = rhs`), and `max_iter` counts scipy's *restart
+cycles* (default restart length 20), so the worst-case matvec budget is
+about `20 * max_iter`. Non-convergence raises a `RuntimeError` rather than
+returning a partially converged result.
 
 ---
 
@@ -296,11 +312,18 @@ GMRES solve itself always runs in the global frame where the susceptibility
 matrix $\mathbf{S}$ is diagonal. Anisotropic susceptibility therefore works
 for arbitrary rotations.
 
+Two size gates keep the bookkeeping proportionate: a detected grid smaller
+than `MIN_GRID_CELLS` (16) is handled as a dense *loose* block instead of an
+FFT kernel, and a geometry cluster smaller than `MIN_CLUSTER_CELLS` (8) is
+folded into the point-matched *generic* cluster.
+
 Cross-blocks between parallel cuboid clusters use the generalized Newell
-formula; the reverse block is obtained for free from volume-weighted
-reciprocity, $\mathbf{T}_{BA} = (V_A / V_B)\, \mathbf{T}_{AB}^\mathsf{T}$.
-Displacements are deduplicated before evaluation — for same-spacing grids
-only $O(N)$ of the $N^2$ pair displacements are distinct.
+formula; for dense blocks the reverse block is obtained for free from
+volume-weighted reciprocity, $\mathbf{T}_{BA} = (V_A / V_B)\,
+\mathbf{T}_{AB}^\mathsf{T}$ (sparsified blocks are rebuilt per direction to
+preserve their row-sum error bound). Displacements are deduplicated before
+evaluation when fewer than 25 % are distinct — for same-spacing grids only
+$O(N)$ of the $N^2$ pair displacements are.
 
 ---
 
@@ -330,6 +353,10 @@ which bounded individual entries but not their accumulated sum.
 
 ```text
 apply_demag(collection, solver=...)
+│
+├─ 0. Legacy flags (pairs_matching / max_dist / split)?
+│      YES → historical all-point-matching dense tensor; iterative then
+│            runs a dense matvec without the Jacobi preconditioner
 │
 ├─ 1. Collect cells: positions, dimensions, orientations, χ
 │
@@ -376,6 +403,6 @@ $N=27\,000$ solves in ~2 s where the dense solver would need ~50 GB
    demagnetizing tensor for nonuniform magnetization._ Journal of Geophysical
    Research: Solid Earth, 98(B6), 9551–9555.
 
-2. Chadbec, O. et al. (2006). _Micromagnetic simulation using the
-   demagnetization tensor approach._ (Method of Moments references in
-   `demag_tensor` docstring.)
+2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of
+   magnetostatic moment method._ IEEE Transactions on Magnetics, 42(4),
+   515–520.

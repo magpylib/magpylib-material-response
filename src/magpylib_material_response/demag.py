@@ -572,8 +572,6 @@ def demag_tensor(
         ``T[k, i, j, m] = -N_mk(pos_j - pos_i) / mu_0``
 
     TODO: allow multi-point matching
-    TODO: allow current sources
-    TODO: allow external stray fields
     """
     nof_src = len(src_list)
 

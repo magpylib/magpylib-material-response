@@ -29,8 +29,6 @@ external dataset.
 ## Define magnetic sources with their susceptibilities
 
 ```{code-cell} ipython3
-import json
-
 import magpylib as magpy
 import numpy as np
 import pandas as pd
@@ -42,9 +40,14 @@ from magpylib_material_response.meshing import mesh_all
 # from magpylib_material_response import configure_logging
 # configure_logging(min_log_time=5)  # log steps taking longer than 5 s
 
+if magpy.__version__.split(".")[0] != "5":
+    raise RuntimeError(
+        f"Magpylib version must be >=5, (installed: {magpy.__version__})"
+    )
+
 magpy.defaults.display.backend = "plotly"
 
-# hard magnet
+# hard magnet, SI units (m, T)
 cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.002))
 cube1.move((0, 0, 0.0005))
 cube1.susceptibility = 0.5  # µr=1.5
@@ -146,7 +149,7 @@ df["Distance [m]"] -= df["Distance [m]"].min()
 
 ```{code-cell} ipython3
 px_kwargs = dict(
-    x="path",
+    x="Distance [m]",
     y=B_cols,
     facet_row="variable",
     facet_col="sensor",
@@ -184,3 +187,7 @@ display(fig1, fig2)
 
 As shown above, the demagnetized collection outputs are approaching the
 reference FEM values while refining the mesh.
+
+For larger meshes the default dense solver becomes the bottleneck — see
+[solvers and performance](solver_performance.md) for the FFT-accelerated
+iterative solver and guidance on choosing between them.

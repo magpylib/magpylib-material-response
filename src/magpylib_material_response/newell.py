@@ -290,10 +290,11 @@ def demag_tensor_newell(positions, dim, mu_0):
     -------
     T : ndarray, shape (3, n, n, 3)
         Same layout as :func:`magpylib_material_response.demag.demag_tensor`:
-        ``T[k, i, j, m]`` is the world-frame component ``m`` of the volume
-        averaged H-field over observer cell ``j`` per unit polarisation along
-        world axis ``k`` of source cell ``i``, divided by ``mu_0`` is *not*
-        applied here -- the caller multiplies by ``mu_0`` afterwards.
+        ``T[k, i, j, m] = -N_mk(pos[j] - pos[i]) / mu_0``: component ``m`` of
+        the volume-averaged field over observer cell ``j`` per unit
+        polarization along axis ``k`` of source cell ``i``. The returned
+        tensor is *pre*-``mu_0``; multiplying by ``mu_0`` (as ``apply_demag``
+        does) yields the dimensionless ``-N``.
     """
     pos = np.asarray(positions, dtype=float)
     if pos.ndim != 2 or pos.shape[1] != 3:
