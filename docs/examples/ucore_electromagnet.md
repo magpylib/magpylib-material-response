@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.0
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -118,21 +118,24 @@ print(f"{len(coil)} windings × 25 A = {len(coil) * 25:.0f} ampere-turns")
 
 ## Assemble the system and the field plane
 
-The field is evaluated on a plane 10 mm above the pole faces, normal to the legs
+The field is evaluated on a plane 30 mm above the pole faces, normal to the legs
 (the z-direction). A decimated copy of the sensor grid is added to the scene to
 visualize where the field will be evaluated.
 
 ```{code-cell} ipython3
 system = magpy.Collection(core, coil, style_label="U-core electromagnet")
 
-x = np.linspace(-0.08, 0.08, 81)
-y = np.linspace(-0.04, 0.04, 41)
+x = np.linspace(-0.08, 0.08, 161)  # 1 mm grid step
+y = np.linspace(-0.04, 0.04, 81)
 X, Y = np.meshgrid(x, y, indexing="ij")
-pixel = np.stack([X, Y, np.full_like(X, 0.08)], axis=-1)  # 10 mm above poles
+pixel = np.stack([X, Y, np.full_like(X, 0.10)], axis=-1)  # 30 mm above poles
 
 plane = magpy.Sensor(pixel=pixel, style_label="field plane")
 plane_shown = magpy.Sensor(
-    pixel=pixel[::10, ::5], style_label="field plane", style_pixel_size=0.5
+    pixel=pixel[::20, ::10],
+    style_label="field plane",
+    style_pixel_size=0.5,
+    style_opacity=0.5,
 )
 
 magpy.show(system, plane_shown)
@@ -176,7 +179,7 @@ drop-in source for the total field. The normal component $B_z$ maps the two pole
 footprints — positive above one leg, negative above the other:
 
 ```{code-cell} ipython3
-B_full = plane.getB(system_demag)  # shape (81, 41, 3)
+B_full = plane.getB(system_demag)  # shape (161, 81, 3)
 
 fig = px.imshow(
     B_full[..., 2].T * 1e3,  # transpose to (y, x) image orientation
@@ -186,7 +189,7 @@ fig = px.imshow(
     color_continuous_scale="RdBu_r",
     color_continuous_midpoint=0,
     labels={"x": "x (mm)", "y": "y (mm)", "color": "Bz (mT)"},
-    title="Bz 10 mm above the pole faces",
+    title="Bz 30 mm above the pole faces",
 )
 fig
 ```
@@ -194,9 +197,9 @@ fig
 +++ {"user_expressions": []}
 
 How much of this is the core? Compare with the bare coil along the line y = 0.
-Without the core the same 400 ampere-turns produce a field two orders of
-magnitude weaker on this plane — the soft core collects the coil flux and
-delivers it to the poles:
+Without the core the same 400 ampere-turns produce a field roughly fifty times
+weaker on this plane — the soft core collects the coil flux and delivers it to
+the poles:
 
 ```{code-cell} ipython3
 B_coil = plane.getB(coil)  # bare coil, no core
@@ -212,7 +215,7 @@ cut = pd.DataFrame(
 fig = px.line(
     cut,
     labels={"value": "Bz (mT)", "variable": ""},
-    title="Bz along y=0, 10 mm above the pole faces",
+    title="Bz along y=0, 30 mm above the pole faces",
 )
 
 amp = np.abs(B_full[..., 2]).max() / np.abs(B_coil[..., 2]).max()
@@ -257,40 +260,51 @@ for i in range(n):
 u_iron = magpy.magnet.TriangularMesh(
     vertices=vertices, faces=np.array(faces), reorient_faces=True
 )
-
-core_tet = mesh_TriangularMesh(u_iron, target_elems=250)
-core_tet.susceptibility = 999
-n_tets = len(core_tet.sources_all)
-print(f"{n_tets} tetrahedra")
-
-magpy.show(
-    {"objects": [u_iron], "col": 1},
-    {"objects": [core_tet], "col": 2},
-)
+print(f"closed U prism: {len(u_iron.faces)} faces, volume {u_iron.volume * 1e6:.0f} cm³")
 ```
 
 +++ {"user_expressions": []}
 
 TetGen grades the cells: they are small along the edges and corners of the U,
 where the magnetization gradients live, and coarse in the bulk. Solve both
-discretizations at the same three refinement levels (`target_elems` of 250, 500
-and 1000). Every solve is timed, and the wall times end up in the plot legend:
+discretizations at the same refinement levels, up to a `target_elems` of 1000.
+The tetrahedral target is halved: `target_elems` sets TetGen's _maximum_ cell
+volume, and its quality refinement typically lands near twice the requested
+count. Every solve is timed, and the wall times end up in the plot legend. The
+comparison field is evaluated along the y = 0 line only — that is all the plot
+below needs, and it keeps the field evaluation cheap:
 
 ```{code-cell} ipython3
-targets = [250, 500, 1000]
+line = magpy.Sensor(pixel=pixel[:, iy])  # the y=0 row of the field plane
+
+targets = [100, 250, 500, 750, 1000]
 runs = {}
 
 for target in targets:  # cuboid meshes
     meshed = mesh_all(system, target_elems=target)
     nc = sum(isinstance(s, magpy.magnet.Cuboid) for s in meshed.sources_all)
-    demag, t = timed_demag(meshed)
-    runs[f"cuboids: {nc} cells, {t:.1f} s"] = plane.getB(demag)
+    demag_cub, t = timed_demag(meshed)
+    runs[f"cuboids: {nc} cells, {t:.1f} s"] = line.getB(demag_cub)
 
 for target in targets:  # tetrahedral meshes
-    core_t = mesh_TriangularMesh(u_iron, target_elems=target)
+    core_t = mesh_TriangularMesh(u_iron, target_elems=target // 2)
     core_t.susceptibility = 999
-    demag, t = timed_demag(magpy.Collection(core_t, coil.copy()))
-    runs[f"tetrahedra: {len(core_t.sources_all)} cells, {t:.1f} s"] = plane.getB(demag)
+    demag_tet, t = timed_demag(magpy.Collection(core_t, coil.copy()))
+    runs[f"tetrahedra: {len(core_t.sources_all)} cells, {t:.1f} s"] = line.getB(demag_tet)
+```
+
++++ {"user_expressions": []}
+
+After the loops, `demag_cub` and `demag_tet` hold the finest solve of each
+family. Side by side — the cell colors encode the direction of the induced
+magnetization (along +x through the yoke, up one leg and down the other), and
+the graded tetrahedra stand out against the uniform cuboid grid:
+
+```{code-cell} ipython3
+magpy.show(
+    {"objects": [demag_cub], "col": 1},
+    {"objects": [demag_tet], "col": 2},
+)
 ```
 
 +++ {"user_expressions": []}
@@ -302,30 +316,38 @@ for name, B in runs.items():
     print(f"{name:>30}: peak |Bz| = {np.abs(B[..., 2]).max() * 1e3:.2f} mT")
 
 cut = pd.DataFrame(
-    {name: B[:, iy, 2] * 1e3 for name, B in runs.items()},
+    {name: B[:, 2] * 1e3 for name, B in runs.items()},
     index=pd.Index(x * 1e3, name="x (mm)"),
 )
-shades = px.colors.sequential.Blues[4::2] + px.colors.sequential.Oranges[4::2]
+ramp = np.linspace(0.3, 1, len(targets))
+shades = px.colors.sample_colorscale("Blues", ramp) + px.colors.sample_colorscale(
+    "Oranges", ramp
+)
 px.line(
     cut,
     color_discrete_sequence=shades,
     labels={"value": "Bz (mT)", "variable": ""},
     title="Cuboid vs tetrahedral mesh — Bz along y=0",
+    height=800,
 )
 ```
 
 +++ {"user_expressions": []}
 
 Both discretizations converge to the same field, approaching it from opposite
-sides: refining the tetrahedra by 4× moves the peak by only a few percent — the
-graded mesh is nearly converged already at ~400 cells — while the uniform cuboid
-grid climbs from below and needs several thousand cells for the same accuracy.
-Sharp corners and µr = 1000 put the burden on resolving the edge regions, which
-is exactly where TetGen concentrates its cells. The solve times in the legend
-show the other side of the trade: tetrahedra take the point-matched _generic_
-interaction path with dense N² cost, so refining them quickly gets expensive,
-whereas axis-aligned cuboid cells use the analytical volume-averaged path, stay
-much cheaper per cell, and remain FFT-accelerable to far larger cell counts (see
+sides — but at very different rates. The tetrahedral curves are essentially on
+top of each other from a few hundred cells on, while the cuboid family still
+sits several percent low at 1000 cells: with µr = 1000 the magnetization
+concentrates at the edges and corners of the core, exactly where TetGen grades
+its cells and where a uniform grid under-resolves. Pushing the cuboid mesh
+further (8000 cells ≈ 5 min with the iterative solver) continues the climb, and
+extrapolating its series lands on the tetrahedral value to within about a
+percent — the gap seen here is discretization error, not a model discrepancy.
+The solve times in the legend show the other side of the trade: tetrahedra take
+the point-matched _generic_ interaction path with dense N² cost, so refining
+them quickly gets expensive, whereas axis-aligned cuboid cells use the
+analytical volume-averaged path, stay much cheaper per cell, and remain
+FFT-accelerable to far larger cell counts (see
 [solvers and performance](solver_performance.md)).
 
 +++ {"user_expressions": []}

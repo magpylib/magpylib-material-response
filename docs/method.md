@@ -334,18 +334,22 @@ observer chunks and stored as CSR. Entries are dropped **per observer row,
 smallest first, only while the sum of dropped magnitudes stays below a budget**
 (`_row_sparsify`):
 
-$$ \sum_{\text{dropped } j} |T_{ij}| ;\le; \varepsilon_\text{row}
-  = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \chi_{\max})\, K}$$
+$$
+\sum_{\text{dropped } j} |T_{ij}| ;\le; \varepsilon_\text{row}
+  = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \chi_{\max})\, K}
+$$
 
-where $\varepsilon_\text{tol}$ is `solver_tol`. Summing over the $\le K$
-blocks that touch a row, the operator perturbation is rigorously bounded:
+where $\varepsilon_\text{tol}$ is `solver_tol`. Summing over the $\le K$ blocks
+that touch a row, the operator perturbation is rigorously bounded:
 
-$$\|\mathbf{S}(\mathbf{T}-\tilde{\mathbf{T}})\|_\infty
-  \;\le\; 0.1\, \varepsilon_\text{tol}$$
+$$
+\|\mathbf{S}(\mathbf{T}-\tilde{\mathbf{T}})\|_\infty
+  \;\le\; 0.1\, \varepsilon_\text{tol}
+$$
 
 — the truncation error can never exceed the requested solver accuracy. This
-replaces the earlier point-estimate triage ($\chi V / r^3$ thresholding),
-which bounded individual entries but not their accumulated sum.
+replaces the earlier point-estimate triage ($\chi V / r^3$ thresholding), which
+bounded individual entries but not their accumulated sum.
 
 ---
 
@@ -382,12 +386,12 @@ apply_demag(collection, solver=...)
 
 ## 7. Complexity summary
 
-| Configuration                   | Operator build                  | Matvec per GMRES iteration    |
-| ------------------------------- | ------------------------------- | ----------------------------- |
-| Single uniform grid             | $O(N \log N)$                   | $O(N \log N)$                 |
-| $K$ grid clusters               | $O(N \log N + \sum_{A\neq B} n_A n_B)$ | $O(N \log N + \text{nnz})$ |
-| Loose / generic cells           | $O(n^2)$ for those cells        | $O(n^2)$ or $O(\text{nnz})$   |
-| Legacy (`split`, `max_dist`, …) | $O(N^2)$ dense                  | $O(N^2)$                      |
+| Configuration                   | Operator build                         | Matvec per GMRES iteration  |
+| ------------------------------- | -------------------------------------- | --------------------------- |
+| Single uniform grid             | $O(N \log N)$                          | $O(N \log N)$               |
+| $K$ grid clusters               | $O(N \log N + \sum_{A\neq B} n_A n_B)$ | $O(N \log N + \text{nnz})$  |
+| Loose / generic cells           | $O(n^2)$ for those cells               | $O(n^2)$ or $O(\text{nnz})$ |
+| Legacy (`split`, `max_dist`, …) | $O(N^2)$ dense                         | $O(N^2)$                    |
 
 Cross-block build cost is halved by reciprocity and reduced further by
 displacement deduplication when cluster grids share their spacing. Indicative
@@ -403,7 +407,5 @@ $N=27\,000$ solves in ~2 s where the dense solver would need ~50 GB
    demagnetizing tensor for nonuniform magnetization._ Journal of Geophysical
    Research: Solid Earth, 98(B6), 9551–9555.
 
-2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of
-   magnetostatic moment method._ IEEE Transactions on Magnetics, 42(4),
-   515–520.
-$$
+2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of magnetostatic
+   moment method._ IEEE Transactions on Magnetics, 42(4), 515–520. $$

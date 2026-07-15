@@ -40,6 +40,9 @@ exclude_patterns = [
     ".DS_Store",
     ".env",
     ".venv",
+    # jupytext-paired notebooks (gitignored, created by IDE pairing) — the
+    # MyST .md files are the single documentation source
+    "**/*.ipynb",
 ]
 
 html_theme = "pydata_sphinx_theme"
