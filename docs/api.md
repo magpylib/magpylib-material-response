@@ -30,6 +30,14 @@ The public functions of `magpylib-material-response`, grouped by module.
 .. autofunction:: magpylib_material_response.meshing.mesh_thin_CylinderSegment_with_cuboids
 ```
 
+## Coil construction — `polyline`
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.polyline.create_polyline_fillet
+
+.. autofunction:: magpylib_material_response.polyline.move_grid_along_polyline
+```
+
 ## Structure analysis and FFT kernels — `demag_fft`
 
 ```{eval-rst}

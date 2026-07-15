@@ -6,6 +6,9 @@ Worked, executable examples — in suggested reading order:
   magnets; mesh-refinement convergence against FEM reference data.
 - [Soft magnets](soft_magnets.md) — a hard magnet next to a high-permeability
   soft cuboid; field comparison against FEM.
+- [U-core electromagnet](ucore_electromagnet.md) — current sources driving a
+  soft core: a swept multi-turn coil built with the polyline helpers, the field
+  on a plane above the poles, and a cuboid- vs tetrahedral-mesh comparison.
 - [Solvers and performance](solver_performance.md) — direct vs. iterative
   solver: agreement guarantee, scaling of wall time and memory, and how the
   model topology decides which interaction paths do the work.
@@ -19,6 +22,7 @@ Worked, executable examples — in suggested reading order:
 
 cuboids_demagnetization
 soft_magnets
+ucore_electromagnet
 solver_performance
 tetrahedral_meshes
 ```
