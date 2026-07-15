@@ -26,6 +26,7 @@ All computations run in the global frame; per-cluster rotations are handled
 inside the block builders, so anisotropic susceptibility (diagonal in the
 global frame) is always applied to the correct components.
 """
+# pylint: disable=too-many-lines
 
 from __future__ import annotations
 
