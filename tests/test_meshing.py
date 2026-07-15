@@ -327,4 +327,5 @@ def test_voxelize_small_target_finite_cells():
         voxelize(sphere, 3)  # grid too coarse: clean error, no crash
     coll = voxelize(sphere, 100)
     dims = np.array([c.dimension for c in coll.sources_all])
-    assert np.isfinite(dims).all() and (dims > 0).all()
+    assert np.isfinite(dims).all()
+    assert (dims > 0).all()
