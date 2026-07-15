@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import io
+import time as _time
 
 import pytest
 from loguru import logger
 
 from magpylib_material_response import configure_logging, disable_logging
 from magpylib_material_response.logging_config import PACKAGE
+from magpylib_material_response.utils import timelog
 
 
 def _emit_from_package(level: str, message: str, **kwargs) -> None:
@@ -119,3 +121,12 @@ def test_timelog_uses_default_min_log_time():
     with timelog("quick step"):
         pass
     assert "Completed: quick step" in sink.getvalue()
+
+
+def test_timelog_exit_does_not_block():
+    """Regression: timelog exit must not wait on the poll interval
+    (was up to min_log_time/5 seconds per block)."""
+    t0 = _time.perf_counter()
+    with timelog("noop", min_log_time=5.0):
+        pass
+    assert _time.perf_counter() - t0 < 0.1

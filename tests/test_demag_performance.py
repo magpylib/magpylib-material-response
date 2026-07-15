@@ -15,7 +15,11 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response.demag import apply_demag, demag_tensor
+from magpylib_material_response.demag import (
+    apply_demag,
+    demag_tensor,
+    get_susceptibilities,
+)
 from magpylib_material_response.demag_fft import (
     analyze_collection,
     analyze_structure,
@@ -355,3 +359,69 @@ def test_fft_faster_than_direct():
     assert t_iter < t_direct, (
         f"FFT path ({t_iter:.3f}s) should be faster than direct ({t_direct:.3f}s)"
     )
+
+
+def test_three_magnet_scalar_susceptibilities_stay_isotropic():
+    """Regression: a 3-magnet collection with per-object SCALAR
+    susceptibilities was misread as one anisotropic 3-vector."""
+    cubes = []
+    for i, chi in enumerate([0.1, 0.2, 0.3]):
+        c = magpy.magnet.Cuboid(
+            polarization=(0, 0, 1), dimension=(1e-3,) * 3, position=(3e-3 * i, 0, 0)
+        )
+        c.susceptibility = chi
+        cubes.append(c)
+    per_cell = get_susceptibilities(cubes).reshape(3, 3).T  # (cell, xyz)
+    np.testing.assert_allclose(per_cell, [[0.1] * 3, [0.2] * 3, [0.3] * 3])
+
+
+def test_split_with_singleton_subset():
+    """Regression: getH squeezes the source axis for a 1-source subset,
+    which broke the legacy split concatenation."""
+    cubes = [
+        magpy.magnet.Cuboid(
+            polarization=(0, 0, 1), dimension=(1e-3,) * 3, position=(3e-3 * i, 0, 0)
+        )
+        for i in range(3)
+    ]
+    coll = magpy.Collection(*cubes)
+    c_split = apply_demag(coll, susceptibility=0.5, split=2)
+    c_pairs = apply_demag(coll, susceptibility=0.5, pairs_matching=True)
+    np.testing.assert_allclose(_pols(c_split), _pols(c_pairs), rtol=1e-10)
+
+
+def test_match_pairs_absolute_dims_and_scale_invariance():
+    """Regression: the pair key used dimension DIFFERENCES (colliding e.g.
+    dims 1->2 with 2->3) and absolute 1e-8 rounding (collapsing sub-1e-8 m
+    geometries). Point-matched pairs_matching must equal the split ground
+    truth for non-uniform dims at nanometre scale."""
+    nm = 1e-9
+    dims = [1.0, 2.0, 2.0, 3.0]
+    cubes = [
+        magpy.magnet.Cuboid(
+            polarization=(0, 0, 1),
+            dimension=(d * nm,) * 3,
+            position=(6 * nm * i, 0, 0),
+        )
+        for i, d in enumerate(dims)
+    ]
+    T_pairs = demag_tensor(cubes, pairs_matching=True)
+    T_ref = demag_tensor(cubes, split=2)  # plain point-matching, no matching
+    np.testing.assert_allclose(T_pairs, T_ref, rtol=1e-9, atol=1e-12)
+
+
+def test_max_dist_legacy_path_runs():
+    """Regression: demag_tensor unpacked 4 values from filter_distance called
+    with return_params=False (which returns 3), crashing every max_dist>0
+    call; it also used the deprecated functional getH interface."""
+    cubes = [
+        magpy.magnet.Cuboid(
+            polarization=(0, 0, 1), dimension=(1e-3,) * 3, position=(3e-3 * i, 0, 0)
+        )
+        for i in range(4)
+    ]
+    # max_dist large enough to keep every pair -> equals plain point matching
+    coll = magpy.Collection(*cubes)
+    c_md = apply_demag(coll, susceptibility=0.5, max_dist=100)
+    c_ref = apply_demag(coll, susceptibility=0.5, split=2)
+    np.testing.assert_allclose(_pols(c_md), _pols(c_ref), rtol=1e-9)

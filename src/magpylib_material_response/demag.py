@@ -1,8 +1,10 @@
 """Demagnetization / material-response solver.
 
 The self-consistent polarization of ``n`` interacting cells is the solution
-of ``(I - S T) J = J0 + S mu_0 H_ext`` where ``S`` is the (diagonal)
-susceptibility matrix and ``T`` the demag interaction operator.
+of ``(I - S T) J = J0 + S B_ext`` where ``S`` is the (diagonal)
+susceptibility matrix and ``T`` the demag interaction operator. The
+``H_ext`` object attribute is interpreted as the applied flux density
+``B_ext`` in Tesla (B-field convention, consistent with polarization).
 
 A single *pair rule* defines every entry of ``T`` (single source of truth):
 
@@ -31,6 +33,7 @@ from collections import Counter
 
 import magpylib as magpy
 import numpy as np
+import scipy.linalg
 import scipy.sparse as sp
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
@@ -91,14 +94,14 @@ def _convert_to_array(susceptibility, n, from_hierarchy=False):
     if np.isscalar(susceptibility):
         return np.ones((n, 3)) * susceptibility
     if (
-        hasattr(susceptibility, "__len__")
+        not from_hierarchy  # hierarchy values are always one entry per source
+        and hasattr(susceptibility, "__len__")
         and len(susceptibility) == 3
         and all(not isinstance(x, list | tuple | np.ndarray) for x in susceptibility)
     ):
         # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
-        # Only check for ambiguity when susceptibility comes from user input, not from hierarchy
-        if n == 3 and not from_hierarchy:
+        if n == 3:
             msg = (
                 "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
                 "Please choose different means of input or change the number of cells in the Collection."
@@ -146,22 +149,23 @@ def _get_susceptibility_from_hierarchy(source):
     return _get_susceptibility_from_hierarchy(source.parent)
 
 
-def get_H_ext(*sources, H_ext=None):
-    """Return a list of length (len(sources)) with H_ext values
-    Priority is given at the source level, however if value is not found, it is searched up the
-    the parent tree, if available. Sets H_ext to zero if no value is found when reached the top
-    level of the tree"""
+def get_H_ext(*sources):
+    """Return a list of length (len(sources)) with H_ext values.
+
+    The ``H_ext`` attribute is interpreted as the externally applied flux
+    density in Tesla (B-field convention). Priority is given at the source
+    level; if no value is found, the parent tree is searched. Defaults to
+    zero at the top of the tree."""
     H_exts = []
     for src in sources:
-        H_ext = getattr(src, "H_ext", None)
-        if H_ext is None:
+        h_ext = getattr(src, "H_ext", None)
+        if h_ext is None:
             if src.parent is None:
-                # print("Warning: No value for H_ext defined in any parent collection. H_ext set to zero.")
                 H_exts.append((0.0, 0.0, 0.0))
             else:
                 H_exts.extend(get_H_ext(src.parent))
         else:
-            H_exts.append(H_ext)
+            H_exts.append(h_ext)
     return H_exts
 
 
@@ -601,7 +605,7 @@ def demag_tensor(
     getH_params = {}
     if max_dist != 0:
         mask_inds, getH_params, pos0, rot0 = filter_distance(
-            src_list, max_dist, return_params=False, return_base_geo=True
+            src_list, max_dist, return_params=True, return_base_geo=True
         )
     elif pairs_matching:
         getH_params, mask_inds, unique_inv_inds, pos0, rot0 = match_pairs(src_list)
@@ -621,8 +625,16 @@ def demag_tensor(
                     polarization = np.repeat(pol_all, len(src_list), axis=0)
                     if mask_inds is not None:
                         polarization = polarization[mask_inds]
-                    H_unique = magpy.getH(
-                        "Cuboid", polarization=polarization, **getH_params
+                    # magpy.func replaces the deprecated string-based
+                    # functional interface (magpy.getH("Cuboid", ...))
+                    H_unique = magpy.func.cuboid_field(
+                        "H",
+                        observers=getH_params["observers"],
+                        dimensions=getH_params["dimension"],
+                        polarizations=polarization,
+                        positions=getH_params["position"],
+                        orientations=getH_params["orientation"],
+                        squeeze=False,
                     )
                     if max_dist != 0:
                         H_temp = np.zeros((len(src_list) ** 2, 3))
@@ -645,9 +657,13 @@ def demag_tensor(
                                 total_subsets=len(src_list_split),
                             )
                             if src_list_subset.size > 0:
-                                H_unit_pol.append(
-                                    magpy.getH(src_list_subset.tolist(), pos0)
+                                # reshape: getH squeezes the source axis for
+                                # a single-source subset
+                                H_sub = np.reshape(
+                                    magpy.getH(src_list_subset.tolist(), pos0),
+                                    (len(src_list_subset), len(pos0), 3),
                                 )
+                                H_unit_pol.append(H_sub)
                         H_unit_pol = np.concatenate(H_unit_pol, axis=0)
                 H_point.append(H_unit_pol)  # shape (n_cells, n_pos, 3_xyz)
     finally:
@@ -731,12 +747,25 @@ def match_pairs(src_list, min_log_time=None):
             logger.debug("Computing orientation differences")
             rotQ2a = np.tile(rotQ0, (len_src, 1)).reshape((num_of_pairs, -1))
             rotQ2b = np.repeat(rotQ0, len_src, axis=0).reshape((num_of_pairs, -1))
-            logger.debug("Computing dimension differences")
-            dim2 = np.tile(dim0, (len_src, 1)) - np.repeat(dim0, len_src, axis=0)
+            logger.debug("Collecting source dimensions")
+            # The reused field depends on the ABSOLUTE source-cell dimensions
+            # (repeat side, matching the params below), not on a dimension
+            # difference — a difference key would collide distinct pair
+            # geometries (e.g. dims 2->4 vs 3->5).
+            dim_src = np.repeat(dim0, len_src, axis=0)
             logger.debug("Concatenating properties for comparison")
-            prop = (np.concatenate([pos2, rotQ2a, rotQ2b, dim2], axis=1) + 1e-9).round(
-                8
+            # Round positions/dimensions relative to the geometry scale so
+            # matching is scale-invariant (absolute 1e-8 rounding collapses
+            # all pairs of sub-1e-8-metre meshes); quaternions are O(1).
+            geo_scale = max(
+                float(np.max(np.abs(pos2), initial=0.0)),
+                float(np.max(np.abs(dim0))),
+                np.finfo(float).tiny,
             )
+            prop = np.concatenate(
+                [pos2 / geo_scale, rotQ2a, rotQ2b, dim_src / geo_scale], axis=1
+            )
+            prop = (prop + 1e-9).round(8)
             logger.debug("Finding unique interaction pairs")
             _, unique_inds, unique_inv_inds = np.unique(
                 prop, return_index=True, return_inverse=True, axis=0
@@ -942,8 +971,13 @@ def apply_demag(
 
         with timelog("Solving of linear system", min_log_time=min_log_time):
             if solver == "direct":
-                Q = np.eye(3 * n) - (sus[:, None] * T)
-                pol_new = np.linalg.solve(Q, rhs)
+                # In-place assembly of Q = I - S T reuses T's buffer (T is
+                # not needed afterwards), cutting peak memory ~2-3x compared
+                # to np.eye(3n) - sus*T which materializes three matrices.
+                Q = np.ascontiguousarray(T)
+                Q *= -sus[:, None]
+                Q[np.diag_indices_from(Q)] += 1.0
+                pol_new = scipy.linalg.solve(Q, rhs, overwrite_a=True)
             else:
                 if T is not None:
                     matvec = _build_dense_matvec(sus, T)

@@ -231,8 +231,9 @@ def mesh_thin_CylinderSegment_with_cuboids(
     # distribute elements -> targeting thin close-to-square surface cells
     circumf = 2 * np.pi * r1
     if np.isscalar(target_elems):
-        nphi = int(np.round((target_elems * circumf / h) ** 0.5))
-        nh = int(np.round(target_elems / nphi))
+        # clamp to >=1: extreme aspect ratios can round either count to zero
+        nphi = max(1, int(np.round((target_elems * circumf / h) ** 0.5)))
+        nh = max(1, int(np.round(target_elems / nphi)))
     else:
         nphi, nh = target_elems
     dh = h / nh
@@ -341,7 +342,8 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     vol, containing_cube_edge = get_volume(obj, return_containing_cube_edge=True)
     vol_ratio = (containing_cube_edge**3) / vol
 
-    grid_elems = [int((vol_ratio * target_elems) ** (1 / 3))] * 3
+    # clamp to >=2: the cell size below divides by (grid_elems - 1)
+    grid_elems = [max(2, int((vol_ratio * target_elems) ** (1 / 3)))] * 3
     grid_dim = [containing_cube_edge] * 3
 
     slices = [
@@ -349,6 +351,11 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     ]
     grid = np.mgrid[slices].reshape(len(slices), -1).T
     grid = grid[mask_inside(obj, grid, tolerance=1e-14)]
+    if grid.size == 0:
+        msg = (
+            "voxelize produced no cell centres inside the object; increase target_elems"
+        )
+        raise ValueError(msg)
     cube_cell_dim = np.array([containing_cube_edge / (grid_elems[0] - 1)] * 3)
     if strict_inside:
         elemgrid = np.array(

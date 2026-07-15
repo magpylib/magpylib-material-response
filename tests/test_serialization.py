@@ -191,3 +191,18 @@ def test_from_json_returns_multiple_objects():
     assert len(out) == 2
     assert isinstance(out[0], magpy.magnet.Cuboid)
     assert isinstance(out[1], magpy.Sensor)
+
+
+def test_material_attributes_round_trip():
+    """susceptibility (any type, any level) and H_ext survive a round-trip."""
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
+    cube.susceptibility = np.array([1.0, 2.0, 3.0])  # numpy array must serialize
+    cube.H_ext = (0.0, 0.0, 0.1)
+    coll = magpy.Collection(cube)
+    coll.susceptibility = 0.3  # collection-level value used by hierarchy lookup
+
+    out = from_json(to_json(coll))[0]
+    assert out.susceptibility == 0.3
+    child = out.children[0]
+    np.testing.assert_allclose(child.susceptibility, [1.0, 2.0, 3.0])
+    np.testing.assert_allclose(child.H_ext, [0.0, 0.0, 0.1])

@@ -7,6 +7,7 @@ import warnings
 from contextlib import contextmanager
 
 import magpylib as magpy
+import numpy as np
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from scipy.spatial.transform import Rotation
@@ -35,12 +36,12 @@ class ElapsedTimeThread(threading.Thread):
     def stopped(self):
         return self._stop_event.is_set()
 
-    def getStart(self):
-        return self.thread_start
-
     def run(self):
         self.thread_start = time.time()
-        while not self.stopped():
+        # Event.wait returns immediately when stop() is set, so joining the
+        # thread never blocks on the poll interval (a plain time.sleep here
+        # would stall every timelog exit by up to min_log_time/5 seconds).
+        while not self._stop_event.wait(max(0.01, self.min_log_time / 5)):
             if (
                 self.msg is not None
                 and time.time() - self.thread_start > self.min_log_time
@@ -48,8 +49,6 @@ class ElapsedTimeThread(threading.Thread):
             ):
                 logger.info("Starting: {operation}", operation=self.msg)
                 self._msg_displayed = True
-            # include a delay here so the thread doesn't uselessly thrash the CPU
-            time.sleep(max(0.01, self.min_log_time / 5))
 
 
 def format_duration(seconds):
@@ -142,11 +141,18 @@ def _serialize_recursive(obj, parent="warn"):
             f"object parent ({obj.parent}) not included in serialization", stacklevel=2
         )
 
+    # Material attributes may sit on any object (per-magnet or on a parent
+    # Collection for hierarchy lookup); np.asarray handles scalars, tuples
+    # and numpy arrays alike.
+    susceptibility = getattr(obj, "susceptibility", None)
+    if susceptibility is not None:
+        dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
+    h_ext = getattr(obj, "H_ext", None)
+    if h_ext is not None:
+        dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
+
     if isinstance(obj, BaseMagnet):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
-        susceptibility = getattr(obj, "susceptibility", None)
-        if susceptibility is not None:
-            dd["susceptibility"] = {"value": susceptibility}
 
     if isinstance(obj, BaseCurrent):
         dd["current"] = {"value": float(obj.current), "unit": "A"}
@@ -234,6 +240,9 @@ def _deserialize_recursive(inp):
 
     if inp.get("susceptibility") is not None:
         obj.susceptibility = inp["susceptibility"]["value"]
+    if inp.get("H_ext") is not None:
+        _check_unit("H_ext", inp["H_ext"], "T")
+        obj.H_ext = inp["H_ext"]["value"]
 
     if constr is magpy.Collection:
         obj.add(*[_deserialize_recursive(child) for child in inp["children"]])

@@ -78,13 +78,21 @@ def _interpolate_circle(
         List of NumPy arrays representing the interpolated points.
     """
     angle_diff = np.arccos(
-        np.dot(start - center, end - center)
-        / (np.linalg.norm(start - center) * np.linalg.norm(end - center))
+        np.clip(
+            np.dot(start - center, end - center)
+            / (np.linalg.norm(start - center) * np.linalg.norm(end - center)),
+            -1.0,
+            1.0,
+        )
     )
-    angles = np.linspace(0, angle_diff, n_points)
     v = start - center
     w = np.cross(v, end - start)
-    w /= np.linalg.norm(w)
+    w_norm = np.linalg.norm(w)
+    if angle_diff == 0 or w_norm == 0:
+        # degenerate arc (collinear points): nothing to sweep
+        return [start, end]
+    w /= w_norm
+    angles = np.linspace(0, angle_diff, n_points)
     return [
         center + np.cos(angle) * v + np.sin(angle) * np.cross(w, v) for angle in angles
     ]
@@ -139,10 +147,16 @@ def create_polyline_fillet(
         Array of filleted points with shape (M, 2) or (M, 3), where M depends on the number of
         filleted segments.
     """
-    points = np.array(polyline)
+    points = np.array(polyline, dtype=float)
     radius = max_radius
     if radius == 0 or N == 0:
         return points
+
+    # 2D polylines are lifted to z=0 so the single 3D code path (cross
+    # products) serves both; the result is sliced back at the end.
+    is_2d = points.shape[1] == 2
+    if is_2d:
+        points = np.column_stack([points, np.zeros(len(points))])
 
     closed = np.allclose(points[0], points[-1])
     if closed:
@@ -166,7 +180,8 @@ def create_polyline_fillet(
         filleted_points[0] = filleted_points[-1]
     else:
         filleted_points = np.append(filleted_points, points[-1:], axis=0)
-    return np.array(filleted_points)
+    out = np.array(filleted_points)
+    return out[:, :2] if is_2d else out
 
 
 def _bisectors(polyline: np.ndarray) -> np.ndarray:
@@ -256,7 +271,14 @@ def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
     np.ndarray, shape (m, n, d)
         Array of moved grid points along the polyline, with the same dimensions as the input grid.
     """
-    grid = grid.copy()
+    verts = np.asarray(verts, dtype=float)
+    grid = np.asarray(grid, dtype=float).copy()
+    # 2D inputs are lifted to z=0 (the plane intersection is 3D-only) and
+    # sliced back at the end.
+    is_2d = verts.shape[1] == 2
+    if is_2d:
+        verts = np.column_stack([verts, np.zeros(len(verts))])
+        grid = np.column_stack([grid, np.zeros(len(grid))])
     pts = [grid]
     normals = _bisectors(verts)
     closed = np.allclose(verts[0], verts[-1])
@@ -277,4 +299,5 @@ def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
         pts.append(pts1)
     if closed:
         pts[0] = pts[-1]
-    return np.array(pts).swapaxes(0, 1)
+    out = np.array(pts).swapaxes(0, 1)
+    return out[..., :2] if is_2d else out
