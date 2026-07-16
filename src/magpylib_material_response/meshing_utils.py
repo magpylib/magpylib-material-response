@@ -113,8 +113,8 @@ def cells_from_dimension(
 
 
 def get_volume(obj, return_containing_cube_edge=False):
-    """Return object volume in mm^3. The `containting_cube_edge` is the minimum side
-    length of an unrotated cube centered at the origin containing the object.
+    """Return object volume in m³ (SI units). The `containing_cube_edge` is the minimum
+    side length of an unrotated cube centered at the origin containing the object.
     """
     if obj.__class__.__name__ == "Cuboid":
         dim = obj.dimension

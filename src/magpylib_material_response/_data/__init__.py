@@ -4,7 +4,7 @@ Built-in datasets for demonstration, educational and test purposes.
 
 from __future__ import annotations
 
-import importlib
+import importlib.resources
 import json
 from pathlib import Path
 

@@ -16,7 +16,7 @@ def _find_circle_center_and_tangent_points(
         Vertices of a triangle (b is the middle vertex) with shape (2,) or (3,).
     r : float
         Radius of the circle.
-    max_ratio : float, optional, default: 0.5
+    max_ratio : float, optional, default: 1
         Maximum allowed ratio of the distance to the tangent point relative to the length of the
         triangle sides.
 

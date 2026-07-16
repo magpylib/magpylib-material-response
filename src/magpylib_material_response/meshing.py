@@ -330,7 +330,7 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
         Input object to be discretized
     target_elems: int
         Target number of cells
-    strict inside: bool
+    strict_inside: bool
         If True, also filters out the cells with vertices outside the object boundaries
 
     Returns

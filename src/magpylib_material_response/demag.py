@@ -92,6 +92,8 @@ def get_susceptibilities(sources, susceptibility=None):
 def _convert_to_array(susceptibility, n, from_hierarchy=False):
     """Convert susceptibility input(s) to (n, 3) array format"""
     # Handle single values (scalar or 3-vector) applied to all sources
+    if isinstance(susceptibility, np.ndarray) and susceptibility.ndim == 0:
+        susceptibility = susceptibility.item()  # 0-d array -> plain scalar
     if np.isscalar(susceptibility):
         return np.ones((n, 3)) * susceptibility
     if (
