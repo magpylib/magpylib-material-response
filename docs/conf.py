@@ -99,11 +99,25 @@ myst_enable_extensions = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable", None),
+    "scipy": ("https://docs.scipy.org/doc/scipy", None),
+    "magpylib": ("https://magpylib.readthedocs.io/en/stable", None),
 }
 
 nitpick_ignore = [
     ("py:class", "_io.StringIO"),
     ("py:class", "_io.BytesIO"),
+]
+
+# The API docstrings use NumPy-style type strings ("array_like, shape (n, 3)",
+# "int, optional, default=8", "magpy.Collection", ...). Nitpicky mode tries to
+# resolve every fragment as a class reference; silence those without masking
+# genuinely broken cross-references to fully-qualified targets.
+nitpick_ignore_regex = [
+    ("py:class", r"[^.]*"),  # any dot-free fragment: array_like, optional, n, 3, ...
+    ("py:class", r"default.*"),  # "default=0.5", "default 1.5"
+    ("py:class", r"(np|magpy|magnet)\..*"),  # docstring shorthand aliases
+    ("py:class", r".*\bobject\b.*"),  # free text like "magpylib.Collection object ..."
 ]
 
 always_document_param_types = True

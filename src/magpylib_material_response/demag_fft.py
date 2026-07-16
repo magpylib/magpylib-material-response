@@ -147,7 +147,7 @@ def _detect_grid(positions, dim, rtol=1e-6):
 def detect_uniform_grid(positions, dimensions, rotations, atol=QUAT_ATOL):
     """Detect whether *all* cells form one uniform grid of identical cuboids.
 
-    Convenience wrapper around :func:`_detect_grid` that first checks for
+    Convenience wrapper around the private ``_detect_grid`` that first checks for
     identical dimensions and a single common rotation. For a non-identity
     common rotation, the grid is detected in the cells' local frame.
 
@@ -412,7 +412,8 @@ def demag_fft_matvec(M, kernel_fft, grid_shape):
     -------
     H : ndarray, shape (Nx, Ny, Nz, 3)
         ``T @ M`` with ``T = -N`` (the demag field scaled by ``mu_0``,
-        matching the dense demag matrix used in :func:`apply_demag`).
+        matching the dense demag matrix used in
+        :func:`~magpylib_material_response.demag.apply_demag`).
     """
     Nx, Ny, Nz = grid_shape
     Mp = np.zeros((2 * Nx, 2 * Ny, 2 * Nz, 3), dtype=float)
