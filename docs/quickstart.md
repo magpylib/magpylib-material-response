@@ -66,6 +66,10 @@ magnet.susceptibility = (0.3, 0.1, 0.0)  # anisotropic, global frame
 coll = apply_demag(mesh, susceptibility=0.3)
 ```
 
+Anisotropic 3-vectors act component-wise as a diagonal tensor in the **global
+frame** — this works for arbitrarily rotated cells (see the
+[method page](method.md) for how rotations are handled).
+
 A uniform external field can be applied through the `H_ext` attribute, given as
 flux density in Tesla units (i.e. $\mu_0 H_\text{ext}$):
 
@@ -78,6 +82,11 @@ soft_demag = apply_demag(mesh_Cuboid(soft, target_elems=125))
 print("induced polarization of the first cell:")
 print(soft_demag.sources_all[0].polarization)
 ```
+
+Current sources (`magpy.current.*`) placed in the collection also drive the
+material response — their field at the cells adds to the applied field. The
+[U-core electromagnet example](examples/ucore_electromagnet.md) builds a
+coil-driven soft core this way.
 
 ## Meshing helpers
 

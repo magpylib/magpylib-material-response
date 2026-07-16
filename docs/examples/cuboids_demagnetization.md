@@ -12,18 +12,14 @@ kernelspec:
   name: python3
 ---
 
-# Cuboids demagnetization
+# Cuboid Demagnetization
 
-The following example demonstrates how to create magnetic sources with different
-susceptibilities using the Magpylib library. It defines three cuboid magnets
-with varying susceptibilities and positions, creates a collection of these
-magnets, and computes their magnetic field responses using different levels of
-meshing. The results are then compared to a Finite Element Method (FEM) analysis
-to evaluate the performance of the Magpylib-Material-Response approach. The
-comparison is presented in two separate plots, one showing the magnetic field
-values and the other showing the difference between the Magpylib results and the
-FEM reference data. The code demonstrates that even with a low number of mesh
-elements, the Magpylib results quickly approach the reference FEM values.
+Three hard cuboid magnets with different susceptibilities, positions, and
+orientations are meshed at increasing resolution and solved with `apply_demag`.
+The field along a sensor line is compared against a Finite Element Method (FEM)
+reference solution — both directly and as the difference to the reference.
+Already coarse meshes land close to the FEM values, and refining the mesh
+converges toward them.
 
 +++
 
@@ -41,11 +37,6 @@ from magpylib_material_response.meshing import mesh_all
 # Uncomment to enable logging output from the package (silent by default).
 # from magpylib_material_response import configure_logging
 # configure_logging(min_log_time=5)  # log steps taking longer than 5 s
-
-if magpy.__version__.split(".")[0] != "5":
-    raise RuntimeError(
-        f"Magpylib version must be >=5, (installed: {magpy.__version__})"
-    )
 
 magpy.defaults.display.backend = "plotly"
 
@@ -82,7 +73,7 @@ magpy.show(*coll, sensor)
 coll_meshed = mesh_all(
     coll, target_elems=50, per_child_elems=False, style_label="No demag - meshed"
 )
-coll_meshed.show()
+magpy.show(coll_meshed)
 ```
 
 ## Compute material response - demagnetization
@@ -109,15 +100,16 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
 ## Compare with FEM analysis
 
 ```{code-cell} ipython3
-# compute field before demag
-B_no_demag_df = magpy.getB(coll_meshed, sensor, output="dataframe")
+# template dataframe with the right index/path structure; the FEM values
+# from the reference dataset are filled into a copy of it below
+B_template_df = magpy.getB(coll_meshed, sensor, output="dataframe")
 
 B_cols = ["Bx", "By", "Bz"]
 
 
 def get_FEM_dataframe(sim):
     res = sim["results"][0]
-    df = B_no_demag_df.copy()
+    df = B_template_df.copy()
     for Bk in B_cols:
         df[Bk] = res["value"].get(Bk, np.nan)
     df["computation"] = res["computation"]

@@ -808,9 +808,12 @@ def apply_demag(
     collection: magpylib.Collection object with n magnet sources
         Each magnet source in collection is treated as a magnetic cell.
 
-    susceptibility: array_like, shape (n,)
-        Vector of n magnetic susceptibilities of the cells. If not defined, values are
-        searched at object level or parent level if needed.
+    susceptibility: scalar, 3-vector, or array_like, shape (n,) or (n, 3)
+        Magnetic susceptibility of the cells: one scalar or one 3-vector applied to
+        all cells, or one entry (scalar or 3-vector) per cell. 3-vectors define an
+        anisotropic susceptibility acting component-wise as a diagonal tensor in the
+        global frame. If not defined, values are searched at object level or parent
+        level if needed.
 
     inplace: bool
         If False, applies demagnetization on a copy of the input collection and returns

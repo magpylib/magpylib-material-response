@@ -30,7 +30,7 @@ winding-pack cross-section (turns × layers) along it, producing one closed
 polyline per winding.
 
 At the end, the same core is re-meshed with tetrahedral cells and both
-discretizations are compared on the same field map.
+discretizations are compared along a line above the poles.
 
 ## Build the U-core
 

@@ -14,6 +14,15 @@ The public functions of `magpylib-material-response`, grouped by module.
 .. autofunction:: magpylib_material_response.demag.get_H_ext
 ```
 
+Legacy helpers of the historical all-point-matching path (used by the
+`pairs_matching` and `max_dist` options of `apply_demag`):
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.demag.filter_distance
+
+.. autofunction:: magpylib_material_response.demag.match_pairs
+```
+
 ## Meshing — `meshing`
 
 ```{eval-rst}
@@ -28,6 +37,10 @@ The public functions of `magpylib-material-response`, grouped by module.
 .. autofunction:: magpylib_material_response.meshing.mesh_TriangularMesh
 
 .. autofunction:: magpylib_material_response.meshing.mesh_thin_CylinderSegment_with_cuboids
+
+.. autofunction:: magpylib_material_response.meshing.voxelize
+
+.. autofunction:: magpylib_material_response.meshing_utils.trimesh_from_model3d
 ```
 
 ## Coil construction — `polyline`

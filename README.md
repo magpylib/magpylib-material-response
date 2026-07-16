@@ -42,8 +42,8 @@ by meshing sources into an arbitrary number of unit cells.
 Key features:
 
 - **`apply_demag`** — self-consistent demagnetization of magpylib `Collection`
-  objects, with per-cell scalar or anisotropic susceptibility and external field
-  support.
+  objects, with per-cell scalar or anisotropic susceptibility; external fields
+  and current sources in the collection drive the response.
 - **Two solvers, one physics** — an exact dense solver and an FFT-accelerated
   iterative solver that agree to solver tolerance for any input; meshes with
   tens of thousands of cells solve in seconds.
@@ -70,6 +70,22 @@ Tetrahedral meshing of `TriangularMesh` magnets requires the optional
 
 ```bash
 pip install magpylib-material-response[tetgen]
+```
+
+## Minimal example
+
+```python
+import magpylib as magpy
+from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.meshing import mesh_Cuboid
+
+# a magnet with finite susceptibility, SI units (m, T)
+magnet = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3))
+magnet.susceptibility = 0.3  # µr = 1.3
+
+# mesh into cells, solve the material response — result is a field source
+mesh_demag = apply_demag(mesh_Cuboid(magnet, target_elems=125))
+print(magpy.getB(mesh_demag, (0, 0, 1.5e-3)))
 ```
 
 See the [documentation](https://magpylib-material-response.readthedocs.io/) for

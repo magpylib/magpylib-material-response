@@ -13,10 +13,12 @@ magnetization proportional to the local total field:
 
 $$\mathbf{M} = \chi \, \mathbf{H}_\text{total}$$
 
-where $\chi$ is the (isotropic scalar) magnetic susceptibility. In magpylib's
-convention, the primary field quantity is the **intrinsic polarization**
-$\mathbf{J} = \mu_0 \mathbf{M}$ (units of Tesla), so the constitutive relation
-becomes
+where $\chi$ is the magnetic susceptibility — an isotropic scalar, or a 3-vector
+acting component-wise as a diagonal tensor in the **global frame** (anisotropy
+works for arbitrarily rotated cells, see the rotation handling in section 5.2).
+In magpylib's convention, the primary field quantity is the **intrinsic
+polarization** $\mathbf{J} = \mu_0 \mathbf{M}$ (units of Tesla), so the
+constitutive relation becomes
 
 $$\mathbf{J} = \mu_0 \chi \, \mathbf{H}_\text{total} = \chi \, \mathbf{B}_\text{total}$$
 
@@ -153,8 +155,9 @@ T[(m, j), (k, i)]  =  -N_mk( pos[j] - pos[i] )
 ```
 
 so `T` maps a polarization $\mathbf{J}$ (Tesla) to the demagnetizing flux
-$\mathbf{B}_\text{demag}$ (Tesla). The public :func:`demag_tensor` and the
-legacy point-matching path use the historical _pre_-`mu_0` 4-index layout
+$\mathbf{B}_\text{demag}$ (Tesla). The public
+{func}`~magpylib_material_response.demag.demag_tensor` and the legacy
+point-matching path use the historical _pre_-`mu_0` 4-index layout
 `T[k, i, j, m] = -N_mk(pos[j] - pos[i]) / mu_0`, promoted by a `T *= mu_0` step
 inside `apply_demag`; both conventions describe the same operator.
 
@@ -408,4 +411,4 @@ $N=27\,000$ solves in ~2 s where the dense solver would need ~50 GB
    Research: Solid Earth, 98(B6), 9551–9555.
 
 2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of magnetostatic
-   moment method._ IEEE Transactions on Magnetics, 42(4), 515–520. $$
+   moment method._ IEEE Transactions on Magnetics, 42(4), 515–520.

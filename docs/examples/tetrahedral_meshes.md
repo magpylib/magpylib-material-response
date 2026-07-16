@@ -141,3 +141,6 @@ and volume meshes.
 - Everything shown in the [solver performance example](solver_performance.md)
   (agreement guarantee, `solver_tol`, `max_iter`, non-convergence raising)
   applies unchanged.
+- For a cuboid-vs-tetrahedral comparison on the same solid — accuracy per cell
+  and solve-time trade-offs at matched refinement levels — see the
+  [U-core electromagnet example](ucore_electromagnet.md).
