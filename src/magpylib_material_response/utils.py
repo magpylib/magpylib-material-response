@@ -115,7 +115,8 @@ def _serialize_recursive(obj, parent="warn"):
     """Serialize a magpylib object to a JSON-compatible dict.
 
     Supported classes:
-        - ``magpylib.magnet.Cuboid``, ``Cylinder``, ``CylinderSegment``
+        - ``magpylib.magnet.Cuboid``, ``Cylinder``, ``CylinderSegment``,
+          ``Sphere``, ``Tetrahedron``, ``TriangularMesh``
         - ``magpylib.current.Polyline``, ``Circle``
         - ``magpylib.Sensor``
         - ``magpylib.Collection`` (recursively)
@@ -167,6 +168,13 @@ def _serialize_recursive(obj, parent="warn"):
     elif isinstance(obj, magpy.magnet.CylinderSegment):
         # (r1, r2, h, phi1, phi2) — first three in m, last two in deg.
         dd["dimension"] = {"value": obj.dimension.tolist(), "unit": "m,m,m,deg,deg"}
+    elif isinstance(obj, magpy.magnet.Sphere):
+        dd["diameter"] = {"value": float(obj.diameter), "unit": "m"}
+    elif isinstance(obj, magpy.magnet.Tetrahedron):
+        dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+    elif isinstance(obj, magpy.magnet.TriangularMesh):
+        dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+        dd["faces"] = {"value": obj.faces.tolist()}
     elif isinstance(obj, magpy.current.Polyline):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
     elif isinstance(obj, magpy.current.Circle):
@@ -230,6 +238,16 @@ def _deserialize_recursive(inp):
     elif constr is magpy.magnet.CylinderSegment:
         _check_unit("Dimension", inp["dimension"], "m,m,m,deg,deg")
         kw["dimension"] = inp["dimension"]["value"]
+    elif constr is magpy.magnet.Sphere:
+        _check_unit("Diameter", inp["diameter"], "m")
+        kw["diameter"] = inp["diameter"]["value"]
+    elif constr is magpy.magnet.Tetrahedron:
+        _check_unit("Vertices", inp["vertices"], "m")
+        kw["vertices"] = inp["vertices"]["value"]
+    elif constr is magpy.magnet.TriangularMesh:
+        _check_unit("Vertices", inp["vertices"], "m")
+        kw["vertices"] = inp["vertices"]["value"]
+        kw["faces"] = inp["faces"]["value"]
     elif constr is magpy.current.Polyline:
         _check_unit("Vertices", inp["vertices"], "m")
         kw["vertices"] = inp["vertices"]["value"]
@@ -261,6 +279,9 @@ _CLASS_BY_TYPE = {
     "magnet.Cuboid": magpy.magnet.Cuboid,
     "magnet.Cylinder": magpy.magnet.Cylinder,
     "magnet.CylinderSegment": magpy.magnet.CylinderSegment,
+    "magnet.Sphere": magpy.magnet.Sphere,
+    "magnet.Tetrahedron": magpy.magnet.Tetrahedron,
+    "magnet.TriangularMesh": magpy.magnet.TriangularMesh,
     "current.Polyline": magpy.current.Polyline,
     "current.Circle": magpy.current.Circle,
     "Sensor": magpy.Sensor,

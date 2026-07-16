@@ -7,6 +7,9 @@ import numpy as np
 import pytest
 
 from magpylib_material_response import from_json, to_json
+from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.meshing import mesh_TriangularMesh
+from magpylib_material_response.meshing_utils import trimesh_from_model3d
 from magpylib_material_response.utils import (
     _deserialize_recursive,
     _serialize_recursive,
@@ -143,7 +146,7 @@ def test_to_from_json_string():
 
 
 def test_unsupported_type_raises():
-    src = magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=0.001)
+    src = magpy.misc.Dipole(moment=(0, 0, 1e-6))
     with pytest.raises(TypeError, match="Unsupported"):
         _serialize_recursive(src)
 
@@ -206,3 +209,57 @@ def test_material_attributes_round_trip():
     child = out.children[0]
     np.testing.assert_allclose(child.susceptibility, [1.0, 2.0, 3.0])
     np.testing.assert_allclose(child.H_ext, [0.0, 0.0, 0.1])
+
+
+def test_roundtrip_sphere():
+    src = magpy.magnet.Sphere(polarization=(0, 0.5, 1), diameter=0.002)
+    src.susceptibility = 0.4
+    out = _deserialize_recursive(_serialize_recursive(src))
+    assert isinstance(out, magpy.magnet.Sphere)
+    assert out.susceptibility == 0.4
+    _assert_field_equal(src, out)
+
+
+def test_roundtrip_tetrahedron():
+    src = magpy.magnet.Tetrahedron(
+        polarization=(0, 0, 1),
+        vertices=[(0, 0, 0), (0.001, 0, 0), (0, 0.001, 0), (0, 0, 0.001)],
+    )
+    src.susceptibility = 999.0
+    dd = _serialize_recursive(src)
+    assert dd["type"] == "magnet.Tetrahedron"
+    out = _deserialize_recursive(dd)
+    assert isinstance(out, magpy.magnet.Tetrahedron)
+    assert out.susceptibility == 999.0
+    _assert_field_equal(src, out)
+
+
+def test_roundtrip_triangular_mesh():
+    src = magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 1),
+        points=[
+            (0, 0, 0),
+            (0.001, 0, 0),
+            (0, 0.001, 0),
+            (0, 0, 0.001),
+            (0.001, 0.001, 0.001),
+        ],
+    )
+    out = _deserialize_recursive(_serialize_recursive(src))
+    assert isinstance(out, magpy.magnet.TriangularMesh)
+    assert not out.status_open
+    _assert_field_equal(src, out)
+
+
+def test_roundtrip_demagnetized_tet_collection():
+    """The mesh_TriangularMesh -> apply_demag workflow must be persistable."""
+    pytest.importorskip("tetgen", reason="tetgen optional dependency not installed")
+
+    trimesh = trimesh_from_model3d("cuboid", (0, 0, 1), dimension=(0.001, 0.001, 0.001))
+    mesh = mesh_TriangularMesh(trimesh, target_elems=30)
+    mesh.susceptibility = 0.5
+    demag = apply_demag(mesh)
+
+    out = from_json(to_json(demag))[0]
+    assert len(out.sources_all) == len(demag.sources_all)
+    _assert_field_equal(demag, out)
