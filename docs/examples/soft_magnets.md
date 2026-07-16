@@ -18,23 +18,21 @@ kernelspec:
 
 +++
 
-This code demonstrates demagnetization calculations for a hard and a soft cuboid
-magnet using the Magpylib library. Demagnetization is applied using varying
-numbers of cells for the mesh and compared to the computed magnetic fields from
-Magpylib without demagnetization and with FEM analysis data obtained from an
-external dataset.
+A hard cuboid magnet next to a high-permeability soft cuboid (µr = 4000): the
+pair is meshed at increasing resolution and solved with `apply_demag`, and the
+fields along three sensor lines are compared against FEM reference data — with
+the unsolved collection included to show how much the material response matters.
 
 +++ {"user_expressions": []}
 
 ## Define magnetic sources with their susceptibilities
 
 ```{code-cell} ipython3
-import json
-
 import magpylib as magpy
 import numpy as np
 import pandas as pd
 import plotly.express as px
+from magpylib_material_response import get_dataset
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all
 
@@ -44,7 +42,7 @@ from magpylib_material_response.meshing import mesh_all
 
 magpy.defaults.display.backend = "plotly"
 
-# hard magnet
+# hard magnet, SI units (m, T)
 cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.002))
 cube1.move((0, 0, 0.0005))
 cube1.susceptibility = 0.5  # µr=1.5
@@ -107,15 +105,16 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
 ## Compare with FEM analysis
 
 ```{code-cell} ipython3
-# compute field before demag
-B_no_demag_df = magpy.getB(coll_meshed, sensors, output="dataframe")
+# template dataframe with the right index/path structure; the FEM values
+# from the reference dataset are filled into a copy of it below
+B_template_df = magpy.getB(coll_meshed, sensors, output="dataframe")
 
 B_cols = ["Bx", "Bz"]
 
 
 def get_FEM_dataframe(sim):
     res = sim["results"][0]
-    df = B_no_demag_df.copy()
+    df = B_template_df.copy()
     for Bk in B_cols:
         df[Bk] = res["value"].get(Bk, np.nan)
     df["computation"] = res["computation"]
@@ -127,8 +126,6 @@ def get_magpylib_dataframe(collection, sensors):
     df["computation"] = collection.style.label
     return df
 
-
-from magpylib_material_response import get_dataset
 
 sim_ANSYS = get_dataset("FEMdata_test_softmag")  # FEM dataset has only Bx and Bz
 
@@ -146,7 +143,7 @@ df["Distance [m]"] -= df["Distance [m]"].min()
 
 ```{code-cell} ipython3
 px_kwargs = dict(
-    x="path",
+    x="Distance [m]",
     y=B_cols,
     facet_row="variable",
     facet_col="sensor",
@@ -184,3 +181,7 @@ display(fig1, fig2)
 
 As shown above, the demagnetized collection outputs are approaching the
 reference FEM values while refining the mesh.
+
+For larger meshes the default dense solver becomes the bottleneck — see
+[solvers and performance](solver_performance.md) for the FFT-accelerated
+iterative solver and guidance on choosing between them.

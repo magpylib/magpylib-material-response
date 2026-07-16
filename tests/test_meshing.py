@@ -13,6 +13,7 @@ from magpylib_material_response.meshing import (
     mesh_thin_CylinderSegment_with_cuboids,
     mesh_TriangularMesh,
     slice_Cuboid,
+    voxelize,
 )
 from magpylib_material_response.meshing_utils import trimesh_from_model3d
 
@@ -307,3 +308,32 @@ def test_mesh_TriangularMesh():
     # TypeError on wrong input type
     with pytest.raises(TypeError):
         mesh_TriangularMesh(cuboid, target_elems=10)
+
+
+def test_thin_cylinder_segment_extreme_aspect_ratio():
+    """Regression: nphi/nh rounding to zero caused ZeroDivisionError."""
+    seg = magpy.magnet.CylinderSegment(
+        polarization=(0, 0, 1), dimension=(0.0099, 0.01, 1.0, 0, 45)
+    )
+    coll = mesh_thin_CylinderSegment_with_cuboids(seg, 1)
+    assert len(coll.sources_all) >= 1
+
+
+def test_trimesh_from_model3d_tiny_scale():
+    """Regression: absolute 1e-10 vertex rounding collapsed sub-1e-10 m shapes;
+    dedup quantization is now relative to the geometry scale."""
+    trimesh = trimesh_from_model3d("cuboid", (0, 0, 1), dimension=(1e-10, 1e-10, 1e-10))
+    assert trimesh.vertices.shape == (8, 3)
+    assert not trimesh.status_open
+
+
+def test_voxelize_small_target_finite_cells():
+    """Regression: grid_elems=1 caused division by zero, and an empty grid
+    crashed with an opaque reshape error; both now behave cleanly."""
+    sphere = magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=0.001)
+    with pytest.raises(ValueError, match="no cell centres"):
+        voxelize(sphere, 3)  # grid too coarse: clean error, no crash
+    coll = voxelize(sphere, 100)
+    dims = np.array([c.dimension for c in coll.sources_all])
+    assert np.isfinite(dims).all()
+    assert (dims > 0).all()

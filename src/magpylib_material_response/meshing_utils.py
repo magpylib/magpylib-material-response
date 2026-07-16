@@ -113,8 +113,8 @@ def cells_from_dimension(
 
 
 def get_volume(obj, return_containing_cube_edge=False):
-    """Return object volume in mm^3. The `containting_cube_edge` is the minimum side
-    length of an unrotated cube centered at the origin containing the object.
+    """Return object volume in m³ (SI units). The `containing_cube_edge` is the minimum
+    side length of an unrotated cube centered at the origin containing the object.
     """
     if obj.__class__.__name__ == "Cuboid":
         dim = obj.dimension
@@ -173,15 +173,23 @@ def mask_inside_Cylinder(obj, positions, tolerance=1e-14):
 
 
 def mask_inside_Sphere(obj, positions, tolerance=1e-14):
-    """Return mask of provided positions inside a Sphere"""
+    """Return mask of provided positions inside a Sphere.
+
+    ``tolerance`` is relative to the sphere radius (scale-invariant).
+    """
     x, y, z = np.copy(positions.T)
     r = np.sqrt(x**2 + y**2 + z**2)  # faster than np.linalg.norm
     r0 = abs(obj.diameter) / 2
-    return r - r0 < tolerance
+    return r - r0 < tolerance * r0
 
 
 def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
-    """Return mask of provided positions inside a CylinderSegment"""
+    """Return mask of provided positions inside a CylinderSegment.
+
+    ``tolerance`` is relative to the outer radius (radially) and to the
+    height (axially), so masking is scale-invariant. Points exactly on the
+    ``phi`` boundary planes are included.
+    """
 
     r1, r2, h, phi1, phi2 = obj.dimension.T
     r1 = abs(r1)
@@ -205,11 +213,13 @@ def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
 
     # r, phi ,z lies in-between, avoid numerical fluctuations
     # (e.g. due to rotations) by including tolerance
-    mask_r_in = (r1 - tolerance < r) & (r < r2 + tolerance)
+    tol_r = tolerance * r2
+    tol_z = tolerance * h
+    mask_r_in = (r1 - tol_r < r) & (r < r2 + tol_r)
     mask_phi_in = (np.sign(phio1 - phi1) != np.sign(phio1 - phi2)) | (
         np.sign(phio2 - phi1) != np.sign(phio2 - phi2)
     )
-    mask_z_in = (z1 - tolerance < z) & (z < z2 + tolerance)
+    mask_z_in = (z1 - tol_z < z) & (z < z2 + tol_z)
 
     # inside
     return mask_r_in & mask_phi_in & mask_z_in
@@ -230,7 +240,12 @@ def mask_inside_TriangularMesh(obj, positions, tolerance=1e-14):  # noqa: ARG001
 
 
 def mask_inside(obj, positions, tolerance=1e-14):
-    """Return mask of provided positions inside a Magpylib object"""
+    """Return mask of provided positions inside a Magpylib object.
+
+    ``positions`` are interpreted in the object's local (unrotated,
+    untranslated) frame. ``tolerance`` is relative to the object size for
+    every shape (scale-invariant).
+    """
     mask_inside_funcs = {
         "Cuboid": mask_inside_Cuboid,
         "Cylinder": mask_inside_Cylinder,
@@ -292,9 +307,13 @@ def trimesh_from_model3d(shape, polarization, **make_kwargs):
     kw = trace["kwargs"]
     verts_raw = np.column_stack([kw["x"], kw["y"], kw["z"]])
     faces_raw = np.column_stack([kw["i"], kw["j"], kw["k"]])
-    # Deduplicate numerically identical vertices (shared edges produce duplicates)
-    _, inv = np.unique(np.round(verts_raw, 10), axis=0, return_inverse=True)
-    vertices = np.unique(np.round(verts_raw, 10), axis=0)
+    # Deduplicate numerically identical vertices (shared edges produce
+    # duplicates). Quantization is relative to the geometry scale, so the
+    # dedup works for arbitrarily small or large shapes.
+    scale = max(float(np.max(np.abs(verts_raw))), np.finfo(float).tiny)
+    keys = np.round(verts_raw / (1e-9 * scale))
+    _, first_idx, inv = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    vertices = verts_raw[first_idx]
     faces = inv[faces_raw]
     return magpy.magnet.TriangularMesh(
         polarization=polarization,

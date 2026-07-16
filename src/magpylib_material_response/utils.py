@@ -7,6 +7,7 @@ import warnings
 from contextlib import contextmanager
 
 import magpylib as magpy
+import numpy as np
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from scipy.spatial.transform import Rotation
@@ -15,7 +16,7 @@ from magpylib_material_response import logging_config
 
 
 class ElapsedTimeThread(threading.Thread):
-    """ "Stoppable thread that logs the time elapsed"""
+    """Stoppable thread that logs the time elapsed."""
 
     def __init__(self, msg=None, min_log_time=None):
         super().__init__()
@@ -35,12 +36,12 @@ class ElapsedTimeThread(threading.Thread):
     def stopped(self):
         return self._stop_event.is_set()
 
-    def getStart(self):
-        return self.thread_start
-
     def run(self):
         self.thread_start = time.time()
-        while not self.stopped():
+        # Event.wait returns immediately when stop() is set, so joining the
+        # thread never blocks on the poll interval (a plain time.sleep here
+        # would stall every timelog exit by up to min_log_time/5 seconds).
+        while not self._stop_event.wait(max(0.01, self.min_log_time / 5)):
             if (
                 self.msg is not None
                 and time.time() - self.thread_start > self.min_log_time
@@ -48,8 +49,6 @@ class ElapsedTimeThread(threading.Thread):
             ):
                 logger.info("Starting: {operation}", operation=self.msg)
                 self._msg_displayed = True
-            # include a delay here so the thread doesn't uselessly thrash the CPU
-            time.sleep(max(0.01, self.min_log_time / 5))
 
 
 def format_duration(seconds):
@@ -87,8 +86,12 @@ def timelog(msg, min_log_time=None):
     if min_log_time is None:
         min_log_time = logging_config.DEFAULT_MIN_LOG_TIME
     start = time.perf_counter()
-    thread_timer = ElapsedTimeThread(msg=msg, min_log_time=min_log_time)
-    thread_timer.start()
+    # The watchdog thread only exists to emit "Starting: ..." during long
+    # steps; skip it entirely while the package is silent (the default).
+    thread_timer = None
+    if logging_config._package_logging_enabled():
+        thread_timer = ElapsedTimeThread(msg=msg, min_log_time=min_log_time)
+        thread_timer.start()
     try:
         yield
     except Exception:
@@ -103,15 +106,17 @@ def timelog(msg, min_log_time=None):
                 duration=format_duration(end),
             )
     finally:
-        thread_timer.stop()
-        thread_timer.join()
+        if thread_timer is not None:
+            thread_timer.stop()
+            thread_timer.join()
 
 
 def _serialize_recursive(obj, parent="warn"):
     """Serialize a magpylib object to a JSON-compatible dict.
 
     Supported classes:
-        - ``magpylib.magnet.Cuboid``, ``Cylinder``, ``CylinderSegment``
+        - ``magpylib.magnet.Cuboid``, ``Cylinder``, ``CylinderSegment``,
+          ``Sphere``, ``Tetrahedron``, ``TriangularMesh``
         - ``magpylib.current.Polyline``, ``Circle``
         - ``magpylib.Sensor``
         - ``magpylib.Collection`` (recursively)
@@ -142,11 +147,18 @@ def _serialize_recursive(obj, parent="warn"):
             f"object parent ({obj.parent}) not included in serialization", stacklevel=2
         )
 
+    # Material attributes may sit on any object (per-magnet or on a parent
+    # Collection for hierarchy lookup); np.asarray handles scalars, tuples
+    # and numpy arrays alike.
+    susceptibility = getattr(obj, "susceptibility", None)
+    if susceptibility is not None:
+        dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
+    h_ext = getattr(obj, "H_ext", None)
+    if h_ext is not None:
+        dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
+
     if isinstance(obj, BaseMagnet):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
-        susceptibility = getattr(obj, "susceptibility", None)
-        if susceptibility is not None:
-            dd["susceptibility"] = {"value": susceptibility}
 
     if isinstance(obj, BaseCurrent):
         dd["current"] = {"value": float(obj.current), "unit": "A"}
@@ -156,6 +168,13 @@ def _serialize_recursive(obj, parent="warn"):
     elif isinstance(obj, magpy.magnet.CylinderSegment):
         # (r1, r2, h, phi1, phi2) — first three in m, last two in deg.
         dd["dimension"] = {"value": obj.dimension.tolist(), "unit": "m,m,m,deg,deg"}
+    elif isinstance(obj, magpy.magnet.Sphere):
+        dd["diameter"] = {"value": float(obj.diameter), "unit": "m"}
+    elif isinstance(obj, magpy.magnet.Tetrahedron):
+        dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+    elif isinstance(obj, magpy.magnet.TriangularMesh):
+        dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+        dd["faces"] = {"value": obj.faces.tolist()}
     elif isinstance(obj, magpy.current.Polyline):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
     elif isinstance(obj, magpy.current.Circle):
@@ -219,6 +238,16 @@ def _deserialize_recursive(inp):
     elif constr is magpy.magnet.CylinderSegment:
         _check_unit("Dimension", inp["dimension"], "m,m,m,deg,deg")
         kw["dimension"] = inp["dimension"]["value"]
+    elif constr is magpy.magnet.Sphere:
+        _check_unit("Diameter", inp["diameter"], "m")
+        kw["diameter"] = inp["diameter"]["value"]
+    elif constr is magpy.magnet.Tetrahedron:
+        _check_unit("Vertices", inp["vertices"], "m")
+        kw["vertices"] = inp["vertices"]["value"]
+    elif constr is magpy.magnet.TriangularMesh:
+        _check_unit("Vertices", inp["vertices"], "m")
+        kw["vertices"] = inp["vertices"]["value"]
+        kw["faces"] = inp["faces"]["value"]
     elif constr is magpy.current.Polyline:
         _check_unit("Vertices", inp["vertices"], "m")
         kw["vertices"] = inp["vertices"]["value"]
@@ -234,6 +263,9 @@ def _deserialize_recursive(inp):
 
     if inp.get("susceptibility") is not None:
         obj.susceptibility = inp["susceptibility"]["value"]
+    if inp.get("H_ext") is not None:
+        _check_unit("H_ext", inp["H_ext"], "T")
+        obj.H_ext = inp["H_ext"]["value"]
 
     if constr is magpy.Collection:
         obj.add(*[_deserialize_recursive(child) for child in inp["children"]])
@@ -247,6 +279,9 @@ _CLASS_BY_TYPE = {
     "magnet.Cuboid": magpy.magnet.Cuboid,
     "magnet.Cylinder": magpy.magnet.Cylinder,
     "magnet.CylinderSegment": magpy.magnet.CylinderSegment,
+    "magnet.Sphere": magpy.magnet.Sphere,
+    "magnet.Tetrahedron": magpy.magnet.Tetrahedron,
+    "magnet.TriangularMesh": magpy.magnet.TriangularMesh,
     "current.Polyline": magpy.current.Polyline,
     "current.Circle": magpy.current.Circle,
     "Sensor": magpy.Sensor,
