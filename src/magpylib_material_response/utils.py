@@ -16,7 +16,7 @@ from magpylib_material_response import logging_config
 
 
 class ElapsedTimeThread(threading.Thread):
-    """ "Stoppable thread that logs the time elapsed"""
+    """Stoppable thread that logs the time elapsed."""
 
     def __init__(self, msg=None, min_log_time=None):
         super().__init__()

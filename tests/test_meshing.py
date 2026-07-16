@@ -319,6 +319,14 @@ def test_thin_cylinder_segment_extreme_aspect_ratio():
     assert len(coll.sources_all) >= 1
 
 
+def test_trimesh_from_model3d_tiny_scale():
+    """Regression: absolute 1e-10 vertex rounding collapsed sub-1e-10 m shapes;
+    dedup quantization is now relative to the geometry scale."""
+    trimesh = trimesh_from_model3d("cuboid", (0, 0, 1), dimension=(1e-10, 1e-10, 1e-10))
+    assert trimesh.vertices.shape == (8, 3)
+    assert not trimesh.status_open
+
+
 def test_voxelize_small_target_finite_cells():
     """Regression: grid_elems=1 caused division by zero, and an empty grid
     crashed with an opaque reshape error; both now behave cleanly."""

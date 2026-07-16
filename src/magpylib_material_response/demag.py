@@ -584,6 +584,15 @@ def demag_tensor(
     Demagnetization tensor: ndarray, shape (3,n,n,3), pre-``mu_0``:
         ``T[k, i, j, m] = -N_mk(pos_j - pos_i) / mu_0``
 
+    Notes
+    -----
+    Point-matched evaluation temporarily assigns unit polarizations to the
+    sources. Sources whose ``polarization`` is ``None`` keep the last unit
+    polarization afterwards (magpylib does not allow assigning ``None``
+    back); all other sources are restored. ``apply_demag`` is unaffected —
+    it operates on a copy and overwrites every polarization with the
+    solution.
+
     TODO: allow multi-point matching
     """
     nof_src = len(src_list)
