@@ -342,15 +342,33 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, row_budget=None):
 
 
 def _assemble_T_dense(magnets_list, positions, clusters, min_log_time=None):
-    """Assemble the full dense (3n, 3n) T in Fortran layout, global frame."""
+    """Assemble the full dense (3n, 3n) T in Fortran layout, global frame.
+
+    Reverse Newell cross-blocks are derived from the forward block by
+    volume-weighted reciprocity (``V_a N_ab = V_b N_ba^T``, exact for the
+    volume-averaged tensor) instead of a second analytical evaluation —
+    the same shortcut the iterative operator build uses.
+    """
     n = len(magnets_list)
     T = np.zeros((3 * n, 3 * n))
+
+    def _flat(cl):
+        return (np.arange(3)[:, None] * n + cl["indices"][None, :]).ravel()
+
     with timelog("Demagnetization tensor assembly", min_log_time=min_log_time):
-        for cl_a in clusters:
-            rows = (np.arange(3)[:, None] * n + cl_a["indices"][None, :]).ravel()
-            for cl_b in clusters:
-                cols = (np.arange(3)[:, None] * n + cl_b["indices"][None, :]).ravel()
-                T[np.ix_(rows, cols)] = _pair_block(cl_a, cl_b, magnets_list, positions)
+        for idx_a, cl_a in enumerate(clusters):
+            rows = _flat(cl_a)
+            T[np.ix_(rows, rows)] = _pair_block(cl_a, cl_a, magnets_list, positions)
+            for cl_b in clusters[idx_a + 1 :]:
+                cols = _flat(cl_b)
+                M_ab = _pair_block(cl_a, cl_b, magnets_list, positions)
+                T[np.ix_(rows, cols)] = M_ab
+                if _pair_uses_newell(cl_a, cl_b):
+                    v_ratio = float(np.prod(cl_a["dim"]) / np.prod(cl_b["dim"]))
+                    M_ba = v_ratio * M_ab.T
+                else:
+                    M_ba = _pair_block(cl_b, cl_a, magnets_list, positions)
+                T[np.ix_(cols, rows)] = M_ba
     return T
 
 

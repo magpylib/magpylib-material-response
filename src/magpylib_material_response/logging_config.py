@@ -64,6 +64,28 @@ def _env_bool(name: str, default: bool) -> bool:
     return val.strip().lower() in ("true", "1", "yes", "on")
 
 
+def _package_logging_enabled() -> bool:
+    """Best-effort check whether package records can currently be emitted.
+
+    Used to skip the ``timelog`` watchdog thread when the package is silent
+    (the default). Reads loguru's activation rules defensively: on any
+    surprise — no matching rule, changed internals — it returns ``True`` so
+    the watchdog behaves exactly as it always did.
+    """
+    try:
+        if not logger._core.handlers:
+            return False  # no sinks at all -> nothing can be emitted
+        # Activation rules are stored with a trailing dot ("pkg."); an empty
+        # name is the global rule. Most specific rule first.
+        for name, status in logger._core.activation_list:
+            base = name.removesuffix(".")
+            if not base or base == PACKAGE or PACKAGE.startswith(f"{base}."):
+                return status
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        return True
+    return True
+
+
 def configure_logging(
     level: str | None = None,
     enable_colors: bool | None = None,

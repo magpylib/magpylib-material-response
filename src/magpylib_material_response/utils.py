@@ -86,8 +86,12 @@ def timelog(msg, min_log_time=None):
     if min_log_time is None:
         min_log_time = logging_config.DEFAULT_MIN_LOG_TIME
     start = time.perf_counter()
-    thread_timer = ElapsedTimeThread(msg=msg, min_log_time=min_log_time)
-    thread_timer.start()
+    # The watchdog thread only exists to emit "Starting: ..." during long
+    # steps; skip it entirely while the package is silent (the default).
+    thread_timer = None
+    if logging_config._package_logging_enabled():
+        thread_timer = ElapsedTimeThread(msg=msg, min_log_time=min_log_time)
+        thread_timer.start()
     try:
         yield
     except Exception:
@@ -102,8 +106,9 @@ def timelog(msg, min_log_time=None):
                 duration=format_duration(end),
             )
     finally:
-        thread_timer.stop()
-        thread_timer.join()
+        if thread_timer is not None:
+            thread_timer.stop()
+            thread_timer.join()
 
 
 def _serialize_recursive(obj, parent="warn"):
