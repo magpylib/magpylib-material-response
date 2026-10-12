@@ -26,6 +26,18 @@ and this project adheres to
   in addition to `magnet.Cuboid` and `magnet.Cylinder`.
 - Optional dependency group `tetgen` (`tetgen>=0.8.3`).
   ([#41](https://github.com/magpylib/magpylib-material-response/pull/41)).
+- `apply_demag(..., solver="iterative")`: a matrix-free GMRES solver next to the
+  dense direct solver (`solver="direct"`, the default), with `solver_tol` and
+  `max_iter`. Both use one interaction rule and agree to `solver_tol`; meshes of
+  tens of thousands of cells solve in seconds. GMRES that does not converge
+  raises.
+- Volume-averaged Newell tensors for cuboid cells, generalized to different cell
+  sizes (`newell` module), and FFT products on uniform cuboid grids (`demag_fft`
+  module). Parallel cuboids interact through the Newell tensor, everything else
+  through point-matched `getH`.
+- `demag_fft.analyze_collection(sources)`: splits a collection into grid, loose
+  and generic clusters covering every cell once.
+- `scipy>=1.12` dependency.
 
 ### Changed
 
@@ -46,8 +58,27 @@ and this project adheres to
   less closely; a triple still sets the divisions. The cells are the ones
   magpylib's force mesher produces
   ([magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
+- The direct solver assembles in place (about 2-3x less peak memory), derives
+  reverse Newell blocks by reciprocity, and every block is built in chunks of at
+  most 200,000 (observer, source) pairs. 1,757 tetrahedra: 16.8 s and 7.7 GB
+  before, 7.5 s and 1.7 GB after.
+- `timelog` no longer blocks on exit and skips its watchdog thread while package
+  logging is silent (a 27-cell solve went from about 0.5 s to 5 ms).
 
 ### Fixed
+
+- Cells could be silently dropped from the interaction (up to 92% error); 180
+  deg rotated groups were split; polarizations were written back to the wrong
+  objects in some collections.
+- `H_ext` set on a meshed object now reaches its cells.
+- Three magnets with per-object scalar susceptibilities were read as one
+  anisotropic 3-vector; 0-d numpy arrays are accepted as scalars.
+- `split`, `max_dist` and `pairs_matching` crashed in several cases;
+  `match_pairs` could merge distinct geometries.
+- `to_json` dropped `H_ext` and Collection-level susceptibility.
+- Meshing edge cases (thin segments, empty voxel grids), scale-relative
+  tolerances in inside-masks and in `trimesh_from_model3d`, and a latent import
+  error in `get_dataset`.
 
 - Meshed cells get `meshing=1`, so `magpylib.getFT` accepts meshed and
   demagnetized collections as targets, with one force point per cell. It refused
