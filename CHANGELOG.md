@@ -26,13 +26,13 @@ and this project adheres to
 ### Fixed
 
 - Meshed cells get `meshing=1`, so `magpylib.getFT` accepts meshed and
-  demagnetized collections as targets, with one force point per cell. It
-  refused them before ("Missing meshing input").
-- `mesh_Cylinder` gives thin rings enough sectors that every cell's centroid lies
-  inside it. Demagnetization matches the field at the centroid, and for wide
-  sectors of a thin ring that point lay outside the material: in a transverse
-  field, a 4-5 mm tube meshed with 12 cells came out with the wrong sign. Thin
-  rings can now get more cells than `target_elems`.
+  demagnetized collections as targets, with one force point per cell. It refused
+  them before ("Missing meshing input").
+- `mesh_Cylinder` gives thin rings enough sectors that every cell's centroid
+  lies inside it. Demagnetization matches the field at the centroid, and for
+  wide sectors of a thin ring that point lay outside the material: in a
+  transverse field, a 4-5 mm tube meshed with 12 cells came out with the wrong
+  sign. Thin rings can now get more cells than `target_elems`.
 - `apply_demag` refuses objects whose dimension, polarization, current or other
   property varies along a path (with magpylib versions that allow this), not
   only position paths, instead of failing inside the solver.
