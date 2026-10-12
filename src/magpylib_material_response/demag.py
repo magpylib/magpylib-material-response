@@ -14,6 +14,30 @@ from scipy.spatial.transform import Rotation as R
 from magpylib_material_response.utils import timelog
 
 
+def _matching_point(src):
+    """Point where a cell's field is matched: its centroid.
+
+    `centroid` exists from magpylib 5.2 on; `barycenter` is the older name, kept
+    only as a deprecated alias on later versions. Cuboids and cylinders have
+    neither before 5.2, and for them the position is the centroid.
+    """
+    for attr in ("centroid", "barycenter"):
+        point = getattr(src, attr, None)
+        if point is not None:
+            return point
+    return src.position
+
+
+def _has_path(src):
+    """True if the position, orientation or any path-capable property of `src`
+    varies along a path (magpylib >= 5.3 lets e.g. `dimension` or `current` do so).
+    """
+    if np.ndim(src.position) != 1:
+        return True
+    path_len = getattr(src, "_get_path_len", None)
+    return path_len is not None and path_len() > 1
+
+
 def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
     Priority is given at the source level, however if value is not found, it is searched
@@ -174,7 +198,7 @@ def demag_tensor(
     elif pairs_matching:
         getH_params, mask_inds, unique_inv_inds, pos0, rot0 = match_pairs(src_list)
     else:
-        pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
+        pos0 = np.array([_matching_point(src) for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
 
@@ -237,7 +261,7 @@ def filter_distance(
         if not all_cuboids:
             msg = "filter_distance only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
+        pos0 = np.array([_matching_point(src) for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -284,7 +308,7 @@ def match_pairs(src_list, min_log_time=None):
         if not all_cuboids:
             msg = "Pairs matching only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([getattr(src, "barycenter", src.position) for src in src_list])
+        pos0 = np.array([_matching_point(src) for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -382,11 +406,12 @@ def apply_demag(
     if style is not None:
         collection.style = style
     srcs = collection.sources_all
-    src_with_paths = [src for src in srcs if src.position.ndim != 1]
+    src_with_paths = [src for src in srcs if _has_path(src)]
     if src_with_paths:
         msg = (
             f"{len(src_with_paths)} objects with paths, found. Demagnetization of "
-            "objects with paths is not yet supported"
+            "objects with paths (in position, orientation or any other property, "
+            "e.g. dimension, polarization or current) is not yet supported"
         )
         raise ValueError(msg)
     magnets_list = [src for src in srcs if isinstance(src, BaseMagnet)]

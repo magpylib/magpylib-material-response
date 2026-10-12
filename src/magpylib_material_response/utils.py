@@ -7,6 +7,7 @@ import warnings
 from contextlib import contextmanager
 
 import magpylib as magpy
+import numpy as np
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from scipy.spatial.transform import Rotation
@@ -146,10 +147,13 @@ def _serialize_recursive(obj, parent="warn"):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
         susceptibility = getattr(obj, "susceptibility", None)
         if susceptibility is not None:
-            dd["susceptibility"] = {"value": susceptibility}
+            # np.asarray covers scalars, tuples and numpy arrays alike
+            dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
 
+    # A scalar, or one value per path step where magpylib allows the property to
+    # vary along a path; .tolist() writes either as JSON.
     if isinstance(obj, BaseCurrent):
-        dd["current"] = {"value": float(obj.current), "unit": "A"}
+        dd["current"] = {"value": np.asarray(obj.current).tolist(), "unit": "A"}
 
     if isinstance(obj, magpy.magnet.Cuboid | magpy.magnet.Cylinder):
         dd["dimension"] = {"value": obj.dimension.tolist(), "unit": "m"}
@@ -159,7 +163,7 @@ def _serialize_recursive(obj, parent="warn"):
     elif isinstance(obj, magpy.current.Polyline):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
     elif isinstance(obj, magpy.current.Circle):
-        dd["diameter"] = {"value": float(obj.diameter), "unit": "m"}
+        dd["diameter"] = {"value": np.asarray(obj.diameter).tolist(), "unit": "m"}
     elif isinstance(obj, magpy.Sensor):
         if obj.pixel is not None:
             dd["pixel"] = {"value": obj.pixel.tolist(), "unit": "m"}

@@ -21,6 +21,13 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     if susceptibility is not None:
         for cell in cells:
             cell.susceptibility = susceptibility
+    # One force point per cell, so `magpy.getFT` accepts the cells as targets
+    # (it refuses targets without `meshing`). After demagnetization each cell
+    # carries its own polarization, and its centre is the point that stands for
+    # it. Classes without `meshing` (magpylib < 5.2) are left alone.
+    for cell in cells:
+        if hasattr(cell, "meshing") and cell.meshing is None:
+            cell.meshing = 1
     coll = magpy.Collection(cells)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
@@ -95,6 +102,28 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
     return _collection_from_obj_and_cells(cuboid, cells, **kwargs)
 
 
+def _sectors_with_centroid_inside(r_in, r_out, span, n):
+    """Smallest number of sectors, at least `n`, that splits the ring
+    `r_in..r_out` over `span` degrees so that each sector's centroid lies within
+    a quarter of the ring's thickness of its mid-radius.
+
+    Demagnetization matches each cell's field at its centroid. A wide sector of a
+    thin ring has its centroid outside the material (a 120 deg sector of a
+    4-5 mm ring has it at 3.7 mm), which makes the result wrong.
+    """
+    if r_in == 0:
+        return n  # a disc sector's centroid is always inside it
+    r_mid = (r_in + r_out) / 2
+    tolerance = (r_out - r_in) / 4
+    # centroid radius of an annular sector of half-angle a: r_bar * sin(a) / a
+    r_bar = 2 / 3 * (r_out**3 - r_in**3) / (r_out**2 - r_in**2)
+    while True:
+        half_angle = np.deg2rad(span / n) / 2
+        if r_mid - r_bar * np.sin(half_angle) / half_angle <= tolerance:
+            return n
+        n += 1
+
+
 def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
     """
     Split `Cylinder` or `CylinderSegment` up into small cylindrical or cylinder segment
@@ -111,7 +140,9 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
         over the radius and over the height. If an integer, the number of divisions is
         apportioned proportionally to the cylinder (or cylinder segment) dimensions. The
         resulting meshing cylinder segment cells are then the closest to cubes as
-        possible.
+        possible. Either way, a ring gets more sectors where needed so that every
+        cell's centroid lies inside it, so thin rings can get more cells than asked
+        for.
     verbose: bool
         If True, prints out meshing information
 
@@ -157,6 +188,9 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
     for r_ind in range(nr):
         # redistribute number divisions proportionally to the radius
         nphi_r = max(1, int(r[r_ind + 1] / ((r1 + r2) / 2) * nphi))
+        nphi_r = _sectors_with_centroid_inside(
+            r[r_ind], r[r_ind + 1], phi2 - phi1, nphi_r
+        )
         phi = np.linspace(phi1, phi2, nphi_r + 1)
         for h_ind in range(nh):
             pos_h = dh * h_ind - h / 2 + dh / 2
