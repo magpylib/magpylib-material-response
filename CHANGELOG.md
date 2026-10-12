@@ -10,6 +10,10 @@ and this project adheres to
 
 ### Added
 
+- Serialization (`to_json` / `from_json`) now supports `magnet.Sphere`,
+  `magnet.Tetrahedron`, and `magnet.TriangularMesh` — demagnetized tetrahedral
+  meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded.
+
 - `mesh_TriangularMesh()` — meshes a `magnet.TriangularMesh` into conforming
   tetrahedral cells using [TetGen](https://tetgen.pyvista.org/). Quality and
   cell count are controlled via `target_elems`, `minratio`, and `mindihedral`.
