@@ -61,6 +61,12 @@ from magpylib_material_response.utils import timelog
 #: deriving the reverse block by reciprocity (halving the build cost).
 DENSE_BLOCK_MAX_ENTRIES = 20_000_000
 
+#: Every block is evaluated in observer chunks covering at most this many
+#: (observer, source) pairs per field evaluation. Memory grows with pairs, not
+#: with output entries: about 0.8 kB per pair for cuboids and about 3 kB for
+#: tetrahedra in magpylib's kernels, so one chunk stays below about 0.6 GB.
+KERNEL_PAIRS_PER_CALL = 200_000
+
 
 def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
@@ -317,14 +323,23 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, row_budget=None):
             return _newell_block_T(pos_a[sl], pos_b, cl_a["dim"], cl_b["dim"], rot_mat)
         return _point_block_T([magnets_list[i] for i in ib], pos_a[sl])
 
-    if not sparsify:
-        return _dense_chunk(slice(None))
+    def _chunks():
+        # Observer chunks bounded by kernel pairs, which is what costs memory;
+        # a single call over all n_a * n_b pairs of 5,000 tetrahedra needs ~97 GB.
+        chunk = max(1, KERNEL_PAIRS_PER_CALL // max(n_b, 1))
+        for start in range(0, n_a, chunk):
+            stop = min(start + chunk, n_a)
+            yield start, stop, _dense_chunk(slice(start, stop))
 
-    chunk = max(1, DENSE_BLOCK_MAX_ENTRIES // max(9 * n_b, 1))
+    if not sparsify:
+        # Rows of a block are m-major over its observers: (3, n_a, 3 n_b).
+        block = np.empty((3, n_a, 3 * n_b))
+        for start, stop, part in _chunks():
+            block[:, start:stop] = part.reshape(3, stop - start, 3 * n_b)
+        return block.reshape(3 * n_a, 3 * n_b)
+
     rows_all, cols_all, vals_all = [], [], []
-    for start in range(0, n_a, chunk):
-        stop = min(start + chunk, n_a)
-        block = _dense_chunk(slice(start, stop))
+    for start, stop, block in _chunks():
         r, c, v = _row_sparsify(block, row_budget)
         # Local rows are m-major over the chunk; map to m-major over n_a.
         n_ch = stop - start
