@@ -71,8 +71,6 @@ print(f"Saved {json_path.stat().st_size / 1024:.1f} kB → {json_path.name}")
 ## Reload and display
 
 ```{code-cell} ipython3
-import time
-
 from magpylib_material_response import from_json
 
 # reload — no simulation needed

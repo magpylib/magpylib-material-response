@@ -5,17 +5,25 @@
 ```
 
 ```{toctree}
-:caption: CONTENT
-:glob: true
+:caption: Getting started
 :maxdepth: 2
 
+quickstart
+examples/index
+```
+
+```{toctree}
+:caption: Reference
+:maxdepth: 2
+
+method
+api
 logging
 serialization
-examples/index
+changelog
 ```
 
 ## Indices and tables
 
 - {ref}`genindex`
-- {ref}`modindex`
 - {ref}`search`
