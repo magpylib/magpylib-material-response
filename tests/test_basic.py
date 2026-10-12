@@ -183,3 +183,28 @@ def test_get_susceptibilities_edge_cases():
     result = get_susceptibilities([zone])
     expected = np.array([3.0, 3.0, 3.0])
     np.testing.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: magpy.magnet.Cuboid(
+            polarization=(0, 0, 1), dimension=[(0.01, 0.01, 0.01), (0.012, 0.01, 0.01)]
+        ),
+        lambda: magpy.magnet.Cuboid(
+            polarization=[(0, 0, 1), (0, 0, 0.9)], dimension=(0.01, 0.01, 0.01)
+        ),
+        lambda: magpy.current.Circle(diameter=0.02, current=[1, 2, 3]),
+    ],
+    ids=["dimension", "polarization", "current"],
+)
+def test_apply_demag_refuses_property_paths(make):
+    """Demagnetization along a path is not supported, whichever property varies."""
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01))
+    if not hasattr(cube, "path_properties"):
+        pytest.skip("this magpylib has no path-valued properties")
+    cube.susceptibility = 1
+    obj = make()
+    obj.susceptibility = 1
+    with pytest.raises(ValueError, match="paths"):
+        apply_demag(magpy.Collection(cube, obj))

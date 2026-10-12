@@ -6,6 +6,7 @@ import magpylib as magpy
 import numpy as np
 import pytest
 
+from magpylib_material_response.demag import _matching_point, apply_demag
 from magpylib_material_response.meshing import (
     mesh_all,
     mesh_Cuboid,
@@ -307,3 +308,55 @@ def test_mesh_TriangularMesh():
     # TypeError on wrong input type
     with pytest.raises(TypeError):
         mesh_TriangularMesh(cuboid, target_elems=10)
+
+
+def test_cells_are_force_targets():
+    """Every cell gets one force point, so getFT accepts meshed and demagnetized
+    collections; a meshed cuboid gives the force of the same grid on the whole."""
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01))
+    if not hasattr(cube, "meshing"):
+        pytest.skip("magpylib < 5.2 has no force computation")
+    src = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01), position=(0, 0, -0.011)
+    )
+    cyl = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(0.01, 0.01))
+    for coll in (mesh_Cuboid(cube, 27), mesh_Cylinder(cyl, 30)):
+        assert {cell.meshing for cell in coll.children} == {1}
+        F, T = magpy.getFT(src, coll)
+        assert np.all(np.isfinite(F))
+        assert np.all(np.isfinite(T))
+
+    cube.meshing = (3, 3, 3)
+    np.testing.assert_allclose(
+        magpy.getFT(src, mesh_Cuboid(cube, 27))[0],
+        magpy.getFT(src, cube)[0],
+        rtol=1e-9,
+        atol=1e-9,
+    )
+
+
+def test_mesh_Cylinder_thin_ring_centroids_inside():
+    """A wide sector of a thin ring has its centroid outside the material, where
+    demagnetization matches the field: a 4-5 mm tube in 12 cells came out with
+    the wrong sign in a transverse field."""
+    tube = magpy.magnet.CylinderSegment(
+        polarization=(0, 0, 0), dimension=(0.004, 0.005, 0.03, 0, 360)
+    )
+    for target in (3, 12, 24, 48):
+        for cell in mesh_Cylinder(tube, target).children:
+            r1, r2 = cell.dimension[:2]
+            x, y, _ = _matching_point(cell)
+            assert r1 <= np.hypot(x, y) <= r2
+
+    src = magpy.magnet.Cuboid(
+        polarization=(1, 0, 0), dimension=(0.01, 0.01, 0.01), position=(0.015, 0, 0)
+    )
+    src.susceptibility = 0
+
+    def moment_x(target):
+        cells = mesh_Cylinder(tube, target)
+        cells.susceptibility = 1000
+        out = apply_demag(magpy.Collection(src.copy(), cells)).children[1]
+        return sum(c.polarization[0] * c.volume for c in out.children)
+
+    np.testing.assert_allclose(moment_x(12), moment_x(48), rtol=0.05)

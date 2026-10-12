@@ -191,3 +191,21 @@ def test_from_json_returns_multiple_objects():
     assert len(out) == 2
     assert isinstance(out[0], magpy.magnet.Cuboid)
     assert isinstance(out[1], magpy.Sensor)
+
+
+def test_roundtrip_susceptibility_array():
+    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1, 1, 1))
+    cube.susceptibility = np.array([1.0, 2.0, 3.0])
+    out = from_json(to_json(cube))[0]
+    np.testing.assert_allclose(out.susceptibility, [1.0, 2.0, 3.0])
+
+
+def test_roundtrip_circle_with_property_paths():
+    """A Circle whose diameter and current vary along a path serializes."""
+    if "current" not in getattr(magpy.current.Circle(), "path_properties", ()):
+        pytest.skip("this magpylib has no path-valued properties")
+    circ = magpy.current.Circle(
+        diameter=np.linspace(0.01, 0.05, 5), current=np.linspace(1, 10, 5)
+    )
+    out = from_json(to_json(circ))[0]
+    np.testing.assert_allclose(out.getB((0, 0, 0.01)), circ.getB((0, 0, 0.01)))
