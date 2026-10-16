@@ -186,8 +186,9 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
     dh = h / nh
     cells = []
     for r_ind in range(nr):
-        # redistribute number divisions proportionally to the radius
-        nphi_r = max(1, int(r[r_ind + 1] / ((r1 + r2) / 2) * nphi))
+        # angular divisions in proportion to the ring's middle radius, so that all
+        # cells have about the same arc length and the rings add up to nphi * nr
+        nphi_r = max(1, round((r[r_ind] + r[r_ind + 1]) / (r1 + r2) * nphi))
         nphi_r = _sectors_with_centroid_inside(
             r[r_ind], r[r_ind + 1], phi2 - phi1, nphi_r
         )

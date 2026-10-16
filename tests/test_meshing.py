@@ -155,7 +155,7 @@ def test_mesh_Cylinder2():
     cyl_segs = [o for o in cm if isinstance(o, magpy.magnet.CylinderSegment)]
 
     assert len(cyls) == 7
-    assert len(cyl_segs) == 231
+    assert len(cyl_segs) == 189
 
 
 def test_mesh_thin_CylinderSegment_with_cuboids():
@@ -232,7 +232,7 @@ def test_mesh_all():
     cylsegs = [o for o in cm.sources_all if isinstance(o, magpy.magnet.CylinderSegment)]
     assert len(cubs) == 16
     assert len(cyls) == 0
-    assert len(cylsegs) == 18
+    assert len(cylsegs) == 12
 
     # mesh per child elems
     cm = mesh_all(c0, per_child_elems=True, target_elems=20)
@@ -241,7 +241,7 @@ def test_mesh_all():
     cylsegs = [o for o in cm.sources_all if isinstance(o, magpy.magnet.CylinderSegment)]
     assert len(cubs) == 40
     assert len(cyls) == 1
-    assert len(cylsegs) == 23
+    assert len(cylsegs) == 19
 
     # mesh on copy (by default)
     cm = mesh_all(c0, target_elems=20)
@@ -360,3 +360,42 @@ def test_mesh_Cylinder_thin_ring_centroids_inside():
         return sum(c.polarization[0] * c.volume for c in out.children)
 
     np.testing.assert_allclose(moment_x(12), moment_x(48), rtol=0.05)
+
+
+def _segment_dimensions(coll):
+    """(r1, r2, h, phi1, phi2) of each Cylinder or CylinderSegment cell."""
+    dims = []
+    for cell in coll:
+        if isinstance(cell, magpy.magnet.Cylinder):
+            d, h = cell.dimension
+            dims.append((0, d / 2, h, 0, 360))
+        else:
+            dims.append(tuple(cell.dimension))
+    return np.array(dims)
+
+
+@pytest.mark.parametrize(
+    ("magnet", "target_elems"),
+    [
+        (magpy.magnet.Cylinder(dimension=(1, 1)), 200),
+        (magpy.magnet.CylinderSegment(dimension=(1, 1.1, 1, 0, 270)), 20),
+        (magpy.magnet.CylinderSegment(dimension=(0, 1, 2, 10, 370)), 50),
+    ],
+    ids=["Cylinder-200", "Segment-20", "Segment-50"],
+)
+def test_cells_match_magpylib_force_mesh(magnet, target_elems):
+    """mesh_Cylinder cuts a magnet into the same cells as magpylib's force mesher
+    for the same target (magpylib#1009)."""
+    magnet.polarization = (1, 0, 0)
+    magnet.meshing = target_elems
+    cells = magnet._generate_mesh().get("cells")
+    if cells is None:
+        pytest.skip("this magpylib meshes points, not cells")
+    coll = mesh_Cylinder(magnet, target_elems)
+    scale = np.max(np.abs(magnet.dimension))
+    np.testing.assert_allclose(
+        [cell.position for cell in coll], cells["positions"], atol=1e-12 * scale
+    )
+    np.testing.assert_allclose(
+        _segment_dimensions(coll), cells["dimensions"], atol=1e-12 * scale
+    )
