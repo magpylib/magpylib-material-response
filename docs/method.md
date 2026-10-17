@@ -269,8 +269,9 @@ door to specialized fast matvec implementations.
 The preconditioner is block-Jacobi: one 3×3 block per cell, built from the
 cell's susceptibility tensor and its self-demag factors under the chosen rule,
 
-$$ \mathbf{M}_i = \mathbf{I} + \boldsymbol{\chi}_i ,
-  \operatorname{diag}\bigl(N^{(\text{self})}_i\bigr)$$
+$$
+\mathbf{M}_i = \mathbf{I} + \boldsymbol{\chi}_i \, \operatorname{diag}\bigl(N^{(\text{self})}_i\bigr)
+$$
 
 which is the cell's own block of $\mathbf{Q}$ (exact for a rotated anisotropic
 cell) and dramatically reduces the number of GMRES iterations needed for
@@ -309,9 +310,8 @@ Physical grid (Nx × Ny × Nz)   →   Doubled grid (2Nx × 2Ny × 2Nz)
                                      |_________________|
 ```
 
-The kernel (the 6 independent components of the chosen rule's tensor,
-pre-FFTed) is built **once** by `build_fft_kernel` and reused for every GMRES
-iteration.
+The kernel (the 6 independent components of the chosen rule's tensor, pre-FFTed)
+is built **once** by `build_fft_kernel` and reused for every GMRES iteration.
 
 **Flow for a single-group FFT matvec:**
 
@@ -379,10 +379,9 @@ The demag operator becomes a **block structure** over cluster pairs:
 **Rotation handling:** each cluster may have an arbitrary orientation $R_C$. The
 FFT operates in the cluster's local frame — the polarization is rotated in and
 the field rotated back **inside the block** (`_fft_apply`), so the GMRES solve
-itself always runs in the global frame. There each cell's susceptibility is
-its 3×3 tensor $R_i \operatorname{diag}(\boldsymbol{\chi}_i) R_i^\mathsf{T}$:
-an anisotropic susceptibility follows the cell's own axes, whatever its
-rotation.
+itself always runs in the global frame. There each cell's susceptibility is its
+3×3 tensor $R_i \operatorname{diag}(\boldsymbol{\chi}_i) R_i^\mathsf{T}$: an
+anisotropic susceptibility follows the cell's own axes, whatever its rotation.
 
 Two size gates keep the bookkeeping proportionate: a detected grid smaller than
 `MIN_GRID_CELLS` (16) is handled as a dense _loose_ block instead of an FFT
@@ -390,13 +389,13 @@ kernel, and under point matching a geometry cluster smaller than
 `MIN_CLUSTER_CELLS` (8) is folded into the _generic_ cluster. Volume averaging
 keeps every cuboid in a geometry cluster, since each pair needs both shapes.
 
-For dense blocks the reverse block comes for free by reciprocity wherever it
-is exact: volume averaging obeys
+For dense blocks the reverse block comes for free by reciprocity wherever it is
+exact: volume averaging obeys
 $\mathbf{T}_{BA} = (V_A / V_B)\,\mathbf{T}_{AB}^\mathsf{T}$ for any two parallel
 cuboid clusters, point matching $\mathbf{T}_{BA} = \mathbf{T}_{AB}^\mathsf{T}$
 when both clusters share one cell shape and orientation (sparsified blocks are
-rebuilt per direction to preserve their row-sum error bound). Displacements
-are deduplicated before evaluation when fewer than 25 % are distinct — for
+rebuilt per direction to preserve their row-sum error bound). Displacements are
+deduplicated before evaluation when fewer than 25 % are distinct — for
 same-spacing grids only $O(N)$ of the $N^2$ pair displacements are.
 
 ---
@@ -416,8 +415,8 @@ $$
 $$
 
 where $\varepsilon_\text{tol}$ is `solver_tol` and $\|\mathbf{S}\|_\infty$ the
-largest row sum of the cells' $|\boldsymbol{\chi}_i|$. Summing over the $\le K$ blocks
-that touch a row, the operator perturbation is rigorously bounded:
+largest row sum of the cells' $|\boldsymbol{\chi}_i|$. Summing over the $\le K$
+blocks that touch a row, the operator perturbation is rigorously bounded:
 
 $$
 
@@ -476,9 +475,9 @@ apply_demag(collection, solver=..., interaction=...)
 
 Cross-block build cost is halved by reciprocity and reduced further by
 displacement deduplication when cluster grids share their spacing. Indicative
-timings for one meshed cube (Apple Silicon, $\chi = 3$, `solver_tol=1e-8`,
-point matching): about 40× faster than the direct solver at $N=3\,375$;
-$N=27\,000$ solves in about 1.5 s where the dense solver would need ~50 GB
+timings for one meshed cube (Apple Silicon, $\chi = 3$, `solver_tol=1e-8`, point
+matching): about 40× faster than the direct solver at $N=3\,375$; $N=27\,000$
+solves in about 1.5 s where the dense solver would need ~50 GB
 ($(3N)^2 \times 8$ bytes).
 
 ---
@@ -491,4 +490,3 @@ $N=27\,000$ solves in about 1.5 s where the dense solver would need ~50 GB
 
 2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of magnetostatic
    moment method._ IEEE Transactions on Magnetics, 42(4), 515–520.
-$$
