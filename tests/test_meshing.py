@@ -160,6 +160,24 @@ def test_mesh_Cylinder2():
     assert len(cyl_segs) == 162
 
 
+@pytest.mark.parametrize(
+    ("susceptibility", "accepted"),
+    [(0.5, True), ((0.1, 0.1, 2.0), True), (np.array((2.0, 0.1, 0.1)), False)],
+)
+def test_mesh_thin_CylinderSegment_with_cuboids_anisotropy(susceptibility, accepted):
+    """Its cells are turned about z, so only a susceptibility equal along x and y
+    keeps the segment's own axes (#50)."""
+    seg = magpy.magnet.CylinderSegment(
+        polarization=(1, 0, 0), dimension=(1, 1.1, 1, 0, 270)
+    )
+    seg.susceptibility = susceptibility
+    if accepted:
+        mesh_thin_CylinderSegment_with_cuboids(seg, target_elems=20)
+    else:
+        with pytest.raises(ValueError, match="same along x and y"):
+            mesh_thin_CylinderSegment_with_cuboids(seg, target_elems=20)
+
+
 def test_mesh_thin_CylinderSegment_with_cuboids():
     # create thin CylinderSegment with rotated path
     N = 3
