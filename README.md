@@ -44,11 +44,13 @@ Key features:
 - **`apply_demag`** — self-consistent demagnetization of magpylib `Collection`
   objects, with per-cell scalar or anisotropic susceptibility; external fields
   and current sources in the collection drive the response.
-- **Two solvers, one physics** — an exact dense solver and an FFT-accelerated
-  iterative solver that agree to solver tolerance for any input; meshes with
-  tens of thousands of cells solve in seconds.
-- **Analytical interactions** — volume-averaged Newell tensors for cuboid cells
-  (generalized to different cell sizes), point matching for everything else.
+- **Two solvers, one system** — an exact dense solver and an FFT-accelerated
+  iterative solver that apply the same interactions; a box of tens of thousands
+  of cuboid cells solves in seconds.
+- **Two interaction rules** — the field of each cell taken at the centre of the
+  others (default, any cell type), or averaged over them
+  (`interaction="newell"`, cuboid meshes), whose induced moment rises towards
+  the converged value with every refinement.
 - **Meshing helpers** — cuboids, cylinders, and arbitrary closed surfaces via
   tetrahedral meshing (`mesh_TriangularMesh`, using TetGen).
 

@@ -14,8 +14,10 @@ magnetization proportional to the local total field:
 $$\mathbf{M} = \chi \, \mathbf{H}_\text{total}$$
 
 where $\chi$ is the magnetic susceptibility — an isotropic scalar, or a 3-vector
-acting component-wise as a diagonal tensor in the **global frame** (anisotropy
-works for arbitrarily rotated cells, see the rotation handling in section 5.2).
+$(\chi_x, \chi_y, \chi_z)$ along the **cell's own axes**, which turn with its
+orientation like its polarization: a cell rotated by $R$ responds with the
+tensor $R\,\operatorname{diag}(\chi_x, \chi_y, \chi_z)\,R^\mathsf{T}$ in the global
+frame.
 In magpylib's convention, the primary field quantity is the **intrinsic
 polarization** $\mathbf{J} = \mu_0 \mathbf{M}$ (units of Tesla), so the
 constitutive relation becomes
@@ -53,8 +55,9 @@ $j$ is linear in $\mathbf{J}_j$:
 $$\mathbf{B}_{\text{demag},i} = \sum_{j=1}^{N} \mathsf{T}_{ij} \, \mathbf{J}_j$$
 
 where $\mathsf{T}_{ij}$ is a **3×3 demagnetization tensor block**
-(dimensionless) that encodes the volume-averaged field produced at cell $i$'s
-centre by a unit polarization in cell $j$.
+(dimensionless): the field that a unit polarization in cell $j$ produces at
+cell $i$, taken at its centre or averaged over it depending on the
+interaction rule (section 3).
 
 ### Linear system
 
@@ -77,8 +80,9 @@ where:
 
 - $\mathbf{J} \in \mathbb{R}^{3N}$ — unknown polarization vector (Fortran-flat:
   $[J_{x,1},\ldots,J_{x,N},\, J_{y,1},\ldots,J_{z,N}]$)
-- $\mathbf{S} = \operatorname{diag}(\chi_1,\ldots,\chi_N,\chi_1,\ldots,\chi_N,\chi_1,\ldots,\chi_N)$
-  — susceptibility matrix (3N×3N diagonal)
+- $\mathbf{S}$ — susceptibility matrix, block-diagonal: cell $i$ contributes
+  its 3×3 tensor $R_i \operatorname{diag}(\boldsymbol{\chi}_i) R_i^\mathsf{T}$
+  (diagonal when the susceptibility is isotropic or the cell unrotated)
 - $\mathbf{T} \in \mathbb{R}^{3N \times 3N}$ — full demag tensor matrix
   ($\mathsf{T}_{ij}$ blocks on rows $i$, columns $j$)
 
@@ -89,12 +93,57 @@ accounting for all mutual demagnetization interactions.
 
 ## 3. The demagnetization tensor
 
+### Two interaction rules
+
+A cell's field is known exactly; the method of moments only has to decide
+_where_ in the observer cell to take it. `apply_demag` offers two answers,
+chosen per solve with `interaction` and applied to **every pair**, never mixed:
+
+| `interaction`         | The field of cell $j$ at cell $i$       | Works for                                    |
+| --------------------- | --------------------------------------- | -------------------------------------------- |
+| `"point"` (default)   | at the centre of cell $i$               | any cell type and orientation                |
+| `"newell"`            | averaged over the whole of cell $i$     | cuboid cells, all with one orientation       |
+
+**Point matching** (Chadebec 2006) is the rule this package has always used.
+**Volume averaging** is the Galerkin form of the problem: with it, the induced
+moment of a soft body in a uniform field is a **lower bound** that rises with
+every refinement of the mesh and never overshoots, so a convergence study knows
+which side the converged value is on. Point matching gives no such guarantee:
+on a thin soft plate its moment overshoots and then falls back as the mesh is
+refined.
+
+At equal cell count neither rule is more accurate in general. On cubic cells
+they agree to fourth order in cell size over distance; on flat or long cells
+each is closer to the converged answer on different quantities (on a
+20 × 20 × 1 mm soft plate with 4 × 4 × 1 mm cells, point matching is closer on
+the moment and volume averaging on the field beside the plate). Both converge
+to the same answer.
+
+The rules are never mixed within a solve. A mix would use volume averaging only
+between parallel cuboids, so turning one of two touching bodies by any angle,
+however small, would switch their interaction to point matching: the result
+would jump (0.28 % for a magnet and an iron block turned by a millionth of a
+degree), and the lower bound would be lost. `interaction="newell"` therefore
+raises when the cells are not all cuboids with one orientation.
+
+### Point matching
+
+The field of a uniformly polarized cell at the observer's centre is evaluated
+with magpylib's closed-form field of the cell type (`magpy.getH`, Chadebec
+2006). For cuboid source cells this is
+{func}`~magpylib_material_response.newell.point_block`: the tensor depends only
+on the displacement and the source shape, so cells sharing a shape and
+orientation get the same fast paths as volume averaging (deduplicated blocks,
+reverse blocks by reciprocity, FFT kernels). It is symmetric and even in the
+displacement outside the source. Beyond 50 source sides it switches to the
+far-field expansion below, where magpylib's closed form would slowly lose
+precision; the error stays below 3 × 10⁻⁸ on both sides of the switch.
+
 ### Newell 1993 analytical formula
 
 For **identical, axis-aligned** rectangular prisms of dimensions $(a,b,c)$, the
 volume-averaged interaction tensor $\mathsf{N}_{ij}$ (a.k.a. the _Newell
 kernel_) has a closed analytical form given by
-
 > A. J. Newell, W. Williams, D. J. Dunlop (1993) _A generalization of the
 > demagnetizing tensor for nonuniform magnetization._ J. Geophys. Res.
 > **98**(B6), 9551–9555.
@@ -135,15 +184,26 @@ used to derive reverse cross-blocks by transposition. Implemented in
 `demag_block_general` and validated against Gauss–Legendre volume averages of
 magpylib's exact cuboid field.
 
-### The unified pair rule
+### Far field
 
-Every entry of $\mathbf{T}$ is defined by one rule, shared by both solvers:
+Far apart, the exact formulas lose precision: Newell's double differences
+cancel nearly equal terms, about $\varepsilon\, r^6 / (V_\text{src} V_\text{obs})$
+relative. Beyond a switch distance both rules use the far-field expansion of
+the tensor, the point dipole plus its leading cell-size correction,
 
-- both cells are Cuboids with a **common orientation** (any relative position,
-  any sizes) → analytical volume-averaged Newell tensor;
-- anything else (non-cuboid magnets, differently-rotated cells) → **point
-  matching**: the field of a unit source polarization evaluated at the observer
-  barycentre via `magpy.getH` (Chadebec 2006).
+$$
+\mathsf{N}(\mathbf{r}) \approx -\frac{V_\text{src}}{4\pi}
+  \Bigl[\nabla\nabla \tfrac{1}{r}
+  + \sum_k \tfrac{a_k^2 + b_k^2}{24}\, \partial_k^2 \nabla\nabla \tfrac{1}{r}\Bigr],
+$$
+
+accurate to $(h_\text{max}/r)^4$, with $a$ and $b$ the source and observer
+sides ($b = 0$ for point matching). Volume averaging switches where the two
+errors meet, at $r^{10} = 10^{15}\, h_\text{max}^4 V_\text{src} V_\text{obs}$,
+calibrated against 60-digit evaluations of the exact formulas: the worst error
+from 5 to 10 000 cell sizes is $3 \times 10^{-7}$ for cubes and
+$10^{-5}$ for 10:1 rods. Without the switch, an iron cube 3 m from a magnet
+meshed with 1 mm cells received 300 times its induced polarization.
 
 ### Sign convention in the code
 
@@ -163,17 +223,17 @@ inside `apply_demag`; both conventions describe the same operator.
 
 ### Self-demagnetization
 
-For the **diagonal block** $i = j$ (a cell acting on itself), the Newell kernel
-reduces to the classical shape demagnetization factors
+For the **diagonal block** $i = j$ (a cell acting on itself), volume
+averaging gives the classical magnetometric demagnetization factors
 $(N_{xx}^{(\text{self})},\, N_{yy}^{(\text{self})},\, N_{zz}^{(\text{self})})$
 satisfying Brown's identity:
 
 $$N_{xx}^{(\text{self})} + N_{yy}^{(\text{self})} + N_{zz}^{(\text{self})} = 1$$
 
-For a cube: $N_{xx} = N_{yy} = N_{zz} = \tfrac{1}{3}$.
+Point matching gives the factors at the cell's centre instead, which also sum
+to 1. For a cube both are $N_{xx} = N_{yy} = N_{zz} = \tfrac{1}{3}$.
 
-These self-factors are used to build the Jacobi preconditioner for GMRES (see
-below).
+The chosen rule's self-factors build the GMRES preconditioner (see below).
 
 ---
 
@@ -188,14 +248,17 @@ below).
 Cost: $O(N^2)$ memory, $O(N^3)$ solve. Exact to floating-point precision.
 Practical for $N \lesssim 3000$.
 
-The tensor $\mathbf{T}$ is assembled block-wise from the unified pair rule
-(`_assemble_T_dense`): analytical Newell blocks for parallel-cuboid cluster
-pairs, `magpy.getH` point matching otherwise. Because the iterative solver
-applies the _same_ entries matrix-free, **both solvers agree to solver tolerance
-for any input**.
+The tensor $\mathbf{T}$ is assembled block-wise under the chosen rule
+(`_assemble_T_dense`). The iterative solver applies the _same_ entries
+matrix-free, so **both solvers solve the same system**. GMRES stops when the
+residual falls below `solver_tol` relative to the right-hand side; the
+polarizations then agree to about `solver_tol` for hard magnets, and for soft
+ones the gap can grow to about $\chi \cdot$ `solver_tol` / 3 (35 times
+`solver_tol` measured at $\chi = 1000$), so tighten `solver_tol` for high
+susceptibilities.
 
-The legacy options (`pairs_matching`, `max_dist`, `split`) force the historical
-all-point-matching evaluation.
+The legacy options (`pairs_matching`, `max_dist`, `split`) take the historical
+point-matching path; they do not combine with `interaction="newell"`.
 
 ### 4.2 Iterative solver (`solver="iterative"`) — GMRES
 
@@ -203,13 +266,15 @@ Instead of assembling $\mathbf{Q}$ explicitly, GMRES only requires a **matvec**
 $\mathbf{v} \mapsto \mathbf{Q}\,\mathbf{v}$ at each iteration. This opens the
 door to specialized fast matvec implementations.
 
-The preconditioner is a diagonal (Jacobi) operator using the analytical
-self-demag factors:
+The preconditioner is block-Jacobi: one 3×3 block per cell, built from the
+cell's susceptibility tensor and its self-demag factors under the chosen rule,
 
-$$[\mathbf{M}_\text{prec}]_{ii} = 1 + \chi_i \, N_{ii}^{(\text{self})}$$
+$$\mathbf{M}_i = \mathbf{I} + \boldsymbol{\chi}_i \,
+  \operatorname{diag}\bigl(N^{(\text{self})}_i\bigr)$$
 
-which approximates the diagonal of $\mathbf{Q}$ and dramatically reduces the
-number of GMRES iterations needed for high-susceptibility materials.
+which is the cell's own block of $\mathbf{Q}$ (exact for a rotated anisotropic
+cell) and dramatically reduces the number of GMRES iterations needed for
+high-susceptibility materials.
 
 Two implementation details worth knowing: the solve is **warm-started** at the
 right-hand side (`x0 = rhs`), and `max_iter` counts scipy's _restart cycles_
@@ -244,8 +309,9 @@ Physical grid (Nx × Ny × Nz)   →   Doubled grid (2Nx × 2Ny × 2Nz)
                                      |_________________|
 ```
 
-The kernel (6 independent Newell components pre-FFTed) is built **once** by
-`build_fft_kernel` and reused for every GMRES iteration.
+The kernel (the 6 independent components of the chosen rule's tensor,
+pre-FFTed) is built **once** by `build_fft_kernel` and reused for every GMRES
+iteration.
 
 **Flow for a single-group FFT matvec:**
 
@@ -269,7 +335,7 @@ H_fft (2Nx, 2Ny, Nz+1, 3)
     ▼ reorder back to original-cell order
 H (3N flat)
     │
-    ▼  return  J - S * H     [the (I - ST) matvec result]
+    ▼  return  J - S H       [the (I - ST) matvec result; S per cell]
 ```
 
 Implemented in `demag_fft_matvec`; the kernel supports grid spacings larger than
@@ -288,7 +354,10 @@ exactly one cluster (asserted), so no interaction can be silently dropped:
 >   one when their grids align);
 > - **loose**: identical parallel cuboids without grid structure;
 > - **generic**: everything else — non-cuboid magnets, rotated singletons, and
->   clusters too small to be worth dedicated bookkeeping.
+>   (under point matching) groups too small to be worth dedicated bookkeeping.
+
+Clusters only decide _how fast_ a block is computed, never which rule it
+follows.
 
 Orientation keying uses sign-canonicalized quaternions (largest component made
 positive — stable for 180° rotations where $w \approx 0$) with a two-stage
@@ -300,9 +369,9 @@ The demag operator becomes a **block structure** over cluster pairs:
  Clusters:   C₁        C₂        C₃
           ┌─────────┬─────────┬─────────┐
      C₁   │ T₁₁ FFT │ T₁₂     │ T₁₃     │   self blocks of grid clusters → FFT
-          ├─────────┼─────────┼─────────┤   all other blocks → pair rule:
-     C₂   │ T₂₁     │ T₂₂ FFT │ T₂₃     │     parallel cuboids → Newell
-          ├─────────┼─────────┼─────────┤     otherwise        → getH
+          ├─────────┼─────────┼─────────┤   all other blocks, chosen rule:
+     C₂   │ T₂₁     │ T₂₂ FFT │ T₂₃     │     cuboid sources → deduplicated
+          ├─────────┼─────────┼─────────┤     other sources  → getH per pair
      C₃   │ T₃₁     │ T₃₂     │ T₃₃     │   (dense if small, sparse if huge)
           └─────────┴─────────┴─────────┘
 ```
@@ -310,21 +379,23 @@ The demag operator becomes a **block structure** over cluster pairs:
 **Rotation handling:** each cluster may have an arbitrary orientation $R_C$. The
 FFT operates in the cluster's local frame — the polarization is rotated in and
 the field rotated back **inside the block** (`_fft_apply`), so the GMRES solve
-itself always runs in the global frame where the susceptibility matrix
-$\mathbf{S}$ is diagonal. Anisotropic susceptibility therefore works for
-arbitrary rotations.
+itself always runs in the global frame. There each cell's susceptibility is
+its 3×3 tensor $R_i \operatorname{diag}(\boldsymbol{\chi}_i) R_i^\mathsf{T}$:
+an anisotropic susceptibility follows the cell's own axes, whatever its
+rotation.
 
 Two size gates keep the bookkeeping proportionate: a detected grid smaller than
 `MIN_GRID_CELLS` (16) is handled as a dense _loose_ block instead of an FFT
-kernel, and a geometry cluster smaller than `MIN_CLUSTER_CELLS` (8) is folded
-into the point-matched _generic_ cluster.
+kernel, and under point matching a geometry cluster smaller than
+`MIN_CLUSTER_CELLS` (8) is folded into the _generic_ cluster. Volume averaging
+keeps every cuboid in a geometry cluster, since each pair needs both shapes.
 
-Cross-blocks between parallel cuboid clusters use the generalized Newell
-formula; for dense blocks the reverse block is obtained for free from
-volume-weighted reciprocity,
-$\mathbf{T}_{BA} = (V_A / V_B)\,
-\mathbf{T}_{AB}^\mathsf{T}$ (sparsified blocks
-are rebuilt per direction to preserve their row-sum error bound). Displacements
+For dense blocks the reverse block comes for free by reciprocity wherever it
+is exact: volume averaging obeys
+$\mathbf{T}_{BA} = (V_A / V_B)\,\mathbf{T}_{AB}^\mathsf{T}$ for any two parallel
+cuboid clusters, point matching $\mathbf{T}_{BA} = \mathbf{T}_{AB}^\mathsf{T}$
+when both clusters share one cell shape and orientation (sparsified blocks are
+rebuilt per direction to preserve their row-sum error bound). Displacements
 are deduplicated before evaluation when fewer than 25 % are distinct — for
 same-spacing grids only $O(N)$ of the $N^2$ pair displacements are.
 
@@ -339,10 +410,11 @@ smallest first, only while the sum of dropped magnitudes stays below a budget**
 
 $$
 \sum_{\text{dropped } j} |T_{ij}| ;\le; \varepsilon_\text{row}
-  = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \chi_{\max})\, K}
+  = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \|\mathbf{S}\|_\infty)\, K}
 $$
 
-where $\varepsilon_\text{tol}$ is `solver_tol`. Summing over the $\le K$ blocks
+where $\varepsilon_\text{tol}$ is `solver_tol` and $\|\mathbf{S}\|_\infty$ the
+largest row sum of the cells' $|\boldsymbol{\chi}_i|$. Summing over the $\le K$ blocks
 that touch a row, the operator perturbation is rigorously bounded:
 
 $$
@@ -359,28 +431,30 @@ bounded individual entries but not their accumulated sum.
 ## 6. Complete algorithm flow
 
 ```text
-apply_demag(collection, solver=...)
+apply_demag(collection, solver=..., interaction=...)
 │
 ├─ 0. Legacy flags (pairs_matching / max_dist / split)?
-│      YES → historical all-point-matching dense tensor; iterative then
-│            runs a dense matvec without the Jacobi preconditioner
+│      YES → historical point-matching dense tensor (refused with
+│            interaction="newell"); iterative then runs a dense matvec
 │
-├─ 1. Collect cells: positions, dimensions, orientations, χ
+├─ 1. Collect cells: positions, dimensions, orientations; one 3×3
+│      susceptibility tensor per cell, R diag(χ) Rᵀ; check the rule
+│      ("newell": all cells cuboid, one orientation, else raise)
 │
 ├─ 2. analyze_structure → clusters (grid / loose / generic), full coverage
 │
-├─ 3. Build demag operator from the unified pair rule
+├─ 3. Build demag operator under the chosen rule
 │      ├─ [direct]     _assemble_T_dense: every cluster-pair block scattered
 │      │               into the dense (3N × 3N) T
 │      └─ [iterative]  _build_operator:
 │            · grid self-blocks   → build_fft_kernel (FFT convolution)
 │            · other blocks       → dense (small) or row-budget CSR (large)
-│            · reverse Newell blocks by reciprocity transpose
+│            · reverse blocks by reciprocity where it is exact
 │
 ├─ 4. Solve linear system  (I - S T) J = J⁽⁰⁾ + S B_ext   [global frame]
 │      ├─ [direct]     numpy.linalg.solve(Q, rhs)                  O(N³)
-│      └─ [iterative]  GMRES + Jacobi preconditioner (rotated analytical
-│                      self-demag factors); RuntimeError on non-convergence
+│      └─ [iterative]  GMRES + block-Jacobi preconditioner (each cell's
+│                      3×3 self block); RuntimeError on non-convergence
 │
 └─ 5. Assign self-consistent polarizations back to the magnet objects
 ```
@@ -398,8 +472,9 @@ apply_demag(collection, solver=...)
 
 Cross-block build cost is halved by reciprocity and reduced further by
 displacement deduplication when cluster grids share their spacing. Indicative
-timings (Apple Silicon, `solver_tol=1e-8`, vs. direct): 16× at $N=3\,375$;
-$N=27\,000$ solves in ~2 s where the dense solver would need ~50 GB
+timings for one meshed cube (Apple Silicon, $\chi = 3$, `solver_tol=1e-8`,
+point matching): about 40× faster than the direct solver at $N=3\,375$;
+$N=27\,000$ solves in about 1.5 s where the dense solver would need ~50 GB
 ($(3N)^2 \times 8$ bytes).
 
 ---

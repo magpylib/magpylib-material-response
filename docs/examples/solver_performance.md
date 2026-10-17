@@ -18,9 +18,10 @@ kernelspec:
 
 +++
 
-`apply_demag` offers two solvers that share the **same interaction model** (the
-analytical volume-averaged Newell tensor for parallel cuboid cells, point
-matching otherwise) and therefore agree to solver tolerance for any input:
+`apply_demag` offers two solvers that apply the **same interactions** (the
+field of each cell at the centre of the others by default, or averaged over
+them with `interaction="newell"`, see the [method page](../method.md)), so they
+solve the same system:
 
 - `solver="direct"` (default) — assembles the dense system matrix and solves it
   exactly with LAPACK. Memory grows as (3N)² and time as N³, so it is the right
@@ -122,8 +123,10 @@ pd.DataFrame(rows)
 
 +++ {"user_expressions": []}
 
-The two solvers match to the requested `solver_tol` in every configuration — the
-choice between them is purely a performance trade-off.
+The two solvers match to about the requested `solver_tol` in every
+configuration here (susceptibilities up to 3; for very soft materials the gap
+grows with the susceptibility, see the [method page](../method.md)) — the choice
+between them is a performance trade-off.
 
 ## Performance scaling
 
@@ -256,8 +259,9 @@ few hundred MB).
 ## Model topology matters
 
 The solvers assemble the interaction operator from _structure clusters_ (uniform
-grids of identical parallel cells → FFT / analytical blocks, everything else →
-point-matched `magpy.getH`), so the model topology decides which paths do the
+grids of identical parallel cuboids → FFT, other cuboids sharing a shape and
+orientation → blocks computed once per distinct displacement, every other cell →
+one `magpy.getH` per pair), so the model topology decides which paths do the
 work — and how much the solver choice matters. Here the same comparison runs on
 characteristic topologies of similar total cell count (single-run timings —
 indicative, not statistics).
@@ -355,14 +359,15 @@ pd.DataFrame(topo_rows)
 What the rows show:
 
 - **Single body / a few parallel bodies** — everything runs on the FFT and
-  analytical Newell paths; the iterative solver is ahead and scales far better
+  deduplicated cuboid paths; the iterative solver is ahead and scales far better
   (previous section).
 - **Dozens of bodies** — the pairwise cross-blocks (one per body pair) start to
   dominate the operator build. The iterative solver still wins, but its
   advantage shrinks as the body count grows at fixed total cells.
 - **Bodies rotated individually** — cross-blocks between differently oriented
-  bodies fall back to point matching, which both solvers share: expect near
-  parity. The self-blocks of each body still use their own rotated FFT grid.
+  bodies share no displacements, so they are computed pair by pair in both
+  directions, by both solvers alike: expect near parity. The self-blocks of each
+  body still use their own rotated FFT grid.
 - **Meshed cylinder** — non-cuboid cells (here Cylinder and CylinderSegment,
   likewise tetrahedra from `mesh_TriangularMesh` — see the
   [tetrahedral mesh example](tetrahedral_meshes.md)) take the point-matched
@@ -374,16 +379,17 @@ What the rows show:
 
 | Model topology                                           | Interaction paths               | Recommendation                                                 |
 | -------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- |
-| One meshed body, up to a few thousand cells (~2000–3000) | FFT / analytical                | either; `direct` (default) is exact and tuning-free            |
+| One meshed body, up to a few thousand cells (~2000–3000) | FFT / deduplicated              | either; `direct` (default) is exact and tuning-free            |
 | One meshed body, large                                   | FFT self-block                  | `iterative` — O(N log N); only option for N ≳ 10⁴ (memory)     |
-| Few parallel bodies                                      | FFT + analytical cross-blocks   | `iterative` — cross-blocks are analytical and cheap            |
+| Few parallel bodies                                      | FFT + deduplicated cross-blocks | `iterative` — cross-blocks are cheap                           |
 | Dozens of bodies                                         | cross-blocks dominate the build | `iterative`, but advantage shrinks with body count             |
-| Bodies rotated differently                               | point-matched cross-blocks      | either — build cost is shared, expect parity                   |
-| Non-cuboid cells (cylinder, tetrahedra)                  | point-matched, dense            | either — cell field evaluation dominates; keep counts moderate |
+| Bodies rotated differently                               | pair-by-pair cross-blocks       | either — build cost is shared, expect parity                   |
+| Non-cuboid cells (cylinder, tetrahedra)                  | one `getH` per pair, dense      | either — cell field evaluation dominates; keep counts moderate |
 
 Two knobs control the iterative solver: `solver_tol` (relative residual, default
 `1e-6`) and `max_iter` (default 50). Non-convergence raises a `RuntimeError`
 with guidance rather than returning an inaccurate result. To see the detected
 structure for your own model, enable the package logging
 (`magpylib_material_response.configure_logging()`) — the cluster summary is
-logged at the start of every solve.
+logged at the start of every solve. Both solvers, and everything on this page,
+work the same with `interaction="newell"` on meshes of parallel cuboids.

@@ -59,16 +59,15 @@ which then takes precedence:
 
 ```{code-cell} ipython3
 magnet.susceptibility = 0.3  # isotropic
-magnet.susceptibility = (0.3, 0.1, 0.0)  # anisotropic, global frame
+magnet.susceptibility = (0.3, 0.1, 0.0)  # anisotropic, along the magnet's axes
 
 # explicit values override object attributes: one scalar/vector for all
 # cells, or one entry per cell
 coll = apply_demag(mesh, susceptibility=0.3)
 ```
 
-Anisotropic 3-vectors act component-wise as a diagonal tensor in the **global
-frame** — this works for arbitrarily rotated cells (see the
-[method page](method.md) for how rotations are handled).
+Anisotropic 3-vectors act along the **magnet's own axes** and turn with it,
+like its polarization (see the [method page](method.md)).
 
 A uniform external field can be applied through the `H_ext` attribute, given as
 flux density in Tesla units (i.e. $\mu_0 H_\text{ext}$):
@@ -87,6 +86,23 @@ Current sources (`magpy.current.*`) placed in the collection also drive the
 material response — their field at the cells adds to the applied field. The
 [U-core electromagnet example](examples/ucore_electromagnet.md) builds a
 coil-driven soft core this way.
+
+## Point or Newell
+
+How the cells act on each other follows one rule per solve. By default the
+field of each cell is taken at the centre of the others (point matching); with
+`interaction="newell"` it is averaged over them:
+
+```{code-cell} ipython3
+coll_point = apply_demag(mesh, susceptibility=0.3)
+coll_newell = apply_demag(mesh, susceptibility=0.3, interaction="newell")
+```
+
+Both converge to the same answer as the mesh is refined, and at equal cell
+count neither is more accurate in general. The Newell rule needs a mesh of
+cuboid cells with one orientation; in exchange, a soft body's induced moment
+never overshoots as you refine, so a convergence study knows which side the
+answer is on. The [method page](method.md) explains both.
 
 ## Meshing helpers
 

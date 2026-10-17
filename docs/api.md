@@ -65,9 +65,14 @@ Legacy helpers of the historical all-point-matching path (used by the
 .. autofunction:: magpylib_material_response.demag_fft.demag_fft_matvec
 ```
 
-## Analytical Newell tensors — `newell`
+## Interaction tensors — `newell`
+
+The two interaction rules of `apply_demag`: the field at a point
+(`point_block`, the default) and the field averaged over a cell (the Newell
+tensors).
 
 ```{eval-rst}
+.. autofunction:: magpylib_material_response.newell.point_block
 .. autofunction:: magpylib_material_response.newell.demag_block
 
 .. autofunction:: magpylib_material_response.newell.demag_block_general

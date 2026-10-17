@@ -10,7 +10,7 @@ Worked, executable examples — in suggested reading order:
   soft core: a swept multi-turn coil built with the polyline helpers, the field
   on a plane above the poles, and a cuboid- vs tetrahedral-mesh comparison.
 - [Solvers and performance](solver_performance.md) — direct vs. iterative
-  solver: agreement guarantee, scaling of wall time and memory, and how the
+  solver: solver agreement, scaling of wall time and memory, and how the
   model topology decides which interaction paths do the work.
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
   `TriangularMesh` magnet with TetGen, validated against the exact soft-sphere
