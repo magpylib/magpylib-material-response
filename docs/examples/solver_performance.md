@@ -18,10 +18,10 @@ kernelspec:
 
 +++
 
-`apply_demag` offers two solvers that apply the **same interactions** (the
-field of each cell at the centre of the others by default, or averaged over
-them with `interaction="newell"`, see the [method page](../method.md)), so they
-solve the same system:
+`apply_demag` offers two solvers that apply the **same interactions** (the field
+of each cell at the centre of the others by default, or averaged over them with
+`interaction="newell"`, see the [method page](../method.md)), so they solve the
+same system:
 
 - `solver="direct"` (default) — assembles the dense system matrix and solves it
   exactly with LAPACK. Memory grows as (3N)² and time as N³, so it is the right
@@ -123,10 +123,10 @@ pd.DataFrame(rows)
 
 +++ {"user_expressions": []}
 
-The two solvers match to about the requested `solver_tol` in every
-configuration here (susceptibilities up to 3; for very soft materials the gap
-grows with the susceptibility, see the [method page](../method.md)) — the choice
-between them is a performance trade-off.
+The two solvers match to about the requested `solver_tol` in every configuration
+here (susceptibilities up to 3; for very soft materials the gap grows with the
+susceptibility, see the [method page](../method.md)) — the choice between them
+is a performance trade-off.
 
 ## Performance scaling
 

@@ -28,10 +28,10 @@ dependency:
 pip install magpylib-material-response[tetgen]
 ```
 
-Tetrahedral cells take the _generic_ interaction path, one `magpy.getH` per
-cell pair (see the [solver performance example](solver_performance.md)): both
-solvers share it, and the computation cost is dominated by the cells' analytical
-field evaluation rather than by the solver choice. They use the default point
+Tetrahedral cells take the _generic_ interaction path, one `magpy.getH` per cell
+pair (see the [solver performance example](solver_performance.md)): both solvers
+share it, and the computation cost is dominated by the cells' analytical field
+evaluation rather than by the solver choice. They use the default point
 matching; `interaction="newell"` needs cuboid cells.
 
 This example validates the whole chain on a case with an exact analytical

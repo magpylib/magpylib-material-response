@@ -16,11 +16,10 @@ $$\mathbf{M} = \chi \, \mathbf{H}_\text{total}$$
 where $\chi$ is the magnetic susceptibility — an isotropic scalar, or a 3-vector
 $(\chi_x, \chi_y, \chi_z)$ along the **cell's own axes**, which turn with its
 orientation like its polarization: a cell rotated by $R$ responds with the
-tensor $R\,\operatorname{diag}(\chi_x, \chi_y, \chi_z)\,R^\mathsf{T}$ in the global
-frame.
-In magpylib's convention, the primary field quantity is the **intrinsic
-polarization** $\mathbf{J} = \mu_0 \mathbf{M}$ (units of Tesla), so the
-constitutive relation becomes
+tensor $R\,\operatorname{diag}(\chi_x, \chi_y, \chi_z)\,R^\mathsf{T}$ in the
+global frame. In magpylib's convention, the primary field quantity is the
+**intrinsic polarization** $\mathbf{J} = \mu_0 \mathbf{M}$ (units of Tesla), so
+the constitutive relation becomes
 
 $$\mathbf{J} = \mu_0 \chi \, \mathbf{H}_\text{total} = \chi \, \mathbf{B}_\text{total}$$
 
@@ -55,9 +54,9 @@ $j$ is linear in $\mathbf{J}_j$:
 $$\mathbf{B}_{\text{demag},i} = \sum_{j=1}^{N} \mathsf{T}_{ij} \, \mathbf{J}_j$$
 
 where $\mathsf{T}_{ij}$ is a **3×3 demagnetization tensor block**
-(dimensionless): the field that a unit polarization in cell $j$ produces at
-cell $i$, taken at its centre or averaged over it depending on the
-interaction rule (section 3).
+(dimensionless): the field that a unit polarization in cell $j$ produces at cell
+$i$, taken at its centre or averaged over it depending on the interaction rule
+(section 3).
 
 ### Linear system
 
@@ -80,8 +79,8 @@ where:
 
 - $\mathbf{J} \in \mathbb{R}^{3N}$ — unknown polarization vector (Fortran-flat:
   $[J_{x,1},\ldots,J_{x,N},\, J_{y,1},\ldots,J_{z,N}]$)
-- $\mathbf{S}$ — susceptibility matrix, block-diagonal: cell $i$ contributes
-  its 3×3 tensor $R_i \operatorname{diag}(\boldsymbol{\chi}_i) R_i^\mathsf{T}$
+- $\mathbf{S}$ — susceptibility matrix, block-diagonal: cell $i$ contributes its
+  3×3 tensor $R_i \operatorname{diag}(\boldsymbol{\chi}_i) R_i^\mathsf{T}$
   (diagonal when the susceptibility is isotropic or the cell unrotated)
 - $\mathbf{T} \in \mathbb{R}^{3N \times 3N}$ — full demag tensor matrix
   ($\mathsf{T}_{ij}$ blocks on rows $i$, columns $j$)
@@ -99,25 +98,25 @@ A cell's field is known exactly; the method of moments only has to decide
 _where_ in the observer cell to take it. `apply_demag` offers two answers,
 chosen per solve with `interaction` and applied to **every pair**, never mixed:
 
-| `interaction`         | The field of cell $j$ at cell $i$       | Works for                                    |
-| --------------------- | --------------------------------------- | -------------------------------------------- |
-| `"point"` (default)   | at the centre of cell $i$               | any cell type and orientation                |
-| `"newell"`            | averaged over the whole of cell $i$     | cuboid cells, all with one orientation       |
+| `interaction`       | The field of cell $j$ at cell $i$   | Works for                              |
+| ------------------- | ----------------------------------- | -------------------------------------- |
+| `"point"` (default) | at the centre of cell $i$           | any cell type and orientation          |
+| `"newell"`          | averaged over the whole of cell $i$ | cuboid cells, all with one orientation |
 
 **Point matching** (Chadebec 2006) is the rule this package has always used.
 **Volume averaging** is the Galerkin form of the problem: with it, the induced
 moment of a soft body in a uniform field is a **lower bound** that rises with
 every refinement of the mesh and never overshoots, so a convergence study knows
-which side the converged value is on. Point matching gives no such guarantee:
-on a thin soft plate its moment overshoots and then falls back as the mesh is
+which side the converged value is on. Point matching gives no such guarantee: on
+a thin soft plate its moment overshoots and then falls back as the mesh is
 refined.
 
 At equal cell count neither rule is more accurate in general. On cubic cells
 they agree to fourth order in cell size over distance; on flat or long cells
-each is closer to the converged answer on different quantities (on a
-20 × 20 × 1 mm soft plate with 4 × 4 × 1 mm cells, point matching is closer on
-the moment and volume averaging on the field beside the plate). Both converge
-to the same answer.
+each is closer to the converged answer on different quantities (on a 20 × 20 × 1
+mm soft plate with 4 × 4 × 1 mm cells, point matching is closer on the moment
+and volume averaging on the field beside the plate). Both converge to the same
+answer.
 
 The rules are never mixed within a solve. A mix would use volume averaging only
 between parallel cuboids, so turning one of two touching bodies by any angle,
@@ -144,6 +143,7 @@ precision; the error stays below 3 × 10⁻⁸ on both sides of the switch.
 For **identical, axis-aligned** rectangular prisms of dimensions $(a,b,c)$, the
 volume-averaged interaction tensor $\mathsf{N}_{ij}$ (a.k.a. the _Newell
 kernel_) has a closed analytical form given by
+
 > A. J. Newell, W. Williams, D. J. Dunlop (1993) _A generalization of the
 > demagnetizing tensor for nonuniform magnetization._ J. Geophys. Res.
 > **98**(B6), 9551–9555.
@@ -186,10 +186,10 @@ magpylib's exact cuboid field.
 
 ### Far field
 
-Far apart, the exact formulas lose precision: Newell's double differences
-cancel nearly equal terms, about $\varepsilon\, r^6 / (V_\text{src} V_\text{obs})$
-relative. Beyond a switch distance both rules use the far-field expansion of
-the tensor, the point dipole plus its leading cell-size correction,
+Far apart, the exact formulas lose precision: Newell's double differences cancel
+nearly equal terms, about $\varepsilon\, r^6 / (V_\text{src} V_\text{obs})$
+relative. Beyond a switch distance both rules use the far-field expansion of the
+tensor, the point dipole plus its leading cell-size correction,
 
 $$
 \mathsf{N}(\mathbf{r}) \approx -\frac{V_\text{src}}{4\pi}
@@ -197,13 +197,13 @@ $$
   + \sum_k \tfrac{a_k^2 + b_k^2}{24}\, \partial_k^2 \nabla\nabla \tfrac{1}{r}\Bigr],
 $$
 
-accurate to $(h_\text{max}/r)^4$, with $a$ and $b$ the source and observer
-sides ($b = 0$ for point matching). Volume averaging switches where the two
-errors meet, at $r^{10} = 10^{15}\, h_\text{max}^4 V_\text{src} V_\text{obs}$,
+accurate to $(h_\text{max}/r)^4$, with $a$ and $b$ the source and observer sides
+($b = 0$ for point matching). Volume averaging switches where the two errors
+meet, at $r^{10} = 10^{15}\, h_\text{max}^4 V_\text{src} V_\text{obs}$,
 calibrated against 60-digit evaluations of the exact formulas: the worst error
-from 5 to 10 000 cell sizes is $3 \times 10^{-7}$ for cubes and
-$10^{-5}$ for 10:1 rods. Without the switch, an iron cube 3 m from a magnet
-meshed with 1 mm cells received 300 times its induced polarization.
+from 5 to 10 000 cell sizes is $3 \times 10^{-7}$ for cubes and $10^{-5}$ for
+10:1 rods. Without the switch, an iron cube 3 m from a magnet meshed with 1 mm
+cells received 300 times its induced polarization.
 
 ### Sign convention in the code
 
@@ -223,8 +223,8 @@ inside `apply_demag`; both conventions describe the same operator.
 
 ### Self-demagnetization
 
-For the **diagonal block** $i = j$ (a cell acting on itself), volume
-averaging gives the classical magnetometric demagnetization factors
+For the **diagonal block** $i = j$ (a cell acting on itself), volume averaging
+gives the classical magnetometric demagnetization factors
 $(N_{xx}^{(\text{self})},\, N_{yy}^{(\text{self})},\, N_{zz}^{(\text{self})})$
 satisfying Brown's identity:
 
@@ -269,7 +269,7 @@ door to specialized fast matvec implementations.
 The preconditioner is block-Jacobi: one 3×3 block per cell, built from the
 cell's susceptibility tensor and its self-demag factors under the chosen rule,
 
-$$\mathbf{M}_i = \mathbf{I} + \boldsymbol{\chi}_i \,
+$$ \mathbf{M}_i = \mathbf{I} + \boldsymbol{\chi}_i ,
   \operatorname{diag}\bigl(N^{(\text{self})}_i\bigr)$$
 
 which is the cell's own block of $\mathbf{Q}$ (exact for a rotated anisotropic
@@ -409,8 +409,10 @@ smallest first, only while the sum of dropped magnitudes stays below a budget**
 (`_row_sparsify`):
 
 $$
-\sum_{\text{dropped } j} |T_{ij}| ;\le; \varepsilon_\text{row}
-  = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \|\mathbf{S}\|_\infty)\, K}
+
+\sum_{\text{dropped } j} |T_{ij}| ;\le; \varepsilon_\text{row} = \frac{0.1\,
+\varepsilon_\text{tol}}{\max(1, \|\mathbf{S}\|_\infty)\, K}
+
 $$
 
 where $\varepsilon_\text{tol}$ is `solver_tol` and $\|\mathbf{S}\|_\infty$ the
@@ -418,8 +420,10 @@ largest row sum of the cells' $|\boldsymbol{\chi}_i|$. Summing over the $\le K$ 
 that touch a row, the operator perturbation is rigorously bounded:
 
 $$
-\|\mathbf{S}(\mathbf{T}-\tilde{\mathbf{T}})\|_\infty
-  \;\le\; 0.1\, \varepsilon_\text{tol}
+
+\|\mathbf{S}(\mathbf{T}-\tilde{\mathbf{T}})\|_\infty \;\le\; 0.1\,
+\varepsilon_\text{tol}
+
 $$
 
 — the truncation error can never exceed the requested solver accuracy. This
@@ -487,3 +491,4 @@ $N=27\,000$ solves in about 1.5 s where the dense solver would need ~50 GB
 
 2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of magnetostatic
    moment method._ IEEE Transactions on Magnetics, 42(4), 515–520.
+$$
