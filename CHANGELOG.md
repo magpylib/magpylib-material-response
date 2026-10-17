@@ -27,6 +27,14 @@ and this project adheres to
 - Optional dependency group `tetgen` (`tetgen>=0.8.3`).
   ([#41](https://github.com/magpylib/magpylib-material-response/pull/41)).
 
+### Changed
+
+- `mesh_Cylinder` cuts each ring in proportion to its middle radius instead of
+  its outer radius: a cylinder gets about `target_elems` cells instead of up to
+  twice as many, all with about the same arc length. The cells are the ones
+  magpylib's force mesher produces
+  ([magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
+
 ### Fixed
 
 - Meshed cells get `meshing=1`, so `magpylib.getFT` accepts meshed and

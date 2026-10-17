@@ -21,10 +21,11 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     if susceptibility is not None:
         for cell in cells:
             cell.susceptibility = susceptibility
-    # One force point per cell, so `magpy.getFT` accepts the cells as targets
-    # (it refuses targets without `meshing`). After demagnetization each cell
-    # carries its own polarization, and its centre is the point that stands for
-    # it. Classes without `meshing` (magpylib < 5.2) are left alone.
+    # One force point per cell. magpylib 5.2 refuses getFT targets without a
+    # `meshing` attribute, so each cell gets 1; since magpylib 6 `meshing` is an
+    # argument of getFT and the cells take `meshing=1` on the call. After
+    # demagnetization each cell carries its own polarization, and its centre is
+    # the point that stands for it.
     for cell in cells:
         if hasattr(cell, "meshing") and cell.meshing is None:
             cell.meshing = 1
@@ -186,8 +187,9 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
     dh = h / nh
     cells = []
     for r_ind in range(nr):
-        # redistribute number divisions proportionally to the radius
-        nphi_r = max(1, int(r[r_ind + 1] / ((r1 + r2) / 2) * nphi))
+        # angular divisions in proportion to the ring's middle radius, so that all
+        # cells have about the same arc length and the rings add up to nphi * nr
+        nphi_r = max(1, round((r[r_ind] + r[r_ind + 1]) / (r1 + r2) * nphi))
         nphi_r = _sectors_with_centroid_inside(
             r[r_ind], r[r_ind + 1], phi2 - phi1, nphi_r
         )
