@@ -25,6 +25,24 @@ def apportion_triple(triple, min_val=1, max_iter=30):
     return triple
 
 
+def near_cubic_divisions(sides, target_elems):
+    """Divisions of a box into about `target_elems` cells as close to cubes as
+    possible: the cell edge is h = (volume / target_elems)^(1/3), and each side is
+    cut into round(side / h) divisions, at least 1. `target_elems=1` gives one
+    cell. This is how magpylib's force mesher cuts cuboids and cylinders.
+
+    Examples
+    --------
+    >>> near_cubic_divisions([3, 2, 1], 100)
+    array([8, 5, 3])
+    """
+    sides = np.abs(np.asarray(sides, dtype=float))
+    if target_elems == 1:
+        return np.ones(3, dtype=int)
+    edge = (np.prod(sides) / target_elems) ** (1 / 3)
+    return np.maximum(1, np.round(sides / edge)).astype(int)
+
+
 def cells_from_dimension(
     dim,
     target_elems,
