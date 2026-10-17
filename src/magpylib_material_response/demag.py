@@ -114,6 +114,25 @@ def _convert_to_array(susceptibility, n, from_hierarchy=False):
     return np.array(susis)
 
 
+def _susceptibility_matrix(sus, orientations):
+    """Return the (3n, 3n) susceptibility matrix in the global frame, ordered
+    x1..xn, y1..yn, z1..zn like the polarization vector.
+
+    `sus` is the flat output of `get_susceptibilities`: the values along each
+    cell's own axes. Cell i contributes R_i diag(sus_i) R_i^T, so an anisotropic
+    susceptibility turns with its cell, as its polarization does."""
+    n = len(orientations)
+    rot = np.array([o.as_matrix() for o in orientations])
+    chi_own = np.reshape(sus, (n, 3), order="F")
+    chi = np.einsum("nab,nb,ncb->nac", rot, chi_own, rot)
+    S = np.zeros((3 * n, 3 * n))
+    idx = np.arange(n)
+    for a in range(3):
+        for b in range(3):
+            S[a * n + idx, b * n + idx] = chi[:, a, b]
+    return S
+
+
 def _get_susceptibility_from_hierarchy(source):
     """Helper function to get susceptibility value from source or its parent hierarchy.
     Returns the raw susceptibility value (scalar or 3-tuple), not the reshaped array."""
@@ -364,9 +383,11 @@ def apply_demag(
     collection: magpylib.Collection object with n magnet sources
         Each magnet source in collection is treated as a magnetic cell.
 
-    susceptibility: array_like, shape (n,)
-        Vector of n magnetic susceptibilities of the cells. If not defined, values are
-        searched at object level or parent level if needed.
+    susceptibility: scalar, 3-vector, or array_like, shape (n,) or (n, 3)
+        Magnetic susceptibility of the cells: one value for all cells, or one per
+        cell. A 3-vector gives an anisotropic susceptibility along the cell's own
+        x, y and z axes, which turn with its orientation like its polarization. If
+        not defined, values are searched at object level or parent level if needed.
 
     inplace: bool
         If False, applies demagnetization on a copy of the input collection and returns
@@ -454,7 +475,7 @@ def apply_demag(
 
         # set up S
         sus = get_susceptibilities(magnets_list, susceptibility)
-        S = np.diag(sus)  # shape ii, jj
+        S = _susceptibility_matrix(sus, [src.orientation for src in magnets_list])
 
         # set up H_ext
         H_ext = get_H_ext(*magnets_list)

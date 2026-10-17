@@ -40,6 +40,11 @@ and this project adheres to
 
 ### Fixed
 
+- An anisotropic susceptibility `(χx, χy, χz)` acts along each cell's own axes
+  and turns with its orientation, like its polarization. It acted along the
+  global axes, so a rotated magnet demagnetized differently from the same magnet
+  unrotated. Scalar values and unrotated magnets give the same results as before
+  ([#50](https://github.com/magpylib/magpylib-material-response/issues/50)).
 - Meshed cells get `meshing=1`, so `magpylib.getFT` accepts meshed and
   demagnetized collections as targets, with one force point per cell. It refused
   them before ("Missing meshing input").
