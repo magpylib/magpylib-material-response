@@ -250,15 +250,17 @@ def mesh_thin_CylinderSegment_with_cuboids(
         allowing mesh elements overlapping. This improves the field calculation
         approximation accuracy.
 
-    Each cell is turned about the z axis to follow the ring, so an anisotropic
-    susceptibility must be the same along x and y: the cells cannot keep
-    different values along the segment's own x and y axes. Use `mesh_Cylinder`
-    for those.
-
     Returns
     -------
     discretization: magpylib.Collection
         Collection of Cuboid cells
+
+    Notes
+    -----
+    Each cell is turned about the z axis to follow the ring, so an anisotropic
+    susceptibility must be the same along x and y: the cells cannot keep
+    different values along the segment's own x and y axes. Use `mesh_Cylinder`
+    for those.
     """
 
     r1, r2, h, phi1, phi2 = cyl_seg.dimension
