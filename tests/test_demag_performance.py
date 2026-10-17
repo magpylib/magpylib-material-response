@@ -16,6 +16,7 @@ import pytest
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.demag import (
+    _check_interaction,
     apply_demag,
     demag_tensor,
     get_susceptibilities,
@@ -41,16 +42,33 @@ def _pols(coll):
     return np.array([s.polarization for s in coll.sources_all])
 
 
+def _interactions(coll):
+    """Every rule that applies to these cells: always point, Newell when all
+    cells are parallel cuboids."""
+    try:
+        _check_interaction("newell", coll.sources_all)
+    except ValueError:
+        return ("point",)
+    return ("point", "newell")
+
+
 def _assert_solvers_agree(coll, susceptibility=None, atol=1e-6, **iter_kwargs):
-    coll1 = apply_demag(coll, susceptibility=susceptibility, solver="direct")
-    coll2 = apply_demag(
-        coll,
-        susceptibility=susceptibility,
-        solver="iterative",
-        solver_tol=1e-10,
-        **iter_kwargs,
-    )
-    np.testing.assert_allclose(_pols(coll1), _pols(coll2), atol=atol)
+    for interaction in _interactions(coll):
+        coll1 = apply_demag(
+            coll,
+            susceptibility=susceptibility,
+            solver="direct",
+            interaction=interaction,
+        )
+        coll2 = apply_demag(
+            coll,
+            susceptibility=susceptibility,
+            solver="iterative",
+            solver_tol=1e-10,
+            interaction=interaction,
+            **iter_kwargs,
+        )
+        np.testing.assert_allclose(_pols(coll1), _pols(coll2), atol=atol)
 
 
 # ── structure detection ─────────────────────────────────────────────────────
@@ -158,14 +176,16 @@ def test_analyze_collection_two_identical_meshes():
 # ── tensor-level checks ─────────────────────────────────────────────────────
 
 
-def test_rotated_newell_tensor_is_rotation_of_axial():
-    """demag_tensor on uniformly-rotated cells = R @ T_axial @ R^T to machine precision."""
+@pytest.mark.parametrize("interaction", ["point", "newell"])
+def test_rotated_tensor_is_rotation_of_axial(interaction):
+    """demag_tensor on uniformly-rotated cells = R @ T_axial @ R^T to machine
+    precision, under either rule."""
     # Build axis-aligned collection, get local-frame positions and T_axial.
     coll_axial = _build_uniform_collection(27)
     srcs_axial = coll_axial.sources_all
     pos_axial = np.array([s.position for s in srcs_axial])
 
-    T_axial = demag_tensor(srcs_axial)  # Newell, axis-aligned
+    T_axial = demag_tensor(srcs_axial, interaction=interaction)  # axis-aligned
 
     # Apply a 30° rotation around z to every cell.
     angle = 30.0
@@ -179,7 +199,7 @@ def test_rotated_newell_tensor_is_rotation_of_axial():
         s.position = p
         s.orientation = r_rot * s.orientation  # was identity, now r_rot
 
-    T_rotated = demag_tensor(srcs_rotated)  # Newell with rotation
+    T_rotated = demag_tensor(srcs_rotated, interaction=interaction)
 
     # Expected: T_global = R @ T_axial @ R^T
     # T_global[k,i,j,m] = Σ_{a,b} R[m,a]*T_axial[b,i,j,a]*R[k,b]
@@ -199,7 +219,7 @@ def test_fft_matvec_matches_dense_newell():
     assert info is not None
     Nx, Ny, Nz = info["shape"]
 
-    kernel_fft = build_fft_kernel(info["shape"], info["spacing"], info["dim"])
+    kernel_fft = build_fft_kernel(info["shape"], info["spacing"], info["dim"], "newell")
     rng = np.random.default_rng(1)
     M_orig = rng.normal(size=(len(srcs), 3))
 
@@ -446,10 +466,154 @@ def test_distant_bodies_interact_as_with_point_matching():
         return magpy.Collection(magnet, iron)
 
     chi = [0.05] * 64 + [1000.0] * 64
-    newell = apply_demag(bodies(), susceptibility=chi)
+    newell = apply_demag(bodies(), susceptibility=chi, interaction="newell")
     point = apply_demag(bodies(), susceptibility=chi, split=2)
     jz = [
         np.mean([c.polarization[2] for c in res.children[1].sources_all])
         for res in (newell, point)
     ]
     np.testing.assert_allclose(jz[0], jz[1], rtol=1e-2)
+
+
+# ── the two interaction rules ───────────────────────────────────────────────
+
+
+def _mixed_collection():
+    """A grid (FFT), a loose cuboid group of another size, a small group below
+    the cluster threshold, a turned cuboid group, a cylinder and a tetrahedron:
+    every block path of the point rule."""
+    a = 0.01
+    grid = mesh_Cuboid(
+        magpy.magnet.Cuboid(dimension=(a, a, a), polarization=(0, 0, 1)), 64
+    )
+    loose = mesh_Cuboid(
+        magpy.magnet.Cuboid(
+            dimension=(a, a, 2 * a), polarization=(0, 0, 1), position=(0.02, 0, 0)
+        ),
+        8,
+    )
+    small = mesh_Cuboid(
+        magpy.magnet.Cuboid(
+            dimension=(a, a, a), polarization=(1, 0, 0), position=(0, 0.02, 0)
+        ),
+        2,
+    )
+    turned = mesh_Cuboid(
+        magpy.magnet.Cuboid(
+            dimension=(a, a, a), polarization=(0, 1, 0), position=(0, -0.02, 0)
+        ),
+        27,
+    ).rotate_from_angax(30, "z", anchor=(0, -0.02, 0))
+    cylinder = magpy.magnet.Cylinder(
+        dimension=(a, a), polarization=(0, 0, 1), position=(-0.02, 0, 0)
+    )
+    tetra = magpy.magnet.Tetrahedron(
+        vertices=np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]) * a,
+        polarization=(0, 0, 1),
+        position=(0, 0, 0.02),
+    )
+    return magpy.Collection(grid, loose, small, turned, cylinder, tetra)
+
+
+def test_default_is_point_matching():
+    """The default rule reproduces the historical point-matching solve, through
+    every fast path, up to the far-field expansion (here none: all close)."""
+    coll = _mixed_collection()
+    default = _pols(apply_demag(coll, susceptibility=0.5))
+    legacy = _pols(apply_demag(coll, susceptibility=0.5, split=2))
+    np.testing.assert_allclose(default, legacy, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("build", "kwargs", "match"),
+    [
+        (_mixed_collection, {}, "needs every cell to be a Cuboid"),
+        (
+            lambda: _build_uniform_collection(27).rotate_from_angax(
+                1e-6, "x", anchor=None
+            ),
+            {},
+            None,
+        ),
+        (
+            lambda: magpy.Collection(
+                _build_uniform_collection(8),
+                _build_uniform_collection(8).rotate_from_angax(10, "x"),
+            ),
+            {},
+            "turned against each other",
+        ),
+        (lambda: _build_uniform_collection(27), {"split": 2}, "do not combine"),
+    ],
+    ids=[
+        "cylinder-and-tetrahedron",
+        "all-turned-alike",
+        "turned-bodies",
+        "legacy-option",
+    ],
+)
+def test_newell_refuses_cells_it_cannot_cover(build, kwargs, match):
+    """The Newell rule applies to every pair or not at all: it raises rather
+    than mixing rules. Cells all turned alike are parallel, so they pass."""
+    coll = build()
+    if match is None:
+        apply_demag(coll, susceptibility=0.5, interaction="newell", **kwargs)
+        return
+    with pytest.raises(ValueError, match=match):
+        apply_demag(coll, susceptibility=0.5, interaction="newell", **kwargs)
+
+
+def test_unknown_interaction_is_refused():
+    with pytest.raises(ValueError, match="interaction must be one of"):
+        apply_demag(_build_uniform_collection(8), susceptibility=0.5, interaction="avg")
+
+
+@pytest.mark.parametrize(
+    ("dimension", "divisions"),
+    [
+        ((0.01, 0.01, 0.01), [(1, 1, 1), (2, 2, 2), (4, 4, 4), (8, 8, 8)]),
+        ((0.02, 0.02, 0.001), [(5, 5, 1), (10, 10, 2), (20, 20, 4)]),
+    ],
+    ids=["cube", "thin-plate"],
+)
+def test_newell_moment_rises_under_refinement(dimension, divisions):
+    """Galerkin: with the Newell rule, a soft body's induced moment in a uniform
+    field rises with every nested refinement, towards the converged value from
+    below. (The point rule overshoots on the thin plate.)"""
+    moments = []
+    for div in divisions:
+        body = magpy.magnet.Cuboid(dimension=dimension, polarization=(0, 0, 0))
+        body.H_ext = (0.01, 0, 0)
+        res = apply_demag(
+            mesh_Cuboid(body, div), susceptibility=1000.0, interaction="newell"
+        )
+        moments.append(
+            sum(np.prod(c.dimension) * c.polarization[0] for c in res.sources_all)
+        )
+    assert np.all(np.diff(moments) > 0)
+
+
+def test_point_rule_is_smooth_when_a_body_turns():
+    """A touching magnet and iron block: turning the iron by a millionth of a
+    degree changes the result by a matching amount, not by a jump."""
+    a = 0.01
+
+    def iron_jz(angle):
+        magnet = mesh_Cuboid(
+            magpy.magnet.Cuboid(dimension=(a, a, a), polarization=(0, 0, 1.2)), 27
+        )
+        iron = magpy.magnet.Cuboid(
+            dimension=(a, a, a), polarization=(0, 0, 0), position=(0, 0, a)
+        )
+        iron = mesh_Cuboid(iron.rotate_from_angax(angle, "x"), 27)
+        res = apply_demag(
+            magpy.Collection(magnet, iron), susceptibility=[0.05] * 27 + [1000.0] * 27
+        )
+        return np.mean(
+            [
+                c.orientation.apply(c.polarization)[2]
+                for c in res.children[1].sources_all
+            ]
+        )
+
+    assert abs(iron_jz(1e-6) / iron_jz(0.0) - 1) < 1e-10

@@ -13,14 +13,17 @@ conditions.
 - ``"grid"``  : identical cuboids, common orientation, on a uniform grid
                 (FFT-eligible self-interactions),
 - ``"loose"`` : identical cuboids, common orientation, no grid structure
-                (analytical Newell self-interactions, dense),
-- ``"generic"``: everything else (point-matched ``magpy.getH``).
+                (dense blocks, computed once per distinct displacement),
+- ``"generic"``: everything else (one ``magpy.getH`` per cell pair).
 
-The kernel is built from the analytical Newell formula
-(:mod:`magpylib_material_response.newell`); only the 6 independent
-components ``(Nxx, Nyy, Nzz, Nxy, Nxz, Nyz)`` are stored. Grid *spacing* is
-detected independently of the cell side lengths, so grids of non-touching
-cells are supported.
+The clusters only decide *how fast* a block is computed, never which rule it
+follows: the rule is chosen once per solve (``interaction`` in
+:func:`~magpylib_material_response.demag.apply_demag`), and the FFT kernel is
+built from that same rule, :func:`~magpylib_material_response.newell.point_block`
+or :func:`~magpylib_material_response.newell.demag_block`. Only the 6
+independent components ``(Nxx, Nyy, Nzz, Nxy, Nxz, Nyz)`` are stored; both
+tensors are symmetric. Grid *spacing* is detected independently of the cell
+side lengths, so grids of non-touching cells are supported.
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response.newell import demag_block
+from magpylib_material_response.newell import demag_block, point_block
 
 __all__ = [
     "analyze_collection",
@@ -47,9 +50,12 @@ __all__ = [
 #: absolute tolerance (after sign canonicalization).
 QUAT_ATOL = 1e-9
 
-#: A geometry cluster below this size is folded into the point-matched
-#: "generic" cluster: with e.g. one cluster per orientation (rotated-cell
-#: meshes) the per-cluster bookkeeping would otherwise dominate.
+#: A geometry cluster below this size is folded into the "generic" cluster,
+#: computed one cell pair at a time: with e.g. one cluster per orientation
+#: (rotated-cell meshes) the per-cluster bookkeeping would otherwise dominate.
+#: Under the point rule this changes speed only. The Newell rule keeps every
+#: cuboid in a geometry cluster (``min_cluster_cells=1``), since it needs the
+#: prisms' shapes for every pair.
 MIN_CLUSTER_CELLS = 8
 
 #: Minimum cells for a detected grid to be worth an FFT kernel; smaller
@@ -215,7 +221,7 @@ def _matching_point(src):
     return src.position
 
 
-def analyze_collection(sources, atol=QUAT_ATOL):
+def analyze_collection(sources, atol=QUAT_ATOL, min_cluster_cells=MIN_CLUSTER_CELLS):
     """Partition magnet objects into structure clusters (see
     :func:`analyze_structure`).
 
@@ -223,6 +229,8 @@ def analyze_collection(sources, atol=QUAT_ATOL):
     dimensions, orientations and the cuboid mask from a sequence of magpylib
     magnet objects (e.g. ``collection.sources_all``) and returns the cluster
     list together with the extracted positions.
+
+    ``min_cluster_cells`` is passed on to :func:`analyze_structure`.
 
     Returns
     -------
@@ -237,11 +245,20 @@ def analyze_collection(sources, atol=QUAT_ATOL):
         dtype=float,
     )
     rotations = R.from_quat([s.orientation.as_quat() for s in sources])
-    clusters = analyze_structure(positions, dimensions, rotations, is_cuboid, atol)
+    clusters = analyze_structure(
+        positions, dimensions, rotations, is_cuboid, atol, min_cluster_cells
+    )
     return positions, clusters
 
 
-def analyze_structure(positions, dimensions, rotations, is_cuboid, atol=QUAT_ATOL):
+def analyze_structure(
+    positions,
+    dimensions,
+    rotations,
+    is_cuboid,
+    atol=QUAT_ATOL,
+    min_cluster_cells=MIN_CLUSTER_CELLS,
+):
     """Partition cells into structure clusters covering every cell exactly once.
 
     Parameters
@@ -256,6 +273,11 @@ def analyze_structure(positions, dimensions, rotations, is_cuboid, atol=QUAT_ATO
         Which cells are ``magpylib.magnet.Cuboid`` instances.
     atol : float
         Quaternion comparison tolerance.
+    min_cluster_cells : int
+        Cuboids sharing one shape and orientation form a ``"grid"`` or
+        ``"loose"`` cluster when there are at least this many of them, and
+        join the ``"generic"`` cluster otherwise. ``1`` keeps every cuboid in
+        a geometry cluster.
 
     Returns
     -------
@@ -315,7 +337,7 @@ def analyze_structure(positions, dimensions, rotations, is_cuboid, atol=QUAT_ATO
 
         for lab in np.unique(labels):
             members = cub_idx[labels == lab]  # original indices
-            if members.size < MIN_CLUSTER_CELLS:
+            if members.size < min_cluster_cells:
                 fold_to_generic.append(members)
                 continue
             dim0 = dimensions[members[0]]
@@ -368,8 +390,8 @@ def analyze_structure(positions, dimensions, rotations, is_cuboid, atol=QUAT_ATO
     return clusters
 
 
-def build_fft_kernel(grid_shape, spacing, dim):
-    """Build the 6-component Newell demag kernel on the doubled grid, FFTed.
+def build_fft_kernel(grid_shape, spacing, dim, interaction="point"):
+    """Build the 6-component demag kernel on the doubled grid, FFTed.
 
     Parameters
     ----------
@@ -378,6 +400,10 @@ def build_fft_kernel(grid_shape, spacing, dim):
         Grid pitch per axis (>= cell size for non-overlapping cells).
     dim : tuple (sx, sy, sz)
         Cell side lengths.
+    interaction : {"point", "newell"}
+        The rule the kernel follows: the field at each cell's centre
+        (:func:`~magpylib_material_response.newell.point_block`) or averaged
+        over the cell (:func:`~magpylib_material_response.newell.demag_block`).
 
     Returns
     -------
@@ -399,7 +425,13 @@ def build_fft_kernel(grid_shape, spacing, dim):
 
     DX, DY, DZ = np.meshgrid(di * px, dj * py, dk * pz, indexing="ij")
     disp = np.stack([DX, DY, DZ], axis=-1)  # (2Nx, 2Ny, 2Nz, 3)
-    N = demag_block(disp, dim)  # (2Nx, 2Ny, 2Nz, 3, 3)
+    if interaction == "newell":
+        N = demag_block(disp, dim)  # (2Nx, 2Ny, 2Nz, 3, 3)
+    elif interaction == "point":
+        N = point_block(disp, dim)
+    else:
+        msg = f"interaction must be 'point' or 'newell'; got {interaction!r}"
+        raise ValueError(msg)
 
     # Stack the 6 independent components: diagonal then upper triangle.
     idx = ((0, 0), (1, 1), (2, 2), (0, 1), (0, 2), (1, 2))

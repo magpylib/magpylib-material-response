@@ -1,7 +1,21 @@
-"""Analytical demagnetization tensor for rectangular prisms (Newell 1993).
+"""Interaction tensors between rectangular prisms, the two rules of ``apply_demag``.
 
-Implements the volume-averaged demagnetization tensor between two identical
-axis-aligned rectangular prisms, following:
+A tensor block ``N`` gives the field one uniformly magnetized prism (the source)
+produces at another (the observer), ``H = -N @ M``. The demagnetization solver
+offers two ways to take that field at the observer:
+
+- **point** (:func:`point_block`): at the observer's centre. The exact field of
+  the source prism, magpylib's closed form. Works for any observer, and is the
+  rule magpylib-material-response has always used.
+- **newell** (:func:`demag_block`, :func:`demag_block_general`): averaged over
+  the observer prism. This is the Galerkin form of the problem, which makes the
+  induced moment of a body in a uniform field a lower bound that rises with
+  refinement. It needs both prisms parallel.
+
+For two cubes of one size both rules agree to fourth order in cell size over
+distance; they differ most for flat or long cells and for neighbours.
+
+The volume-averaged tensor follows:
 
     A. J. Newell, W. Williams, D. J. Dunlop (1993)
     "A generalization of the demagnetizing tensor for nonuniform magnetization"
@@ -20,6 +34,8 @@ Far apart, the exact formulas lose precision: their double differences cancel
 nearly equal terms, about ``eps * r**6 / (V_src * V_obs)`` relative. There the
 blocks switch to a far-field expansion, the point dipole plus its leading
 cell-size correction, accurate to ``(h_max / r)**4`` (see ``FAR_FIELD_C``).
+The point rule switches the same way, much farther out (see
+``POINT_FAR_FIELD_RATIO``).
 
 Sign convention: the tensor returned by :func:`demag_tensor_newell` matches
 the layout produced by :func:`magpylib_material_response.demag.demag_tensor`
@@ -33,6 +49,7 @@ diagonal is exactly ``-1 / (3 * mu_0)``.
 
 from __future__ import annotations
 
+import magpylib as magpy
 import numpy as np
 
 __all__ = [
@@ -41,6 +58,7 @@ __all__ = [
     "demag_tensor_newell",
     "newell_f",
     "newell_g",
+    "point_block",
     "self_demag_factors",
 ]
 
@@ -57,6 +75,13 @@ _OFF = (-1, 0, 1)
 #: rods, and pairs of different sizes; the error where they meet is 3e-7 for
 #: cubes and 2e-5 for 10:1 rods, and both fall on either side of it.
 FAR_FIELD_C = 1e15
+
+#: The point rule switches to the far-field expansion beyond this many of the
+#: source's longest side. magpylib's closed form loses precision far more slowly
+#: than Newell's double differences, so one ratio fits every shape: calibrated
+#: like ``FAR_FIELD_C``, the error stays below 3e-8 on both sides of the switch
+#: for cubes, 10:1 plates and 10:1 rods.
+POINT_FAR_FIELD_RATIO = 50.0
 
 
 def _safe(arr):
@@ -283,7 +308,8 @@ def _far_field_block(disp, dim_src, dim_obs):
     prisms adds ``sum_k (a_k**2 + b_k**2) / 24 * d_k**2`` of it to leading
     order, ``a`` and ``b`` being the source and observer sides; the rest is
     ``O((h_max / r)**4)``. The correction vanishes for two cubes of one size,
-    and the expansion keeps the volume-weighted reciprocity exactly.
+    and the expansion keeps the volume-weighted reciprocity exactly. A zero
+    observer size gives the expansion of the point rule.
     """
     x = np.asarray(disp, dtype=float).reshape(-1, 3)
     r2 = np.einsum("ni,ni->n", x, x)[:, None, None]
@@ -317,6 +343,59 @@ def _exact_or_far(disp, dim_src, dim_obs, exact):
         out[~far] = exact(flat[~far])
     if far.any():
         out[far] = _far_field_block(flat[far], dim_src, dim_obs)
+    return out.reshape(*disp.shape[:-1], 3, 3)
+
+
+def _point_block_exact(disp, dim_src):
+    """``N`` of a source prism at observer points, from magpylib's closed form.
+
+    Three field evaluations, one per unit magnetization axis; ``disp`` is
+    ``(n, 3)`` in the prism's own frame.
+    """
+    source = magpy.magnet.Cuboid(dimension=dim_src)
+    out = np.empty((len(disp), 3, 3), dtype=float)
+    for k in range(3):
+        source.polarization = magpy.mu_0 * np.eye(3)[k]  # M = e_k in A/m
+        out[:, :, k] = -np.reshape(source.getH(disp), (-1, 3))
+    return out
+
+
+def point_block(disp, dim_src):
+    """3x3 tensor ``N`` of a source prism at an observer point.
+
+    The point rule: the field of a uniformly magnetized prism at the point
+    ``disp`` from its centre, in the prism's own frame, is ``H = -N @ M``.
+    Exact (magpylib's closed form) up to ``POINT_FAR_FIELD_RATIO`` times the
+    prism's longest side, the far-field expansion beyond.
+
+    The tensor depends only on the displacement and the source prism, so cells
+    on a grid share it, which is what makes the point rule as cheap as the
+    volume-averaged one: deduplicated dense blocks and FFT products alike.
+    Outside the source it is symmetric and even in ``disp``.
+
+    Parameters
+    ----------
+    disp : array_like, shape (..., 3)
+        Observer point minus source centre, in the source prism's frame.
+    dim_src : array_like, shape (3,)
+        Source prism side lengths.
+
+    Returns
+    -------
+    N : ndarray, shape (..., 3, 3)
+        At ``disp = 0``, the prism's demagnetizing factors at its centre
+        (``1/3`` each for a cube).
+    """
+    dim_src = np.asarray(dim_src, dtype=float)
+    disp = np.asarray(disp, dtype=float)
+    flat = disp.reshape(-1, 3)
+    r_switch = POINT_FAR_FIELD_RATIO * float(np.max(dim_src))
+    far = np.einsum("ni,ni->n", flat, flat) > r_switch**2
+    out = np.empty((len(flat), 3, 3), dtype=float)
+    if not far.all():
+        out[~far] = _point_block_exact(flat[~far], dim_src)
+    if far.any():
+        out[far] = _far_field_block(flat[far], dim_src, np.zeros(3))
     return out.reshape(*disp.shape[:-1], 3, 3)
 
 

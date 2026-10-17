@@ -6,21 +6,36 @@ susceptibility matrix and ``T`` the demag interaction operator. The
 ``H_ext`` object attribute is interpreted as the applied flux density
 ``B_ext`` in Tesla (B-field convention, consistent with polarization).
 
-A single *pair rule* defines every entry of ``T`` (single source of truth):
+Every entry of ``T`` follows one *interaction rule*, chosen per solve with
+``interaction`` and applied to every pair of cells, never mixed:
 
-- both cells are Cuboids sharing one orientation → analytical volume-averaged
-  Newell tensor (:mod:`magpylib_material_response.newell`), generalized to
-  different cell sizes;
-- anything else → point-matched ``magpy.getH`` (field evaluated at the
-  observer barycentre, see Chadebec 2006).
+- ``"point"`` (default): the field of the source cell at the observer cell's
+  centre (point matching, Chadebec 2006). Any cell type and orientation; the
+  rule this package has always used.
+- ``"newell"``: the field of the source cell averaged over the observer cell,
+  the volume-averaged Newell tensor (:mod:`magpylib_material_response.newell`).
+  This is the Galerkin form of the problem: the induced moment of a body in a
+  uniform field is then a lower bound that rises under refinement, so a mesh
+  study knows which side the converged value is on. It needs every cell to be
+  a cuboid, all with one orientation, and raises otherwise.
 
-Two evaluation strategies share that rule, so ``solver="direct"`` and
-``solver="iterative"`` agree to solver tolerance by construction:
+At equal cell count neither rule is more accurate in general: they agree for
+cubes, and for flat cells each wins on different quantities. A mix of the two
+would jump when a body turns by any angle that makes its cells non-parallel,
+and would lose the lower bound, so there is none.
+
+Two evaluation strategies apply the chosen rule, so ``solver="direct"`` and
+``solver="iterative"`` solve the same system:
 
 - ``"direct"``   materialises the dense ``T`` and calls ``np.linalg.solve``;
 - ``"iterative"`` applies ``T`` matrix-free in GMRES — FFT convolution for
   uniform-grid clusters (:mod:`magpylib_material_response.demag_fft`), dense
   or row-sum-bounded sparse blocks for everything else.
+
+Cells sharing a cuboid shape and orientation make every block fast under
+either rule: the tensor depends only on the displacement, so it is computed
+once per distinct displacement, reverse blocks follow by reciprocity, and
+uniform grids use FFT products. Other cells cost one field evaluation per pair.
 
 All computations run in the global frame; per-cluster rotations are handled
 inside the block builders. An anisotropic susceptibility acts along each cell's
@@ -44,6 +59,7 @@ from scipy.sparse.linalg import LinearOperator, gmres
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.demag_fft import (
+    MIN_CLUSTER_CELLS,
     QUAT_ATOL,
     _matching_point,
     analyze_collection,
@@ -53,6 +69,7 @@ from magpylib_material_response.demag_fft import (
 )
 from magpylib_material_response.newell import (
     demag_block_general,
+    point_block,
     self_demag_factors,
 )
 from magpylib_material_response.utils import timelog
@@ -260,9 +277,46 @@ def _cell_positions(srcs):
     return np.array([_matching_point(src) for src in srcs], dtype=float)
 
 
-def _analyze_collection(magnets_list, atol=QUAT_ATOL):
-    """Run :func:`analyze_collection` on a list of magnet objects, with logging."""
-    positions, clusters = analyze_collection(magnets_list, atol)
+#: The interaction rules ``apply_demag`` and ``demag_tensor`` accept.
+INTERACTIONS = ("point", "newell")
+
+
+def _check_interaction(interaction, magnets_list, atol=QUAT_ATOL):
+    """Refuse an unknown rule, and the Newell rule on cells it cannot cover."""
+    if interaction not in INTERACTIONS:
+        msg = f"interaction must be one of {INTERACTIONS}; got {interaction!r}"
+        raise ValueError(msg)
+    if interaction == "point":
+        return
+    others = Counter(
+        type(m).__name__ for m in magnets_list if not isinstance(m, Cuboid)
+    )
+    if others:
+        found = ", ".join(f"{k} {name}" for name, k in others.items())
+        msg = (
+            "interaction='newell' averages the field over each cell, which needs "
+            f"every cell to be a Cuboid; found {found}. Use interaction='point' "
+            "(the default), which handles any cell."
+        )
+        raise ValueError(msg)
+    quats = canonical_quats(np.array([m.orientation.as_quat() for m in magnets_list]))
+    if not np.allclose(quats, quats[0], atol=atol):
+        msg = (
+            "interaction='newell' needs all cuboid cells parallel, with one "
+            "orientation; these cells are turned against each other. Use "
+            "interaction='point' (the default), which handles any orientation."
+        )
+        raise ValueError(msg)
+
+
+def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL):
+    """Run :func:`analyze_collection` on a list of magnet objects, with logging.
+
+    Under the Newell rule every cuboid stays in a geometry cluster, whatever the
+    group size, because each pair needs both prisms' shapes.
+    """
+    min_cells = 1 if interaction == "newell" else MIN_CLUSTER_CELLS
+    positions, clusters = analyze_collection(magnets_list, atol, min_cells)
     counts = Counter(c["kind"] for c in clusters)
     logger.info(
         "Cell structure: {n_grid} grid, {n_loose} loose, {n_generic} generic clusters",
@@ -273,14 +327,28 @@ def _analyze_collection(magnets_list, atol=QUAT_ATOL):
     return positions, clusters
 
 
-def _pair_uses_newell(cl_a, cl_b, atol=QUAT_ATOL):
-    """True when the analytical Newell tensor applies to this cluster pair:
-    both cuboid clusters, prisms parallel (same orientation up to sign)."""
-    if cl_a["kind"] == "generic" or cl_b["kind"] == "generic":
-        return False
+def _same_orientation(cl_a, cl_b, atol=QUAT_ATOL):
+    """True when two cuboid clusters' prisms are parallel."""
     qa = canonical_quats(cl_a["r_common"].as_quat()[None])[0]
     qb = canonical_quats(cl_b["r_common"].as_quat()[None])[0]
     return bool(np.allclose(qa, qb, atol=atol))
+
+
+def _reciprocity_factor(cl_a, cl_b, interaction):
+    """``c`` with ``T_ba = c * T_ab.T`` exactly, or ``None`` to compute ``T_ba``.
+
+    The volume-averaged tensor obeys ``V_a N_ab = V_b N_ba^T`` for any two
+    parallel prisms. The point tensor is symmetric and even in the
+    displacement, so ``N_ba = N_ab^T`` holds when both clusters share one prism
+    shape and orientation.
+    """
+    if cl_a["kind"] == "generic" or cl_b["kind"] == "generic":
+        return None
+    if interaction == "newell":
+        return float(np.prod(cl_a["dim"]) / np.prod(cl_b["dim"]))
+    if np.allclose(cl_a["dim"], cl_b["dim"]) and _same_orientation(cl_a, cl_b):
+        return 1.0
+    return None
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -293,23 +361,23 @@ def _pair_uses_newell(cl_a, cl_b, atol=QUAT_ATOL):
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def _dedup_demag_blocks(disp, dim_src, dim_obs):
-    """Evaluate Newell blocks with duplicate displacements computed once.
+def _dedup_blocks(disp, scale, block):
+    """Evaluate ``block(disp)`` with duplicate displacements computed once.
 
     Cells on regular grids share displacements massively (two same-spacing
-    grids have O(N) unique displacements out of N^2 pairs), so the analytical
-    evaluation is gathered from the unique set when that pays off.
+    grids have O(N) unique displacements out of N^2 pairs), so the tensor is
+    gathered from the unique set when that pays off. ``scale`` sets the
+    rounding (1e-9 of it) that decides when two displacements are the same.
     """
     flat = disp.reshape(-1, 3)
-    scale = max(np.max(np.abs(dim_src)), np.max(np.abs(dim_obs)))
     keys = np.round(flat / (1e-9 * scale)).astype(np.int64)
     uniq, inverse = np.unique(keys, axis=0, return_inverse=True)
     if uniq.shape[0] > 0.25 * flat.shape[0]:
-        return demag_block_general(disp, dim_src, dim_obs)
+        return block(disp)
     # Representative displacement per unique key (first occurrence).
     first = np.zeros(uniq.shape[0], dtype=np.int64)
     first[inverse[::-1]] = np.arange(flat.shape[0] - 1, -1, -1)
-    N_u = demag_block_general(flat[first], dim_src, dim_obs)
+    N_u = block(flat[first])
     return N_u[inverse].reshape((*disp.shape[:-1], 3, 3))
 
 
@@ -325,7 +393,29 @@ def _newell_block_T(pos_a, pos_b, dim_a, dim_b, rot_mat):
         pos_a = pos_a @ rot_mat  # = rot.inv().apply(pos_a)
         pos_b = pos_b @ rot_mat
     disp = pos_a[:, None, :] - pos_b[None, :, :]  # (n_a, n_b, 3) obs - src
-    N = _dedup_demag_blocks(disp, dim_b, dim_a)  # (n_a, n_b, 3m, 3k), local
+    scale = max(np.max(np.abs(dim_a)), np.max(np.abs(dim_b)))
+    N = _dedup_blocks(  # (n_a, n_b, 3m, 3k), local
+        disp, scale, lambda d: demag_block_general(d, dim_b, dim_a)
+    )
+    if rot_mat is not None:
+        N = np.einsum("ma,ijab,kb->ijmk", rot_mat, N, rot_mat)
+    return -N.transpose(2, 0, 3, 1).reshape(3 * n_a, 3 * n_b)
+
+
+def _point_cuboid_block_T(pos_a, pos_b, dim_b, rot_mat):
+    """Point-rule T block for cuboid sources sharing one shape and orientation.
+
+    Observers ``a`` are any matching points; ``rot_mat`` is the sources' common
+    rotation matrix (``None`` for identity). The tensor depends only on the
+    displacement in the sources' frame, so it is deduplicated like the Newell
+    blocks; it equals ``_point_block_T`` up to the far-field switch.
+    """
+    n_a, n_b = len(pos_a), len(pos_b)
+    if rot_mat is not None:
+        pos_a = pos_a @ rot_mat  # = rot.inv().apply(pos_a)
+        pos_b = pos_b @ rot_mat
+    disp = pos_a[:, None, :] - pos_b[None, :, :]  # (n_a, n_b, 3) obs - src
+    N = _dedup_blocks(disp, np.max(np.abs(dim_b)), lambda d: point_block(d, dim_b))
     if rot_mat is not None:
         N = np.einsum("ma,ijab,kb->ijmk", rot_mat, N, rot_mat)
     return -N.transpose(2, 0, 3, 1).reshape(3 * n_a, 3 * n_b)
@@ -372,8 +462,9 @@ def _row_sparsify(block, row_budget):
     return rows, cols, block[rows, cols]
 
 
-def _pair_block(cl_a, cl_b, magnets_list, positions, row_budget=None):
-    """Build the T block for a cluster pair via the pair rule.
+def _pair_block(cl_a, cl_b, magnets_list, positions, interaction, row_budget=None):
+    """Build the T block for a cluster pair (observers ``a``, sources ``b``)
+    under the solve's interaction rule.
 
     Returns a dense ndarray when the block is small (or ``row_budget`` is
     None), else a CSR matrix with per-row dropped sums below ``row_budget``.
@@ -381,16 +472,19 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, row_budget=None):
     ia, ib = cl_a["indices"], cl_b["indices"]
     pos_a, pos_b = positions[ia], positions[ib]
     n_a, n_b = len(ia), len(ib)
-    use_newell = _pair_uses_newell(cl_a, cl_b)
     sparsify = row_budget is not None and 9 * n_a * n_b > DENSE_BLOCK_MAX_ENTRIES
-
+    cuboid_sources = cl_b["kind"] != "generic"
+    # Newell: every cluster is cuboid and all share one orientation (checked
+    # up front). Point: the sources' orientation sets the frame.
     rot_mat = None
-    if use_newell and not cl_a["is_identity"]:
-        rot_mat = cl_a["r_common"].as_matrix()
+    if cuboid_sources and not cl_b["is_identity"]:
+        rot_mat = cl_b["r_common"].as_matrix()
 
     def _dense_chunk(sl):
-        if use_newell:
+        if interaction == "newell":
             return _newell_block_T(pos_a[sl], pos_b, cl_a["dim"], cl_b["dim"], rot_mat)
+        if cuboid_sources:
+            return _point_cuboid_block_T(pos_a[sl], pos_b, cl_b["dim"], rot_mat)
         return _point_block_T([magnets_list[i] for i in ib], pos_a[sl])
 
     def _chunks():
@@ -426,13 +520,14 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, row_budget=None):
     )
 
 
-def _assemble_T_dense(magnets_list, positions, clusters, min_log_time=None):
+def _assemble_T_dense(
+    magnets_list, positions, clusters, interaction, min_log_time=None
+):
     """Assemble the full dense (3n, 3n) T in Fortran layout, global frame.
 
-    Reverse Newell cross-blocks are derived from the forward block by
-    volume-weighted reciprocity (``V_a N_ab = V_b N_ba^T``, exact for the
-    volume-averaged tensor) instead of a second analytical evaluation —
-    the same shortcut the iterative operator build uses.
+    Reverse cross-blocks are derived from the forward block by reciprocity
+    wherever it holds exactly (see :func:`_reciprocity_factor`) instead of a
+    second evaluation, the same shortcut the iterative operator build uses.
     """
     n = len(magnets_list)
     T = np.zeros((3 * n, 3 * n))
@@ -443,16 +538,18 @@ def _assemble_T_dense(magnets_list, positions, clusters, min_log_time=None):
     with timelog("Demagnetization tensor assembly", min_log_time=min_log_time):
         for idx_a, cl_a in enumerate(clusters):
             rows = _flat(cl_a)
-            T[np.ix_(rows, rows)] = _pair_block(cl_a, cl_a, magnets_list, positions)
+            T[np.ix_(rows, rows)] = _pair_block(
+                cl_a, cl_a, magnets_list, positions, interaction
+            )
             for cl_b in clusters[idx_a + 1 :]:
                 cols = _flat(cl_b)
-                M_ab = _pair_block(cl_a, cl_b, magnets_list, positions)
+                M_ab = _pair_block(cl_a, cl_b, magnets_list, positions, interaction)
                 T[np.ix_(rows, cols)] = M_ab
-                if _pair_uses_newell(cl_a, cl_b):
-                    v_ratio = float(np.prod(cl_a["dim"]) / np.prod(cl_b["dim"]))
-                    M_ba = v_ratio * M_ab.T
+                factor = _reciprocity_factor(cl_a, cl_b, interaction)
+                if factor is not None:
+                    M_ba = factor * M_ab.T
                 else:
-                    M_ba = _pair_block(cl_b, cl_a, magnets_list, positions)
+                    M_ba = _pair_block(cl_b, cl_a, magnets_list, positions, interaction)
                 T[np.ix_(cols, rows)] = M_ba
     return T
 
@@ -479,7 +576,9 @@ def _fft_apply(op, v_flat):
     return H.T.ravel()
 
 
-def _build_operator(magnets_list, positions, clusters, chi, solver_tol, min_log_time):
+def _build_operator(
+    magnets_list, positions, clusters, chi, solver_tol, min_log_time, interaction
+):
     """Build the list of block operators representing T for the matvec.
 
     Self-blocks of grid clusters are FFT convolutions (exact); every other
@@ -506,7 +605,7 @@ def _build_operator(magnets_list, positions, clusters, chi, solver_tol, min_log_
                         "order": cl_a["order"],
                         "rot_mat": rot_mat,
                         "kernel_fft": build_fft_kernel(
-                            cl_a["shape"], cl_a["spacing"], cl_a["dim"]
+                            cl_a["shape"], cl_a["spacing"], cl_a["dim"], interaction
                         ),
                     }
                 )
@@ -517,14 +616,16 @@ def _build_operator(magnets_list, positions, clusters, chi, solver_tol, min_log_
                         "ia": cl_a["indices"],
                         "ib": cl_a["indices"],
                         "M": _pair_block(
-                            cl_a, cl_a, magnets_list, positions, row_budget
+                            cl_a, cl_a, magnets_list, positions, interaction, row_budget
                         ),
                     }
                 )
             for idx_b, cl_b in enumerate(clusters):
                 if idx_b <= idx_a:
                     continue
-                M_ab = _pair_block(cl_a, cl_b, magnets_list, positions, row_budget)
+                M_ab = _pair_block(
+                    cl_a, cl_b, magnets_list, positions, interaction, row_budget
+                )
                 ops.append(
                     {
                         "kind": "mat",
@@ -533,17 +634,16 @@ def _build_operator(magnets_list, positions, clusters, chi, solver_tol, min_log_
                         "M": M_ab,
                     }
                 )
-                if _pair_uses_newell(cl_a, cl_b) and not sp.issparse(M_ab):
-                    # Volume-weighted reciprocity: V_a * N_ab = V_b * N_ba^T,
-                    # exact for the volume-averaged tensor.
-                    v_ratio = float(np.prod(cl_a["dim"]) / np.prod(cl_b["dim"]))
-                    M_ba = v_ratio * M_ab.T
+                factor = _reciprocity_factor(cl_a, cl_b, interaction)
+                if factor is not None and not sp.issparse(M_ab):
+                    M_ba = factor * M_ab.T
                 else:
                     M_ba = _pair_block(
                         cl_a=cl_b,
                         cl_b=cl_a,
                         magnets_list=magnets_list,
                         positions=positions,
+                        interaction=interaction,
                         row_budget=row_budget,
                     )
                 ops.append(
@@ -585,14 +685,18 @@ def _build_dense_matvec(chi, T):
     return matvec
 
 
-def _self_demag_diagonal(n, clusters):
-    """Fortran-flat (3n,) diagonal of the analytical self-demag factors,
-    rotated to the global frame per cluster (zero for generic cells)."""
+def _self_demag_diagonal(n, clusters, interaction):
+    """Fortran-flat (3n,) diagonal of the cells' own demag factors under the
+    solve's rule, rotated to the global frame per cluster (zero for generic
+    cells): the Jacobi preconditioner."""
     Nself_flat = np.zeros(3 * n)
     for cl in clusters:
         if cl["kind"] == "generic":
             continue
-        Ns = self_demag_factors(cl["dim"])  # (3,) local frame
+        if interaction == "newell":
+            Ns = self_demag_factors(cl["dim"])  # (3,) local frame
+        else:
+            Ns = np.diag(point_block(np.zeros(3), cl["dim"]))
         if cl["is_identity"]:
             diag_m = Ns
         else:
@@ -660,16 +764,17 @@ def demag_tensor(
     split=False,
     max_dist=0,
     min_log_time=None,
+    interaction="point",
 ):
     """
     Compute the demagnetization tensor T for n sources.
 
-    By default the tensor is assembled with the unified pair rule: the
-    analytical volume-averaged Newell tensor for parallel Cuboid cells
-    (generalized to different sizes) and point matching (see Chadebec 2006)
-    otherwise. The legacy options ``pairs_matching``, ``split`` and
-    ``max_dist`` force the historical point-matching evaluation for all
-    pairs.
+    Every pair follows ``interaction``, the same rule as in
+    :func:`apply_demag`: the field at each cell's centre (``"point"``, the
+    default) or averaged over each cell (``"newell"``). The legacy options
+    ``pairs_matching``, ``split`` and ``max_dist`` take the historical
+    point-matching path, which gives the same tensor up to the far-field
+    expansion of :func:`~magpylib_material_response.newell.point_block`.
 
     Parameters
     ----------
@@ -691,6 +796,11 @@ def demag_tensor(
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
         will not be logged.
+
+    interaction: {"point", "newell"}
+        Interaction rule, see :func:`apply_demag`. ``"newell"`` needs every
+        source to be a Cuboid, all with one orientation, and does not combine
+        with the legacy options.
 
     Returns
     -------
@@ -714,13 +824,21 @@ def demag_tensor(
         msg = "Pairs matching does not support splitting"
         raise ValueError(msg)
 
+    _check_interaction(interaction, list(src_list))
     no_split = split is False or split == 1
-    if not pairs_matching and max_dist == 0 and no_split:
-        # Unified assembly (Newell where applicable), returned in the legacy
+    legacy = pairs_matching or max_dist != 0 or not no_split
+    if legacy and interaction == "newell":
+        msg = (
+            "pairs_matching, max_dist and split take the legacy point-matching "
+            "path and do not combine with interaction='newell'."
+        )
+        raise ValueError(msg)
+    if not legacy:
+        # Assembly under the chosen rule, returned in the legacy
         # (3, n, n, 3) pre-mu_0 layout.
-        positions, clusters = _analyze_collection(list(src_list))
+        positions, clusters = _analyze_collection(list(src_list), interaction)
         T2 = _assemble_T_dense(
-            list(src_list), positions, clusters, min_log_time=min_log_time
+            list(src_list), positions, clusters, interaction, min_log_time=min_log_time
         )
         n = nof_src
         # T2[(m, j), (k, i)] -> legacy T[k, i, j, m], pre-mu_0.
@@ -922,10 +1040,29 @@ def apply_demag(
     solver="direct",
     solver_tol=1e-6,
     max_iter=50,
+    interaction="point",
 ):
     """
     Computes the interaction between all collection magnets and fixes their
     polarization.
+
+    Each magnet is a cell with one uniform polarization. How strongly the
+    cells act on each other follows ``interaction``, one rule for every pair:
+
+    - ``"point"`` (default): the field of each cell taken at the centre of the
+      other. Works for any cell type and orientation, and gives the results
+      this package has always given.
+    - ``"newell"``: the field averaged over the whole of the other cell. Needs
+      every cell to be a Cuboid, all with one orientation (a mesh from
+      :func:`~magpylib_material_response.meshing.mesh_Cuboid` of unrotated or
+      equally rotated bodies), and raises otherwise. Its induced moment in a
+      uniform field never overshoots: it rises towards the converged value as
+      the mesh is refined, so a convergence study knows which side the answer
+      is on. Choose it for mesh studies of cuboid models.
+
+    At equal cell count neither rule is more accurate in general: they agree
+    for cubic cells, and for flat or long cells each is closer on different
+    quantities. Both are equally fast for cuboid meshes.
 
     Parameters
     ----------
@@ -971,14 +1108,17 @@ def apply_demag(
         Set collection style. If `inplace=False` only affects the copied collection
 
     solver: {"direct", "iterative"}
-        Linear solver to use. Both solvers share the same interaction model
-        (analytical volume-averaged Newell tensor for parallel cuboid cells,
-        point matching otherwise) and agree to ``solver_tol``.
+        Linear solver to use. Both apply the same ``interaction`` rule.
         ``"direct"`` (default) builds the dense ``Q`` matrix and calls
         :func:`numpy.linalg.solve` — exact within floating-point precision.
         ``"iterative"`` solves matrix-free with :func:`scipy.sparse.linalg.gmres`
         and a diagonal Jacobi preconditioner; uniform-grid clusters of cells
-        use an FFT-accelerated :math:`O(n \\log n)` matvec.
+        use an FFT-accelerated :math:`O(n \\log n)` matvec. GMRES stops when the
+        residual is below ``solver_tol`` relative to the right-hand side. The
+        polarization then agrees with the direct solver to about ``solver_tol``
+        for hard magnets; for soft ones the gap can grow up to about
+        ``chi * solver_tol / 3`` (35 times ``solver_tol`` measured at
+        ``chi = 1000``), so tighten ``solver_tol`` for high susceptibilities.
 
     solver_tol: float
         Relative residual tolerance passed to GMRES when ``solver="iterative"``.
@@ -987,12 +1127,19 @@ def apply_demag(
         Maximum number of GMRES iterations when ``solver="iterative"``.
         Non-convergence raises ``RuntimeError``.
 
+    interaction: {"point", "newell"}
+        How cells act on each other, see above. ``"newell"`` does not combine
+        with ``pairs_matching``, ``max_dist`` or ``split``.
+
     Returns
     -------
     demagnetized collection or None (if ``inplace=True``)
     """
     if solver not in ("direct", "iterative"):
         msg = f"solver must be 'direct' or 'iterative'; got {solver!r}"
+        raise ValueError(msg)
+    if interaction not in INTERACTIONS:
+        msg = f"interaction must be one of {INTERACTIONS}; got {interaction!r}"
         raise ValueError(msg)
     if not inplace:
         collection = collection.copy()
@@ -1074,9 +1221,16 @@ def apply_demag(
 
         rhs = pol_total + _apply_susceptibility(chi, H_ext)  # shape (3n, 1)
 
-        # ── demag operator: legacy point-matching or unified pair rule ──────
+        # ── demag operator: legacy point-matching or the chosen rule ────────
+        _check_interaction(interaction, magnets_list)
         no_split = split is False or split == 1
         legacy = pairs_matching or max_dist != 0 or not no_split
+        if legacy and interaction == "newell":
+            msg = (
+                "pairs_matching, max_dist and split take the legacy point-matching "
+                "path and do not combine with interaction='newell'."
+            )
+            raise ValueError(msg)
         if legacy:
             with timelog(
                 "Demagnetization tensor calculation", min_log_time=min_log_time
@@ -1091,11 +1245,15 @@ def apply_demag(
                 T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
             positions, clusters = None, None
         else:
-            positions, clusters = _analyze_collection(magnets_list)
+            positions, clusters = _analyze_collection(magnets_list, interaction)
             T = None
             if solver == "direct":
                 T = _assemble_T_dense(
-                    magnets_list, positions, clusters, min_log_time=min_log_time
+                    magnets_list,
+                    positions,
+                    clusters,
+                    interaction,
+                    min_log_time=min_log_time,
                 )
 
         with timelog("Solving of linear system", min_log_time=min_log_time):
@@ -1117,9 +1275,10 @@ def apply_demag(
                         chi,
                         solver_tol,
                         min_log_time,
+                        interaction,
                     )
                     matvec = _build_matvec(n, chi, ops)
-                    Nself_flat = _self_demag_diagonal(n, clusters)
+                    Nself_flat = _self_demag_diagonal(n, clusters, interaction)
                 pol_new = _solve_iterative(
                     n=n,
                     chi=chi,
