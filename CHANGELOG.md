@@ -29,6 +29,15 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking:** an anisotropic susceptibility `(χx, χy, χz)` acts along each
+  cell's own axes and turns with its orientation, like its polarization, instead
+  of along the global axes. Results change for anisotropic susceptibilities on
+  rotated magnets, which before depended on how the magnet was turned in space.
+  `mesh_thin_CylinderSegment_with_cuboids`, whose cells are turned about z,
+  refuses an anisotropic susceptibility that differs along x and y; use
+  `mesh_Cylinder`. Scalar values, and unrotated magnets meshed otherwise, give
+  the same results as before
+  ([#50](https://github.com/magpylib/magpylib-material-response/issues/50)).
 - `mesh_Cuboid` and `mesh_Cylinder` cut an integer `target_elems` into
   near-cubic cells: the cell edge comes from the volume and the count, and each
   side is cut into a whole number of cells. `mesh_Cylinder` also cuts each ring
