@@ -29,9 +29,12 @@ and this project adheres to
 
 ### Changed
 
-- `mesh_Cylinder` cuts each ring in proportion to its middle radius instead of
-  its outer radius: a cylinder gets about `target_elems` cells instead of up to
-  twice as many, all with about the same arc length. The cells are the ones
+- `mesh_Cuboid` and `mesh_Cylinder` cut an integer `target_elems` into
+  near-cubic cells: the cell edge comes from the volume and the count, and each
+  side is cut into a whole number of cells. `mesh_Cylinder` also cuts each ring
+  in proportion to its middle radius instead of its outer radius, so a cylinder
+  no longer gets up to twice the requested cells. The count follows the request
+  less closely; a triple still sets the divisions. The cells are the ones
   magpylib's force mesher produces
   ([magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
 

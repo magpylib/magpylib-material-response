@@ -156,8 +156,8 @@ def test_mesh_Cylinder2():
     cyls = [o for o in cm if isinstance(o, magpy.magnet.Cylinder)]
     cyl_segs = [o for o in cm if isinstance(o, magpy.magnet.CylinderSegment)]
 
-    assert len(cyls) == 7
-    assert len(cyl_segs) == 189
+    assert len(cyls) == 6
+    assert len(cyl_segs) == 162
 
 
 def test_mesh_thin_CylinderSegment_with_cuboids():
@@ -232,7 +232,7 @@ def test_mesh_all():
     cubs = [o for o in cm.sources_all if isinstance(o, magpy.magnet.Cuboid)]
     cyls = [o for o in cm.sources_all if isinstance(o, magpy.magnet.Cylinder)]
     cylsegs = [o for o in cm.sources_all if isinstance(o, magpy.magnet.CylinderSegment)]
-    assert len(cubs) == 16
+    assert len(cubs) == 12
     assert len(cyls) == 0
     assert len(cylsegs) == 12
 
@@ -241,9 +241,9 @@ def test_mesh_all():
     cubs = [o for o in cm.sources_all if isinstance(o, magpy.magnet.Cuboid)]
     cyls = [o for o in cm.sources_all if isinstance(o, magpy.magnet.Cylinder)]
     cylsegs = [o for o in cm.sources_all if isinstance(o, magpy.magnet.CylinderSegment)]
-    assert len(cubs) == 40
-    assert len(cyls) == 1
-    assert len(cylsegs) == 19
+    assert len(cubs) == 24
+    assert len(cyls) == 0
+    assert len(cylsegs) == 14
 
     # mesh on copy (by default)
     cm = mesh_all(c0, target_elems=20)
@@ -367,7 +367,18 @@ def test_mesh_Cylinder_thin_ring_centroids_inside():
         out = apply_demag(magpy.Collection(src.copy(), cells)).children[1]
         return sum(c.polarization[0] * c.volume for c in out.children)
 
-    np.testing.assert_allclose(moment_x(12), moment_x(48), rtol=0.05)
+    reference = moment_x(800)
+    for target in (12, 48):
+        np.testing.assert_allclose(moment_x(target), reference, rtol=0.05)
+
+
+def _core_makes_cells():
+    """magpylib's force mesher returns cells from magpylib 6 on (magpylib#1023)."""
+    cube = magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
+    if MESHING_ON_CALL:
+        return "cells" in cube._generate_mesh(1)
+    cube.meshing = 1
+    return "cells" in cube._generate_mesh()
 
 
 def _segment_dimensions(cells):
@@ -395,29 +406,46 @@ def _segment_dimensions(cells):
         (magpy.magnet.CylinderSegment(dimension=(1, 1.1, 1, 0, 270)), 20),
         (magpy.magnet.CylinderSegment(dimension=(0, 1, 2, 10, 370)), 50),
         (magpy.magnet.CylinderSegment(dimension=(0, 1, 2, 10, 370)), 300),
-        (magpy.magnet.CylinderSegment(dimension=(0.95, 1, 0.5, 0, 360)), 8),
+        (magpy.magnet.CylinderSegment(dimension=(0.95, 1, 0.5, 0, 360)), 1),
+        (magpy.magnet.Cylinder(dimension=(2, 1)), (8, 3, 2)),
+        (magpy.magnet.Cuboid(dimension=(0.001, 0.002, 0.003)), 100),
+        (magpy.magnet.Cuboid(dimension=(3, 2, 1)), 5),
+        (magpy.magnet.Cuboid(dimension=(1, 1, 1)), (2, 3, 4)),
     ],
-    ids=["Cylinder-200", "Segment-20", "Segment-50", "Disc-300", "ThinTube-8"],
+    ids=[
+        "Cylinder-200",
+        "Segment-20",
+        "Segment-50",
+        "Disc-300",
+        "ThinTube-1",
+        "Cylinder-triple",
+        "Cuboid-100",
+        "Block-5",
+        "Cuboid-triple",
+    ],
 )
 def test_cells_match_magpylib_force_mesh(magnet, target_elems):
-    """mesh_Cylinder cuts a magnet into the same cells as magpylib's force mesher
-    for the same target (magpylib#1009)."""
+    """mesh_Cuboid and mesh_Cylinder cut a magnet into the same cells as magpylib's
+    force mesher for the same target (magpylib#1023)."""
+    if not _core_makes_cells():
+        pytest.skip("this magpylib meshes points, not cells")
     magnet.polarization = (1, 0, 0)
     if MESHING_ON_CALL:
         mesh = magnet._generate_mesh(target_elems)
     else:
         magnet.meshing = target_elems
         mesh = magnet._generate_mesh()
-    cells = mesh.get("cells")
-    if cells is None:
-        pytest.skip("this magpylib meshes points, not cells")
-    coll = mesh_Cylinder(magnet, target_elems)
+    cells = mesh["cells"]
     scale = np.max(np.abs(magnet.dimension))
+    if isinstance(magnet, magpy.magnet.Cuboid):
+        coll = mesh_Cuboid(magnet, target_elems)
+        dims = np.array([cell.dimension for cell in coll])
+        expected = cells["dimensions"]
+    else:
+        coll = mesh_Cylinder(magnet, target_elems)
+        dims = _segment_dimensions(coll)
+        expected = _segment_dimensions(cells["dimensions"])
     np.testing.assert_allclose(
         [cell.position for cell in coll], cells["positions"], atol=1e-12 * scale
     )
-    np.testing.assert_allclose(
-        _segment_dimensions(coll),
-        _segment_dimensions(cells["dimensions"]),
-        atol=1e-12 * scale,
-    )
+    np.testing.assert_allclose(dims, expected, atol=1e-12 * scale)

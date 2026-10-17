@@ -10,9 +10,9 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.meshing_utils import (
-    cells_from_dimension,
     get_volume,
     mask_inside,
+    near_cubic_divisions,
 )
 
 
@@ -48,9 +48,10 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
     target_elems: triple of int or int
         Target number of cells. If `target_elems` is a triple of integers, the number of
         divisions corresponds respectively to the x,y,z components of the unrotated
-        cuboid in the global CS. If an integer, the number of divisions is apportioned
-        proportionally to the cuboid dimensions. The resulting meshing cuboid cells are
-        then the closest to cubes as possible.
+        cuboid in the global CS. If an integer, the cell edge is taken from the volume
+        and the count and each side is cut into a whole number of cells, so the cells
+        are as close to cubes as possible and the count can differ from the target,
+        as in magpylib's force mesher.
     verbose: bool
         If True, prints out meshing information
 
@@ -69,7 +70,7 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
     pol0 = cuboid.polarization
 
     if np.isscalar(target_elems):
-        nnn = cells_from_dimension(dim0, target_elems)
+        nnn = near_cubic_divisions(dim0, target_elems)
     else:
         nnn = target_elems
     elems = np.prod(nnn)
@@ -138,10 +139,10 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
     target_elems: int
         Target number of cells. If `target_elems` is a triple of integers, the number of
         divisions corresponds respectively to the divisions along the circumference,
-        over the radius and over the height. If an integer, the number of divisions is
-        apportioned proportionally to the cylinder (or cylinder segment) dimensions. The
-        resulting meshing cylinder segment cells are then the closest to cubes as
-        possible. Either way, a ring gets more sectors where needed so that every
+        over the radius and over the height. If an integer, the unrolled cylinder
+        (arc at the mean radius, radial width, height) is cut into near-cubic
+        divisions, as in magpylib's force mesher. Either way, a ring gets more sectors
+        where needed so that every
         cell's centroid lies inside it, so thin rings can get more cells than asked
         for.
     verbose: bool
@@ -172,7 +173,7 @@ def mesh_Cylinder(cylinder, target_elems, verbose=False, **kwargs):
     # "unroll" the cylinder and distribute the target number of elements along the
     # circumference, radius and height.
     if np.isscalar(target_elems):
-        nphi, nr, nh = cells_from_dimension(dim, target_elems)
+        nphi, nr, nh = near_cubic_divisions(dim, target_elems)
     else:
         nphi, nr, nh = target_elems
     elems = np.prod([nphi, nr, nh])
