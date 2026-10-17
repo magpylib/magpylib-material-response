@@ -26,6 +26,33 @@ and this project adheres to
   in addition to `magnet.Cuboid` and `magnet.Cylinder`.
 - Optional dependency group `tetgen` (`tetgen>=0.8.3`).
   ([#41](https://github.com/magpylib/magpylib-material-response/pull/41)).
+- `apply_demag(..., solver="iterative")`: a matrix-free GMRES solver next to the
+  dense direct solver (`solver="direct"`, the default), with `solver_tol` and
+  `max_iter`. Both solvers apply the same interaction rule. GMRES stops at a
+  residual below `solver_tol`: the polarization matches the direct solver to
+  about `solver_tol` for hard magnets, and to at most about
+  `chi * solver_tol / 3` for soft ones. GMRES that does not converge raises.
+  Boxes of cuboid cells on a uniform grid use FFT products (`demag_fft` module):
+  32,768 cells of soft iron solve in about 4 s. Grids with holes, such as
+  voxelized round bodies, and other cell types use dense blocks.
+- `apply_demag(..., interaction="newell")`: cells act on each other through the
+  field averaged over each cell, the volume-averaged Newell tensor (`newell`
+  module, generalized to cells of different sizes), instead of the field at each
+  cell's centre, which stays the default (`interaction="point"`). It is the
+  Galerkin form of the problem: a soft body's induced moment in a uniform field
+  rises with every refinement towards the converged value, never past it, so a
+  mesh study knows which side the answer is on. At equal cell count neither rule
+  is more accurate in general. It needs every cell to be a cuboid, all with one
+  orientation, and raises otherwise instead of mixing the two rules, which would
+  make results jump when a body turns slightly. `demag_tensor` takes the same
+  argument.
+- Cuboid cells sharing a shape and orientation are fast under either rule: each
+  distinct displacement is computed once, reverse blocks follow by reciprocity,
+  and uniform grids use FFT products. Far apart, where the closed forms lose
+  precision, both rules switch to a far-field expansion.
+- `demag_fft.analyze_collection(sources)`: splits a collection into grid, loose
+  and generic clusters covering every cell once.
+- `scipy>=1.12` dependency.
 
 ### Changed
 
@@ -46,8 +73,27 @@ and this project adheres to
   less closely; a triple still sets the divisions. The cells are the ones
   magpylib's force mesher produces
   ([magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
+- The direct solver assembles in place (about 2-3x less peak memory), derives
+  reverse blocks by reciprocity, and every block is built in chunks of at most
+  200,000 (observer, source) pairs. 1,757 tetrahedra: 16.8 s and 7.7 GB before,
+  7.5 s and 1.7 GB after.
+- `timelog` no longer blocks on exit and skips its watchdog thread while package
+  logging is silent (a 27-cell solve went from about 0.5 s to 5 ms).
 
 ### Fixed
+
+- Cells could be silently dropped from the interaction (up to 92% error); 180
+  deg rotated groups were split; polarizations were written back to the wrong
+  objects in some collections.
+- `H_ext` set on a meshed object now reaches its cells.
+- Three magnets with per-object scalar susceptibilities were read as one
+  anisotropic 3-vector; 0-d numpy arrays are accepted as scalars.
+- `split`, `max_dist` and `pairs_matching` crashed in several cases;
+  `match_pairs` could merge distinct geometries.
+- `to_json` dropped `H_ext` and Collection-level susceptibility.
+- Meshing edge cases (thin segments, empty voxel grids), scale-relative
+  tolerances in inside-masks and in `trimesh_from_model3d`, and a latent import
+  error in `get_dataset`.
 
 - Meshed cells get `meshing=1`, so `magpylib.getFT` accepts meshed and
   demagnetized collections as targets, with one force point per cell. It refused

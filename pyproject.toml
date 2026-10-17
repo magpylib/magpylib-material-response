@@ -32,6 +32,7 @@ dynamic = ["version"]
 dependencies = [
   "magpylib>=5.0",
   "loguru>=0.5.0",
+  "scipy>=1.12",
 ]
 
 [project.optional-dependencies]
@@ -61,6 +62,7 @@ docs = [
   "sphinx_autodoc_typehints",
   "pandas",
   "plotly>=6.7",
+  "magpylib-material-response[tetgen]",
 ]
 
 [tool.hatch]
@@ -75,10 +77,9 @@ dependency-groups = ["test"]
 env-vars.PYTHONWARNDEFAULTENCODING = "1"
 
 
-[tool.pytest]
-minversion = "9.0"
+[tool.pytest.ini_options]
 addopts = ["-ra", "--showlocals"]
-strict = true
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 filterwarnings = [
   "error",
 ]

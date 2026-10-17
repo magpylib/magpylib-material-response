@@ -54,6 +54,12 @@ def test_apply_demag_integration():
             id="function_scalar",
         ),
         pytest.param(
+            "function_0d_array",
+            np.array(1.5),
+            np.array([1.5, 1.5, 1.5, 1.5, 1.5, 1.5]),
+            id="function_0d_array",
+        ),
+        pytest.param(
             "function_vector",
             (2.0, 3.0, 4.0),
             np.array([2.0, 2.0, 3.0, 3.0, 4.0, 4.0]),
