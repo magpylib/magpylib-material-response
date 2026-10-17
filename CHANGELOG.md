@@ -34,7 +34,8 @@ and this project adheres to
 - Volume-averaged Newell tensors for cuboid cells, generalized to different cell
   sizes (`newell` module), and FFT products on uniform cuboid grids (`demag_fft`
   module). Parallel cuboids interact through the Newell tensor, everything else
-  through point-matched `getH`.
+  through point-matched `getH`. Far apart, where the exact formulas lose
+  precision, the tensor switches to its far-field expansion.
 - `demag_fft.analyze_collection(sources)`: splits a collection into grid, loose
   and generic clusters covering every cell once.
 - `scipy>=1.12` dependency.

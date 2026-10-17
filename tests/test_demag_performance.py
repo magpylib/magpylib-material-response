@@ -425,3 +425,31 @@ def test_max_dist_legacy_path_runs():
     c_md = apply_demag(coll, susceptibility=0.5, max_dist=100)
     c_ref = apply_demag(coll, susceptibility=0.5, split=2)
     np.testing.assert_allclose(_pols(c_md), _pols(c_ref), rtol=1e-9)
+
+
+def test_distant_bodies_interact_as_with_point_matching():
+    """A magnet and an iron cube 2,000 cells apart: the induced polarization from
+    the Newell blocks matches point matching, which the exact formulas alone
+    missed by orders of magnitude at this distance."""
+    a = 0.01
+
+    def bodies():
+        magnet = mesh_Cuboid(
+            magpy.magnet.Cuboid(dimension=(a, a, a), polarization=(0, 0, 1.2)), 64
+        )
+        iron = mesh_Cuboid(
+            magpy.magnet.Cuboid(
+                dimension=(a, a, a), polarization=(0, 0, 0), position=(0, 0, 5.0)
+            ),
+            64,
+        )
+        return magpy.Collection(magnet, iron)
+
+    chi = [0.05] * 64 + [1000.0] * 64
+    newell = apply_demag(bodies(), susceptibility=chi)
+    point = apply_demag(bodies(), susceptibility=chi, split=2)
+    jz = [
+        np.mean([c.polarization[2] for c in res.children[1].sources_all])
+        for res in (newell, point)
+    ]
+    np.testing.assert_allclose(jz[0], jz[1], rtol=1e-2)

@@ -10,6 +10,7 @@ from numpy.polynomial.legendre import leggauss
 from magpylib_material_response.demag import apply_demag, demag_tensor
 from magpylib_material_response.meshing import mesh_Cuboid
 from magpylib_material_response.newell import (
+    _switch_distance,
     demag_block,
     demag_block_general,
     demag_tensor_newell,
@@ -156,3 +157,48 @@ def test_demag_block_general_far_field_dipole():
     rh = disp / r
     D = (np.eye(3) - 3 * np.outer(rh, rh)) / (4 * np.pi * r**3) * np.prod(dim_s)
     np.testing.assert_allclose(Na, D, atol=1e-3 * np.abs(D).max())
+
+
+FAR_SHAPES = [
+    ((1.0, 1.0, 1.0), (1.0, 1.0, 1.0)),
+    ((1.0, 1.0, 0.1), (1.0, 1.0, 0.1)),
+    ((0.1, 0.1, 1.0), (0.1, 0.1, 1.0)),
+    ((1.0, 1.0, 1.0), (2.0, 2.0, 2.0)),
+    ((1.0, 1.0, 0.2), (0.5, 0.5, 0.5)),
+]
+FAR_DIRECTION = np.array([1.0, 0.3, 0.7]) / np.linalg.norm([1.0, 0.3, 0.7])
+
+
+def _block(disp, dim_src, dim_obs):
+    if dim_src == dim_obs:
+        return demag_block(disp, dim_src)
+    return demag_block_general(disp, dim_src, dim_obs)
+
+
+@pytest.mark.parametrize("cell_sizes", [300, 1000])
+@pytest.mark.parametrize(("dim_src", "dim_obs"), FAR_SHAPES)
+def test_blocks_stay_accurate_far_away(dim_src, dim_obs, cell_sizes):
+    """Far apart, the blocks match magpylib's field of the source prism at the
+    observer centre, where the exact formulas alone lose all precision."""
+    disp = cell_sizes * max(*dim_src, *dim_obs) * FAR_DIRECTION
+    source = magpy.magnet.Cuboid(dimension=dim_src)
+    expected = np.empty((3, 3))
+    for k in range(3):
+        source.polarization = magpy.mu_0 * np.eye(3)[k]
+        expected[:, k] = -source.getH(disp)
+    np.testing.assert_allclose(
+        _block(disp, dim_src, dim_obs),
+        expected,
+        rtol=1e-4,
+        atol=1e-4 * np.abs(expected).max(),
+    )
+
+
+@pytest.mark.parametrize(("dim_src", "dim_obs"), FAR_SHAPES)
+def test_far_field_switch_is_continuous(dim_src, dim_obs):
+    """Just inside and just outside the switch distance, the exact formulas and
+    the far-field expansion agree."""
+    r = _switch_distance(np.array(dim_src), np.array(dim_obs))
+    inside = _block(r * (1 - 1e-9) * FAR_DIRECTION, dim_src, dim_obs)
+    outside = _block(r * (1 + 1e-9) * FAR_DIRECTION, dim_src, dim_obs)
+    np.testing.assert_allclose(outside, inside, atol=3e-5 * np.abs(inside).max())

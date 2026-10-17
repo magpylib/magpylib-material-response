@@ -16,6 +16,11 @@ with weights w(-1)=w(1)=1, w(0)=-2. ``N_xy`` follows the same form with the
 auxiliary function ``g``. The remaining four components are obtained by
 coordinate / dimension permutations.
 
+Far apart, the exact formulas lose precision: their double differences cancel
+nearly equal terms, about ``eps * r**6 / (V_src * V_obs)`` relative. There the
+blocks switch to a far-field expansion, the point dipole plus its leading
+cell-size correction, accurate to ``(h_max / r)**4`` (see ``FAR_FIELD_C``).
+
 Sign convention: the tensor returned by :func:`demag_tensor_newell` matches
 the layout produced by :func:`magpylib_material_response.demag.demag_tensor`
 *before* the ``*= mu_0`` step in ``apply_demag``. That is
@@ -43,6 +48,15 @@ __all__ = [
 # 27-point second-difference weights and offsets.
 _W = (1, -2, 1)
 _OFF = (-1, 0, 1)
+
+#: Sets where the far-field expansion takes over from the exact formulas:
+#: beyond ``r`` with ``r**10 = FAR_FIELD_C * h_max**4 * V_src * V_obs``, where
+#: the expansion's truncation error, ``~(h_max / r)**4``, falls below the
+#: exact formulas' rounding error, ``~eps * r**6 / (V_src * V_obs)``. Calibrated
+#: against 60-digit evaluations of the exact formulas for cubes, 10:1 plates and
+#: rods, and pairs of different sizes; the error where they meet is 3e-7 for
+#: cubes and 2e-5 for 10:1 rods, and both fall on either side of it.
+FAR_FIELD_C = 1e15
 
 
 def _safe(arr):
@@ -168,7 +182,7 @@ def _double_diff_64(func, X, Y, Z, dim_src, dim_obs):
     return -acc / (4.0 * np.pi * a2 * b2 * c2)
 
 
-def demag_block_general(disp, dim_src, dim_obs):
+def _demag_block_general_exact(disp, dim_src, dim_obs):
     """3x3 volume-averaged demag tensor between two parallel rectangular prisms.
 
     Generalizes :func:`demag_block` to source and observer prisms of
@@ -193,9 +207,6 @@ def demag_block_general(disp, dim_src, dim_obs):
     """
     dim_src = np.asarray(dim_src, dtype=float)
     dim_obs = np.asarray(dim_obs, dtype=float)
-    if np.array_equal(dim_src, dim_obs):
-        return demag_block(disp, dim_src)
-
     disp = np.asarray(disp, dtype=float)
     X = disp[..., 0]
     Y = disp[..., 1]
@@ -221,7 +232,7 @@ def demag_block_general(disp, dim_src, dim_obs):
     return out
 
 
-def demag_block(disp, dim):
+def _demag_block_exact(disp, dim):
     """Compute the 3x3 demag tensor block ``N`` for given displacement and dimension.
 
     Parameters
@@ -263,6 +274,110 @@ def demag_block(disp, dim):
     out[..., 0, 2] = out[..., 2, 0] = Nxz
     out[..., 1, 2] = out[..., 2, 1] = Nyz
     return out
+
+
+def _far_field_block(disp, dim_src, dim_obs):
+    """Far-field expansion of the volume-averaged tensor, shape ``(n, 3, 3)``.
+
+    Averaging the dipole tensor ``-V_src * d_i d_j (1 / (4 pi r))`` over both
+    prisms adds ``sum_k (a_k**2 + b_k**2) / 24 * d_k**2`` of it to leading
+    order, ``a`` and ``b`` being the source and observer sides; the rest is
+    ``O((h_max / r)**4)``. The correction vanishes for two cubes of one size,
+    and the expansion keeps the volume-weighted reciprocity exactly.
+    """
+    x = np.asarray(disp, dtype=float).reshape(-1, 3)
+    r2 = np.einsum("ni,ni->n", x, x)[:, None, None]
+    xx = x[:, :, None] * x[:, None, :]
+    eye = np.eye(3)
+    w = (np.asarray(dim_src, float) ** 2 + np.asarray(dim_obs, float) ** 2) / 24.0
+    s1 = ((x * x) @ w)[:, None, None]
+    w_tot = w.sum()
+    dipole = (3.0 * xx - r2 * eye) / r2**2.5
+    size = (
+        105.0 * xx * s1 / r2**4.5
+        - 15.0 * (eye * s1 + (2.0 * (w[:, None] + w[None, :]) + w_tot) * xx) / r2**3.5
+        + 3.0 * (w_tot * eye + 2.0 * np.diag(w)) / r2**2.5
+    )
+    return -np.prod(dim_src) / (4.0 * np.pi) * (dipole + size)
+
+
+def _switch_distance(dim_src, dim_obs):
+    """Distance beyond which the far-field expansion replaces the exact formulas."""
+    h_max = max(np.max(dim_src), np.max(dim_obs))
+    return float(FAR_FIELD_C * h_max**4 * np.prod(dim_src) * np.prod(dim_obs)) ** 0.1
+
+
+def _exact_or_far(disp, dim_src, dim_obs, exact):
+    """Evaluate ``exact`` on near displacements and the expansion on far ones."""
+    disp = np.asarray(disp, dtype=float)
+    flat = disp.reshape(-1, 3)
+    far = np.einsum("ni,ni->n", flat, flat) > _switch_distance(dim_src, dim_obs) ** 2
+    out = np.empty((len(flat), 3, 3), dtype=float)
+    if not far.all():
+        out[~far] = exact(flat[~far])
+    if far.any():
+        out[far] = _far_field_block(flat[far], dim_src, dim_obs)
+    return out.reshape(*disp.shape[:-1], 3, 3)
+
+
+def demag_block(disp, dim):
+    """Compute the 3x3 demag tensor block ``N`` for given displacement and dimension.
+
+    Exact (Newell 1993) up to the switch distance set by ``FAR_FIELD_C``, the
+    far-field expansion beyond it.
+
+    Parameters
+    ----------
+    disp : array_like, shape (..., 3)
+        Centre-to-centre displacement ``obs - src`` (observer minus source).
+    dim : array_like, shape (3,)
+        Common cell side lengths ``(a, b, c)``.
+
+    Returns
+    -------
+    N : ndarray, shape (..., 3, 3)
+        Symmetric demag tensor block. ``N_ii`` are diagonal demag factors
+        (sum to 1 for ``disp = 0``); off-diagonal terms are mutual coupling.
+    """
+    dim = np.asarray(dim, dtype=float)
+    return _exact_or_far(disp, dim, dim, lambda d: _demag_block_exact(d, dim))
+
+
+def demag_block_general(disp, dim_src, dim_obs):
+    """3x3 volume-averaged demag tensor between two parallel rectangular prisms.
+
+    Generalizes :func:`demag_block` to source and observer prisms of
+    *different* side lengths (both axis-aligned in the same frame). Exact up
+    to the switch distance set by ``FAR_FIELD_C``, the far-field expansion
+    beyond it.
+
+    Parameters
+    ----------
+    disp : array_like, shape (..., 3)
+        Centre-to-centre displacement ``obs - src``.
+    dim_src : array_like, shape (3,)
+        Source prism side lengths ``(a1, b1, c1)``.
+    dim_obs : array_like, shape (3,)
+        Observer prism side lengths ``(a2, b2, c2)``.
+
+    Returns
+    -------
+    N : ndarray, shape (..., 3, 3)
+        ``N_mk`` such that the H-field volume-averaged over the observer
+        prism per unit magnetization of the source prism is ``H = -N @ M``.
+        Satisfies the volume-weighted reciprocity
+        ``V_obs * N(d; s, o) = V_src * N(d; o, s).T``.
+    """
+    dim_src = np.asarray(dim_src, dtype=float)
+    dim_obs = np.asarray(dim_obs, dtype=float)
+    if np.array_equal(dim_src, dim_obs):
+        return demag_block(disp, dim_src)
+    return _exact_or_far(
+        disp,
+        dim_src,
+        dim_obs,
+        lambda d: _demag_block_general_exact(d, dim_src, dim_obs),
+    )
 
 
 def self_demag_factors(dim):
