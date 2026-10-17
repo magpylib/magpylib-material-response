@@ -37,8 +37,8 @@ and this project adheres to
   voxelized round bodies, and other cell types use dense blocks.
 - `apply_demag(..., interaction="newell")`: cells act on each other through the
   field averaged over each cell, the volume-averaged Newell tensor (`newell`
-  module, generalized to cells of different sizes), instead of the field at
-  each cell's centre, which stays the default (`interaction="point"`). It is the
+  module, generalized to cells of different sizes), instead of the field at each
+  cell's centre, which stays the default (`interaction="point"`). It is the
   Galerkin form of the problem: a soft body's induced moment in a uniform field
   rises with every refinement towards the converged value, never past it, so a
   mesh study knows which side the answer is on. At equal cell count neither rule
@@ -74,9 +74,9 @@ and this project adheres to
   magpylib's force mesher produces
   ([magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
 - The direct solver assembles in place (about 2-3x less peak memory), derives
-  reverse blocks by reciprocity, and every block is built in chunks of at
-  most 200,000 (observer, source) pairs. 1,757 tetrahedra: 16.8 s and 7.7 GB
-  before, 7.5 s and 1.7 GB after.
+  reverse blocks by reciprocity, and every block is built in chunks of at most
+  200,000 (observer, source) pairs. 1,757 tetrahedra: 16.8 s and 7.7 GB before,
+  7.5 s and 1.7 GB after.
 - `timelog` no longer blocks on exit and skips its watchdog thread while package
   logging is silent (a 27-cell solve went from about 0.5 s to 5 ms).
 
