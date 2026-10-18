@@ -510,7 +510,7 @@ def apply_demag(
         pol_new = np.reshape(pol_new, (n, 3), order="F")
         # pol_new *= .4*np.pi
 
-        for s, pol in zip(collection.sources_all, pol_new, strict=False):
+        for s, pol in zip(magnets_list, pol_new, strict=True):
             s.polarization = s.orientation.inv().apply(pol)  # ROTATION CHECK
 
     if not inplace:

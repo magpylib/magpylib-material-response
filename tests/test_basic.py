@@ -224,10 +224,11 @@ def test_apply_demag_refuses_property_paths(make):
     ids=["cuboid", "tetrahedron", "cylinder_segment"],
 )
 def test_current_field_is_taken_at_the_cell_centroid(make):
+    """The coil comes first in the collection, ahead of the magnet it drives."""
     coil = magpy.current.Circle(diameter=0.05, current=1000, position=(0.02, 0, 0.01))
     cell = make()
     cell.polarization = (0, 0, 0)
-    J_coil = apply_demag(magpy.Collection(cell, coil), susceptibility=10).sources[0]
+    J_coil = apply_demag(magpy.Collection(coil, cell), susceptibility=10).sources[1]
     cell = make()
     cell.polarization = (0, 0, 0)
     cell.H_ext = coil.getB(cell.centroid)
