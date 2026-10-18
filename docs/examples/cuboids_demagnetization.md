@@ -17,9 +17,7 @@ kernelspec:
 Three hard cuboid magnets with different susceptibilities, positions, and
 orientations are meshed at increasing resolution and solved with `apply_demag`.
 The field along a sensor line is compared against a Finite Element Method (FEM)
-reference solution — both directly and as the difference to the reference.
-Already coarse meshes land close to the FEM values, and refining the mesh
-converges toward them.
+reference solution, directly and as the difference to it.
 
 +++
 
@@ -170,5 +168,6 @@ fig2.update_yaxes(matches=None, showticklabels=True)
 display(fig1, fig2)
 ```
 
-As shown above, already with a low number of mesh elements, the result is
-approaching the reference FEM values and improves while refining the mesh.
+Without the material response the field is off by up to 20 mT. With it, the RMS
+deviation from FEM falls from 0.9 mT with 3 cells to 0.13 mT with 682, and the
+largest deviation levels off at 0.8 mT from 182 cells on.

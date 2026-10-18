@@ -17,13 +17,10 @@ kernelspec:
 # Quickstart
 
 Magpylib treats magnet polarization as fixed. This package adds the **material
-response**: mesh the magnets into cells, assign a magnetic susceptibility, and
-`apply_demag` computes the self-consistent polarization of every cell —
-including the demagnetization of the magnets themselves and the response of soft
-magnetic parts nearby.
-
-The minimal workflow has three steps: **mesh → susceptibility → `apply_demag`**.
-All quantities are SI (meters, Tesla).
+response**: mesh the magnets into cells, give them a susceptibility, and
+`apply_demag` computes the self-consistent polarization of every cell — the
+demagnetization of the magnets themselves and the magnetization of soft parts
+nearby. All quantities are SI (m, T).
 
 ```{code-cell} ipython3
 import magpylib as magpy
@@ -39,38 +36,37 @@ magnet.susceptibility = 0.3  # µr = 1.3
 mesh = mesh_Cuboid(magnet, target_elems=125)
 mesh_demag = apply_demag(mesh)
 
-# the demagnetized collection is a drop-in field source
+# the demagnetized collection is a field source like any other
 observer = (0, 0, 1.5e-3)
-print("B ignoring material response:", magpy.getB(magnet, observer))
-print("B with demagnetization      :", magpy.getB(mesh_demag, observer))
+print(f"Bz without material response: {magpy.getB(magnet, observer)[2] * 1e3:.2f} mT")
+print(f"Bz with demagnetization     : {magpy.getB(mesh_demag, observer)[2] * 1e3:.2f} mT")
 ```
 
 +++ {"user_expressions": []}
 
-The z-field drops by several percent — that is the magnet demagnetizing itself.
-Refining the mesh (`target_elems`) converges the result; the
+The field drops by about 10 %: the magnet demagnetizes itself. Refining the mesh
+(`target_elems`) converges the result; the
 [cuboid example](examples/cuboids_demagnetization.md) compares against FEM.
 
 ## Setting material properties
 
-Susceptibility can be attached to objects — searched up the parent `Collection`
-tree when not set on the object itself — or passed explicitly to `apply_demag`,
-which then takes precedence:
+Susceptibility is an attribute of a magnet, or of a parent `Collection` for all
+the magnets in it; the cells of a mesh copy their magnet's value when it is
+meshed. A value passed to `apply_demag` takes precedence:
 
 ```{code-cell} ipython3
 magnet.susceptibility = 0.3  # isotropic
 magnet.susceptibility = (0.3, 0.1, 0.0)  # anisotropic, along the magnet's axes
 
-# explicit values override object attributes: one scalar/vector for all
-# cells, or one entry per cell
+# overrides the attributes: one value for all cells, or one per cell
 coll = apply_demag(mesh, susceptibility=0.3)
 ```
 
-Anisotropic 3-vectors act along the **magnet's own axes** and turn with it, like
-its polarization (see the [method page](method.md)).
+An anisotropic value acts along the **magnet's own axes** and turns with it,
+like its polarization (see the [method page](method.md)).
 
-A uniform external field can be applied through the `H_ext` attribute, given as
-flux density in Tesla units (i.e. $\mu_0 H_\text{ext}$):
+A uniform applied field is set the same way, with the `H_ext` attribute, as
+$\mu_0 \mathbf{H}$ in tesla:
 
 ```{code-cell} ipython3
 soft = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(1e-3, 1e-3, 1e-3))
@@ -78,25 +74,20 @@ soft.susceptibility = 3999  # µr = 4000
 soft.H_ext = (0, 0, 0.1)  # 0.1 T applied along z
 
 soft_demag = apply_demag(mesh_Cuboid(soft, target_elems=125))
-print("induced polarization of the first cell:")
-print(soft_demag.sources_all[0].polarization)
+Jz = [cell.polarization[2] for cell in soft_demag.sources_all]
+print(f"mean induced polarization: {sum(Jz) / len(Jz):.3f} T along z")
 ```
 
 Current sources (`magpy.current.*`) placed in the collection also drive the
-material response — their field at the cells adds to the applied field. The
-[U-core electromagnet example](examples/ucore_electromagnet.md) builds a
-coil-driven soft core this way.
+material response: their field at each cell's centroid adds to the applied
+field. The [U-core electromagnet example](examples/ucore_electromagnet.md)
+builds a coil-driven soft core this way.
 
 ## Meshing helpers
 
-- `mesh_Cuboid` / `slice_Cuboid` — uniform grids of cuboid cells,
-- `mesh_Cylinder` — cylinder / cylinder-segment cells,
+- `mesh_Cuboid` — a grid of cuboid cells; `slice_Cuboid` cuts a cuboid in two,
+- `mesh_Cylinder` — cylinder and cylinder-segment cells,
 - `mesh_TriangularMesh` — tetrahedral cells for arbitrary closed surfaces
   (optional [TetGen](https://tetgen.pyvista.org/) dependency, see the
   [tetrahedral example](examples/tetrahedral_meshes.md)),
 - `mesh_all` — walk a `Collection` and mesh every supported child.
-
-## Where to go next
-
-- [Method of Moments](method.md) — the physics and the numerical method.
-- [API reference](api.md) — all public functions.

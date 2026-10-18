@@ -31,9 +31,10 @@ pip install magpylib-material-response[tetgen]
 Each tetrahedron acts on the others through magpylib's closed-form `Tetrahedron`
 field, taken at their centroids (point matching), like any other cell type.
 
-This example validates the whole chain on a case with an exact analytical
-answer: a **soft magnetic sphere**, for which the demagnetizing factor is
-exactly 1/3, so a remanent polarization $J_0$ relaxes to
+This example checks the whole chain against an exact answer: a uniformly
+magnetized **sphere** with remanent polarization $J_0$ and susceptibility
+$\chi$. Its demagnetizing factor is exactly 1/3, so with no applied field its
+polarization relaxes to
 
 $$J = \frac{J_0}{1 + \chi/3}$$
 
@@ -98,10 +99,8 @@ print(f"relative error     : {abs(Jz_mean - J_exact) / J_exact:.2%}")
 
 +++ {"user_expressions": []}
 
-The volume-averaged polarization of the meshed sphere reproduces the exact
-demagnetizing-factor result to a fraction of a percent — the residual is the
-polyhedral approximation of the sphere surface and shrinks with finer surface
-and volume meshes.
+The mean polarization of the meshed sphere matches the exact result to about
+0.01 %.
 
 ## Practical notes
 

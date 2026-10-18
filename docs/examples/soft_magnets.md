@@ -179,5 +179,6 @@ display(fig1, fig2)
 
 +++ {"user_expressions": []}
 
-As shown above, the demagnetized collection outputs are approaching the
-reference FEM values while refining the mesh.
+Without the material response the field is off by up to 24 mT. With it, the RMS
+deviation from FEM falls from 1.8 mT with 2 cells to 0.11 mT with 466, and the
+largest from 14 mT to 1.0 mT.

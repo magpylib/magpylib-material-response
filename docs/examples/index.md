@@ -1,6 +1,6 @@
 # Examples
 
-Worked, executable examples — in suggested reading order:
+Executable examples, in suggested reading order:
 
 - [Cuboid demagnetization](cuboids_demagnetization.md) — two hard cuboid
   magnets; mesh-refinement convergence against FEM reference data.
@@ -10,8 +10,8 @@ Worked, executable examples — in suggested reading order:
   soft core: a swept multi-turn coil built with the polyline helpers, the field
   on a plane above the poles, and a cuboid- vs tetrahedral-mesh comparison.
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
-  `TriangularMesh` magnet with TetGen, validated against the exact soft-sphere
-  solution.
+  `TriangularMesh` magnet with TetGen, checked against the exact solution for a
+  magnetized sphere.
 
 ```{toctree}
 :maxdepth: 1

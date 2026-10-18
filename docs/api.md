@@ -1,7 +1,5 @@
 # API Reference
 
-The public functions of `magpylib-material-response`, grouped by module.
-
 ## Demagnetization solver — `demag`
 
 ```{eval-rst}
@@ -14,8 +12,7 @@ The public functions of `magpylib-material-response`, grouped by module.
 .. autofunction:: magpylib_material_response.demag.get_H_ext
 ```
 
-Legacy helpers of the historical all-point-matching path (used by the
-`pairs_matching` and `max_dist` options of `apply_demag`):
+Helpers behind the `pairs_matching` and `max_dist` options of `apply_demag`:
 
 ```{eval-rst}
 .. autofunction:: magpylib_material_response.demag.filter_distance

@@ -18,11 +18,11 @@ kernelspec:
 
 +++
 
-All other examples drive the material response with hard magnets or a uniform
-external field. This one uses **current sources**: a soft-magnetic U-core with a
-multi-turn coil wound around its middle bar. Current objects are first-class
-citizens of the workflow — `mesh_all` passes them through unmeshed, and
-`apply_demag` adds their field to the applied field seen by every magnet cell.
+The other examples drive the material response with hard magnets or a uniform
+applied field. This one uses **current sources**: a soft-magnetic U-core with a
+multi-turn coil wound around its middle bar. `mesh_all` passes current sources
+through unmeshed, and `apply_demag` adds their field at each cell's centroid to
+the applied field.
 
 The coil itself is built with the `polyline` helpers: `create_polyline_fillet`
 rounds the corners of a square loop, and `move_grid_along_polyline` sweeps the
@@ -96,8 +96,7 @@ turn = create_polyline_fillet(square, max_radius=0.006, N=6)
 The winding pack is a grid of wire positions in the cross-sectional plane of the
 coil: 8 turns along the yoke axis (x) times 2 radial layers, anchored at the
 seam point of the turn. Sweeping this grid along the rounded turn returns one
-closed polyline per winding — outer layers automatically get slightly larger
-fillet radii, exactly like a real winding.
+closed polyline per winding; the outer layer gets slightly larger fillet radii.
 
 ```{code-cell} ipython3
 pitch = 0.0022  # wire pitch
@@ -145,11 +144,10 @@ magpy.show(system, plane_shown)
 
 ## Mesh and apply the material response
 
-`mesh_all` walks the collection and meshes the three cuboids into cells, passing
-the current polylines through untouched. `apply_demag` then solves for the
-self-consistent polarization of every cell: the right-hand side of the linear
-system contains the coil field evaluated at each cell, on top of the cell-cell
-interactions.
+`mesh_all` meshes the three cuboids into cells and passes the current polylines
+through untouched. `apply_demag` then solves for the self-consistent
+polarization of every cell, with the coil's field at each cell's centroid as the
+applied field.
 
 ```{code-cell} ipython3
 system_meshed = mesh_all(system, target_elems=250)
@@ -174,9 +172,9 @@ print(f"{n_cells} cuboid cells solved in {t_cub:.1f} s")
 
 ## Field on the plane above the poles
 
-The returned collection contains the magnetized cells _and_ the coil, so it is a
-drop-in source for the total field. The normal component $B_z$ maps the two pole
-footprints — positive above one leg, negative above the other:
+The returned collection contains the magnetized cells _and_ the coil, so it
+gives the total field. The normal component $B_z$ maps the two pole footprints —
+positive above one leg, negative above the other:
 
 ```{code-cell} ipython3
 B_full = plane.getB(system_demag)  # shape (161, 81, 3)
@@ -198,8 +196,7 @@ fig
 
 How much of this is the core? Compare with the bare coil along the line y = 0.
 Without the core the same 400 ampere-turns produce a field roughly fifty times
-weaker on this plane — the soft core collects the coil flux and delivers it to
-the poles:
+weaker on this plane: the high-permeability core guides the flux to the poles:
 
 ```{code-cell} ipython3
 B_coil = plane.getB(coil)  # bare coil, no core
@@ -295,9 +292,8 @@ for target in targets:  # tetrahedral meshes
 +++ {"user_expressions": []}
 
 After the loops, `demag_cub` and `demag_tet` hold the finest solve of each
-family. Side by side — the cell colors encode the direction of the induced
-magnetization (along +x through the yoke, up one leg and down the other), and
-the graded tetrahedra stand out against the uniform cuboid grid:
+family. Side by side, the cell colors show the direction of the induced
+magnetization: along +x through the yoke, up one leg and down the other.
 
 ```{code-cell} ipython3
 magpy.show(
@@ -342,16 +338,13 @@ mT at 3,822 and 2.07 mT at 8,019, and extrapolating that series gives 2.16 mT.
 The tetrahedral peak creeps up from 2.12 mT at 89 cells to 2.148 mT at 4,016.
 The two agree to within 1 %.
 
-With µr = 1000 the error of a uniform cuboid grid shrinks only about as the cell
-size to the power 1.5, so refine by a large factor, not a few percent, before
-trusting a plateau.
+Here the error of the cuboid grid shrinks only about as the cell size to the
+power 1.5: refine by a large factor, not a few percent, before trusting a
+plateau.
 
 +++ {"user_expressions": []}
 
 Notes:
 
-- The demo meshes are deliberately coarse to keep the page fast; refine
-  `target_elems` to converge the field values (see the
-  [cuboid example](cuboids_demagnetization.md) for a convergence study).
-- With µr = 1000 the result is the linear material response; saturation of real
-  core materials is not modeled.
+- The material is linear, with µr = 1000 at any field: saturation of real core
+  materials is not modeled.
