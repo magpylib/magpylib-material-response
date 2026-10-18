@@ -450,7 +450,11 @@ def test_H_ext_set_before_meshing_reaches_the_cells():
             obj.H_ext = H_ext
         return obj
 
-    before = apply_demag(mesh_Cuboid(soft((0, 0, 0.01)), 8))
+    obj = soft(np.array([0, 0, 0.01]))
+    mesh = mesh_Cuboid(obj, 8)
+    mesh.H_ext *= 1  # an in-place edit of the mesh leaves the magnet alone
+    assert mesh.H_ext is not obj.H_ext
+    before = apply_demag(mesh)
     after = mesh_Cuboid(soft(), 8)
     after.H_ext = (0, 0, 0.01)
     after = apply_demag(after)
@@ -462,3 +466,12 @@ def test_H_ext_set_before_meshing_reaches_the_cells():
     changed.H_ext = (0, 0, 0.02)
     J2 = np.array([c.polarization for c in apply_demag(changed).sources_all])
     np.testing.assert_allclose(J2, 2 * J)
+
+
+def test_mesh_all_returns_the_mesh_of_a_magnet_in_a_collection():
+    magnet = magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
+    outer = magpy.Collection(magnet)
+    meshed = mesh_all(magnet, target_elems=8, inplace=True)
+    assert isinstance(meshed, magpy.Collection)
+    assert meshed.parent is outer
+    assert len(meshed.sources_all) == 8

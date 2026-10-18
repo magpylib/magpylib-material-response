@@ -162,8 +162,9 @@ def test_get_susceptibilities_errors(error_case, setup_func, error_message):
         with pytest.raises(ValueError, match=error_message):
             get_susceptibilities(sources, susceptibility=[1.0, 2.0, 3.0, 4.0, 5.0])
     elif error_case == "ambiguous_input":
-        with pytest.raises(ValueError, match=error_message):
-            get_susceptibilities(sources, susceptibility=(1.0, 2.0, 3.0))
+        for value in ((1.0, 2.0, 3.0), (np.array(1.0), 2.0, 3.0)):
+            with pytest.raises(ValueError, match=error_message):
+                get_susceptibilities(sources, susceptibility=value)
     else:
         with pytest.raises(ValueError, match=error_message):
             get_susceptibilities(sources)
@@ -316,13 +317,43 @@ def test_legacy_options_refuse_bad_values(legacy):
         apply_demag(mesh_Cuboid(cube, 8), susceptibility=1, **legacy)
 
 
-def test_three_per_object_susceptibilities_stay_per_object():
-    """Three cells with their own scalar values, one a 0-d array, are three
-    isotropic cells, not one anisotropic value repeated."""
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ((0.1, np.array(0.2), 0.3), [[0.1] * 3, [0.2] * 3, [0.3] * 3]),
+        ((0.1, (1.0, 2.0, 3.0), 0.3), [[0.1] * 3, [1.0, 2.0, 3.0], [0.3] * 3]),
+    ],
+    ids=["scalars", "mixed"],
+)
+def test_per_object_susceptibilities_stay_per_object(values, expected):
+    """Three cells with their own values, scalars, 0-d arrays or 3-vectors, keep
+    them, rather than one anisotropic value being repeated."""
     cells = [
         magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
         for _ in range(3)
     ]
-    for cell, chi in zip(cells, (0.1, np.array(0.2), 0.3), strict=True):
+    for cell, chi in zip(cells, values, strict=True):
         cell.susceptibility = chi
-    np.testing.assert_allclose(get_susceptibilities(cells), np.tile([0.1, 0.2, 0.3], 3))
+    np.testing.assert_allclose(
+        get_susceptibilities(cells), np.ravel(expected, order="F")
+    )
+
+
+def test_copy_keeps_the_parents_material_attributes():
+    """With inplace=False, a collection inside another one still sees the outer
+    collection's H_ext and susceptibility, as an in-place solve does."""
+
+    def scene():
+        inner = magpy.Collection(
+            magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+        )
+        outer = magpy.Collection(inner)
+        outer.H_ext = (0, 0, 0.01)
+        outer.susceptibility = 100
+        return inner
+
+    copied = apply_demag(scene()).sources_all[0].polarization
+    in_place = scene()
+    apply_demag(in_place, inplace=True)
+    assert copied[2] > 0.01
+    np.testing.assert_allclose(copied, in_place.sources_all[0].polarization)

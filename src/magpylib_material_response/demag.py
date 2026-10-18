@@ -50,13 +50,15 @@ def get_susceptibilities(sources, susceptibility=None):
 def _convert_to_array(susceptibility, n, from_hierarchy=False):
     """Convert susceptibility input(s) to (n, 3) array format"""
     # Handle single values (scalar or 3-vector) applied to all sources
-    if np.ndim(susceptibility) == 0:  # a scalar, or a 0-d numpy array
+    if np.isscalar(susceptibility) or (
+        isinstance(susceptibility, np.ndarray) and susceptibility.ndim == 0
+    ):
         return np.ones((n, 3)) * float(susceptibility)
     if (
         not from_hierarchy  # values read from the objects are one per object
         and hasattr(susceptibility, "__len__")
         and len(susceptibility) == 3
-        and all(not isinstance(x, list | tuple | np.ndarray) for x in susceptibility)
+        and all(np.ndim(x) == 0 for x in susceptibility)
     ):
         # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
@@ -442,6 +444,9 @@ def apply_demag(
     a parent's), given as mu_0 * H in tesla, and to the field of the current
     sources in `collection` at its centroid.
     """
+    # The copy has no parent, so material attributes a cell inherits from above
+    # `collection` are read from the original.
+    original = collection
     if not inplace:
         collection = collection.copy()
     if style is not None:
@@ -456,6 +461,7 @@ def apply_demag(
         )
         raise ValueError(msg)
     magnets_list = [src for src in srcs if isinstance(src, BaseMagnet)]
+    originals = [src for src in original.sources_all if isinstance(src, BaseMagnet)]
     currents_list = [src for src in srcs if isinstance(src, BaseCurrent)]
     others_list = [
         src
@@ -494,11 +500,11 @@ def apply_demag(
         )  # shape ii = x1, ... xn, y1, ... yn, z1, ... zn
 
         # set up S
-        sus = get_susceptibilities(magnets_list, susceptibility)
+        sus = get_susceptibilities(originals, susceptibility)
         S = _susceptibility_matrix(sus, [src.orientation for src in magnets_list])
 
         # set up H_ext
-        H_ext = get_H_ext(*magnets_list)
+        H_ext = get_H_ext(*originals)
         H_ext = np.array(H_ext)
         if len(H_ext) != n:
             msg = "Apply_demag input collection and H_ext must have same length."

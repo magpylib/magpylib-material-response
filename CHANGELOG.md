@@ -81,9 +81,12 @@ and this project adheres to
   ([#62](https://github.com/magpylib/magpylib-material-response/pull/62)).
 - Material attributes are no longer lost or misread: `H_ext` set on a magnet
   before meshing moves to the meshed collection, where its cells ignored it
-  before and stayed unmagnetized; three magnets with their own scalar
-  susceptibilities get one value each, not one anisotropic value shared by all;
-  `to_json` keeps `H_ext` and a Collection's susceptibility
+  before and stayed unmagnetized; a collection solved as a copy
+  (`inplace=False`) keeps the `H_ext` and susceptibility it inherits from a
+  parent; three magnets with their own scalar susceptibilities get one value
+  each, not one anisotropic value shared by all; `to_json` keeps `H_ext` and a
+  Collection's susceptibility. `mesh_all` on a magnet inside a collection
+  returns its mesh, not the unmeshed magnet
   ([#63](https://github.com/magpylib/magpylib-material-response/pull/63)).
 
 ## [0.4.0] - 2026-05-01

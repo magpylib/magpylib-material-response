@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from itertools import product
 
@@ -20,7 +21,7 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     susceptibility = getattr(obj, "susceptibility", None)
     if susceptibility is not None:
         for cell in cells:
-            cell.susceptibility = susceptibility
+            cell.susceptibility = copy.deepcopy(susceptibility)
     coll = magpy.Collection(cells)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
@@ -30,7 +31,7 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     # collection: the cells find it there, and a later change still reaches them.
     h_ext = getattr(obj, "H_ext", None)
     if h_ext is not None:
-        coll.H_ext = h_ext
+        coll.H_ext = copy.deepcopy(h_ext)
     return coll
 
 
@@ -602,6 +603,6 @@ def mesh_all(
             child.parent = None
             if parent is not None:
                 parent.add(child_meshed)
-            else:
+            if child is obj:
                 obj = child_meshed
     return obj
