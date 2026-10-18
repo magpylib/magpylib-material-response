@@ -10,6 +10,13 @@ and this project adheres to
 
 ### Added
 
+- Mesh-convergence tools: `convergence.mesh_study` solves a model on meshes of
+  increasing resolution and estimates the error of the finest by Richardson
+  extrapolation, with the observed order, declining when the results do not yet
+  change steadily; `mesh_Cuboid(..., grading=...)`, also through `mesh_all`,
+  shrinks the cells toward the faces, which brings a soft iron cube of 512 cells
+  within 0.3 % of its converged moment, against 2.3 % with identical cells
+  ([#66](https://github.com/magpylib/magpylib-material-response/pull/66)).
 - Serialization (`to_json` / `from_json`) now supports `magnet.Sphere`,
   `magnet.Tetrahedron`, and `magnet.TriangularMesh` — demagnetized tetrahedral
   meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded.
