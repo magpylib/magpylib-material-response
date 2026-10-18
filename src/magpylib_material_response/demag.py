@@ -15,13 +15,9 @@ from magpylib_material_response.utils import timelog
 
 
 def _has_path(src):
-    """True if the position, orientation or any path-capable property of `src`
-    varies along a path (magpylib >= 5.3 lets e.g. `dimension` or `current` do so).
-    """
-    if np.ndim(src.position) != 1:
-        return True
-    path_len = getattr(src, "_get_path_len", None)
-    return path_len is not None and path_len() > 1
+    """True if the position, orientation or any path-capable property of `src`,
+    such as `dimension` or `current`, varies along a path."""
+    return src._get_path_len() > 1
 
 
 def get_susceptibilities(sources, susceptibility=None):

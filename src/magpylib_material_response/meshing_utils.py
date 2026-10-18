@@ -237,7 +237,7 @@ def mask_inside_TriangularMesh(obj, positions, tolerance=1e-14):  # noqa: ARG001
     """Return mask of provided positions inside a TriangularMesh (local coordinates).
 
     Note: uses magpylib._src.fields.field_BH_triangularmesh._mask_inside_trimesh,
-    a private magpylib internal API (requires magpylib>=5.0).
+    a private magpylib internal API.
     """
     from magpylib._src.fields.field_BH_triangularmesh import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
         _mask_inside_trimesh,
