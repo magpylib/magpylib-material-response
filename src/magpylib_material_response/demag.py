@@ -198,7 +198,7 @@ def demag_tensor(
     getH_params = {}
     if max_dist != 0:
         mask_inds, getH_params, pos0, rot0 = filter_distance(
-            src_list, max_dist, return_params=False, return_base_geo=True
+            src_list, max_dist, return_params=True, return_base_geo=True
         )
     elif pairs_matching:
         getH_params, mask_inds, unique_inv_inds, pos0, rot0 = match_pairs(src_list)
@@ -216,8 +216,14 @@ def demag_tensor(
                 polarization = np.repeat(pol_all, len(src_list), axis=0)
                 if mask_inds is not None:
                     polarization = polarization[mask_inds]
-                H_unique = magpy.getH(
-                    "Cuboid", polarization=polarization, **getH_params
+                H_unique = magpy.func.cuboid_field(
+                    "H",
+                    observers=getH_params["observers"],
+                    dimensions=getH_params["dimension"],
+                    polarizations=polarization,
+                    positions=getH_params["position"],
+                    orientations=getH_params["orientation"],
+                    squeeze=False,
                 )
                 if max_dist != 0:
                     H_temp = np.zeros((len(src_list) ** 2, 3))

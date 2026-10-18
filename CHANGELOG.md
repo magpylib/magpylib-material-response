@@ -62,6 +62,9 @@ and this project adheres to
   only position paths, instead of failing inside the solver.
 - `to_json` writes a path-valued `current` or `diameter`, and a susceptibility
   given as a numpy array, instead of raising.
+- `apply_demag(..., max_dist=...)` no longer crashes, and `pairs_matching=True`
+  computes its fields with `magpy.func`, since magpylib 6 removed the
+  string-based `getH("Cuboid", ...)` it called.
 - Current sources act on each cell at its centroid, where the cells' own fields
   are matched, instead of at its `position`, which for a tetrahedron built from
   vertices is the origin and for a `mesh_Cylinder` ring segment lies on the

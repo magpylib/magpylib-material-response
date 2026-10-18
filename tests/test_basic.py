@@ -233,3 +233,29 @@ def test_current_field_is_taken_at_the_cell_centroid(make):
     cell.H_ext = coil.getB(cell.centroid)
     J_ext = apply_demag(magpy.Collection(cell), susceptibility=10).sources[0]
     np.testing.assert_allclose(J_coil.polarization, J_ext.polarization, rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    [{"pairs_matching": True}, {"max_dist": 1000}, {"split": 2}],
+    ids=["pairs_matching", "max_dist", "split"],
+)
+def test_legacy_options_solve_the_same_system(legacy):
+    def scene():
+        magnet = magpy.magnet.Cuboid(
+            dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 1), position=(0, 0, 0.012)
+        )
+        magnet.susceptibility = 0
+        soft = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 0))
+        soft.rotate_from_angax(30, "z")
+        soft.susceptibility = 100
+        return magpy.Collection(magnet, mesh_Cuboid(soft, 8))
+
+    default = apply_demag(scene())
+    out = apply_demag(scene(), **legacy)
+    np.testing.assert_allclose(
+        [s.polarization for s in out.sources_all],
+        [s.polarization for s in default.sources_all],
+        rtol=1e-9,
+        atol=1e-12,
+    )
