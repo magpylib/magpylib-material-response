@@ -5,7 +5,12 @@ import numpy as np
 import pytest
 
 import magpylib_material_response
-from magpylib_material_response.demag import apply_demag, get_susceptibilities
+from magpylib_material_response.demag import (
+    apply_demag,
+    demag_tensor,
+    filter_distance,
+    get_susceptibilities,
+)
 from magpylib_material_response.meshing import mesh_Cuboid
 
 
@@ -260,3 +265,38 @@ def test_legacy_options_solve_the_same_system(legacy):
         rtol=1e-9,
         atol=1e-12,
     )
+
+
+def test_demag_tensor_legacy_options():
+    """pairs_matching gives the full tensor; max_dist zeroes the pairs of cells
+    farther apart than max_dist cell sizes."""
+    cube = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 0))
+    cells = mesh_Cuboid(cube, 27).sources_all
+    full = demag_tensor(cells)
+    atol = 1e-12 * np.abs(full).max()
+    np.testing.assert_allclose(
+        demag_tensor(cells, pairs_matching=True), full, rtol=1e-9, atol=atol
+    )
+    kept = filter_distance(cells, 1.5).reshape(27, 27)
+    assert 0 < kept.sum() < kept.size
+    np.testing.assert_allclose(
+        demag_tensor(cells, max_dist=1.5),
+        full * kept[None, :, :, None],
+        rtol=1e-9,
+        atol=atol,
+    )
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    [
+        {"max_dist": -1},
+        {"max_dist": 2, "pairs_matching": True},
+        {"max_dist": 2, "split": 2},
+        {"pairs_matching": True, "split": 2},
+    ],
+)
+def test_legacy_options_refuse_bad_values(legacy):
+    cube = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 1))
+    with pytest.raises(ValueError, match=r"max_dist|splitting"):
+        apply_demag(mesh_Cuboid(cube, 8), susceptibility=1, **legacy)

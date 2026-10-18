@@ -191,8 +191,15 @@ def demag_tensor(
     """
     nof_src = len(src_list)
 
-    if pairs_matching and split != 1:
+    splitting = split not in (False, 1)
+    if max_dist < 0:
+        msg = f"max_dist must be 0 (no filtering) or positive, got {max_dist}."
+        raise ValueError(msg)
+    if pairs_matching and splitting:
         msg = "Pairs matching does not support splitting"
+        raise ValueError(msg)
+    if max_dist != 0 and (pairs_matching or splitting):
+        msg = "max_dist does not combine with pairs_matching or split."
         raise ValueError(msg)
     mask_inds = None
     getH_params = {}
