@@ -29,9 +29,10 @@ and this project adheres to
 
 ### Changed
 
-- Requires magpylib 6. Meshed and demagnetized collections are force targets
-  with one point per cell: pass `meshing=1` to `magpylib.getFT`, which takes the
-  cell count on the call since magpylib 6.
+- **Breaking:** requires magpylib 6. Meshed and demagnetized collections are
+  force targets with one point per cell: pass `meshing=1` to `magpylib.getFT`,
+  which takes the cell count on the call since magpylib 6
+  ([#62](https://github.com/magpylib/magpylib-material-response/pull/62)).
 - **Breaking:** an anisotropic susceptibility `(χx, χy, χz)` acts along each
   cell's own axes and turns with its orientation, like its polarization, instead
   of along the global axes. Results change for anisotropic susceptibilities on
@@ -69,7 +70,8 @@ and this project adheres to
   string-based `getH("Cuboid", ...)` it called, and no longer merges pairs of
   cells of different sizes, or every pair of a mesh with cells below 1e-8 m;
   `demag_tensor(..., pairs_matching=True)` no longer refuses a split nobody
-  asked for.
+  asked for
+  ([#62](https://github.com/magpylib/magpylib-material-response/pull/62)).
 - Current sources act on each cell at its centroid, where the cells' own fields
   are matched, instead of at its `position`, which for a tetrahedron built from
   vertices is the origin and for a `mesh_Cylinder` ring segment lies on the

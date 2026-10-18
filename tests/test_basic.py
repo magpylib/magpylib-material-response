@@ -206,8 +206,6 @@ def test_get_susceptibilities_edge_cases():
 def test_apply_demag_refuses_property_paths(make):
     """Demagnetization along a path is not supported, whichever property varies."""
     cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01))
-    if not hasattr(cube, "path_properties"):
-        pytest.skip("this magpylib has no path-valued properties")
     cube.susceptibility = 1
     obj = make()
     obj.susceptibility = 1

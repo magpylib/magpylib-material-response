@@ -30,6 +30,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
+  # >=6.0 once magpylib 6.0 is out: a pre-release floor lets later pre-releases in
   "magpylib>=6.0.0rc0",
   "loguru>=0.5.0",
 ]

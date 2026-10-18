@@ -170,6 +170,11 @@ def demag_tensor(
         Number of times the sources list is split before getH calculation ind demag
         tensor calculation
 
+    max_dist: float
+        Leaves out the interaction of two cells whose centroids lie `max_dist` or more
+        times the larger side of the two cells apart. If `max_dist=0`, all
+        interactions are calculated.
+
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
         will not be logged.
@@ -187,7 +192,7 @@ def demag_tensor(
     """
     nof_src = len(src_list)
 
-    splitting = split not in (False, 1)
+    splitting = split > 1
     if max_dist < 0:
         msg = f"max_dist must be 0 (no filtering) or positive, got {max_dist}."
         raise ValueError(msg)
@@ -366,7 +371,7 @@ def match_pairs(src_list, min_log_time=None):
             "observers": np.tile(pos0, (len(src_list), 1))[unique_inds],
             "position": np.repeat(pos0, len(src_list), axis=0)[unique_inds],
             "orientation": R.from_quat(rotQ2b)[unique_inds],
-            "dimension": np.repeat(dim0, len(src_list), axis=0)[unique_inds],
+            "dimension": dim_src[unique_inds],
         }
     return params, unique_inds, unique_inv_inds, pos0, rot0
 
@@ -406,10 +411,10 @@ def apply_demag(
         with `max_dist` or `split` and applies only cuboid cells.
 
     max_dist: float
-        Posivive number representing the max_dimension to distance ratio for each pair
-        of interacting cells. This filters out far interactions. If `max_dist=0`, all
-        interactions are calculated. This parameter is not compatible with
-        `pairs_matching` or `split` and applies only cuboid cells.
+        Leaves out the interaction of two cells whose centroids lie `max_dist` or more
+        times the larger side of the two cells apart, an approximation. If
+        `max_dist=0`, all interactions are calculated. This parameter is not
+        compatible with `pairs_matching` or `split` and applies only cuboid cells.
 
     split: int
         Number of times the sources list is split before getH calculation ind demag
