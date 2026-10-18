@@ -266,13 +266,12 @@ print(f"closed U prism: {len(u_iron.faces)} faces, volume {u_iron.volume * 1e6:.
 +++ {"user_expressions": []}
 
 TetGen's cells near the surface come out about half the volume of those in the
-bulk. Solve both
-discretizations at the same refinement levels, up to a `target_elems` of 1000.
-The tetrahedral target is halved: `target_elems` sets TetGen's _maximum_ cell
-volume, and its quality refinement typically lands near twice the requested
-count. Every solve is timed, and the wall times end up in the plot legend. The
-comparison field is evaluated along the y = 0 line only — that is all the plot
-below needs, and it keeps the field evaluation cheap:
+bulk. Solve both discretizations at the same refinement levels, up to a
+`target_elems` of 1000. The tetrahedral target is halved: `target_elems` sets
+TetGen's _maximum_ cell volume, and its quality refinement typically lands near
+twice the requested count. Every solve is timed, and the wall times end up in
+the plot legend. The comparison field is evaluated along the y = 0 line only —
+that is all the plot below needs, and it keeps the field evaluation cheap:
 
 ```{code-cell} ipython3
 line = magpy.Sensor(pixel=pixel[:, iy])  # the y=0 row of the field plane
@@ -338,10 +337,10 @@ Both discretizations head for the same field, at very different rates. The
 tetrahedral peak barely moves with refinement, while the cuboid family is still
 about 14 % low at 768 cells. The three finest cuboid curves look converged only
 because those meshes differ by 6 % in cell size. A longer study on this model
-shows the climb continuing: the cuboid peak reaches 1.98 mT at 2,232 cells,
-2.03 mT at 3,822 and 2.07 mT at 8,019, and extrapolating that series gives
-2.16 mT. The tetrahedral peak creeps up from 2.12 mT at 89 cells to 2.148 mT at
-4,016. The two agree to within 1 %.
+shows the climb continuing: the cuboid peak reaches 1.98 mT at 2,232 cells, 2.03
+mT at 3,822 and 2.07 mT at 8,019, and extrapolating that series gives 2.16 mT.
+The tetrahedral peak creeps up from 2.12 mT at 89 cells to 2.148 mT at 4,016.
+The two agree to within 1 %.
 
 With µr = 1000 the error of a uniform cuboid grid shrinks only about as the cell
 size to the power 1.5, so refine by a large factor, not a few percent, before

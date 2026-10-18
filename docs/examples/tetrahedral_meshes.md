@@ -28,9 +28,8 @@ dependency:
 pip install magpylib-material-response[tetgen]
 ```
 
-Each tetrahedron acts on the others through magpylib's closed-form
-`Tetrahedron` field, taken at their centroids (point matching), like any other
-cell type.
+Each tetrahedron acts on the others through magpylib's closed-form `Tetrahedron`
+field, taken at their centroids (point matching), like any other cell type.
 
 This example validates the whole chain on a case with an exact analytical
 answer: a **soft magnetic sphere**, for which the demagnetizing factor is
