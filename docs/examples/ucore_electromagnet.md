@@ -342,6 +342,14 @@ Here the error of the cuboid grid shrinks only about as the cell size to the
 power 1.5: refine by a large factor, not a few percent, before trusting a
 plateau.
 
+This is not special to the U-core. On a plain cube of the same iron (χ = 1000)
+in a uniform field, 128 tetrahedra put the induced moment within 1.5 % of its
+converged value, while cubes need 1,728 cells to get within 1.2 %. Nor does it
+come from the permeability: at χ = 10⁵ the 768 cuboid cells above still give
+1.95 mT against 2.30 mT for 432 tetrahedra, so the gap comes from the
+discretization. For high-permeability parts, prefer a tetrahedral mesh, and
+judge convergence over a large range of cell counts.
+
 +++ {"user_expressions": []}
 
 Notes:
