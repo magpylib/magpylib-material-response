@@ -7,6 +7,8 @@ on:
     branches:
       - main
 
+permissions: {}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -21,16 +23,19 @@ jobs:
   lint:
     name: Format
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v9.0.0
 
       - uses: j178/prek-action@v2
 
@@ -40,6 +45,8 @@ jobs:
   checks:
     name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -49,13 +56,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-          activate-environment: true
+          allow-prereleases: true
+
+      - uses: astral-sh/setup-uv@v9.0.0
 
       - name: Install package
         run: uv sync
