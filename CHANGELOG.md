@@ -16,7 +16,7 @@ and this project adheres to
   change steadily; `mesh_Cuboid(..., grading=...)`, also through `mesh_all`,
   shrinks the cells toward the faces, which brings a soft iron cube of 512 cells
   within 0.3 % of its converged moment, against 2.3 % with identical cells
-  ([#66](https://github.com/magpylib/magpylib-material-response/pull/66)).
+  ([#67](https://github.com/magpylib/magpylib-material-response/pull/67)).
 - Serialization (`to_json` / `from_json`) now supports `magnet.Sphere`,
   `magnet.Tetrahedron`, and `magnet.TriangularMesh` — demagnetized tetrahedral
   meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded.
