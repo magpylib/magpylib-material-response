@@ -50,17 +50,17 @@ def get_susceptibilities(sources, susceptibility=None):
 def _convert_to_array(susceptibility, n, from_hierarchy=False):
     """Convert susceptibility input(s) to (n, 3) array format"""
     # Handle single values (scalar or 3-vector) applied to all sources
-    if np.isscalar(susceptibility):
-        return np.ones((n, 3)) * susceptibility
+    if np.ndim(susceptibility) == 0:  # a scalar, or a 0-d numpy array
+        return np.ones((n, 3)) * float(susceptibility)
     if (
-        hasattr(susceptibility, "__len__")
+        not from_hierarchy  # values read from the objects are one per object
+        and hasattr(susceptibility, "__len__")
         and len(susceptibility) == 3
         and all(not isinstance(x, list | tuple | np.ndarray) for x in susceptibility)
     ):
         # This is a 3-vector, not a list of 3 items
         susis = np.tile(susceptibility, (n, 1))
-        # Only check for ambiguity when susceptibility comes from user input, not from hierarchy
-        if n == 3 and not from_hierarchy:
+        if n == 3:
             msg = (
                 "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
                 "Please choose different means of input or change the number of cells in the Collection."
@@ -80,7 +80,7 @@ def _convert_to_array(susceptibility, n, from_hierarchy=False):
     # Convert each susceptibility to 3-tuple format
     susis = []
     for sus in susceptibility_list:
-        if np.isscalar(sus):
+        if np.ndim(sus) == 0:
             susis.append((float(sus), float(sus), float(sus)))
         elif hasattr(sus, "__len__") and len(sus) == 3:
             try:
@@ -128,10 +128,11 @@ def _get_susceptibility_from_hierarchy(source):
 
 
 def get_H_ext(*sources, H_ext=None):
-    """Return a list of length (len(sources)) with H_ext values
-    Priority is given at the source level, however if value is not found, it is searched up the
-    the parent tree, if available. Sets H_ext to zero if no value is found when reached the top
-    level of the tree"""
+    """Return a list of length (len(sources)) with H_ext values.
+
+    `H_ext` is a uniform applied field given as mu_0 * H in tesla. A source's own
+    value takes priority; otherwise it is searched up the parent tree, and it is
+    zero if no parent sets it."""
     H_exts = []
     for src in sources:
         H_ext = getattr(src, "H_ext", None)
@@ -432,7 +433,14 @@ def apply_demag(
 
     Returns
     -------
-    None
+    magpylib.Collection or None
+        The demagnetized copy of `collection` if `inplace=False`, else None.
+
+    Notes
+    -----
+    Each cell responds to a uniform applied field set by its `H_ext` attribute (or
+    a parent's), given as mu_0 * H in tesla, and to the field of the current
+    sources in `collection` at its centroid.
     """
     if not inplace:
         collection = collection.copy()

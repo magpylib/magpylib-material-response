@@ -271,3 +271,22 @@ def test_roundtrip_demagnetized_tet_collection():
     out = from_json(to_json(demag))[0]
     assert len(out.sources_all) == len(demag.sources_all)
     _assert_field_equal(demag, out)
+
+
+def test_roundtrip_keeps_material_attributes():
+    """A reloaded model solves to the same polarizations: a magnet's H_ext and a
+    Collection's susceptibility and H_ext survive."""
+    magnet = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.01,) * 3)
+    magnet.H_ext = (0, 0, 0.01)
+    other = magpy.magnet.Cuboid(
+        polarization=(0, 0, 0), dimension=(0.01,) * 3, position=(0.02, 0, 0)
+    )
+    coll = magpy.Collection(magnet, other)
+    coll.susceptibility = 100
+    coll.H_ext = (0.005, 0, 0)
+
+    out = from_json(to_json(coll))[0]
+    np.testing.assert_allclose(
+        [s.polarization for s in apply_demag(out).sources_all],
+        [s.polarization for s in apply_demag(coll).sources_all],
+    )

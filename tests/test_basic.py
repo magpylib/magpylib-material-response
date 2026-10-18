@@ -314,3 +314,15 @@ def test_legacy_options_refuse_bad_values(legacy):
     cube = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 1))
     with pytest.raises(ValueError, match=r"max_dist|splitting"):
         apply_demag(mesh_Cuboid(cube, 8), susceptibility=1, **legacy)
+
+
+def test_three_per_object_susceptibilities_stay_per_object():
+    """Three cells with their own scalar values, one a 0-d array, are three
+    isotropic cells, not one anisotropic value repeated."""
+    cells = [
+        magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
+        for _ in range(3)
+    ]
+    for cell, chi in zip(cells, (0.1, np.array(0.2), 0.3), strict=True):
+        cell.susceptibility = chi
+    np.testing.assert_allclose(get_susceptibilities(cells), np.tile([0.1, 0.2, 0.3], 3))

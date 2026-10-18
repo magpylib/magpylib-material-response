@@ -437,3 +437,28 @@ def test_cells_match_magpylib_force_mesh(magnet, target_elems):
         [cell.position for cell in coll], cells["positions"], atol=1e-12 * scale
     )
     np.testing.assert_allclose(dims, expected, atol=1e-12 * scale)
+
+
+def test_H_ext_set_before_meshing_reaches_the_cells():
+    """The applied field moves to the meshed collection, where a later change
+    still reaches the cells."""
+
+    def soft(H_ext=None):
+        obj = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 0))
+        obj.susceptibility = 1000
+        if H_ext is not None:
+            obj.H_ext = H_ext
+        return obj
+
+    before = apply_demag(mesh_Cuboid(soft((0, 0, 0.01)), 8))
+    after = mesh_Cuboid(soft(), 8)
+    after.H_ext = (0, 0, 0.01)
+    after = apply_demag(after)
+    J = np.array([c.polarization for c in before.sources_all])
+    assert np.all(J[:, 2] > 0.01)
+    np.testing.assert_allclose(J, [c.polarization for c in after.sources_all])
+
+    changed = mesh_Cuboid(soft((0, 0, 0.01)), 8)
+    changed.H_ext = (0, 0, 0.02)
+    J2 = np.array([c.polarization for c in apply_demag(changed).sources_all])
+    np.testing.assert_allclose(J2, 2 * J)

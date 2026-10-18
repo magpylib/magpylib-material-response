@@ -146,10 +146,14 @@ def _serialize_recursive(obj, parent="warn"):
 
     if isinstance(obj, BaseMagnet):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
-        susceptibility = getattr(obj, "susceptibility", None)
-        if susceptibility is not None:
-            # np.asarray covers scalars, tuples and numpy arrays alike
-            dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
+    # Material attributes may sit on a magnet or on a parent Collection; np.asarray
+    # covers scalars, tuples and numpy arrays alike.
+    susceptibility = getattr(obj, "susceptibility", None)
+    if susceptibility is not None:
+        dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
+    h_ext = getattr(obj, "H_ext", None)
+    if h_ext is not None:
+        dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
 
     # A scalar, or one value per path step where magpylib allows the property to
     # vary along a path; .tolist() writes either as JSON.
@@ -256,6 +260,9 @@ def _deserialize_recursive(inp):
 
     if inp.get("susceptibility") is not None:
         obj.susceptibility = inp["susceptibility"]["value"]
+    if inp.get("H_ext") is not None:
+        _check_unit("H_ext", inp["H_ext"], "T")
+        obj.H_ext = inp["H_ext"]["value"]
 
     if constr is magpy.Collection:
         obj.add(*[_deserialize_recursive(child) for child in inp["children"]])

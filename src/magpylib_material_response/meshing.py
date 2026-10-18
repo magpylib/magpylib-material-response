@@ -26,6 +26,11 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
     coll.position = obj.position
     coll.orientation = obj.orientation
+    # The applied field is uniform over the object, so it belongs to the meshed
+    # collection: the cells find it there, and a later change still reaches them.
+    h_ext = getattr(obj, "H_ext", None)
+    if h_ext is not None:
+        coll.H_ext = h_ext
     return coll
 
 
