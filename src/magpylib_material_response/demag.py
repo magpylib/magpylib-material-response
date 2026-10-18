@@ -503,7 +503,7 @@ def apply_demag(
             with timelog(
                 "Add current sources contributions", min_log_time=min_log_time
             ):
-                pos = np.array([src.position for src in magnets_list])
+                pos = np.array([_matching_point(src) for src in magnets_list])
                 pol_currents = magpy.getB(currents_list, pos, sumup=True)
                 pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
                 pol_total += np.matmul(S, pol_currents)

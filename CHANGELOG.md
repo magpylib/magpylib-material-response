@@ -65,6 +65,12 @@ and this project adheres to
 - Cells are matched at their `centroid`, falling back to `barycenter`, which
   newer magpylib deprecates. The deprecation warning failed this package's tests
   against magpylib main.
+- Current sources act on each cell at its centroid, where the cells' own fields
+  are matched, instead of at its `position`, which for a tetrahedron built from
+  vertices is the origin and for a `mesh_Cylinder` ring segment lies on the
+  axis. The field above a tetrahedral U-core driven by a coil came out 2.2 times
+  too strong
+  ([#62](https://github.com/magpylib/magpylib-material-response/pull/62)).
 
 ## [0.4.0] - 2026-05-01
 

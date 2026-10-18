@@ -208,3 +208,28 @@ def test_apply_demag_refuses_property_paths(make):
     obj.susceptibility = 1
     with pytest.raises(ValueError, match="paths"):
         apply_demag(magpy.Collection(cube, obj))
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: magpy.magnet.Cuboid(
+            dimension=(0.01, 0.02, 0.01), position=(0.03, 0, 0)
+        ),
+        lambda: magpy.magnet.Tetrahedron(
+            vertices=[(0.03, 0, 0), (0.04, 0, 0), (0.03, 0.01, 0), (0.03, 0, 0.01)]
+        ),
+        lambda: magpy.magnet.CylinderSegment(dimension=(0.01, 0.02, 0.01, 0, 90)),
+    ],
+    ids=["cuboid", "tetrahedron", "cylinder_segment"],
+)
+def test_current_field_is_taken_at_the_cell_centroid(make):
+    coil = magpy.current.Circle(diameter=0.05, current=1000, position=(0.02, 0, 0.01))
+    cell = make()
+    cell.polarization = (0, 0, 0)
+    J_coil = apply_demag(magpy.Collection(cell, coil), susceptibility=10).sources[0]
+    cell = make()
+    cell.polarization = (0, 0, 0)
+    cell.H_ext = coil.getB(cell.centroid)
+    J_ext = apply_demag(magpy.Collection(cell), susceptibility=10).sources[0]
+    np.testing.assert_allclose(J_coil.polarization, J_ext.polarization, rtol=1e-12)
