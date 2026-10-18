@@ -27,8 +27,8 @@ extensions = [
     "sphinx_copybutton",
 ]
 
-# Benchmark cells in the examples (e.g. solver_performance) run for tens of
-# seconds locally; give slower CI builders comfortable headroom over the
+# Mesh-refinement loops in the examples (e.g. the U-core comparison) run for tens
+# of seconds locally; give slower CI builders comfortable headroom over the
 # myst-nb default of 30 s per cell.
 nb_execution_timeout = 120
 
