@@ -144,7 +144,7 @@ cuboid cells:
 | Option                | Effect                                                                                                               |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `pairs_matching=True` | Cell pairs with the same offset, orientations and source dimensions are evaluated once; pays off on regular grids    |
-| `max_dist=d`          | Pairs whose centroids lie more than $d$ times the larger cell side apart are dropped, an approximation               |
+| `max_dist=d`          | Pairs whose centroids lie $d$ or more times the larger cell side apart are dropped, an approximation                 |
 | `split=k`             | The field evaluations run in $k$ chunks of source cells, bounding the memory of the field evaluation (any cell type) |
 
 `pairs_matching` and `max_dist` take cuboid cells only. `max_dist` does not
