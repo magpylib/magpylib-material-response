@@ -30,10 +30,61 @@
 
 <!-- prettier-ignore-end -->
 
-> **Warning** > **This package is experimental and in development phase,
-> breaking API changes may happen at any time.**
+> **Warning** This package is experimental and in development phase, breaking
+> API changes may happen at any time.
 
-Magpylib-Material-Response is an extension to the Magpylib library, providing
-magnetic field analysis for soft materials and demagnetization of hard magnets.
-Leveraging the Method of Moments, it calculates magnetic material response by
-meshing sources in an arbitrary number of unit elements.
+Magpylib-Material-Response is an extension to the
+[Magpylib](https://magpylib.readthedocs.io/) library, providing magnetic field
+analysis for soft materials and demagnetization of hard magnets. Leveraging the
+Method of Moments, it calculates the self-consistent magnetic material response
+by meshing sources into an arbitrary number of unit cells.
+
+Key features:
+
+- **`apply_demag`** — self-consistent demagnetization of magpylib `Collection`
+  objects, with per-cell scalar or anisotropic susceptibility; external fields
+  and current sources in the collection drive the response.
+- **Exact dense solver** — every cell acts on every other through magpylib's
+  closed-form field, taken at each cell's centroid (point matching), and the
+  linear system is solved directly.
+- **Meshing helpers** — cuboids, cylinders, and arbitrary closed surfaces via
+  tetrahedral meshing (`mesh_TriangularMesh`, using TetGen).
+
+## Installation
+
+```bash
+pip install magpylib-material-response
+```
+
+or with
+[conda](https://github.com/conda-forge/magpylib-material-response-feedstock):
+
+```bash
+conda install -c conda-forge magpylib-material-response
+```
+
+Tetrahedral meshing of `TriangularMesh` magnets requires the optional
+[TetGen](https://tetgen.pyvista.org/) dependency:
+
+```bash
+pip install magpylib-material-response[tetgen]
+```
+
+## Minimal example
+
+```python
+import magpylib as magpy
+from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.meshing import mesh_Cuboid
+
+# a magnet with finite susceptibility, SI units (m, T)
+magnet = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3))
+magnet.susceptibility = 0.3  # µr = 1.3
+
+# mesh into cells, solve the material response — result is a field source
+mesh_demag = apply_demag(mesh_Cuboid(magnet, target_elems=125))
+print(magpy.getB(mesh_demag, (0, 0, 1.5e-3)))
+```
+
+See the [documentation](https://magpylib-material-response.readthedocs.io/) for
+a quickstart, worked examples, and the method description.
