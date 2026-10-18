@@ -110,8 +110,8 @@ does.
 
 The solve is direct, exact up to floating-point rounding. Memory grows with
 $N^2$ — the matrix alone takes $(3N)^2 \times 8$ bytes, 650 MB for 3,000 cells —
-and time with up to $N^3$. On an Apple Silicon Mac, 1,744 tetrahedra take about
-16 s and 7 GB.
+and time with up to $N^3$. On an Apple Silicon Mac with magpylib 6, 1,744
+tetrahedra take about 15 s and 8.6 GB.
 
 ### Legacy options
 
