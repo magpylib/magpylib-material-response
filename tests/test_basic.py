@@ -287,6 +287,20 @@ def test_demag_tensor_legacy_options():
     )
 
 
+def test_pairs_matching_keys_on_cell_dimensions_at_any_scale():
+    """Pairs of different cell sizes, at nanometre scale, are not merged."""
+    nm = 1e-9
+    cubes = [
+        magpy.magnet.Cuboid(
+            polarization=(0, 0, 1), dimension=(d * nm,) * 3, position=(6 * nm * i, 0, 0)
+        )
+        for i, d in enumerate([1.0, 2.0, 2.0, 3.0])
+    ]
+    np.testing.assert_allclose(
+        demag_tensor(cubes, pairs_matching=True), demag_tensor(cubes), rtol=1e-9
+    )
+
+
 @pytest.mark.parametrize(
     "legacy",
     [

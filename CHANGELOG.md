@@ -65,9 +65,10 @@ and this project adheres to
 - The legacy options run again: `max_dist` no longer crashes, and refuses
   negative values and the `pairs_matching` or `split` it silently ignored;
   `pairs_matching=True` computes its fields with `magpy.func`, since magpylib 6
-  removed the string-based `getH("Cuboid", ...)` it called, and
-  `demag_tensor(..., pairs_matching=True)` no longer refuses a split nobody
-  asked for.
+  removed the string-based `getH("Cuboid", ...)` it called, and no longer merges
+  pairs of cells of different sizes, or every pair of a mesh with cells below
+  1e-8 m; `demag_tensor(..., pairs_matching=True)` no longer refuses a split
+  nobody asked for.
 - Current sources act on each cell at its centroid, where the cells' own fields
   are matched, instead of at its `position`, which for a tetrahedron built from
   vertices is the origin and for a `mesh_Cylinder` ring segment lies on the

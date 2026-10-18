@@ -334,12 +334,20 @@ def match_pairs(src_list, min_log_time=None):
             logger.debug("Computing orientation differences")
             rotQ2a = np.tile(rotQ0, (len_src, 1)).reshape((num_of_pairs, -1))
             rotQ2b = np.repeat(rotQ0, len_src, axis=0).reshape((num_of_pairs, -1))
-            logger.debug("Computing dimension differences")
-            dim2 = np.tile(dim0, (len_src, 1)) - np.repeat(dim0, len_src, axis=0)
-            logger.debug("Concatenating properties for comparison")
-            prop = (np.concatenate([pos2, rotQ2a, rotQ2b, dim2], axis=1) + 1e-9).round(
-                8
+            # The reused field depends on the source cell's own dimensions, not
+            # on a difference with the observer's (2 -> 4 and 3 -> 5 collide).
+            dim_src = np.repeat(dim0, len_src, axis=0)
+            # Round relative to the geometry's size: an absolute 1e-8 merges
+            # every pair of a mesh with cells below 1e-8 m.
+            geo_scale = max(
+                float(np.max(np.abs(pos2), initial=0.0)),
+                float(np.max(np.abs(dim0))),
+                np.finfo(float).tiny,
             )
+            prop = np.concatenate(
+                [pos2 / geo_scale, rotQ2a, rotQ2b, dim_src / geo_scale], axis=1
+            )
+            prop = (prop + 1e-9).round(8)
             logger.debug("Finding unique interaction pairs")
             _, unique_inds, unique_inv_inds = np.unique(
                 prop, return_index=True, return_inverse=True, axis=0
