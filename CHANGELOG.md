@@ -29,6 +29,9 @@ and this project adheres to
 
 ### Changed
 
+- Requires magpylib 6. Meshed and demagnetized collections are force targets
+  with one point per cell: pass `meshing=1` to `magpylib.getFT`, which takes the
+  cell count on the call since magpylib 6.
 - **Breaking:** an anisotropic susceptibility `(χx, χy, χz)` acts along each
   cell's own axes and turns with its orientation, like its polarization, instead
   of along the global axes. Results change for anisotropic susceptibilities on
@@ -49,9 +52,6 @@ and this project adheres to
 
 ### Fixed
 
-- Meshed cells get `meshing=1`, so `magpylib.getFT` accepts meshed and
-  demagnetized collections as targets, with one force point per cell. It refused
-  them before ("Missing meshing input").
 - `mesh_Cylinder` gives thin rings enough sectors that every cell's centroid
   lies inside it. Demagnetization matches the field at the centroid, and for
   wide sectors of a thin ring that point lay outside the material: in a
@@ -62,9 +62,6 @@ and this project adheres to
   only position paths, instead of failing inside the solver.
 - `to_json` writes a path-valued `current` or `diameter`, and a susceptibility
   given as a numpy array, instead of raising.
-- Cells are matched at their `centroid`, falling back to `barycenter`, which
-  newer magpylib deprecates. The deprecation warning failed this package's tests
-  against magpylib main.
 - Current sources act on each cell at its centroid, where the cells' own fields
   are matched, instead of at its `position`, which for a tetrahedron built from
   vertices is the origin and for a `mesh_Cylinder` ring segment lies on the

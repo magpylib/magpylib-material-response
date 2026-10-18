@@ -30,7 +30,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "magpylib>=5.0",
+  "magpylib>=6.0.0rc0",
   "loguru>=0.5.0",
 ]
 

@@ -21,14 +21,6 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     if susceptibility is not None:
         for cell in cells:
             cell.susceptibility = susceptibility
-    # One force point per cell. magpylib 5.2 refuses getFT targets without a
-    # `meshing` attribute, so each cell gets 1; since magpylib 6 `meshing` is an
-    # argument of getFT and the cells take `meshing=1` on the call. After
-    # demagnetization each cell carries its own polarization, and its centre is
-    # the point that stands for it.
-    for cell in cells:
-        if hasattr(cell, "meshing") and cell.meshing is None:
-            cell.meshing = 1
     coll = magpy.Collection(cells)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))

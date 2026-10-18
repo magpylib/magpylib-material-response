@@ -205,8 +205,6 @@ def test_roundtrip_susceptibility_array():
 
 def test_roundtrip_circle_with_property_paths():
     """A Circle whose diameter and current vary along a path serializes."""
-    if "current" not in getattr(magpy.current.Circle(), "path_properties", ()):
-        pytest.skip("this magpylib has no path-valued properties")
     circ = magpy.current.Circle(
         diameter=np.linspace(0.01, 0.05, 5), current=np.linspace(1, 10, 5)
     )
@@ -225,8 +223,6 @@ def test_roundtrip_sphere():
 
 def test_roundtrip_sphere_with_diameter_path():
     """A Sphere whose diameter varies along a path serializes."""
-    if "diameter" not in getattr(magpy.magnet.Sphere(), "path_properties", ()):
-        pytest.skip("this magpylib has no path-valued properties")
     src = magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=[0.002, 0.003, 0.004])
     out = from_json(to_json(src))[0]
     _assert_field_equal(src, out)

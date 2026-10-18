@@ -14,20 +14,6 @@ from scipy.spatial.transform import Rotation as R
 from magpylib_material_response.utils import timelog
 
 
-def _matching_point(src):
-    """Point where a cell's field is matched: its centroid.
-
-    `centroid` exists from magpylib 5.2 on; `barycenter` is the older name, kept
-    only as a deprecated alias on later versions. Cuboids and cylinders have
-    neither before 5.2, and for them the position is the centroid.
-    """
-    for attr in ("centroid", "barycenter"):
-        point = getattr(src, attr, None)
-        if point is not None:
-            return point
-    return src.position
-
-
 def _has_path(src):
     """True if the position, orientation or any path-capable property of `src`
     varies along a path (magpylib >= 5.3 lets e.g. `dimension` or `current` do so).
@@ -217,7 +203,7 @@ def demag_tensor(
     elif pairs_matching:
         getH_params, mask_inds, unique_inv_inds, pos0, rot0 = match_pairs(src_list)
     else:
-        pos0 = np.array([_matching_point(src) for src in src_list])
+        pos0 = np.array([src.centroid for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
 
@@ -280,7 +266,7 @@ def filter_distance(
         if not all_cuboids:
             msg = "filter_distance only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([_matching_point(src) for src in src_list])
+        pos0 = np.array([src.centroid for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -327,7 +313,7 @@ def match_pairs(src_list, min_log_time=None):
         if not all_cuboids:
             msg = "Pairs matching only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([_matching_point(src) for src in src_list])
+        pos0 = np.array([src.centroid for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -503,7 +489,7 @@ def apply_demag(
             with timelog(
                 "Add current sources contributions", min_log_time=min_log_time
             ):
-                pos = np.array([_matching_point(src) for src in magnets_list])
+                pos = np.array([src.centroid for src in magnets_list])
                 pol_currents = magpy.getB(currents_list, pos, sumup=True)
                 pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
                 pol_total += np.matmul(S, pol_currents)
