@@ -5,7 +5,12 @@ import numpy as np
 import pytest
 
 import magpylib_material_response
-from magpylib_material_response.demag import apply_demag, get_susceptibilities
+from magpylib_material_response.demag import (
+    apply_demag,
+    demag_tensor,
+    filter_distance,
+    get_susceptibilities,
+)
 from magpylib_material_response.meshing import mesh_Cuboid
 
 
@@ -201,10 +206,111 @@ def test_get_susceptibilities_edge_cases():
 def test_apply_demag_refuses_property_paths(make):
     """Demagnetization along a path is not supported, whichever property varies."""
     cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01))
-    if not hasattr(cube, "path_properties"):
-        pytest.skip("this magpylib has no path-valued properties")
     cube.susceptibility = 1
     obj = make()
     obj.susceptibility = 1
     with pytest.raises(ValueError, match="paths"):
         apply_demag(magpy.Collection(cube, obj))
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: magpy.magnet.Cuboid(
+            dimension=(0.01, 0.02, 0.01), position=(0.03, 0, 0)
+        ),
+        lambda: magpy.magnet.Tetrahedron(
+            vertices=[(0.03, 0, 0), (0.04, 0, 0), (0.03, 0.01, 0), (0.03, 0, 0.01)]
+        ),
+        lambda: magpy.magnet.CylinderSegment(dimension=(0.01, 0.02, 0.01, 0, 90)),
+    ],
+    ids=["cuboid", "tetrahedron", "cylinder_segment"],
+)
+def test_current_field_is_taken_at_the_cell_centroid(make):
+    """The coil comes first in the collection, ahead of the magnet it drives."""
+    coil = magpy.current.Circle(diameter=0.05, current=1000, position=(0.02, 0, 0.01))
+    cell = make()
+    cell.polarization = (0, 0, 0)
+    J_coil = apply_demag(magpy.Collection(coil, cell), susceptibility=10).sources[1]
+    cell = make()
+    cell.polarization = (0, 0, 0)
+    cell.H_ext = coil.getB(cell.centroid)
+    J_ext = apply_demag(magpy.Collection(cell), susceptibility=10).sources[0]
+    np.testing.assert_allclose(J_coil.polarization, J_ext.polarization, rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    [{"pairs_matching": True}, {"max_dist": 1000}, {"split": 5}],
+    ids=["pairs_matching", "max_dist", "split"],
+)
+def test_legacy_options_solve_the_same_system(legacy):
+    """Nine cells in five chunks leave one chunk with a single cell."""
+
+    def scene():
+        magnet = magpy.magnet.Cuboid(
+            dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 1), position=(0, 0, 0.012)
+        )
+        magnet.susceptibility = 0
+        soft = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 0))
+        soft.rotate_from_angax(30, "z")
+        soft.susceptibility = 100
+        return magpy.Collection(magnet, mesh_Cuboid(soft, 8))
+
+    default = apply_demag(scene())
+    out = apply_demag(scene(), **legacy)
+    np.testing.assert_allclose(
+        [s.polarization for s in out.sources_all],
+        [s.polarization for s in default.sources_all],
+        rtol=1e-9,
+        atol=1e-12,
+    )
+
+
+def test_demag_tensor_legacy_options():
+    """pairs_matching gives the full tensor; max_dist zeroes the pairs of cells
+    farther apart than max_dist cell sizes."""
+    cube = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 0))
+    cells = mesh_Cuboid(cube, 27).sources_all
+    full = demag_tensor(cells)
+    atol = 1e-12 * np.abs(full).max()
+    np.testing.assert_allclose(
+        demag_tensor(cells, pairs_matching=True), full, rtol=1e-9, atol=atol
+    )
+    kept = filter_distance(cells, 1.5).reshape(27, 27)
+    assert 0 < kept.sum() < kept.size
+    np.testing.assert_allclose(
+        demag_tensor(cells, max_dist=1.5),
+        full * kept[None, :, :, None],
+        rtol=1e-9,
+        atol=atol,
+    )
+
+
+def test_pairs_matching_keys_on_cell_dimensions_at_any_scale():
+    """Pairs of different cell sizes, at nanometre scale, are not merged."""
+    nm = 1e-9
+    cubes = [
+        magpy.magnet.Cuboid(
+            polarization=(0, 0, 1), dimension=(d * nm,) * 3, position=(6 * nm * i, 0, 0)
+        )
+        for i, d in enumerate([1.0, 2.0, 2.0, 3.0])
+    ]
+    np.testing.assert_allclose(
+        demag_tensor(cubes, pairs_matching=True), demag_tensor(cubes), rtol=1e-9
+    )
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    [
+        {"max_dist": -1},
+        {"max_dist": 2, "pairs_matching": True},
+        {"max_dist": 2, "split": 2},
+        {"pairs_matching": True, "split": 2},
+    ],
+)
+def test_legacy_options_refuse_bad_values(legacy):
+    cube = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 1))
+    with pytest.raises(ValueError, match=r"max_dist|splitting"):
+        apply_demag(mesh_Cuboid(cube, 8), susceptibility=1, **legacy)

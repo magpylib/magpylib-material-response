@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import inspect
-
 import magpylib as magpy
 import numpy as np
 import pytest
 
-from magpylib_material_response.demag import _matching_point, apply_demag
+from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import (
     mesh_all,
     mesh_Cuboid,
@@ -330,34 +328,21 @@ def test_mesh_TriangularMesh():
         mesh_TriangularMesh(cuboid, target_elems=10)
 
 
-# magpylib 6 takes `meshing` on the getFT call; 5.2 keeps it on the targets
-MESHING_ON_CALL = "meshing" in inspect.signature(magpy.getFT).parameters
-
-
 def test_cells_are_force_targets():
-    """Every cell gets one force point, so getFT accepts meshed and demagnetized
-    collections; a meshed cuboid gives the force of the same grid on the whole."""
+    """Meshed and demagnetized collections are force targets with one point per
+    cell; a meshed cuboid gives the force of the same grid on the whole."""
     cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01))
     src = magpy.magnet.Cuboid(
         polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01), position=(0, 0, -0.011)
     )
     cyl = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(0.01, 0.01))
     for coll in (mesh_Cuboid(cube, 27), mesh_Cylinder(cyl, 30)):
-        if MESHING_ON_CALL:
-            F, T = magpy.getFT(src, coll, meshing=1)
-        else:
-            assert {cell.meshing for cell in coll.children} == {1}
-            F, T = magpy.getFT(src, coll)
+        F, T = magpy.getFT(src, coll, meshing=1)
         assert np.all(np.isfinite(F))
         assert np.all(np.isfinite(T))
 
-    if MESHING_ON_CALL:
-        F_cells = magpy.getFT(src, mesh_Cuboid(cube, 27), meshing=1)[0]
-        F_whole = magpy.getFT(src, cube, meshing=(3, 3, 3))[0]
-    else:
-        cube.meshing = (3, 3, 3)
-        F_cells = magpy.getFT(src, mesh_Cuboid(cube, 27))[0]
-        F_whole = magpy.getFT(src, cube)[0]
+    F_cells = magpy.getFT(src, mesh_Cuboid(cube, 27), meshing=1)[0]
+    F_whole = magpy.getFT(src, cube, meshing=(3, 3, 3))[0]
     np.testing.assert_allclose(F_cells, F_whole, rtol=1e-9, atol=1e-9)
 
 
@@ -371,7 +356,7 @@ def test_mesh_Cylinder_thin_ring_centroids_inside():
     for target in (3, 12, 24, 48):
         for cell in mesh_Cylinder(tube, target).children:
             r1, r2 = cell.dimension[:2]
-            x, y, _ = _matching_point(cell)
+            x, y, _ = cell.centroid
             assert r1 <= np.hypot(x, y) <= r2
 
     src = magpy.magnet.Cuboid(
@@ -388,15 +373,6 @@ def test_mesh_Cylinder_thin_ring_centroids_inside():
     reference = moment_x(800)
     for target in (12, 48):
         np.testing.assert_allclose(moment_x(target), reference, rtol=0.05)
-
-
-def _core_makes_cells():
-    """magpylib's force mesher returns cells from magpylib 6 on (magpylib#1023)."""
-    cube = magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
-    if MESHING_ON_CALL:
-        return "cells" in cube._generate_mesh(1)
-    cube.meshing = 1
-    return "cells" in cube._generate_mesh()
 
 
 def _segment_dimensions(cells):
@@ -445,14 +421,8 @@ def _segment_dimensions(cells):
 def test_cells_match_magpylib_force_mesh(magnet, target_elems):
     """mesh_Cuboid and mesh_Cylinder cut a magnet into the same cells as magpylib's
     force mesher for the same target (magpylib#1023)."""
-    if not _core_makes_cells():
-        pytest.skip("this magpylib meshes points, not cells")
     magnet.polarization = (1, 0, 0)
-    if MESHING_ON_CALL:
-        mesh = magnet._generate_mesh(target_elems)
-    else:
-        magnet.meshing = target_elems
-        mesh = magnet._generate_mesh()
+    mesh = magnet._generate_mesh(target_elems)
     cells = mesh["cells"]
     scale = np.max(np.abs(magnet.dimension))
     if isinstance(magnet, magpy.magnet.Cuboid):

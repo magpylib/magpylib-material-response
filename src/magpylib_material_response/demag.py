@@ -14,28 +14,10 @@ from scipy.spatial.transform import Rotation as R
 from magpylib_material_response.utils import timelog
 
 
-def _matching_point(src):
-    """Point where a cell's field is matched: its centroid.
-
-    `centroid` exists from magpylib 5.2 on; `barycenter` is the older name, kept
-    only as a deprecated alias on later versions. Cuboids and cylinders have
-    neither before 5.2, and for them the position is the centroid.
-    """
-    for attr in ("centroid", "barycenter"):
-        point = getattr(src, attr, None)
-        if point is not None:
-            return point
-    return src.position
-
-
 def _has_path(src):
-    """True if the position, orientation or any path-capable property of `src`
-    varies along a path (magpylib >= 5.3 lets e.g. `dimension` or `current` do so).
-    """
-    if np.ndim(src.position) != 1:
-        return True
-    path_len = getattr(src, "_get_path_len", None)
-    return path_len is not None and path_len() > 1
+    """True if the position, orientation or any path-capable property of `src`,
+    such as `dimension` or `current`, varies along a path."""
+    return src._get_path_len() > 1
 
 
 def get_susceptibilities(sources, susceptibility=None):
@@ -188,6 +170,11 @@ def demag_tensor(
         Number of times the sources list is split before getH calculation ind demag
         tensor calculation
 
+    max_dist: float
+        Leaves out the interaction of two cells whose centroids lie `max_dist` or more
+        times the larger side of the two cells apart. If `max_dist=0`, all
+        interactions are calculated.
+
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
         will not be logged.
@@ -205,19 +192,26 @@ def demag_tensor(
     """
     nof_src = len(src_list)
 
-    if pairs_matching and split != 1:
+    splitting = split > 1
+    if max_dist < 0:
+        msg = f"max_dist must be 0 (no filtering) or positive, got {max_dist}."
+        raise ValueError(msg)
+    if pairs_matching and splitting:
         msg = "Pairs matching does not support splitting"
+        raise ValueError(msg)
+    if max_dist != 0 and (pairs_matching or splitting):
+        msg = "max_dist does not combine with pairs_matching or split."
         raise ValueError(msg)
     mask_inds = None
     getH_params = {}
     if max_dist != 0:
         mask_inds, getH_params, pos0, rot0 = filter_distance(
-            src_list, max_dist, return_params=False, return_base_geo=True
+            src_list, max_dist, return_params=True, return_base_geo=True
         )
     elif pairs_matching:
         getH_params, mask_inds, unique_inv_inds, pos0, rot0 = match_pairs(src_list)
     else:
-        pos0 = np.array([_matching_point(src) for src in src_list])
+        pos0 = np.array([src.centroid for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
 
@@ -230,8 +224,14 @@ def demag_tensor(
                 polarization = np.repeat(pol_all, len(src_list), axis=0)
                 if mask_inds is not None:
                     polarization = polarization[mask_inds]
-                H_unique = magpy.getH(
-                    "Cuboid", polarization=polarization, **getH_params
+                H_unique = magpy.func.cuboid_field(
+                    "H",
+                    observers=getH_params["observers"],
+                    dimensions=getH_params["dimension"],
+                    polarizations=polarization,
+                    positions=getH_params["position"],
+                    orientations=getH_params["orientation"],
+                    squeeze=False,
                 )
                 if max_dist != 0:
                     H_temp = np.zeros((len(src_list) ** 2, 3))
@@ -255,9 +255,13 @@ def demag_tensor(
                                 total_subsets=len(src_list_split),
                             )
                             if src_list_subset.size > 0:
-                                H_unit_pol.append(
-                                    magpy.getH(src_list_subset.tolist(), pos0)
+                                # getH squeezes the source axis of a one-source
+                                # chunk
+                                H_sub = np.reshape(
+                                    magpy.getH(src_list_subset.tolist(), pos0),
+                                    (len(src_list_subset), len(pos0), 3),
                                 )
+                                H_unit_pol.append(H_sub)
                         H_unit_pol = np.concatenate(H_unit_pol, axis=0)
                 else:
                     H_unit_pol = magpy.getH(src_list, pos0)
@@ -280,7 +284,7 @@ def filter_distance(
         if not all_cuboids:
             msg = "filter_distance only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([_matching_point(src) for src in src_list])
+        pos0 = np.array([src.centroid for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -327,7 +331,7 @@ def match_pairs(src_list, min_log_time=None):
         if not all_cuboids:
             msg = "Pairs matching only implemented if all sources are Cuboids"
             raise ValueError(msg)
-        pos0 = np.array([_matching_point(src) for src in src_list])
+        pos0 = np.array([src.centroid for src in src_list])
         rotQ0 = [src.orientation.as_quat() for src in src_list]
         rot0 = R.from_quat(rotQ0)
         dim0 = [src.dimension for src in src_list]
@@ -339,12 +343,20 @@ def match_pairs(src_list, min_log_time=None):
             logger.debug("Computing orientation differences")
             rotQ2a = np.tile(rotQ0, (len_src, 1)).reshape((num_of_pairs, -1))
             rotQ2b = np.repeat(rotQ0, len_src, axis=0).reshape((num_of_pairs, -1))
-            logger.debug("Computing dimension differences")
-            dim2 = np.tile(dim0, (len_src, 1)) - np.repeat(dim0, len_src, axis=0)
-            logger.debug("Concatenating properties for comparison")
-            prop = (np.concatenate([pos2, rotQ2a, rotQ2b, dim2], axis=1) + 1e-9).round(
-                8
+            # The reused field depends on the source cell's own dimensions, not
+            # on a difference with the observer's (2 -> 4 and 3 -> 5 collide).
+            dim_src = np.repeat(dim0, len_src, axis=0)
+            # Round relative to the geometry's size: an absolute 1e-8 merges
+            # every pair of a mesh with cells below 1e-8 m.
+            geo_scale = max(
+                float(np.max(np.abs(pos2), initial=0.0)),
+                float(np.max(np.abs(dim0))),
+                np.finfo(float).tiny,
             )
+            prop = np.concatenate(
+                [pos2 / geo_scale, rotQ2a, rotQ2b, dim_src / geo_scale], axis=1
+            )
+            prop = (prop + 1e-9).round(8)
             logger.debug("Finding unique interaction pairs")
             _, unique_inds, unique_inv_inds = np.unique(
                 prop, return_index=True, return_inverse=True, axis=0
@@ -359,7 +371,7 @@ def match_pairs(src_list, min_log_time=None):
             "observers": np.tile(pos0, (len(src_list), 1))[unique_inds],
             "position": np.repeat(pos0, len(src_list), axis=0)[unique_inds],
             "orientation": R.from_quat(rotQ2b)[unique_inds],
-            "dimension": np.repeat(dim0, len(src_list), axis=0)[unique_inds],
+            "dimension": dim_src[unique_inds],
         }
     return params, unique_inds, unique_inv_inds, pos0, rot0
 
@@ -399,10 +411,10 @@ def apply_demag(
         with `max_dist` or `split` and applies only cuboid cells.
 
     max_dist: float
-        Posivive number representing the max_dimension to distance ratio for each pair
-        of interacting cells. This filters out far interactions. If `max_dist=0`, all
-        interactions are calculated. This parameter is not compatible with
-        `pairs_matching` or `split` and applies only cuboid cells.
+        Leaves out the interaction of two cells whose centroids lie `max_dist` or more
+        times the larger side of the two cells apart, an approximation. If
+        `max_dist=0`, all interactions are calculated. This parameter is not
+        compatible with `pairs_matching` or `split` and applies only cuboid cells.
 
     split: int
         Number of times the sources list is split before getH calculation ind demag
@@ -503,7 +515,7 @@ def apply_demag(
             with timelog(
                 "Add current sources contributions", min_log_time=min_log_time
             ):
-                pos = np.array([src.position for src in magnets_list])
+                pos = np.array([src.centroid for src in magnets_list])
                 pol_currents = magpy.getB(currents_list, pos, sumup=True)
                 pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
                 pol_total += np.matmul(S, pol_currents)
@@ -518,7 +530,7 @@ def apply_demag(
         pol_new = np.reshape(pol_new, (n, 3), order="F")
         # pol_new *= .4*np.pi
 
-        for s, pol in zip(collection.sources_all, pol_new, strict=False):
+        for s, pol in zip(magnets_list, pol_new, strict=True):
             s.polarization = s.orientation.inv().apply(pol)  # ROTATION CHECK
 
     if not inplace:
