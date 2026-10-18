@@ -250,9 +250,13 @@ def demag_tensor(
                                 total_subsets=len(src_list_split),
                             )
                             if src_list_subset.size > 0:
-                                H_unit_pol.append(
-                                    magpy.getH(src_list_subset.tolist(), pos0)
+                                # getH squeezes the source axis of a one-source
+                                # chunk
+                                H_sub = np.reshape(
+                                    magpy.getH(src_list_subset.tolist(), pos0),
+                                    (len(src_list_subset), len(pos0), 3),
                                 )
+                                H_unit_pol.append(H_sub)
                         H_unit_pol = np.concatenate(H_unit_pol, axis=0)
                 else:
                     H_unit_pol = magpy.getH(src_list, pos0)

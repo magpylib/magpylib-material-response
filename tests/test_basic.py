@@ -243,10 +243,12 @@ def test_current_field_is_taken_at_the_cell_centroid(make):
 
 @pytest.mark.parametrize(
     "legacy",
-    [{"pairs_matching": True}, {"max_dist": 1000}, {"split": 2}],
+    [{"pairs_matching": True}, {"max_dist": 1000}, {"split": 5}],
     ids=["pairs_matching", "max_dist", "split"],
 )
 def test_legacy_options_solve_the_same_system(legacy):
+    """Nine cells in five chunks leave one chunk with a single cell."""
+
     def scene():
         magnet = magpy.magnet.Cuboid(
             dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 1), position=(0, 0, 0.012)
