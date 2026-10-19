@@ -35,6 +35,8 @@ repos:
       - id: prettier
         types_or: [yaml, markdown, html, css, scss, javascript, json]
         args: [--prose-wrap=always]
+        # copied verbatim from magpylib, kept identical for comparison
+        exclude: ^docs/_static/webcode/
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.16.2"
