@@ -1,0 +1,19 @@
+# mom/kern_dropin.py on 2026-10-20: #52's tetrahedron assembly with another library's kernel, U-core, apply_demag end to end.
+# kern-venv: magpylib 6.0.0, pymagba 0.7.0 (magba, Rust + Rayon), magpylib-jax 3.0.0, jax 0.12.0 CPU float64. Stock = #52 at 4901d1d via magpy.getH.
+# Reference for the peaks: tet_uniform.txt (same meshes): 2.155450640765695 (417), 2.1416419114236094 (989), 2.1442487702906043 (1,928), 2.147974289042102 (4,016).
+{"kernel": "stock", "cells": 417, "peak_mT": 2.155450640765695, "solve_s": 0.46}    peak RSS 956 MB
+{"kernel": "pymagba", "rayon": "1", "pool": "-", "cells": 417, "peak_mT": 2.1554506407657104, "solve_s": 0.21}    peak RSS 423 MB
+{"kernel": "jax", "cells": 417, "peak_mT": 2.1554506407657112, "solve_s": 0.58}    peak RSS 968 MB
+{"kernel": "stock", "cells": 989, "peak_mT": 2.1416419114236094, "solve_s": 2.35}    peak RSS 1211 MB
+{"kernel": "pymagba", "rayon": "1", "pool": "-", "cells": 989, "peak_mT": 2.141641911423531, "solve_s": 0.83, "cpu_over_wall": 1.1}    peak RSS 1018 MB
+{"kernel": "pymagba", "rayon": "1", "pool": "12", "cells": 989, "peak_mT": 2.141641911423531, "solve_s": 0.77, "cpu_over_wall": 1.2}    peak RSS 991 MB
+{"kernel": "jax", "cells": 989, "peak_mT": 2.14164191142334, "solve_s": 1.34}    peak RSS 1140 MB
+{"kernel": "stock", "cells": 1928, "peak_mT": 2.1442487702906043, "solve_s": 9.22}    peak RSS 2763 MB
+{"kernel": "pymagba", "rayon": "1", "pool": "-", "cells": 1928, "peak_mT": 2.1442487702908846, "solve_s": 2.54, "cpu_over_wall": 1.3}    peak RSS 2515 MB
+{"kernel": "pymagba", "rayon": "1", "pool": "12", "cells": 1928, "peak_mT": 2.1442487702908846, "solve_s": 2.7, "cpu_over_wall": 1.3}    peak RSS 2497 MB
+{"kernel": "pymagba", "rayon": "1", "pool": "-", "cells": 4016, "peak_mT": 2.147974289042353, "solve_s": 12.89, "cpu_over_wall": 1.9}    peak RSS 7561 MB
+{"kernel": "pymagba", "rayon": "1", "pool": "12", "cells": 4016, "peak_mT": 2.147974289042353, "solve_s": 13.89, "cpu_over_wall": 1.8}    peak RSS 7578 MB
+# raw kernels, one source x 1e6 points (ns/point): magpylib cuboid 460, tet 814; pymagba 1 thread cuboid 218, tet 136; pymagba Rayon all cores cuboid 22, tet 15.
+# per pair, n = 1e5 distinct pairs: magpylib cuboid 466 ns, tet 726 ns; magpylib_jax jit cuboid 45 ns wall (cpu/wall 7.5), tet 275 ns wall.
+# agreement with magpylib: pymagba cuboid exact (same position/dimension conventions), tet 1e-14; magpylib_jax cuboid 1e-16 rel, tet 2e-12 rel, same edge/corner values as magpylib.
+# pymagba returns 0 on cuboid edges and corners; magpylib 6.0.0 tetrahedron_field returns nan/inf at a vertex.
