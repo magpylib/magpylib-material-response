@@ -14,11 +14,11 @@ field $\mathbf{H}$ at the cell as
 $$\mathbf{J} = \mathbf{J}^{(0)} + \chi \, \mu_0 \mathbf{H}$$
 
 where $\mathbf{J}^{(0)}$ is the remanent polarization (zero for a soft material)
-and $\chi$ the susceptibility: a scalar, or a 3-vector
-$(\chi_x, \chi_y, \chi_z)$ along the **cell's own axes**, which turn with its
-orientation like its polarization. A cell rotated by $R$ responds with the
-tensor $R\,\operatorname{diag}(\chi_x, \chi_y, \chi_z)\,R^\mathsf{T}$ in the
-global frame.
+and $\chi$ the susceptibility: a scalar, or a 3-vector $(\chi_x, \chi_y,
+\chi_z)$ along the **cell's own axes**, which turn with its orientation like its
+polarization. A cell rotated by $R$ responds with the tensor
+$R\,\operatorname{diag}(\chi_x, \chi_y, \chi_z)\,R^\mathsf{T}$ in the global
+frame.
 
 The field at a cell has three parts, all handled as $\mu_0 \mathbf{H}$ in tesla:
 
@@ -28,8 +28,8 @@ The field at a cell has three parts, all handled as $\mu_0 \mathbf{H}$ in tesla:
 | Currents      | $\mu_0 \mathbf{H}_\text{cur}$ | The current sources (`magpylib.current.*`) in the collection |
 | Demagnetizing | $\mu_0 \mathbf{H}_\text{d}$   | The polarization of all cells, the cell itself included      |
 
-Inside a polarized cell this is not the flux density:
-$\mathbf{B} = \mu_0 \mathbf{H} + \mathbf{J}$.
+Inside a polarized cell this is not the flux density: $\mathbf{B} = \mu_0
+\mathbf{H} + \mathbf{J}$.
 
 Self-consistency requires, for every cell $i$ at once,
 
@@ -101,8 +101,8 @@ does.
 
 ## 4. Solving the system
 
-1. Assemble the full $3N \times 3N$ matrix
-   $\mathbf{Q} = \mathbf{I} - \mathbf{S}\,\mathbf{T}$.
+1. Assemble the full $3N \times 3N$ matrix $\mathbf{Q} = \mathbf{I} -
+   \mathbf{S}\,\mathbf{T}$.
 2. Build the right-hand side from the remanent polarizations, `H_ext`, and the
    field of the current sources at the cell centroids.
 3. Call `numpy.linalg.solve(Q, rhs)` and write each cell's polarization back,
