@@ -60,6 +60,7 @@ repos:
     rev: "v2.4.3"
     hooks:
       - id: codespell
+        exclude: ^explorations/
         additional_dependencies:
           - tomli; python_version<'3.11'
 
@@ -67,6 +68,7 @@ repos:
     rev: "v0.11.0.1-1"
     hooks:
       - id: shellcheck
+        exclude: ^explorations/
 
   - repo: local
     hooks:
