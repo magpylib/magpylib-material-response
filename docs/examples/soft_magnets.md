@@ -182,3 +182,6 @@ display(fig1, fig2)
 Without the material response the field is off by up to 24 mT. With it, the RMS
 deviation from FEM falls from 1.8 mT with 2 cells to 0.11 mT with 466, and the
 largest from 14 mT to 1.0 mT.
+
+For larger meshes, the [iterative solver](solver_performance.md) avoids storing
+the dense interaction matrix.
