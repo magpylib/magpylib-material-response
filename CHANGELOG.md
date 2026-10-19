@@ -6,14 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-19
 
 ### Added
 
 - Serialization (`to_json` / `from_json`) now supports `magnet.Sphere`,
   `magnet.Tetrahedron`, and `magnet.TriangularMesh` — demagnetized tetrahedral
-  meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded.
-
+  meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded
+  ([#55](https://github.com/magpylib/magpylib-material-response/pull/55)).
 - `mesh_TriangularMesh()` — meshes a `magnet.TriangularMesh` into conforming
   tetrahedral cells using [TetGen](https://tetgen.pyvista.org/). Quality and
   cell count are controlled via `target_elems`, `minratio`, and `mindihedral`.
@@ -26,6 +26,10 @@ and this project adheres to
   in addition to `magnet.Cuboid` and `magnet.Cylinder`.
 - Optional dependency group `tetgen` (`tetgen>=0.8.3`).
   ([#41](https://github.com/magpylib/magpylib-material-response/pull/41)).
+- Documentation: a page on the method, a quickstart, an API reference and new
+  examples
+  ([#53](https://github.com/magpylib/magpylib-material-response/pull/53),
+  [#65](https://github.com/magpylib/magpylib-material-response/pull/65)).
 
 ### Changed
 
@@ -49,7 +53,9 @@ and this project adheres to
   no longer gets up to twice the requested cells. The count follows the request
   less closely; a triple still sets the divisions. The cells are the ones
   magpylib's force mesher produces
-  ([magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
+  ([#56](https://github.com/magpylib/magpylib-material-response/pull/56),
+  [#57](https://github.com/magpylib/magpylib-material-response/pull/57),
+  [magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
 
 ### Fixed
 
@@ -57,12 +63,15 @@ and this project adheres to
   lies inside it. Demagnetization matches the field at the centroid, and for
   wide sectors of a thin ring that point lay outside the material: in a
   transverse field, a 4-5 mm tube meshed with 12 cells came out with the wrong
-  sign. Thin rings can now get more cells than `target_elems`.
+  sign. Thin rings can now get more cells than `target_elems`
+  ([#51](https://github.com/magpylib/magpylib-material-response/pull/51)).
 - `apply_demag` refuses objects whose dimension, polarization, current or other
-  property varies along a path (with magpylib versions that allow this), not
-  only position paths, instead of failing inside the solver.
+  property varies along a path, not only position paths, instead of failing
+  inside the solver
+  ([#51](https://github.com/magpylib/magpylib-material-response/pull/51)).
 - `to_json` writes a path-valued `current` or `diameter`, and a susceptibility
-  given as a numpy array, instead of raising.
+  given as a numpy array, instead of raising
+  ([#51](https://github.com/magpylib/magpylib-material-response/pull/51)).
 - The legacy options run again: `split` no longer crashes when a chunk holds a
   single cell; `max_dist` no longer crashes, and refuses negative values and the
   `pairs_matching` or `split` it silently ignored; `pairs_matching=True`
