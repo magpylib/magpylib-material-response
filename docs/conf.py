@@ -133,25 +133,27 @@ html_static_path = ["_static"]
 html_css_files = ["fullwidth.css"]
 
 # ── Fix MathJax on pages with plotly figures ────────────────────────────────
-# The plotly "sphinx_gallery" renderer embeds MathJax *v2* synchronously in
-# the page body (for TeX in chart labels). Sphinx's own MathJax v3 loads
-# deferred in <head>, so on any page with a plotly figure the v2 script runs
-# first, clobbers ``window.MathJax``, and v3 never typesets the page math —
-# raw ``\(...\)`` delimiters appear. We use no TeX inside chart labels, so
-# strip the injected v2 tags at build time; plotly is unaffected
+# The plotly "sphinx_gallery" renderer embeds a MathJax script (v2 in older
+# plotly, v3 tex-svg in newer) synchronously in the page body with every figure,
+# for TeX in chart labels. Sphinx's own MathJax loads deferred in <head>; on a
+# page with plotly figures the injected copies run first and fight it, and the
+# page math can stay as raw ``\(...\)`` delimiters. We use no TeX inside chart
+# labels, so strip the injected tags at build time; plotly is unaffected
 # (``PlotlyConfig.MathJaxConfig = 'local'`` is set by the renderer itself).
-_PLOTLY_MATHJAX2_SCRIPTS = re.compile(
-    r'<script src="https://[^"]*/mathjax/2[^"]*"></script>'
+_PLOTLY_MATHJAX_SCRIPTS = re.compile(
+    r'<script src="https://[^"]*/mathjax/[23][^"]*"></script>'
     r"(\s*<script>if \(window\.MathJax.*?</script>)?",
     re.DOTALL,
 )
 
 
-def _strip_plotly_mathjax2(_app, _pagename, _templatename, context, _doctree):
+def _strip_plotly_mathjax(_app, _pagename, _templatename, context, _doctree):
     body = context.get("body")
-    if body and "/mathjax/2" in body:
-        context["body"] = _PLOTLY_MATHJAX2_SCRIPTS.sub("", body)
+    if body and "/mathjax/" in body:
+        context["body"] = _PLOTLY_MATHJAX_SCRIPTS.sub("", body)
 
 
 def setup(app):
-    app.connect("html-page-context", _strip_plotly_mathjax2)
+    app.connect("html-page-context", _strip_plotly_mathjax)
+    # Fit plotly figures to their container and follow the dark theme.
+    app.add_js_file("webcode/plotlySync.js")

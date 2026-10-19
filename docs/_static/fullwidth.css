@@ -22,3 +22,18 @@
 .cell_output {
   max-width: 100% !important;
 }
+
+/*
+Dark mode paints a light panel behind notebook html outputs. Plotly figures
+follow the page theme themselves (webcode/plotlySync.js, which tags their outputs
+with this class), so for those the panel goes. Same rule as magpylib's
+docs/_static/custom.css; `body` is in the selector only to outweigh the theme's.
+*/
+html[data-theme="dark"]
+  body
+  .bd-content
+  div.cell_output
+  div.text_html.magpy-plotly-output {
+  background: none;
+  padding: 0;
+}
