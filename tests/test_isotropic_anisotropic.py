@@ -27,14 +27,16 @@ def test_isotropic_susceptibility():
     np.testing.assert_allclose(field_ansys, field_magpylib, rtol=0, atol=0.0012)
 
 
+@pytest.mark.parametrize("solver", ["direct", "iterative"])
 @pytest.mark.parametrize(
     "rotation",
     [R.identity(), R.from_rotvec((0.3, -0.5, 0.8))],
     ids=["unrotated", "rotated"],
 )
-def test_anisotropic_susceptibility(rotation):
-    """The susceptibility acts along the magnet's own axes (#50): rotating the
-    magnet and the grid together rotates the reference field."""
+def test_anisotropic_susceptibility(rotation, solver):
+    """The susceptibility acts along the magnet's own axes (#50) in both
+    solvers: rotating the magnet and the grid together rotates the reference
+    field."""
     cells = 1000  # should be >=1000, otherwise discretization error too large
 
     magnet = magpy.magnet.Cuboid(dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, 1.1))
@@ -47,7 +49,7 @@ def test_anisotropic_susceptibility(rotation):
     magnet.susceptibility = (0.3, 0.2, 0.1)
     magnet_meshed = meshing.mesh_Cuboid(magnet, cells)
 
-    demag.apply_demag(magnet_meshed, inplace=True)
+    demag.apply_demag(magnet_meshed, inplace=True, solver=solver)
 
     field_magpylib = rotation.inv().apply(magnet_meshed.getB(rotation.apply(grid)))
 

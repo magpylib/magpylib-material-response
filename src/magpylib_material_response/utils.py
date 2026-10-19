@@ -16,7 +16,7 @@ from magpylib_material_response import logging_config
 
 
 class ElapsedTimeThread(threading.Thread):
-    """ "Stoppable thread that logs the time elapsed"""
+    """Stoppable thread that logs the time elapsed."""
 
     def __init__(self, msg=None, min_log_time=None):
         super().__init__()
@@ -36,12 +36,12 @@ class ElapsedTimeThread(threading.Thread):
     def stopped(self):
         return self._stop_event.is_set()
 
-    def getStart(self):
-        return self.thread_start
-
     def run(self):
         self.thread_start = time.time()
-        while not self.stopped():
+        # Event.wait returns immediately when stop() is set, so joining the
+        # thread never blocks on the poll interval (a plain time.sleep here
+        # would stall every timelog exit by up to min_log_time/5 seconds).
+        while not self._stop_event.wait(max(0.01, self.min_log_time / 5)):
             if (
                 self.msg is not None
                 and time.time() - self.thread_start > self.min_log_time
@@ -49,8 +49,6 @@ class ElapsedTimeThread(threading.Thread):
             ):
                 logger.info("Starting: {operation}", operation=self.msg)
                 self._msg_displayed = True
-            # include a delay here so the thread doesn't uselessly thrash the CPU
-            time.sleep(max(0.01, self.min_log_time / 5))
 
 
 def format_duration(seconds):
@@ -88,8 +86,12 @@ def timelog(msg, min_log_time=None):
     if min_log_time is None:
         min_log_time = logging_config.DEFAULT_MIN_LOG_TIME
     start = time.perf_counter()
-    thread_timer = ElapsedTimeThread(msg=msg, min_log_time=min_log_time)
-    thread_timer.start()
+    # The watchdog thread only exists to emit "Starting: ..." during long
+    # steps; skip it entirely while the package is silent (the default).
+    thread_timer = None
+    if logging_config._package_logging_enabled():
+        thread_timer = ElapsedTimeThread(msg=msg, min_log_time=min_log_time)
+        thread_timer.start()
     try:
         yield
     except Exception:
@@ -104,8 +106,9 @@ def timelog(msg, min_log_time=None):
                 duration=format_duration(end),
             )
     finally:
-        thread_timer.stop()
-        thread_timer.join()
+        if thread_timer is not None:
+            thread_timer.stop()
+            thread_timer.join()
 
 
 def _serialize_recursive(obj, parent="warn"):
@@ -144,16 +147,18 @@ def _serialize_recursive(obj, parent="warn"):
             f"object parent ({obj.parent}) not included in serialization", stacklevel=2
         )
 
-    if isinstance(obj, BaseMagnet):
-        dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
-    # Material attributes may sit on a magnet or on a parent Collection; np.asarray
-    # covers scalars, tuples and numpy arrays alike.
+    # Material attributes may sit on any object (per-magnet or on a parent
+    # Collection for hierarchy lookup); np.asarray handles scalars, tuples
+    # and numpy arrays alike.
     susceptibility = getattr(obj, "susceptibility", None)
     if susceptibility is not None:
         dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
     h_ext = getattr(obj, "H_ext", None)
     if h_ext is not None:
         dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
+
+    if isinstance(obj, BaseMagnet):
+        dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
 
     # A scalar, or one value per path step where magpylib allows the property to
     # vary along a path; .tolist() writes either as JSON.

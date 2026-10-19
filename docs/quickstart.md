@@ -83,6 +83,27 @@ material response: their field at each cell's centroid adds to the applied
 field. The [U-core electromagnet example](examples/ucore_electromagnet.md)
 builds a coil-driven soft core this way.
 
+## Large meshes and the two interaction rules
+
+For meshes too large for the dense solver, `solver="iterative"` solves the same
+system matrix-free with GMRES, using FFT products on grids of identical cuboids
+(see [solvers and performance](examples/solver_performance.md)).
+
+By default each cell's field is taken at the centroids of the others (point
+matching). With `interaction="newell"` it is averaged over each cell instead:
+
+```{code-cell} ipython3
+coll_point = apply_demag(mesh, susceptibility=0.3)
+coll_newell = apply_demag(mesh, susceptibility=0.3, interaction="newell")
+```
+
+Both converge to the same answer, and at equal cell count neither is more
+accurate in general. The Newell rule needs cuboid cells with one orientation. In
+return, for a soft body with positive susceptibility in a uniform applied field,
+its induced moment along the field never exceeds the converged value and rises
+each time every cell is split into smaller ones, so a convergence study knows
+which side the answer lies on (see the [method page](method.md)).
+
 ## Meshing helpers
 
 - `mesh_Cuboid` — a grid of cuboid cells; `slice_Cuboid` cuts a cuboid in two,

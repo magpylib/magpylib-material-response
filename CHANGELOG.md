@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `apply_demag(..., solver="iterative")`: a matrix-free GMRES solver next to the
+  dense direct solver (`solver="direct"`, the default), with `solver_tol` and
+  `max_iter` (iterations). Both solvers apply the same interaction rule. GMRES
+  stops at a residual below `solver_tol`; measured against the direct solver,
+  the polarization agrees to about 2 × `solver_tol` for hard magnets and 35 ×
+  `solver_tol` for soft iron at χ = 1000. GMRES that does not converge raises.
+  Boxes of cuboid cells on a uniform grid use FFT products (`demag_fft` module):
+  32,768 cells of soft iron solve in about 4 s. Grids with holes, such as
+  voxelized round bodies, and other cell types use dense blocks
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `apply_demag(..., interaction="newell")`: cells act on each other through the
+  field averaged over each cell, the volume-averaged Newell tensor (`newell`
+  module, generalized to cells of different sizes), instead of the field at each
+  cell's centroid, which stays the default (`interaction="point"`). It is the
+  Galerkin form of the problem: for a soft body with positive susceptibility in
+  a uniform field, the induced moment along the field never exceeds the
+  converged value and rises each time every cell is split, so a mesh study knows
+  which side the answer is on. At equal cell count neither rule is more accurate
+  in general. It needs every cell to be a cuboid, all with one orientation, and
+  raises otherwise instead of mixing the two rules, which would make results
+  jump when a body turns slightly. `demag_tensor` takes the same argument
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- Cuboid cells sharing a shape and orientation are fast under either rule: each
+  distinct displacement is computed once, reverse blocks follow by reciprocity,
+  and uniform grids use FFT products. Far apart, where the closed forms lose
+  precision, both rules switch to a far-field expansion
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `demag_fft.analyze_collection(sources)`: splits a collection into grid, loose
+  and generic clusters covering every cell once
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `scipy>=1.12` dependency
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
+### Changed
+
+- The direct solver assembles in place (about 2-3x less peak memory), derives
+  reverse blocks by reciprocity, and every block is built in chunks of at most
+  200,000 (observer, source) pairs. 1,757 tetrahedra: 16.8 s and 7.7 GB before,
+  7.5 s and 1.7 GB after
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `timelog` no longer blocks on exit and skips its watchdog thread while package
+  logging is silent (a 27-cell solve went from about 0.5 s to 5 ms)
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
+### Fixed
+
+- Meshing edge cases (thin segments, empty voxel grids), scale-relative
+  tolerances in inside-masks and in `trimesh_from_model3d`, and a latent import
+  error in `get_dataset`
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
 ## [0.5.0] - 2026-10-19
 
 ### Added

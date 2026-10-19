@@ -9,6 +9,9 @@ Executable examples, in suggested reading order:
 - [U-core electromagnet](ucore_electromagnet.md) — current sources driving a
   soft core: a swept multi-turn coil built with the polyline helpers, the field
   on a plane above the poles, and a cuboid- vs tetrahedral-mesh comparison.
+- [Solvers and performance](solver_performance.md) — the direct and the
+  iterative solver: their agreement, their time and memory as meshes grow, and
+  which interactions take the fast paths.
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
   `TriangularMesh` magnet with TetGen, checked against the exact solution for a
   magnetized sphere.
@@ -20,5 +23,6 @@ Executable examples, in suggested reading order:
 cuboids_demagnetization
 soft_magnets
 ucore_electromagnet
+solver_performance
 tetrahedral_meshes
 ```

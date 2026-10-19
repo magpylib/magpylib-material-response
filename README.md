@@ -35,6 +35,11 @@ moments.
 - **`apply_demag`** solves a magpylib `Collection` for a scalar or anisotropic
   susceptibility per cell, driven by remanent polarizations, a uniform applied
   field and the current sources in the collection.
+- **Two solvers, two interaction rules**: a dense direct solver, or
+  `solver="iterative"`, matrix-free GMRES with FFT products on grids of
+  identical cuboids, for meshes too large for a dense matrix. Cells interact
+  through the field at each other's centroids (default) or averaged over each
+  cell (`interaction="newell"`, cuboid meshes).
 - **Meshing helpers** cut cuboids, cylinders and, through TetGen, any closed
   triangular surface into cells.
 
