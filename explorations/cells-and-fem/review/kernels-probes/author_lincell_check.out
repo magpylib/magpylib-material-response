@@ -1,0 +1,13 @@
+10 of 300 points inside their cell
+uniform columns vs magpylib: max |diff| 4.2e-13 (scale 0.62); uniform-only call 4.2e-13
+  J_x = xi_x: max |diff| inside 6.1e-16, outside 3.0e-11
+  J_x = xi_y: max |diff| inside 1.2e-09, outside 7.8e-13
+  J_x = xi_z: max |diff| inside 7.6e-14, outside 4.2e-13
+  J_y = xi_x: max |diff| inside 2.1e-16, outside 3.0e-11
+  J_y = xi_y: max |diff| inside 1.2e-09, outside 3.1e-13
+  J_y = xi_z: max |diff| inside 2.1e-16, outside 4.5e-11
+  J_z = xi_x: max |diff| inside 4.4e-16, outside 4.1e-13
+  J_z = xi_y: max |diff| inside 2.4e-16, outside 7.8e-13
+  J_z = xi_z: max |diff| inside 7.6e-14, outside 4.5e-11
+linear columns vs slab quadrature: worst 1.2e-09; finite: True
+   peak RSS 94 MB

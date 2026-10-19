@@ -1,0 +1,9 @@
+uniform cuboid columns vs point dipole (rel): r | magpylib cuboid | lincell
+    r=   100: magpylib 1.4e-04 | lincell 1.4e-04  (dipole truncation ~ (h/r)^2 = 2e-04)
+    r=  1000: magpylib 1.4e-06 | lincell 1.4e-06  (dipole truncation ~ (h/r)^2 = 2e-06)
+    r= 10000: magpylib 3.7e-04 | lincell 2.0e-04  (dipole truncation ~ (h/r)^2 = 2e-08)
+uniform tet columns vs point dipole (rel): r | magpylib tetrahedron | lintet
+    r=   100: magpylib 4.1e-06 | lintet 4.1e-06
+    r=  1000: magpylib 3.3e-06 | lintet 4.0e-06
+    r= 10000: magpylib 3.1e-03 | lintet 6.5e-03
+   peak RSS 84 MB

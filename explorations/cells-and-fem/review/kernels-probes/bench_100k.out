@@ -1,0 +1,10 @@
+magpylib 6.0.0rc0, jax 0.12.0, devices [CpuDevice(id=0)], cpu_count 14, XLA_FLAGS=
+numpy, per pair: magpylib H 3 calls  1552 ns (median 1558) | 1 call 3n pairs  1529 | B 3 calls  1538 | core 3 calls  1339 | this uniform 3x3   880 (median 882) | linear 3x12  1700 (median 1723)
+jit, per pair: uniform   67 ns (median 69) | linear   85 ns (median 91) | jit vs numpy max diff 1e-10
+reference: jnp elementwise op on the (n,3,12) output    5 ns/pair; numpy same    5 ns/pair
+   peak RSS 805 MB
+magpylib 6.0.0rc0, jax 0.12.0, devices [CpuDevice(id=0)], cpu_count 14, XLA_FLAGS=--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1
+numpy, per pair: magpylib H 3 calls  1560 ns (median 1573) | 1 call 3n pairs  1543 | B 3 calls  1540 | core 3 calls  1332 | this uniform 3x3   859 (median 864) | linear 3x12  1747 (median 1755)
+jit, per pair: uniform   76 ns (median 83) | linear  106 ns (median 110) | jit vs numpy max diff 1e-10
+reference: jnp elementwise op on the (n,3,12) output    5 ns/pair; numpy same    6 ns/pair
+   peak RSS 769 MB

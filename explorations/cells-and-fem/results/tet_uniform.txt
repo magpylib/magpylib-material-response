@@ -1,0 +1,5 @@
+{"cells": 89, "peak_mT": 2.116063412028105, "pole_mT": 2.11039551977694, "solve_s": 0.03, "target": 50}    peak RSS 85 MB
+{"cells": 417, "peak_mT": 2.155450640765695, "pole_mT": 2.1496346362113603, "solve_s": 0.46, "target": 200}    peak RSS 953 MB
+{"cells": 989, "peak_mT": 2.1416419114236094, "pole_mT": 2.135246097580819, "solve_s": 2.34, "target": 500}    peak RSS 1213 MB
+{"cells": 1928, "peak_mT": 2.1442487702906043, "pole_mT": 2.1371897218461946, "solve_s": 9.03, "target": 1000}    peak RSS 2906 MB
+{"cells": 4016, "peak_mT": 2.147974289042102, "pole_mT": 2.14034012590288, "solve_s": 43.5, "target": 2000}    peak RSS 7310 MB

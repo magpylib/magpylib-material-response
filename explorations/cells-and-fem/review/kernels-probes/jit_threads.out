@@ -1,0 +1,3 @@
+numpy linear  : wall   1657 ns/pair, process CPU   1656 ns/pair, CPU/wall 1.0  (XLA_FLAGS=)
+jit linear    : wall     83 ns/pair, process CPU    752 ns/pair, CPU/wall 9.1  (XLA_FLAGS=)
+   peak RSS 641 MB

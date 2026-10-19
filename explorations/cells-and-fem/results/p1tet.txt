@@ -1,0 +1,5 @@
+{"case": "ucore", "basis": "p0", "cells": 89, "unknowns": 267, "peak_mT": 2.1160635459902157, "err_pct": -1.7155807714716365, "s": 0.02}    peak RSS 84 MB
+{"case": "ucore", "basis": "p1", "cells": 89, "unknowns": 1068, "peak_mT": 2.084017582704644, "err_pct": -3.2040138084234115, "s": 0.26}    peak RSS 209 MB
+{"case": "ucore", "basis": "p1", "cells": 417, "unknowns": 5004, "peak_mT": 2.121638994891524, "err_pct": -1.4566189088934478, "s": 5.29}    peak RSS 1820 MB
+{"case": "cube", "basis": "p1", "cells": 108, "unknowns": 1296, "err_pct": -1.0690382674189647, "s": 0.33}    peak RSS 362 MB
+{"case": "cube", "basis": "p1", "cells": 408, "unknowns": 4896, "err_pct": -0.8407530556081122, "s": 4.88}    peak RSS 1394 MB

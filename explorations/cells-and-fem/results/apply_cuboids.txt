@@ -1,0 +1,12 @@
+{"cells": 88, "solver": "direct", "peak_mT": 1.3778767786303483, "solve_s": 0.01}    peak RSS 85 MB
+{"cells": 297, "solver": "direct", "peak_mT": 1.6720344628059223, "solve_s": 0.08}    peak RSS 85 MB
+{"cells": 704, "solver": "direct", "peak_mT": 1.8327865957270408, "solve_s": 0.38}    peak RSS 446 MB
+{"cells": 1375, "solver": "direct", "peak_mT": 1.9266159525722897, "solve_s": 1.19}    peak RSS 963 MB
+{"cells": 2376, "solver": "direct", "peak_mT": 1.985053428705905, "solve_s": 3.53}    peak RSS 2156 MB
+{"cells": 3773, "solver": "direct", "peak_mT": 2.0235637965385, "solve_s": 9.27}    peak RSS 5140 MB
+{"cells": 88, "solver": "iterative", "peak_mT": 1.3778771266412866, "solve_s": 0.02}    peak RSS 82 MB
+{"cells": 297, "solver": "iterative", "peak_mT": 1.6720346993223816, "solve_s": 0.08}    peak RSS 86 MB
+{"cells": 704, "solver": "iterative", "peak_mT": 1.8327864468780932, "solve_s": 0.34}    peak RSS 390 MB
+{"cells": 1375, "solver": "iterative", "peak_mT": 1.9266161625483815, "solve_s": 1.14}    peak RSS 641 MB
+{"cells": 2376, "solver": "iterative", "peak_mT": 1.985053595917473, "solve_s": 12.57}    peak RSS 3261 MB
+GUARD: killed at 8231 MB

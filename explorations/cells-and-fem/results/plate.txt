@@ -1,0 +1,24 @@
+# plate.py output as printed in the session on 2026-10-19 (no tee at the time; copied from the log).
+# "main" = material-response main (0.4.1.dev19), "#52" = feat/demag-solver at 78d7eab (same solver code as 4901d1d).
+# guard.sh caps: 6 GB unless stated. Reference moment 0.5639 A m^2 (NGSolve order 4).
+main      cub  5 1   cells=   25  solve   1.2s  m_x=0.617116  Bx(+2mm)=27.3349 mT   peak RSS   96 MB
+main      cub 10 1   cells=  100  solve   1.2s  m_x=0.568724  Bx(+2mm)=21.4020 mT   peak RSS  114 MB
+main      cub 20 1   cells=  400  solve   1.2s  m_x=0.547129  Bx(+2mm)=18.6761 mT   peak RSS  289 MB
+main      cub 40 1   cells= 1600  solve   3.5s  m_x=0.541245  Bx(+2mm)=17.5839 mT   peak RSS 2529 MB
+main      cub 20 2   cells=  800  solve   1.2s  m_x=0.554930  Bx(+2mm)=18.9101 mT   peak RSS  830 MB
+main      cub 20 3   cells= 1200  solve   2.1s  m_x=0.558561  Bx(+2mm)=19.0195 mT   peak RSS 1734 MB
+main      cub 60 1   GUARD: killed at 7148 MB
+main      cub 40 2   GUARD: killed at 7392 MB
+main      tet 50     GUARD: killed at 7796 MB   (3,328 tets)
+main      tet 200    GUARD: killed at 6827 MB   (3,328 tets)
+main      tet 50 relaxed   GUARD: killed at 10316 MB (cap 10 GB; 1,728 tets)
+#52 direct    cub 20 3   cells= 1200  solve   0.8s  m_x=0.558561  Bx(+2mm)=19.0195 mT   peak RSS  584 MB
+#52 iterative cub 20 3   cells= 1200  solve   0.2s  m_x=0.558561  Bx(+2mm)=19.0195 mT   peak RSS  116 MB
+#52 iterative cub 40 3   cells= 4800  solve   1.1s  m_x=0.557012  Bx(+2mm)=18.0750 mT   peak RSS  166 MB
+#52 iterative cub 40 6   cells= 9600  solve   1.6s  m_x=0.559354  Bx(+2mm)=18.1761 mT   peak RSS  237 MB
+#52 iterative cub 40 12  cells=19200  solve   2.6s  m_x=0.559987  Bx(+2mm)=18.2042 mT   peak RSS  377 MB
+#52 iterative cub 80 6   cells=38400  solve   6.7s  m_x=0.560490  Bx(+2mm)=17.8711 mT   peak RSS  556 MB
+#52 iterative cub 80 12  cells=76800  solve  11.5s  m_x=0.561368  Bx(+2mm)=17.9216 mT   peak RSS 1000 MB
+#52 iterative tet 50 relaxed  cells= 1728  solve  10.2s  m_x=0.567344  Bx(+2mm)=18.2558 mT   peak RSS 2355 MB
+#52 direct    tet 50 relaxed  cells= 1728  solve   7.1s  m_x=0.567344  Bx(+2mm)=18.2558 mT   peak RSS 1672 MB
+#52 direct    tet 50          cells= 3328  solve  28.6s  m_x=0.564645  Bx(+2mm)=17.8870 mT   peak RSS 4094 MB

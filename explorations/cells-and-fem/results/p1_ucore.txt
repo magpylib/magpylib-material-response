@@ -1,0 +1,2 @@
+{"case": "ucore", "cells": 88, "unknowns": 1056, "basis": "p1", "colloc": "lsq8", "peak_mT": 2.0578897366667173, "err_pct": -4.417569128345688, "s": 6.5}    peak RSS 395 MB
+{"case": "ucore", "cells": 297, "unknowns": 3564, "basis": "p1", "colloc": "lsq8", "peak_mT": 2.105952793431318, "err_pct": -2.185193059390722, "s": 91.7}    peak RSS 1118 MB

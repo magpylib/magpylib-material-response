@@ -1,0 +1,25 @@
+B2/B3 TetGen counts (mesh only). one-surface: target -> cells; per-cuboid: total target -> per-body targets -> per-body cells
+   target    30: one-surface    53 cells (vol max/min   4.0, radius-edge median 1.03 max 1.28) | per-cuboid targets [14, 8, 8] -> cells [24, 12, 12] =    48 (vol max/min   1.2, r-e median 0.99 max 1.03)
+   target    40: one-surface    59 cells (vol max/min   3.0, radius-edge median 1.01 max 1.28) | per-cuboid targets [18, 11, 11] -> cells [24, 12, 12] =    48 (vol max/min   1.2, r-e median 0.99 max 1.03)
+   target    50: one-surface    89 cells (vol max/min   2.7, radius-edge median 1.02 max 1.07) | per-cuboid targets [23, 14, 14] -> cells [24, 24, 24] =    72 (vol max/min   1.7, r-e median 1.07 max 1.07)
+   target    60: one-surface    89 cells (vol max/min   2.7, radius-edge median 1.02 max 1.07) | per-cuboid targets [27, 16, 16] -> cells [52, 24, 24] =   100 (vol max/min   2.4, r-e median 1.07 max 1.27)
+   target    80: one-surface   123 cells (vol max/min   4.4, radius-edge median 1.07 max 1.50) | per-cuboid targets [36, 22, 22] -> cells [52, 24, 24] =   100 (vol max/min   2.4, r-e median 1.07 max 1.27)
+   target   100: one-surface   229 cells (vol max/min  10.0, radius-edge median 1.01 max 1.35) | per-cuboid targets [45, 27, 27] -> cells [52, 50, 50] =   152 (vol max/min   4.8, r-e median 1.08 max 1.35)
+   target   150: one-surface   317 cells (vol max/min  19.0, radius-edge median 0.91 max 1.24) | per-cuboid targets [68, 41, 41] -> cells [165, 91, 91] =   347 (vol max/min  21.8, r-e median 0.89 max 1.24)
+   target   200: one-surface   417 cells (vol max/min  20.3, radius-edge median 0.76 max 1.25) | per-cuboid targets [91, 55, 55] -> cells [175, 92, 92] =   359 (vol max/min   9.5, r-e median 0.87 max 1.24)
+   target   300: one-surface   483 cells (vol max/min  12.4, radius-edge median 0.76 max 1.35) | per-cuboid targets [136, 82, 82] -> cells [223, 120, 120] =   463 (vol max/min   9.0, r-e median 0.70 max 1.53)
+   target   500: one-surface   989 cells (vol max/min  22.5, radius-edge median 0.91 max 1.46) | per-cuboid targets [227, 136, 136] -> cells [487, 273, 273] =  1033 (vol max/min  15.3, r-e median 0.91 max 1.37)
+   target  1000: one-surface  1928 cells (vol max/min  29.9, radius-edge median 0.82 max 1.30) | per-cuboid targets [455, 273, 273] -> cells [896, 536, 536] =  1968 (vol max/min  25.7, r-e median 0.82 max 1.35)
+
+B6 #52 cluster structure of the uniform cuboid grids (positions only):
+   h 10.00 mm,    88 cells: ['loose(88)']; 9 n^2 = 6.97e+04 <= DENSE_BLOCK_MAX_ENTRIES 2e+07 -> dense block
+   h  6.67 mm,   297 cells: ['loose(297)']; 9 n^2 = 7.94e+05 <= DENSE_BLOCK_MAX_ENTRIES 2e+07 -> dense block
+   h  5.00 mm,   704 cells: ['loose(704)']; 9 n^2 = 4.46e+06 <= DENSE_BLOCK_MAX_ENTRIES 2e+07 -> dense block
+   h  4.00 mm,  1375 cells: ['loose(1375)']; 9 n^2 = 1.70e+07 <= DENSE_BLOCK_MAX_ENTRIES 2e+07 -> dense block
+   h  3.33 mm,  2376 cells: ['loose(2376)']; 9 n^2 = 5.08e+07 > DENSE_BLOCK_MAX_ENTRIES 2e+07 -> sparsified CSR
+   h  2.86 mm,  3773 cells: ['loose(3773)']; 9 n^2 = 1.28e+08 > DENSE_BLOCK_MAX_ENTRIES 2e+07 -> sparsified CSR
+
+B6 operator build and matvec timing at h = 10 and 6.67 (iterative path, no GMRES):
+   h 10.00: 88 cells, ops [('mat', 'ndarray', (264, 264))]; build 0.004 s, matvec 0.02 ms
+   h  6.67: 297 cells, ops [('mat', 'ndarray', (891, 891))]; build 0.043 s, matvec 0.03 ms
+   peak RSS 158 MB

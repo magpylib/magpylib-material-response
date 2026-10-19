@@ -1,0 +1,20 @@
+# fem/ngs_cube.py and fem/ngs_plate.py output as printed in the session log on 2026-10-19 (not tee'd at the time). Air sphere R = 100 mm (cube), 400 mm (plate).
+# tier 0: 10 mm cube, 1 T, mur = 1; error = |B_fem - B_magpylib| / |B_magpylib| at 30 probes 7.5..50 mm along (1,2,3)
+ngs_cube h=2.00mm grading=0.30 p=2 mur=1     tets=   7462 dofs=   10507  mesh 0.2s solve 0.1s  worst pointwise 14.955 %  near(7.5mm) 5.433 %  far(30-50mm) 14.955 %   peak RSS 182 MB
+ngs_cube h=1.00mm grading=0.30 p=2 mur=1     tets=  22945 dofs=   31216  mesh 0.5s solve 0.4s  worst pointwise 14.036 %  near(7.5mm) 1.086 %  far(30-50mm) 14.036 %   peak RSS 923 MB
+ngs_cube h=1.00mm grading=0.30 p=3 mur=1     tets=  22945 dofs=  104528  mesh 0.5s solve 0.7s  worst pointwise  2.808 %  near(7.5mm) 0.105 %  far(30-50mm)  2.808 %   peak RSS 1150 MB
+ngs_cube h=1.00mm grading=0.30 p=4 mur=1     tets=  22945 dofs=  246903  mesh 0.5s solve 1.0s  worst pointwise  0.312 %  near(7.5mm) 0.017 %  far(30-50mm)  0.312 %   peak RSS 1444 MB
+ngs_cube h=0.5/1 mm, grading 0.15/0.3, p=3/4: GUARD killed at 3.1-4.5 GB (cap 3 GB)
+# iron cube, chi = 1000, 10 mT: moment vs 0.02889 A m^2
+ngs_cube h=2.00mm grading=0.30 p=2 mur=1001  tets=   7462 dofs=   10507  solve 0.1s  moment 0.02983 A m^2 (+3.22 %)   peak RSS 151 MB
+ngs_cube h=2.00mm grading=0.30 p=3 mur=1001  tets=   7462 dofs=   34757  solve 0.2s  moment 0.02923 A m^2 (+1.15 %)   peak RSS 333 MB
+ngs_cube h=2.00mm grading=0.30 p=4 mur=1001  tets=   7462 dofs=   81621  solve 0.3s  moment 0.02905 A m^2 (+0.54 %)   peak RSS 431 MB
+ngs_cube h=1.00mm grading=0.30 p=2 mur=1001  tets=  22945 dofs=   31216  solve 0.5s  moment 0.02916 A m^2 (+0.93 %)   peak RSS 848 MB
+ngs_cube h=1.00mm grading=0.30 p=3 mur=1001  tets=  22945 dofs=  104528  solve 0.7s  moment 0.02898 A m^2 (+0.30 %)   peak RSS 1144 MB
+ngs_cube h=1.00mm grading=0.30 p=4 mur=1001  tets=  22945 dofs=  246903  solve 1.0s  moment 0.02893 A m^2 (+0.12 %)   peak RSS 1496 MB
+# plate 40x40x1 mm, chi = 1000, 10 mT along x
+ngs_plate h=2.00mm grading=0.30 p=2  tets=  29284 dofs=   39757  mesh 0.6s solve 0.6s  m_x=0.569986 A m^2  Bx(+2mm)=18.7688 mT   peak RSS 1146 MB
+ngs_plate h=2.00mm grading=0.30 p=3  tets=  29284 dofs=  133187  mesh 0.6s solve 1.1s  m_x=0.565264 A m^2  Bx(+2mm)=18.2675 mT   peak RSS 1280 MB
+ngs_plate h=2.00mm grading=0.30 p=4  tets=  29284 dofs=  314697  mesh 0.6s solve 1.4s  m_x=0.563921 A m^2  Bx(+2mm)=18.0008 mT   peak RSS 1731 MB
+ngs_plate h=1.00mm grading=0.30 p=2  tets=  75204 dofs=  101177  mesh 1.6s solve 2.1s  m_x=0.567417 A m^2  Bx(+2mm)=17.6288 mT   peak RSS 3546 MB
+ngs_plate h=1.00mm grading=0.30 p=3  tets=  75204 dofs=  340117  mesh 1.6s solve 3.6s  m_x=0.564315 A m^2  Bx(+2mm)=17.8071 mT   peak RSS 3860 MB

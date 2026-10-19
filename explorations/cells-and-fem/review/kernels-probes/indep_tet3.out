@@ -1,0 +1,8 @@
+inside random (bary >= 0.05)                : inside 30/30; kernel vs surface quad max|diff| 7.5e-02 (scale 0.89; rule self-consistency 4.6e-02); uniform cols 7.5e-02, linear cols 6.7e-03; finite True; magpylib uniform vs surface rule 7.5e-02
+inside, 1e-3 of a face (bary 1e-3)          : inside 30/30; kernel vs surface quad max|diff| 8.2e-02 (scale 0.93; rule self-consistency 2.2e-01); uniform cols 8.2e-02, linear cols 6.2e-03; finite True; magpylib uniform vs surface rule 8.2e-02
+inside, 1e-3 of an edge                     : inside 30/30; kernel vs surface quad max|diff| 8.5e-01 (scale 1.95; rule self-consistency 1.7e+00); uniform cols 8.5e-01, linear cols 3.9e-01; finite True; magpylib uniform vs surface rule 8.5e-01
+inside, 1e-3 of a vertex                    : inside 30/30; kernel vs surface quad max|diff| 5.6e-01 (scale 1.40; rule self-consistency 1.7e+00); uniform cols 5.6e-01, linear cols 4.1e-01; finite True; magpylib uniform vs surface rule 5.6e-01
+outside, 0.05 height beyond a face          : inside  0/30; kernel vs surface quad max|diff| 2.9e-02 (scale 0.29; rule self-consistency 7.3e-02); uniform cols 2.9e-02, linear cols 4.6e-03; finite True; surface rule vs 3D dipole GL(44) 1.9e-01; magpylib uniform vs surface rule 2.9e-02
+outside, beyond a vertex (c + 1.3 (v - c))  : inside  0/30; kernel vs surface quad max|diff| 2.9e-08 (scale 0.14; rule self-consistency 1.1e-06); uniform cols 2.9e-08, linear cols 1.2e-08; finite True; surface rule vs 3D dipole GL(44) 2.9e-08; magpylib uniform vs surface rule 2.9e-08
+flat tet (height 1e-3), observers z=+0.002, -0.002 (outside), z=0.0005 and (0.9,0.1,0.0003) (inside): max|diff| 1.8e-02 (scale 1.00); per point [0.01  0.006 0.018 0.007]; inside flags [False False  True False]
+   peak RSS 200 MB

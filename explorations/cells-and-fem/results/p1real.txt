@@ -1,0 +1,9 @@
+{"case": "cube", "basis": "p0", "cells": 27, "unknowns": 81, "err_pct": -8.830569367070161, "s": 0.0}    peak RSS 83 MB
+{"case": "ucore", "basis": "p0", "cells": 88, "unknowns": 264, "peak_mT": 1.3778767773968297, "err_pct": -36.00200755239993, "s": 0.01}    peak RSS 82 MB
+{"case": "cube", "basis": "p1", "cells": 8, "unknowns": 96, "err_pct": -3.8067572504615343, "s": 0.0}    peak RSS 83 MB
+{"case": "cube", "basis": "p1", "cells": 27, "unknowns": 324, "err_pct": -1.9064008972250357, "s": 0.01}    peak RSS 81 MB
+{"case": "cube", "basis": "p1", "cells": 64, "unknowns": 768, "err_pct": -1.1754606715543403, "s": 0.06}    peak RSS 81 MB
+{"case": "cube", "basis": "p1", "cells": 216, "unknowns": 2592, "err_pct": -0.6354680764165677, "s": 0.76}    peak RSS 754 MB
+{"case": "ucore", "basis": "p1", "cells": 88, "unknowns": 1056, "peak_mT": 2.1059605393077905, "err_pct": -2.184833288072896, "s": 0.16}    peak RSS 204 MB
+{"case": "ucore", "basis": "p1", "cells": 297, "unknowns": 3564, "peak_mT": 2.1303976744123485, "err_pct": -1.0498061118277557, "s": 1.62}    peak RSS 1196 MB
+{"case": "ucore", "basis": "p1", "cells": 704, "unknowns": 8448, "peak_mT": 2.139034162660835, "err_pct": -0.6486687105975331, "s": 10.68}    peak RSS 3685 MB

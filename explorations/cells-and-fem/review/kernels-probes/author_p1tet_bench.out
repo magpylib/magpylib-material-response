@@ -1,0 +1,2 @@
+n=200,000 pairs | magpylib tetrahedron 3x3: 2161 ns | this uniform 3x3: numpy 1347, jit 58 ns | linear 3x12: numpy 3146, jit 104 ns (jit vs numpy 1e-12)
+   peak RSS 1123 MB

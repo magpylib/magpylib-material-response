@@ -1,0 +1,13 @@
+# one-surface tets, small targets
+{"cells": 53, "peak_mT": 2.1219126523768908, "pole_mT": 2.116197285693659, "solve_s": 0.02, "target": 30}
+{"cells": 59, "peak_mT": 2.127368890181225, "pole_mT": 2.121759820565829, "solve_s": 0.02, "target": 40}
+{"cells": 123, "peak_mT": 2.1164763422067248, "pole_mT": 2.1108605728217493, "solve_s": 0.05, "target": 80}
+{"cells": 229, "peak_mT": 2.130914962774646, "pole_mT": 2.1089442788924266, "solve_s": 0.16, "target": 100}
+{"cells": 317, "peak_mT": 2.1572421889152547, "pole_mT": 2.145753122802321, "solve_s": 0.29, "target": 150}
+   peak RSS 630 MB
+# per-cuboid tets, small targets
+{"cells": 48, "peak_mT": 2.2455203360375764, "pole_mT": 2.22017925995886, "solve_s": 0.01, "target_total": 30}
+{"cells": 100, "peak_mT": 2.152006529327049, "pole_mT": 2.144998940996699, "solve_s": 0.04, "target_total": 60}
+{"cells": 152, "peak_mT": 2.1670700976748387, "pole_mT": 2.15999621303155, "solve_s": 0.07, "target_total": 100}
+{"cells": 347, "peak_mT": 2.150461489036273, "pole_mT": 2.1308168733928836, "solve_s": 0.33, "target_total": 150}
+   peak RSS 667 MB

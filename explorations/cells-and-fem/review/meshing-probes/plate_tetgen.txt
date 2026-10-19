@@ -1,0 +1,31 @@
+tetgen 0.8.4
+tetrahedralize signature: (self, plc: bool = True, psc: bool = False, refine: bool = False, quality: bool = True, nobisect: bool = False, cdt: bool = False, cdtrefine: int = 7, coarsen: bool = False, weighted: bool = False, brio_hilbert: bool = True, flipinsert: bool = False, metric: bool = False, varvolume: bool = False, fixedvolume: bool = False, regionattrib: bool = False, insertaddpoints: bool = False, diagnose: bool = False, convex: bool = False, nomergefacet: bool = False, nomergevertex: bool = False, noexact: bool = False, nostaticfilter: bool = False, zeroindex: bool = False, facesout: bool = False, edgesout: bool = False, neighout: bool = False, voroout: bool = False, meditview: bool = False, vtkview: bool = False, vtksurfview: bool = False, nobound: bool = False, nonodewritten: bool = False, noelewritten: bool = False, nofacewritten: bool = False, noiterationnum: bool = False, nojettison: bool = False, docheck: bool = False, quiet: bool = True, nowarning: bool = False, verbose: int = 0, vertexperblock: int = 4092, tetrahedraperblock: int = 8188, shellfaceperblock: int = 2044, supsteiner_level: int = 2, addsteiner_algo: int = 1, coarsen_param: int = 0, weighted_param: int = 0, fliplinklevel: int = -1, flipstarsize: int = -1, fliplinklevelinc: int = 1, opt_max_flip_level: int = 3, opt_scheme: int = 7, opt_iterations: int = 3, smooth_cirterion: int = 1, smooth_maxiter: int = 7, delmaxfliplevel: int = 1, order: int = 1, reversetetori: int = 0, steinerleft: int = 100000, unflip_queue_limit: int = 1000, no_sort: bool = False, hilbert_order: int = 52, hilbert_limit: int = 8, brio_threshold: int = 64, brio_ratio: float = 0.125, epsilon: float = 1e-08, facet_separate_ang_tol: float = 179.9, collinear_ang_tol: float = 179.9, facet_small_ang_tol: float = 15.0, maxvolume: float = -1.0, maxvolume_length: float = -1.0, minratio: float = 2.0, opt_max_asp_ratio: float = 1000.0, opt_max_edge_ratio: float = 100.0, mindihedral: float = 0.0, optmaxdihedral: float = 177.0, metric_scale: float = 1.0, smooth_alpha: float = 0.3, coarsen_percent: float = 1.0, elem_growth_ratio: float = 0.0, refine_progress_ratio: float = 0.333, switches: str = '', bgmeshfilename: str = '', bgmesh: Optional[ForwardRef('UnstructuredGrid')] = None) -> tuple[NDArray[numpy.float64], NDArray[numpy.int32], NDArray[numpy.float64], NDArray[numpy.int32]]
+plate volume 1600 mm^3; maxvolume at target 50/200/1000/5000: [32.0, 8.0, 1.6, 0.32] mm^3 -> cube-equivalent edge [3.17, 2.0, 1.17, 0.68] mm vs thickness 1 mm
+
+mesh_TriangularMesh counts: target -> [default (1.5,10), relaxed (2,5), quality=False]
+      50: [3328, 1728, 6]
+     200: [3328, 1728, 6]
+    1000: [3328, 1728, 6]
+    5000: [8412, 8678, 6]
+
+direct tetgen, maxvolume = V/50, quality=True, varying minratio x mindihedral:
+   minratio  1.5: mindihedral 10/5/1/0 -> [3328, 3328, 3328, 3234]
+   minratio  2.0: mindihedral 10/5/1/0 -> [1728, 1728, 1728, 1728]
+   minratio  3.0: mindihedral 10/5/1/0 -> [729, 729, 729, 729]
+   minratio  5.0: mindihedral 10/5/1/0 -> [552, 294, 294, 294]
+   minratio 10.0: mindihedral 10/5/1/0 -> [546, 132, 90, 90]
+   minratio 20.0: mindihedral 10/5/1/0 -> [573, 150, 84, 84]
+   minratio 50.0: mindihedral 10/5/1/0 -> [615, 132, 78, 78]
+
+direct tetgen, other switches:
+   quality=True only (no -a): 1728 tets
+   quality=True, maxvolume=V (fixedvolume): 1728 tets
+   quality=True, maxvolume=V/50, fixedvolume=False: 1728 tets
+   quality=False, maxvolume=V/50 fixedvolume: 6 tets
+   quality=False, maxvolume=V/1000 fixedvolume: 6 tets
+   quality=False, nobisect: 5 tets
+   quality=True, minratio=2, mindihedral=5, maxvolume=V/50: 1728 tets
+   quality=True, minratio=2, mindihedral=5, maxvolume=V/5000: 8678 tets
+   quality=True, minratio=1.5, mindihedral=10, maxvolume=V/5000: 8412 tets
+   quality=True, minratio=1.5, mindihedral=10, maxvolume=V/20000: 44705 tets
+   peak RSS 148 MB

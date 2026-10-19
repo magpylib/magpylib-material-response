@@ -1,0 +1,8 @@
+{"cells": 88, "solver": "direct", "peak_mT": 1.3778767786303483, "solve_s": 0.01}
+   peak RSS 85 MB
+{"cells": 88, "solver": "iterative", "peak_mT": 1.3778771266412866, "solve_s": 0.02}
+   peak RSS 86 MB
+{"cells": 297, "solver": "direct", "peak_mT": 1.6720344628059223, "solve_s": 0.08}
+   peak RSS 223 MB
+{"cells": 297, "solver": "iterative", "peak_mT": 1.6720346993223816, "solve_s": 0.08}
+   peak RSS 209 MB

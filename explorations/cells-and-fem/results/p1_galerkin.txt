@@ -1,0 +1,7 @@
+# p1real.py with COLLOC=galerkin (8 Gauss points, projected onto 1, xi) as printed in the session log on 2026-10-20 (not tee'd at the time).
+{"case": "cube", "basis": "p1", "colloc": "galerkin8", "cells": 27, "unknowns": 324, "err_pct_vs_0.02889": -2.1240680074639195, "s": 0.01}
+{"case": "cube", "basis": "p1", "colloc": "galerkin8", "cells": 64, "unknowns": 768, "err_pct_vs_0.02889": -1.3349739985752063, "s": 0.06}
+{"case": "ucore", "basis": "p1", "colloc": "galerkin8", "cells": 88, "unknowns": 1056, "peak_mT": 2.1284928283141484, "s": 0.15}
+{"case": "ucore", "basis": "p1", "colloc": "galerkin8", "cells": 297, "unknowns": 3564, "peak_mT": 2.139613273054806, "s": 1.46}
+# quadrature-converged Galerkin (reviewer `solver`, review/solver-probes/galerkin_*.log): cube 8/27/64 cells -3.57/-1.71/-1.05 % vs 0.02889 (216 pts/cell);
+# U-core 88 cells 216 pts/cell peak 2.1349 mT 3.8 s; 297 cells 125 pts/cell peak 2.1431 mT 20.5 s.

@@ -1,0 +1,7 @@
+S= 3: 0.4 on a sub-cell centre: False (offset 0.80 half-widths); self-field error at the 8 colloc points: uniform cols 5.0e-16, linear cols 1.1e+00 (rel to max |exact|); worst linear col 11
+S= 5: 0.4 on a sub-cell centre: True  (offset 0.00 half-widths); self-field error at the 8 colloc points: uniform cols 3.2e-15, linear cols 1.0e-02 (rel to max |exact|); worst linear col 7
+S= 7: 0.4 on a sub-cell centre: False (offset 0.80 half-widths); self-field error at the 8 colloc points: uniform cols 3.2e-15, linear cols 4.4e-01 (rel to max |exact|); worst linear col 3
+S= 9: 0.4 on a sub-cell centre: False (offset 0.40 half-widths); self-field error at the 8 colloc points: uniform cols 3.7e-15, linear cols 1.8e-01 (rel to max |exact|); worst linear col 3
+S=15: 0.4 on a sub-cell centre: True  (offset 0.00 half-widths); self-field error at the 8 colloc points: uniform cols 7.0e-15, linear cols 1.1e-03 (rel to max |exact|); worst linear col 11
+S=25: 0.4 on a sub-cell centre: True  (offset 0.00 half-widths); self-field error at the 8 colloc points: uniform cols 2.3e-14, linear cols 4.1e-04 (rel to max |exact|); worst linear col 11
+   peak RSS 219 MB

@@ -1,0 +1,17 @@
+=== emulation S sweep (cube 2 = 8 cells, cube 3 = 27 cells)
+S=3 {"case": "cube", "cells": 8, "unknowns": 96, "basis": "p1", "colloc": "lsq8", "moment": 0.026416712870518076, "err_pct": -8.561049254004583, "s": 0.0}
+S=3    peak RSS 82 MB
+S=5 {"case": "cube", "cells": 8, "unknowns": 96, "basis": "p1", "colloc": "lsq8", "moment": 0.0276500297966209, "err_pct": -4.292039471717201, "s": 0.1}
+S=5    peak RSS 83 MB
+S=7 {"case": "cube", "cells": 8, "unknowns": 96, "basis": "p1", "colloc": "lsq8", "moment": 0.0303140497009412, "err_pct": 4.9292132258262455, "s": 0.2}
+S=7    peak RSS 116 MB
+S=15 {"case": "cube", "cells": 8, "unknowns": 96, "basis": "p1", "colloc": "lsq8", "moment": 0.027774375243650565, "err_pct": -3.8616294785373317, "s": 1.6}
+S=15    peak RSS 406 MB
+S=25 {"case": "cube", "cells": 8, "unknowns": 96, "basis": "p1", "colloc": "lsq8", "moment": 0.02778451247061056, "err_pct": -3.826540427100855, "s": 7.3}
+S=25    peak RSS 1166 MB
+S=3 {"case": "cube", "cells": 27, "unknowns": 324, "basis": "p1", "colloc": "lsq8", "moment": 0.027495704301886616, "err_pct": -4.826222561832405, "s": 0.2}
+S=3    peak RSS 99 MB
+S=5 {"case": "cube", "cells": 27, "unknowns": 324, "basis": "p1", "colloc": "lsq8", "moment": 0.028261011992251738, "err_pct": -2.1771824428807873, "s": 0.7}
+S=5    peak RSS 120 MB
+S=7 {"case": "cube", "cells": 27, "unknowns": 324, "basis": "p1", "colloc": "lsq8", "moment": 0.029341875475101517, "err_pct": 1.564124178267634, "s": 1.8}
+S=7    peak RSS 212 MB

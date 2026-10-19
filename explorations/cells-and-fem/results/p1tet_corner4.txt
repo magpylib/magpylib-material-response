@@ -1,0 +1,13 @@
+# p1tet.py with COLLOC=corner4 (4 points at fraction FRAC from centroid to each vertex, square system) and corner4c (+ centroid, least squares),
+# as printed in the session log on 2026-10-20 (not tee'd at the time). Cube err_pct is vs 0.02889. The full f-sweep is in review/solver-probes/frac_sweep.log.
+{"case": "ucore", "colloc": "corner4", "frac": 0.4472136, "cells": 89, "unknowns": 1068, "peak_mT": 2.1353102787155502, "s": 0.13}
+{"case": "ucore", "colloc": "corner4", "frac": 0.4472136, "cells": 417, "unknowns": 5004, "peak_mT": 2.147347227541999, "s": 2.72}
+{"case": "cube", "colloc": "corner4", "frac": 0.4472136, "cells": 108, "unknowns": 1296, "err_pct_vs_0.02889": -0.5013634323301486, "s": 0.16}
+{"case": "cube", "colloc": "corner4", "frac": 0.4472136, "cells": 408, "unknowns": 4896, "err_pct_vs_0.02889": -0.44181948641169866, "s": 2.44}
+{"case": "ucore", "colloc": "corner4", "frac": 0.5, "cells": 89, "unknowns": 1068, "peak_mT": 2.1529054914642436, "s": 0.13}
+{"case": "ucore", "colloc": "corner4", "frac": 0.5, "cells": 417, "unknowns": 5004, "peak_mT": 2.155628991254512, "s": 2.71}
+{"case": "cube", "colloc": "corner4", "frac": 0.5, "cells": 108, "unknowns": 1296, "err_pct_vs_0.02889": 0.03670479364452639, "s": 0.16}
+{"case": "cube", "colloc": "corner4", "frac": 0.5, "cells": 408, "unknowns": 4896, "err_pct_vs_0.02889": -0.061570346662387365, "s": 2.46}
+{"case": "ucore", "colloc": "corner4c", "frac": 0.5, "cells": 89, "unknowns": 1068, "peak_mT": 2.139020621765334, "s": 0.17}
+{"case": "ucore", "colloc": "corner4c", "frac": 0.5, "cells": 417, "unknowns": 5004, "peak_mT": 2.148205124470008, "s": 3.45}
+{"case": "cube", "colloc": "corner4c", "frac": 0.5, "cells": 108, "unknowns": 1296, "err_pct_vs_0.02889": -0.2768655563146538, "s": 0.21}

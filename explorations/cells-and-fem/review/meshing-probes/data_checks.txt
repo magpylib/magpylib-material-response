@@ -1,0 +1,78 @@
+B1 uniform cuboid errors (%): [-36.   -22.34 -14.87 -10.51  -7.8   -6.01]
+B1 local order (error ~ h^p / N^(-p/3)):
+   h 10.00->6.67: p_h = 1.18   p_N = 1.18
+   h 6.67->5.00: p_h = 1.41   p_N = 1.41
+   h 5.00->4.00: p_h = 1.55   p_N = 1.55
+   h 4.00->3.33: p_h = 1.64   p_N = 1.64
+   h 3.33->2.86: p_h = 1.69   p_N = 1.69
+
+C6 Richardson on uniform cuboids, v = v_inf - c N^(-p/3):
+   cells [88, 297, 704, 1375, 2376, 3773]: v_inf 2.3007 mT (+6.86 % vs 2.153), p 0.97, predicted err of finest -12.05 % (true -6.01 %), max resid 5.9e-03
+   cells [297, 704, 1375, 2376, 3773]: v_inf 2.2176 mT (+3.00 % vs 2.153), p 1.23, predicted err of finest -8.75 % (true -6.01 %), max resid 1.2e-03
+   cells [704, 1375, 2376, 3773]: v_inf 2.1877 mT (+1.61 % vs 2.153), p 1.38, predicted err of finest -7.50 % (true -6.01 %), max resid 2.5e-04
+   cells [1375, 2376, 3773]: v_inf 2.1743 mT (+0.99 % vs 2.153), p 1.48, predicted err of finest -6.93 % (true -6.01 %), max resid 3.3e-11
+   cells [88, 297, 704, 1375, 2376]: v_inf 2.3393 mT (+8.65 % vs 2.153), p 0.92, predicted err of finest -15.14 % (true -7.80 %), max resid 3.8e-03
+   cells [297, 704, 1375, 2376]: v_inf 2.2349 mT (+3.80 % vs 2.153), p 1.17, predicted err of finest -11.18 % (true -7.80 %), max resid 7.6e-04
+   cells [704, 1375, 2376]: v_inf 2.1975 mT (+2.06 % vs 2.153), p 1.33, predicted err of finest -9.67 % (true -7.80 %), max resid 1.7e-12
+   fixed p=1.5, cells [1375, 2376, 3773]: v_inf 2.1712 (+0.84 %), pred err finest -6.80 %
+   fixed p=1.5, cells [2376, 3773]: v_inf 2.1716 (+0.86 %), pred err finest -6.82 %
+   fixed p=2.0, cells [1375, 2376, 3773]: v_inf 2.1234 (-1.38 %), pred err finest -4.70 %
+   fixed p=2.0, cells [2376, 3773]: v_inf 2.1302 (-1.06 %), pred err finest -5.01 %
+
+C2 uniform cell count at a given error (log-log interpolation between uniform points):
+   adaptive 242 cells, -16.50 %: uniform needs ~565 cells (interpolated, slope -0.47) -> ratio 2.33x
+   adaptive 620 cells, -14.22 %: uniform needs ~768 cells (interpolated, slope -0.52) -> ratio 1.24x
+   adaptive 1572 cells, -5.94 %: uniform needs ~3,854 cells (extrapolated, slope -0.56) -> ratio 2.45x
+   adaptive 3994 cells, -4.33 %: uniform needs ~6,760 cells (extrapolated, slope -0.56) -> ratio 1.69x
+
+C6 change between rounds vs true error (true = 2.153 - value):
+   cuboid residual:
+      242: |change| 0.4198 vs true 0.3553 -> true/change 0.8x
+      620: |change| 0.0492 vs true 0.3061 -> true/change 6.2x
+      1572: |change| 0.1782 vs true 0.1279 -> true/change 0.7x
+      3994: |change| 0.0347 vs true 0.0932 -> true/change 2.7x
+   cuboid targeted:
+      256: |change| 0.3648 vs true 0.4103 -> true/change 1.1x
+      536: |change| 0.0032 vs true 0.4135 -> true/change 129.2x
+      1628: |change| 0.2695 vs true 0.1440 -> true/change 0.5x
+      3770: |change| 0.0028 vs true 0.1412 -> true/change 50.4x
+      3994: |change| 0.0106 vs true 0.1306 -> true/change 12.3x
+   tet adaptive:
+      292: |change| 0.0099 vs true 0.0270 -> true/change 2.7x
+      593: |change| 0.0016 vs true 0.0254 -> true/change 15.9x
+      1377: |change| 0.0139 vs true 0.0115 -> true/change 0.8x
+      1496: |change| 0.0004 vs true 0.0111 -> true/change 27.3x
+   cuboid uniform:
+      297: |change| 0.2942 vs true 0.4810 -> true/change 1.6x
+      704: |change| 0.1608 vs true 0.3202 -> true/change 2.0x
+      1375: |change| 0.0938 vs true 0.2264 -> true/change 2.4x
+      2376: |change| 0.0584 vs true 0.1679 -> true/change 2.9x
+      3773: |change| 0.0385 vs true 0.1294 -> true/change 3.4x
+   tet uniform:
+      417: |change| 0.0394 vs true 0.0025 -> true/change 0.1x
+      989: |change| 0.0138 vs true 0.0114 -> true/change 0.8x
+      1928: |change| 0.0026 vs true 0.0088 -> true/change 3.4x
+      4016: |change| 0.0037 vs true 0.0050 -> true/change 1.3x
+
+C6 adjoint estimates vs true error (mT), residual.txt / targeted.txt:
+   residual    88: true 0.7751  signed +0.0305 (+0.04x)  abs 2.546 (3.3x)
+   residual   242: true 0.3553  signed -0.0119 (-0.03x)  abs 3.146 (8.9x)
+   residual   620: true 0.3061  signed +0.0011 (+0.00x)  abs 2.451 (8.0x)
+   residual  1572: true 0.1279  signed -0.0016 (-0.01x)  abs 2.332 (18.2x)
+   residual  3994: true 0.0932  signed -0.0055 (-0.06x)  abs 1.722 (18.5x)
+   targeted    88: true 0.7751  signed +0.0305 (+0.04x)  abs 2.546 (3.3x)
+   targeted   256: true 0.4103  signed -0.0130 (-0.03x)  abs 2.849 (6.9x)
+   targeted   536: true 0.4135  signed +0.0182 (+0.04x)  abs 2.251 (5.4x)
+   targeted  1628: true 0.1440  signed -0.0049 (-0.03x)  abs 2.089 (14.5x)
+   targeted  3770: true 0.1412  signed +0.0040 (+0.03x)  abs 1.588 (11.2x)
+   targeted  3994: true 0.1306  signed +0.0042 (+0.03x)  abs 1.552 (11.9x)
+
+C3 mesh-residual.npz region count:
+   cells: 1600  by size: {2.5: 1024, 5.0: 576}
+   total volume 88,000 mm^3 (expected 88,000)
+   junction blocks |x| in (30,50), |z|<10: 996 cells = 62 % of cells, 18 % of volume; 2.5 mm cells there: 992 of 1024
+   2.5 mm cells: 1024 total; in junction 992, in yoke outside junction 0, in legs z>10 32
+   5.0 mm cells: 576 total; in junction 4, in yoke outside junction 192, in legs z>10 380
+   2.5 mm cells by z band: {'-10..0': 512, '0..10': 480, '10..20': 0, '20..30': 0, '30..40': 0, '40..50': 0, '50..60': 0, '60..70': 32}
+   2.5 mm cells by |x| band: {'0..10': 0, '10..20': 0, '20..30': 0, '30..40': 544, '40..50': 480}
+   5 mm cells by z band: {'-10..0': 96, '0..10': 100, '10..20': 64, '20..30': 64, '30..40': 64, '40..50': 64, '50..60': 64, '60..70': 60}

@@ -1,0 +1,10 @@
+# kernel timings as printed in the session log on 2026-10-20, float64, Apple-silicon laptop (14 cores). jax 0.12.0 CPU, magpylib 6.0.0rc0.
+# NOTE (review `solver`): the jax.jit figures use ~9 cores (cpu/wall 8.8); per core jit is 1.2x NumPy (NPROC=1: 386 ns/pair vs 452). See review/solver-probes/bench_e1*.log.
+bench_pr854  n=   10,000  main    427 ns/pair | #854 numpy    432 (diff 0.0e+00) | jax eager    513 | jax jit     52 ns/pair ( 8.2x), max diff 1.1e-16
+bench_pr854  n=  100,000  main    423 ns/pair | #854 numpy    425 (diff 0.0e+00) | jax eager    166 | jax jit     43 ns/pair ( 9.9x), max diff 1.1e-16
+bench_pr854  n=1,000,000  main    426 ns/pair | #854 numpy    428 (diff 0.0e+00) | jax eager    123 | jax jit     38 ns/pair (11.2x), max diff 2.2e-16
+bench_lincell n=100,000 pairs | magpylib uniform 3x3 (three calls): 1437 ns | this uniform 3x3: numpy 810, jit 64 ns | linear 3x12: numpy 1603, jit 109 ns (jit vs numpy max diff 1e-10)
+bench_lincell n=500,000 pairs | magpylib uniform 3x3 (three calls): 1419 ns | this uniform 3x3: numpy 787, jit 70 ns | linear 3x12: numpy 1676, jit  86 ns (jit vs numpy max diff 1e-11)
+p1tet bench  n=200,000 pairs | magpylib tetrahedron 3x3 (three calls): 2134 ns | this uniform 3x3: numpy 1317, jit 61 ns | linear 3x12: numpy 3127, jit 101 ns (jit vs numpy 1e-12)
+split.py (#52 demag_tensor + LU): cub 1375 cells: assembly 0.96 s, LU 0.14 s; cub 2376: assembly 2.93 s, LU 0.54 s; tet 989: assembly 2.27 s, LU 0.09 s; tet 1928: assembly 8.95 s, LU 0.41 s
+# NOTE (review `solver`): on cuboid grids 92 % of that assembly is np.unique in _dedup_blocks, the kernel is 15 %; on tets 95 % is magpylib's tetrahedron kernel.

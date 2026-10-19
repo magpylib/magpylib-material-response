@@ -1,0 +1,8 @@
+inside random (bary >= 0.05)                : inside 30/30; kernel vs adapted surface quadrature max|diff| 4.2e-02 (scale 0.89); uniform cols 4.2e-02, linear cols 7.4e-03; finite True; magpylib uniform vs surface rule 4.2e-02
+inside, 1e-3 of a face (bary 1e-3)          : inside 30/30; kernel vs adapted surface quadrature max|diff| 1.4e-01 (scale 0.93); uniform cols 1.4e-01, linear cols 1.0e-02; finite True; magpylib uniform vs surface rule 1.4e-01
+inside, 1e-3 of an edge                     : inside 30/30; kernel vs adapted surface quadrature max|diff| 1.5e+00 (scale 2.51); uniform cols 1.5e+00, linear cols 6.6e-01; finite True; magpylib uniform vs surface rule 1.5e+00
+inside, 1e-3 of a vertex                    : inside 30/30; kernel vs adapted surface quadrature max|diff| 1.4e+00 (scale 1.80); uniform cols 1.4e+00, linear cols 1.3e+00; finite True; magpylib uniform vs surface rule 1.4e+00
+outside, 0.05 height beyond a face          : inside  0/30; kernel vs adapted surface quadrature max|diff| 2.8e-02 (scale 0.29); uniform cols 2.8e-02, linear cols 7.9e-03; finite True; surface rule vs 3D dipole GL(44) 1.9e-01; magpylib uniform vs surface rule 2.8e-02
+outside, beyond a vertex (c + 1.3 (v - c))  : inside  0/30; kernel vs adapted surface quadrature max|diff| 1.4e-06 (scale 0.14); uniform cols 1.4e-06, linear cols 6.1e-07; finite True; surface rule vs 3D dipole GL(44) 1.4e-06; magpylib uniform vs surface rule 1.4e-06
+flat tet (height 1e-3), observer at z=+0.002, -0.002 (outside) and z=0.0005 (inside): max|diff| 6.1e-03 (scale 1.00); per point [0.002 0.001 0.006]
+   peak RSS 205 MB

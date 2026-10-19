@@ -1,0 +1,8 @@
+cub     20 1  cells=   400  mesh   0.0s  solve    0.1s  m_x=0.547129 A m^2  Bx(+2mm)=18.6760 mT
+   peak RSS 105 MB
+cub     20 2  cells=   800  mesh   0.1s  solve    0.1s  m_x=0.554930 A m^2  Bx(+2mm)=18.9101 mT
+   peak RSS 110 MB
+cub     20 3  cells=  1200  mesh   0.1s  solve    0.2s  m_x=0.558561 A m^2  Bx(+2mm)=19.0195 mT
+   peak RSS 116 MB
+cub     20 3  cells=  1200  mesh   0.1s  solve    0.9s  m_x=0.558561 A m^2  Bx(+2mm)=19.0195 mT
+   peak RSS 593 MB

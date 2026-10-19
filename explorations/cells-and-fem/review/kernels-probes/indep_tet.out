@@ -1,0 +1,28 @@
+[1] outside points (57) random tets: linear tet kernel vs 3D dipole GL(40): max|diff| 3.6e-16 (scale 0.002); GL(40)-GL(28) 2.2e-17
+    per column: [1.507e-16 8.701e-17 8.977e-17 3.144e-16 3.558e-16 2.035e-16 2.412e-16 2.242e-16 2.459e-16 2.253e-16 2.206e-16 2.756e-16]
+    uniform cols vs magpylib 4.6e-15, magpylib vs GL 4.6e-15
+[2] inside points (40, >= 1/8 height from faces): tet kernel vs surface-charge 2D GL(80): max|diff| 4.1e-01 (scale 0.882); GL(80)-GL(56) 9.6e-01
+    per column: [0.409 0.225 0.351 0.042 0.038 0.088 0.021 0.035 0.046 0.027 0.054 0.058]
+    uniform cols vs magpylib inside 8.4e-15
+    staircase 512 sub-tets (magpylib tetrahedron kernel), 8 pts: max|diff| 3.8e-02, linear cols 3.8e-02
+    staircase 4096 sub-tets (magpylib tetrahedron kernel), 8 pts: max|diff| 1.7e-02, linear cols 1.7e-02
+[3] Kuhn box, 120 inside pts at 1e-3 h from box corners/faces/edges/internal faces/diagonal vs lincell: max|diff| 2.4e-11 (scale 1.08); corners 6.1e-12 faces 6.2e-15 edges 2.4e-11 internal 4.2e-15 diagonal 2.2e-15; finite True
+[4] flat tet: height 1e-3, volume 1.50e-04, scale 0.649
+    r=     3: uniform cols vs point dipole rel 1.6e-02; vs GL(24) all cols rel 2.2e-10, linear cols rel 5.6e-09; |linear| 2.19e-08
+    r=    10: uniform cols vs point dipole rel 1.4e-03; vs GL(24) all cols rel 9.2e-09, linear cols rel 7.9e-07; |linear| 1.75e-10
+    r=    30: uniform cols vs point dipole rel 1.6e-04; vs GL(24) all cols rel 2.4e-07, linear cols rel 6.4e-05; |linear| 2.15e-12
+    r=   100: uniform cols vs point dipole rel 1.4e-05; vs GL(24) all cols rel 3.5e-05, linear cols rel 3.1e-02; |linear| 1.70e-14
+    r=  1000: uniform cols vs point dipole rel 6.8e-05; vs GL(24) all cols rel 9.1e-02, linear cols rel 8.0e+02; |linear| 1.38e-15
+    linear-cols decay exponent 10->30->100: 4.01, 4.02 (expect 4)
+    flat tet near field (z=+0.5/-0.5 above/below): max rel diff vs GL(60) 1.3e-12; at z=+-0.002 (2x height): finite True, rel diff 1.0e+00 (GL(60) may not be converged here)
+[5] D10 tets (reference tet): non-finite count over 36 entries; vs dipole GL(48) where outside
+    in face plane z=0, outside the face (2, 2, 0)   : non-finite  0; vs GL max|diff| 4.2e-17 (scale 0.001); magpylib finite True
+    in face plane z=0, outside (-1, 0.3, 0)         : non-finite  0; vs GL max|diff| 1.0e-16 (scale 0.011); magpylib finite True
+    edge line extension (x axis) (3, 0, 0)          : non-finite 36; vs GL max|diff| inf (scale 0.001); magpylib finite True
+    edge line extension (-2, 0, 0)                  : non-finite 36; vs GL max|diff| inf (scale 0.002); magpylib finite True
+    on face z=0 (0.2, 0.3, 0)                       : non-finite  0
+    on edge (0.5, 0, 0)                             : non-finite 36
+    vertex (0, 0, 0)                                : non-finite 36
+    in plane of slanted face, outside (1, 1, -1)    : non-finite  0; vs GL max|diff| 4.7e-17 (scale 0.003); magpylib finite True
+[6] reversed vertex order: max|diff| 1.8e-15
+   peak RSS 358 MB

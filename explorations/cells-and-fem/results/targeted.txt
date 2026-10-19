@@ -1,0 +1,7 @@
+     88 cells  peak 1.3779 mT (-36.0 %)  solve  0.01s  indicator  0.06s  est_signed +0.0305  est_abs 2.546
+    256 cells  peak 1.7427 mT (-19.1 %)  solve  0.08s  indicator  0.26s  est_signed -0.0130  est_abs 2.849
+    536 cells  peak 1.7395 mT (-19.2 %)  solve  0.21s  indicator  0.89s  est_signed +0.0182  est_abs 2.251
+   1628 cells  peak 2.0090 mT (-6.7 %)  solve  1.78s  indicator  7.13s  est_signed -0.0049  est_abs 2.089
+   3770 cells  peak 2.0118 mT (-6.6 %)  solve 11.46s  indicator 36.67s  est_signed +0.0040  est_abs 1.588
+   3994 cells  peak 2.0224 mT (-6.1 %)  solve 12.16s  indicator 41.41s  est_signed +0.0042  est_abs 1.552
+  peak RSS 5747 MB

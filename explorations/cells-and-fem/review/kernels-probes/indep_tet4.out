@@ -1,0 +1,11 @@
+inside random (bary >= 0.05)        : inside 24/24; kernel vs 2x-graded surface quad max|diff| 2.7e-10 (scale 0.81; rule self-consistency 1.1e-08); uniform 2.7e-10, linear 4.9e-11; magpylib uniform vs rule 2.7e-10
+inside, 1e-3 of a face              : inside 24/24; kernel vs 2x-graded surface quad max|diff| 3.2e-10 (scale 0.86; rule self-consistency 2.6e-08); uniform 3.2e-10, linear 1.5e-10; magpylib uniform vs rule 3.2e-10
+inside, 1e-3 of an edge             : inside 24/24; kernel vs 2x-graded surface quad max|diff| 4.6e-10 (scale 1.20; rule self-consistency 3.9e-08); uniform 4.6e-10, linear 2.9e-10; magpylib uniform vs rule 4.6e-10
+inside, 1e-3 of a vertex            : inside 24/24; kernel vs 2x-graded surface quad max|diff| 8.6e-10 (scale 0.98; rule self-consistency 2.6e-08); uniform 8.6e-10, linear 7.0e-10; magpylib uniform vs rule 3.0e-09
+outside, 0.05 height beyond a face  : inside  0/24; kernel vs 2x-graded surface quad max|diff| 1.6e-10 (scale 0.24; rule self-consistency 1.6e-08); uniform 1.6e-10, linear 5.9e-11; magpylib uniform vs rule 1.6e-10; rule vs 3D dipole GL(44) 2.0e-01
+staircase (magpylib tet kernel) vs kernel, 6 inside pts: 512 sub-tets 6.2e-02, 4096 2.0e-02, 32768 1.0e-02; order 1.02; Richardson(4096, 32768) 3.2e-02; linear cols only 3.2e-02
+far-field precision, uniform cuboid columns vs point dipole (rel): r | magpylib | lincell
+    r=   100: magpylib 1.6e+00 | lincell 1.4e-04  (dipole truncation itself ~ (h/r)^2 = 2e-04)
+    r=  1000: magpylib 1.6e+00 | lincell 1.4e-06  (dipole truncation itself ~ (h/r)^2 = 2e-06)
+    r= 10000: magpylib 1.6e+00 | lincell 2.0e-04  (dipole truncation itself ~ (h/r)^2 = 2e-08)
+   peak RSS 305 MB

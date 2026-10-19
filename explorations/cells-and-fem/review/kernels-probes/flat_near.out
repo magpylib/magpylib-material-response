@@ -1,0 +1,4 @@
+flat tet (height 1e-3): observers z=+0.002, -0.002 (outside), (0.4,0.4,0.0005), (0.9,0.1,0.0003) (inside), (0.4,0.3,0.0012) (just above apex)
+  inside flags [False False  True False False]; kernel vs 2x-graded surface rule max|diff| per point [1.45744322e-10 2.83122198e-11 3.35964812e-10 2.23779273e-10
+ 1.33379301e-10] (scale 1.00; rule self-consistency 2.9e-08); magpylib uniform vs rule 3.4e-10; uniform cols vs magpylib 1.5e-10
+   peak RSS 112 MB
