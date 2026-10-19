@@ -45,6 +45,8 @@ import magpylib as magpy
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_all, mesh_TriangularMesh
@@ -158,7 +160,7 @@ magpy.show(system_meshed, plane_shown)
 
 ```{code-cell} ipython3
 def timed_demag(collection):
-    """apply_demag with wall-clock timing, quoted in the plot legends below."""
+    """apply_demag with wall-clock timing, quoted with the results below."""
     t0 = time.perf_counter()
     out = apply_demag(collection)
     return out, time.perf_counter() - t0
@@ -266,27 +268,28 @@ TetGen's cells near the surface come out about half the volume of those in the
 bulk. Solve both discretizations at the same refinement levels, up to a
 `target_elems` of 1000. The tetrahedral target is halved: `target_elems` sets
 TetGen's _maximum_ cell volume, and its quality refinement typically lands near
-twice the requested count. Every solve is timed, and the wall times end up in
-the plot legend. The comparison field is evaluated along the y = 0 line only —
+twice the requested count. Every solve is timed, and the wall times are printed
+with the results. The comparison field is evaluated along the y = 0 line only —
 that is all the plot below needs, and it keeps the field evaluation cheap:
 
 ```{code-cell} ipython3
 line = magpy.Sensor(pixel=pixel[:, iy])  # the y=0 row of the field plane
 
 targets = [100, 250, 500, 750, 1000]
-runs = {}
+runs = {"cuboids": [], "tetrahedra": []}  # (legend label, cells, B on the line)
 
 for target in targets:  # cuboid meshes
     meshed = mesh_all(system, target_elems=target)
     nc = sum(isinstance(s, magpy.magnet.Cuboid) for s in meshed.sources_all)
     demag_cub, t = timed_demag(meshed)
-    runs[f"cuboids: {nc} cells, {t:.1f} s"] = line.getB(demag_cub)
+    runs["cuboids"].append((f"cuboids: {nc} cells, {t:.1f} s", nc, line.getB(demag_cub)))
 
 for target in targets:  # tetrahedral meshes
     core_t = mesh_TriangularMesh(u_iron, target_elems=target // 2)
     core_t.susceptibility = 999
     demag_tet, t = timed_demag(magpy.Collection(core_t, coil.copy()))
-    runs[f"tetrahedra: {len(core_t.sources_all)} cells, {t:.1f} s"] = line.getB(demag_tet)
+    nt = len(core_t.sources_all)
+    runs["tetrahedra"].append((f"tetrahedra: {nt} cells, {t:.1f} s", nt, line.getB(demag_tet)))
 ```
 
 +++ {"user_expressions": []}
@@ -304,27 +307,64 @@ magpy.show(
 
 +++ {"user_expressions": []}
 
-In the comparison the hue distinguishes the cell type and darker means finer:
+In the comparison the hue distinguishes the cell type and darker means finer;
+the right panel follows the peak field of each family as its cells get finer.
+Hover a curve for its cell count and solve time:
 
 ```{code-cell} ipython3
-for name, B in runs.items():
-    print(f"{name:>30}: peak |Bz| = {np.abs(B[..., 2]).max() * 1e3:.2f} mT")
-
-cut = pd.DataFrame(
-    {name: B[:, 2] * 1e3 for name, B in runs.items()},
-    index=pd.Index(x * 1e3, name="x (mm)"),
-)
 ramp = np.linspace(0.3, 1, len(targets))
-shades = px.colors.sample_colorscale("Blues", ramp) + px.colors.sample_colorscale(
-    "Oranges", ramp
+shades = {
+    "cuboids": px.colors.sample_colorscale("Blues", ramp),
+    "tetrahedra": px.colors.sample_colorscale("Oranges", ramp),
+}
+fig = make_subplots(
+    rows=1,
+    cols=2,
+    column_widths=[0.6, 0.4],
+    horizontal_spacing=0.14,
+    subplot_titles=("Bz along y = 0", "Peak |Bz|"),
 )
-px.line(
-    cut,
-    color_discrete_sequence=shades,
-    labels={"value": "Bz (mT)", "variable": ""},
-    title="Cuboid vs tetrahedral mesh — Bz along y=0",
-    height=800,
+for family, results in runs.items():
+    peaks = []
+    for (name, n, B), color in zip(results, shades[family], strict=True):
+        peaks.append(np.abs(B[:, 2]).max() * 1e3)
+        print(f"{name:>30}: peak |Bz| = {peaks[-1]:.2f} mT")
+        fig.add_trace(
+            go.Scatter(
+                x=x * 1e3,
+                y=B[:, 2] * 1e3,
+                name=name,
+                legendgroup=family,
+                showlegend=False,
+                line_color=color,
+            ),
+            row=1,
+            col=1,
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=[n for _, n, _ in results],
+            y=peaks,
+            name=family,
+            legendgroup=family,
+            mode="lines+markers",
+            line_color=shades[family][-1],
+        ),
+        row=1,
+        col=2,
+    )
+fig.update_xaxes(title_text="x (mm)", row=1, col=1)
+fig.update_yaxes(title_text="Bz (mT)", row=1, col=1)
+fig.update_xaxes(
+    title_text="cells", type="log", tickvals=[100, 300, 1000], row=1, col=2
 )
+fig.update_yaxes(title_text="peak |Bz| (mT)", row=1, col=2)
+fig.update_layout(
+    title="Cuboid vs tetrahedral mesh",
+    height=450,
+    legend={"orientation": "h", "y": -0.2, "x": 0.5, "xanchor": "center"},
+)
+fig
 ```
 
 +++ {"user_expressions": []}
