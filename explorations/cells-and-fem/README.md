@@ -42,6 +42,11 @@ What was studied, on three cases with an independent FEM reference each:
    cancellation).
 8. JAX: ~2× per core; the 8–11× figures are nine cores. On cuboid grids #52's
    assembly is 92 % `np.unique`, not kernel.
+9. pymagba's Rust tetrahedron kernel dropped into #52's assembly: exact,
+   2.8–3.6× faster end to end on one core (989 tets 2.35 → 0.83 s, 4,016 tets
+   43.5 → 12.9 s); its calls hold the GIL, so threads over sources add nothing;
+   memory unchanged. magpylib_jax's tetrahedron kernel is slower per core than
+   magpylib's.
 
 ## Layout
 
@@ -59,10 +64,12 @@ What was studied, on three cases with an independent FEM reference each:
 | `mom/p1real.py`                               | material response with linear cuboids; `COLLOC=lsq8\|galerkin`                                                                                                   |
 | `mom/p1tet.py`                                | material response with linear tetrahedra; `COLLOC=child8\|corner4\|corner4c`, `FRAC=<f>`; `bench` times the kernels                                              |
 | `mom/bench_lincell.py`                        | cost per pair of the cuboid kernels, NumPy and `jax.jit`                                                                                                         |
+| `mom/kern_dropin.py`                          | pymagba's or magpylib_jax's tetrahedron kernel dropped into #52's assembly (`stock\|pymagba\|jax`, `POOL=<threads>`, `RAYON_NUM_THREADS`)                        |
 | `mom/bench_pr854.py`                          | magpylib main vs PR #854 (Array API) cuboid core function, NumPy / JAX eager / `jax.jit`                                                                         |
 | `mom/figures.py`                              | the two figures in `results/`, from the numbers in the result files                                                                                              |
 | `fem/ngs_cube.py`, `fem/ngs_plate.py`         | NGSolve scalar-potential solves: tier-0 cube vs magpylib, iron cube and plate moments                                                                            |
 | `fem/fem.py`, `fem/ucore_setup.py`            | scikit-fem two-potential P2 solve of the U-core and the iron cube (written in a sibling session; `ucore_setup.py` was `setup.py`)                                |
+| `results/kern_dropin.txt`                     | the kernel drop-in runs and the raw kernel timings                                                                                                               |
 | `results/*.txt`                               | one JSON line per solve, as printed by the scripts                                                                                                               |
 | `results/fem-*.json`                          | the scikit-fem runs: mesh sizes, moments, the 161-point Bz line                                                                                                  |
 | `results/mesh-*.npz`                          | the final adaptive meshes                                                                                                                                        |
@@ -130,6 +137,9 @@ $G 2 $P lincell_check.py;  $G 2 $P lintet_check.py    # validation, seconds
 $G 8 $P p1real.py cube 4 p1;  COLLOC=galerkin $G 8 $P p1real.py ucore 6.67 p1;  $G 8 $P p1real.py ucore 5 p1   # 3.7 GB
 COLLOC=corner4 FRAC=0.4472136 $G 8 $P p1tet.py ucore 200 p1;  COLLOC=corner4 FRAC=0.5 $G 8 $P p1tet.py cube 50 p1
 $G 8 $P split.py cub 4;  $G 8 $P split.py tet 500     # assembly vs LU
+
+# kernel drop-in (a venv with pymagba, magpylib-jax, jax[cpu], tetgen, loguru, magpylib)
+RAYON_NUM_THREADS=1 $G 8 python kern_dropin.py pymagba 1000;  $G 8 python kern_dropin.py stock 1000;  JAX_ENABLE_X64=1 $G 8 python kern_dropin.py jax 500
 
 # kernels and JAX (jax-venv)
 $G 8 python bench_lincell.py;  $G 8 python p1tet.py bench;  $G 6 python bench_pr854.py
