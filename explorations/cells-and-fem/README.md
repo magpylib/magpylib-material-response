@@ -47,35 +47,47 @@ What was studied, on three cases with an independent FEM reference each:
    43.5 → 12.9 s); its calls hold the GIL, so threads over sources add nothing;
    memory unchanged. magpylib_jax's tetrahedron kernel is slower per core than
    magpylib's.
+10. Scaling, solve side: FMM (`fmm3dpy`, cells as dipoles) with an exact near
+    correction reproduces the dense operator to 2e-6 and the stock solution to
+    1e-5 at 989–4,016 cells with O(N) memory, but is not faster below ~10⁴
+    cells: the dipole picture needs a 5-edge cutoff (a third of the body), and χ
+    = 1000 takes 230–280 GMRES iterations with block-Jacobi.
+11. Scaling, evaluation side (989 cells, 13,041 plane points): magpylib `getB`
+    13 s chunked and > 5 GB in one call; every cell through pymagba 1.1 s; FMM
+    0.7 s at 1e-3; one multipole expansion fails at r/R = 1.08 (1e-2 at order
+    16): only a hierarchical (FMM) evaluation serves observers near a body.
 
 ## Layout
 
-| Path                                          | What                                                                                                                                                             |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mom/adapt.py`                                | U-core geometry (`BLOCKS`, `COIL`, `LINE`, `CHI`), uniform cuboid grids, the adaptive loop (residual and adjoint indicators), `apply` timing of both #52 solvers |
-| `mom/adapt_tet.py`                            | the U-core as one closed `TriangularMesh`, TetGen meshes, midpoint 1→8 tetrahedron split, adaptive loop for tetrahedra                                           |
-| `mom/boxes_tet.py`                            | each U-core cuboid tetrahedralized on its own (non-conforming joints)                                                                                            |
-| `mom/plate.py`                                | thin plate 40×40×1 mm: cuboid grids vs TetGen tetrahedra; `SOLVER=direct\|iterative`                                                                             |
-| `mom/split.py`                                | where a dense solve spends its time: kernel assembly vs LU                                                                                                       |
-| `mom/lincell.py`                              | **closed-form field of a cuboid with linear polarization** (3×12 per pair), NumPy or JAX                                                                         |
-| `mom/lintet.py`                               | **closed-form field of a tetrahedron with linear polarization** (3×12 per pair), NumPy or JAX                                                                    |
-| `mom/lincell_check.py`, `mom/lintet_check.py` | their validation against magpylib and against each other                                                                                                         |
-| `mom/p1emul.py`                               | the first emulation of linear cells by S³ uniform sub-cuboids (superseded by the real kernels; keeps `P`, `COLLOC`, `grid`)                                      |
-| `mom/p1real.py`                               | material response with linear cuboids; `COLLOC=lsq8\|galerkin`                                                                                                   |
-| `mom/p1tet.py`                                | material response with linear tetrahedra; `COLLOC=child8\|corner4\|corner4c`, `FRAC=<f>`; `bench` times the kernels                                              |
-| `mom/bench_lincell.py`                        | cost per pair of the cuboid kernels, NumPy and `jax.jit`                                                                                                         |
-| `mom/kern_dropin.py`                          | pymagba's or magpylib_jax's tetrahedron kernel dropped into #52's assembly (`stock\|pymagba\|jax`, `POOL=<threads>`, `RAYON_NUM_THREADS`)                        |
-| `mom/bench_pr854.py`                          | magpylib main vs PR #854 (Array API) cuboid core function, NumPy / JAX eager / `jax.jit`                                                                         |
-| `mom/figures.py`                              | the two figures in `results/`, from the numbers in the result files                                                                                              |
-| `fem/ngs_cube.py`, `fem/ngs_plate.py`         | NGSolve scalar-potential solves: tier-0 cube vs magpylib, iron cube and plate moments                                                                            |
-| `fem/fem.py`, `fem/ucore_setup.py`            | scikit-fem two-potential P2 solve of the U-core and the iron cube (written in a sibling session; `ucore_setup.py` was `setup.py`)                                |
-| `results/kern_dropin.txt`                     | the kernel drop-in runs and the raw kernel timings                                                                                                               |
-| `results/*.txt`                               | one JSON line per solve, as printed by the scripts                                                                                                               |
-| `results/fem-*.json`                          | the scikit-fem runs: mesh sizes, moments, the 161-point Bz line                                                                                                  |
-| `results/mesh-*.npz`                          | the final adaptive meshes                                                                                                                                        |
-| `results/fig_*.png`                           | the figures used in issues #73 and #74                                                                                                                           |
-| `review/`                                     | the adversarial review: `BRIEF.md` (every claim, with its source) and one report per reviewer                                                                    |
-| `guard.sh`                                    | `guard.sh <GB> cmd…` kills `cmd` above that RSS and prints the peak; use it for every run                                                                        |
+| Path                                                   | What                                                                                                                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mom/adapt.py`                                         | U-core geometry (`BLOCKS`, `COIL`, `LINE`, `CHI`), uniform cuboid grids, the adaptive loop (residual and adjoint indicators), `apply` timing of both #52 solvers |
+| `mom/adapt_tet.py`                                     | the U-core as one closed `TriangularMesh`, TetGen meshes, midpoint 1→8 tetrahedron split, adaptive loop for tetrahedra                                           |
+| `mom/boxes_tet.py`                                     | each U-core cuboid tetrahedralized on its own (non-conforming joints)                                                                                            |
+| `mom/plate.py`                                         | thin plate 40×40×1 mm: cuboid grids vs TetGen tetrahedra; `SOLVER=direct\|iterative`                                                                             |
+| `mom/split.py`                                         | where a dense solve spends its time: kernel assembly vs LU                                                                                                       |
+| `mom/lincell.py`                                       | **closed-form field of a cuboid with linear polarization** (3×12 per pair), NumPy or JAX                                                                         |
+| `mom/lintet.py`                                        | **closed-form field of a tetrahedron with linear polarization** (3×12 per pair), NumPy or JAX                                                                    |
+| `mom/lincell_check.py`, `mom/lintet_check.py`          | their validation against magpylib and against each other                                                                                                         |
+| `mom/p1emul.py`                                        | the first emulation of linear cells by S³ uniform sub-cuboids (superseded by the real kernels; keeps `P`, `COLLOC`, `grid`)                                      |
+| `mom/p1real.py`                                        | material response with linear cuboids; `COLLOC=lsq8\|galerkin`                                                                                                   |
+| `mom/p1tet.py`                                         | material response with linear tetrahedra; `COLLOC=child8\|corner4\|corner4c`, `FRAC=<f>`; `bench` times the kernels                                              |
+| `mom/bench_lincell.py`                                 | cost per pair of the cuboid kernels, NumPy and `jax.jit`                                                                                                         |
+| `mom/kern_dropin.py`                                   | pymagba's or magpylib_jax's tetrahedron kernel dropped into #52's assembly (`stock\|pymagba\|jax`, `POOL=<threads>`, `RAYON_NUM_THREADS`)                        |
+| `mom/fmm_solve.py`                                     | the MoM operator as `fmm3dpy` (cells as dipoles) + exact near correction, matvec check vs dense, GMRES solve (`<target> [near edges] [dense 0\|1]`)              |
+| `mom/solved_body.py`                                   | field of a solved body: exact per cell, FMM evaluation, one multipole expansion of orders 4–16, vs magpylib `getB`                                               |
+| `mom/bench_pr854.py`                                   | magpylib main vs PR #854 (Array API) cuboid core function, NumPy / JAX eager / `jax.jit`                                                                         |
+| `mom/figures.py`                                       | the two figures in `results/`, from the numbers in the result files                                                                                              |
+| `fem/ngs_cube.py`, `fem/ngs_plate.py`                  | NGSolve scalar-potential solves: tier-0 cube vs magpylib, iron cube and plate moments                                                                            |
+| `fem/fem.py`, `fem/ucore_setup.py`                     | scikit-fem two-potential P2 solve of the U-core and the iron cube (written in a sibling session; `ucore_setup.py` was `setup.py`)                                |
+| `results/fmm_solve.txt`, `results/solved_body_500.txt` | the scaling experiments, solve and evaluation side                                                                                                               |
+| `results/kern_dropin.txt`                              | the kernel drop-in runs and the raw kernel timings                                                                                                               |
+| `results/*.txt`                                        | one JSON line per solve, as printed by the scripts                                                                                                               |
+| `results/fem-*.json`                                   | the scikit-fem runs: mesh sizes, moments, the 161-point Bz line                                                                                                  |
+| `results/mesh-*.npz`                                   | the final adaptive meshes                                                                                                                                        |
+| `results/fig_*.png`                                    | the figures used in issues #73 and #74                                                                                                                           |
+| `review/`                                              | the adversarial review: `BRIEF.md` (every claim, with its source) and one report per reviewer                                                                    |
+| `guard.sh`                                             | `guard.sh <GB> cmd…` kills `cmd` above that RSS and prints the peak; use it for every run                                                                        |
 
 ## Provenance
 
@@ -137,6 +149,9 @@ $G 2 $P lincell_check.py;  $G 2 $P lintet_check.py    # validation, seconds
 $G 8 $P p1real.py cube 4 p1;  COLLOC=galerkin $G 8 $P p1real.py ucore 6.67 p1;  $G 8 $P p1real.py ucore 5 p1   # 3.7 GB
 COLLOC=corner4 FRAC=0.4472136 $G 8 $P p1tet.py ucore 200 p1;  COLLOC=corner4 FRAC=0.5 $G 8 $P p1tet.py cube 50 p1
 $G 8 $P split.py cub 4;  $G 8 $P split.py tet 500     # assembly vs LU
+
+# scaling (same venv + fmm3dpy)
+$G 7 python fmm_solve.py 1000 5 1;  $G 7 python fmm_solve.py 2000 5 0;  $G 6 python solved_body.py 500
 
 # kernel drop-in (a venv with pymagba, magpylib-jax, jax[cpu], tetgen, loguru, magpylib)
 RAYON_NUM_THREADS=1 $G 8 python kern_dropin.py pymagba 1000;  $G 8 python kern_dropin.py stock 1000;  JAX_ENABLE_X64=1 $G 8 python kern_dropin.py jax 500
