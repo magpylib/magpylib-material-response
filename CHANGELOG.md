@@ -17,8 +17,14 @@ and this project adheres to
   the polarization agrees to about 2 × `solver_tol` for hard magnets and 35 ×
   `solver_tol` for soft iron at χ = 1000. GMRES that does not converge raises.
   Boxes of cuboid cells on a uniform grid use FFT products (`demag_fft` module):
-  32,768 cells of soft iron solve in about 4 s. Grids with holes, such as
-  voxelized round bodies, and other cell types use dense blocks
+  32,768 cells of soft iron solve in about 4 s. Each meshed body is a grid of
+  its own, told apart by the Collection its mesher made or, when the cells were
+  flattened into one, by the boxes they fill on their lattice; a yoke with its
+  legs, meshed with `mesh_all`, then gets FFT products within each body and
+  between bodies of one cell size. Grids with holes, such as voxelized round
+  bodies, and other cell types use dense blocks; a dense block is only
+  sparsified when that drops at least half of its entries, which at high
+  susceptibility it rarely does
   ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
 - `apply_demag(..., interaction="newell")`: cells act on each other through the
   field averaged over each cell, the volume-averaged Newell tensor (`newell`
@@ -33,9 +39,11 @@ and this project adheres to
   jump when a body turns slightly. `demag_tensor` takes the same argument
   ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
 - Cuboid cells sharing a shape and orientation are fast under either rule: each
-  distinct displacement is computed once, reverse blocks follow by reciprocity,
-  and uniform grids use FFT products. Far apart, where the closed forms lose
-  precision, both rules switch to a far-field expansion
+  distinct displacement is computed once (between two grids of one spacing by
+  index arithmetic, without a sort, which took most of a dense assembly),
+  reverse blocks follow by reciprocity, and uniform grids use FFT products. Far
+  apart, where the closed forms lose precision, both rules switch to a far-field
+  expansion
   ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
 - `demag_fft.analyze_collection(sources)`: splits a collection into grid, loose
   and generic clusters covering every cell once

@@ -13,10 +13,16 @@ import time
 import magpylib as magpy
 import numpy as np
 import pytest
+import scipy.sparse as sp
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response import demag
 from magpylib_material_response.demag import (
     _check_interaction,
+    _dedup_blocks,
+    _grid_pair_table,
+    _pair_block,
+    _reciprocity_factor,
     apply_demag,
     demag_tensor,
     get_susceptibilities,
@@ -564,3 +570,114 @@ def test_point_rule_is_smooth_when_a_body_turns():
         )
 
     assert abs(iron_jz(1e-6) / iron_jz(0.0) - 1) < 1e-10
+
+
+# ── touching bodies, large blocks, deduplication ────────────────────────────
+def _u_core_cells():
+    """A yoke and two legs of identical cells, touching: one connected component
+    that is not a box, but three bodies that are."""
+    yoke = magpy.magnet.Cuboid(dimension=(5.0, 1.0, 1.0), position=(0, 0, 0))
+    legs = [
+        magpy.magnet.Cuboid(dimension=(1.0, 1.0, 3.0), position=(x, 0, 2.0))
+        for x in (-2.0, 2.0)
+    ]
+    core = magpy.Collection(
+        mesh_Cuboid(yoke, (10, 2, 2)), *(mesh_Cuboid(leg, (2, 2, 6)) for leg in legs)
+    )
+    core.susceptibility = 1000.0
+    return core
+
+
+def test_touching_bodies_get_a_grid_each():
+    core = _u_core_cells()
+    _, clusters = analyze_collection(core.sources_all)
+    assert sorted(c["kind"] for c in clusters) == ["grid", "grid", "grid"]
+    assert sorted(len(c["indices"]) for c in clusters) == [24, 24, 40]
+    _assert_solvers_agree(core)
+
+
+@pytest.mark.parametrize(
+    ("row_budget", "sparse"),
+    [(1e-12, False), (1e9, True)],
+    ids=["keeps nearly all: dense", "drops nearly all: sparse"],
+)
+def test_large_block_is_sparsified_only_when_it_pays(monkeypatch, row_budget, sparse):
+    monkeypatch.setattr(demag, "DENSE_BLOCK_MAX_ENTRIES", 1)
+    coll = _build_uniform_collection(64)
+    positions, clusters = analyze_collection(coll.sources_all)
+    block = _pair_block(
+        clusters[0], clusters[0], coll.sources_all, positions, "point", row_budget
+    )
+    assert sp.issparse(block) is sparse
+
+
+def test_dedup_blocks_matches_direct_evaluation():
+    rng = np.random.default_rng(0)
+    grid = np.stack(np.meshgrid(*[np.arange(4.0)] * 3, indexing="ij"), -1).reshape(
+        -1, 3
+    )
+    pos = np.vstack([grid, rng.uniform(0, 3, (10, 3))])
+    disp = pos[:, None, :] - pos[None, :, :]  # many repeated displacements, some unique
+    outer = lambda d: d[..., :, None] * d[..., None, :]
+    np.testing.assert_allclose(
+        _dedup_blocks(disp, 1.0, outer), outer(disp), rtol=0, atol=1e-15
+    )
+
+
+def test_grid_pair_block_matches_plain_dedup():
+    """Two grids of one spacing, offset by a fraction of it: the sort-free path
+    gives the same block as the general one, for both rules."""
+    a = magpy.magnet.Cuboid(dimension=(2.0, 2.0, 2.0), position=(0, 0, 0))
+    b = magpy.magnet.Cuboid(dimension=(1.5, 3.0, 2.0), position=(2.3, 0.7, -0.4))
+    coll = magpy.Collection(mesh_Cuboid(a, (4, 4, 4)), mesh_Cuboid(b, (3, 6, 4)))
+    positions, clusters = analyze_collection(coll.sources_all)
+    assert [c["kind"] for c in clusters] == ["grid", "grid"]
+    plain = [copy.deepcopy(c) | {"kind": "loose"} for c in clusters]
+    for interaction in ("point", "newell"):
+        for ca, cb, pa, pb in ((0, 1, 0, 1), (1, 1, 1, 1)):
+            fast = _pair_block(
+                clusters[ca], clusters[cb], coll.sources_all, positions, interaction
+            )
+            ref = _pair_block(
+                plain[pa], plain[pb], coll.sources_all, positions, interaction
+            )
+            # the unique displacements are rebuilt from origin and spacing, a last-bit
+            # difference the kernel turns into ~1e-12
+            np.testing.assert_allclose(fast, ref, rtol=0, atol=1e-9 * np.abs(ref).max())
+
+
+def test_flattened_touching_bodies_still_get_a_grid_each():
+    """Cells flattened into one Collection lose their parents; the lattice
+    box split still finds the three bodies."""
+    flat = magpy.Collection(*_u_core_cells().sources_all, override_parent=True)
+    _, clusters = analyze_collection(flat.sources_all)
+    assert sorted(len(c["indices"]) for c in clusters if c["kind"] == "grid") == [
+        24,
+        24,
+        40,
+    ]
+
+
+def test_cross_grid_blocks_use_fft():
+    """Two grids of one spacing: the iterative solver's cross blocks are FFT
+    convolutions that agree with the direct solver."""
+    core = _u_core_cells()
+    cells = core.sources_all
+    positions, clusters = analyze_collection(cells)
+    chi = np.zeros((len(cells), 3, 3))
+    ops = demag._build_operator(cells, positions, clusters, chi, 1e-6, None, "point")
+    kinds = sorted(op["kind"] for op in ops)
+    assert kinds == ["fft"] * 3 + ["fft_cross"] * 6
+    _assert_solvers_agree(core)
+
+
+def test_tiny_grids_of_different_spacing_are_not_one_spacing():
+    """Relative tolerances only: at nanometre scale an absolute 1e-8 would call
+    different spacings, and different cell shapes, equal."""
+    a = magpy.magnet.Cuboid(dimension=(3e-9,) * 3, position=(0, 0, 0))
+    b = magpy.magnet.Cuboid(dimension=(5e-9,) * 3, position=(1e-8, 0, 0))
+    coll = magpy.Collection(mesh_Cuboid(a, (3, 3, 3)), mesh_Cuboid(b, (3, 3, 3)))
+    _, clusters = analyze_collection(coll.sources_all)
+    assert [c["kind"] for c in clusters] == ["grid", "grid"]
+    assert _grid_pair_table(clusters[0], clusters[1], "point") is None
+    assert _reciprocity_factor(clusters[0], clusters[1], "point") is None

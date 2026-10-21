@@ -207,6 +207,48 @@ def _split_components(positions):
     return [np.nonzero(labels == c)[0] for c in range(n_comp)]
 
 
+def _split_boxes(positions, dim, rtol=1e-6):
+    """Split lattice-aligned cells that do not fill a box into full boxes.
+
+    Touching bodies meshed with one cell size (a yoke and its legs) share a
+    lattice; from its lexicographically first cell a box is grown along x,
+    then y, then z while every cell of it is present, taken out, and the rest
+    repeated. Returns the cell indices of each box, or ``None`` when the
+    cells do not sit on one lattice.
+    """
+    positions = np.asarray(positions, dtype=float)
+    n = positions.shape[0]
+    tol = rtol * float(np.min(dim))
+    index = []
+    for ax in range(3):
+        c = _cluster_1d(positions[:, ax], tol)
+        step = float(np.min(np.diff(c))) if c.size > 1 else float(dim[ax])
+        k = np.round((positions[:, ax] - c[0]) / step)
+        if not np.allclose(positions[:, ax], c[0] + k * step, atol=tol):
+            return None
+        index.append(k.astype(np.int64))
+    index = np.stack(index, axis=1)
+    shape = tuple(index.max(0) + 1)
+    occupied = np.zeros(shape, dtype=bool)
+    occupied[tuple(index.T)] = True
+    cell_at = np.full(shape, -1, dtype=np.int64)
+    cell_at[tuple(index.T)] = np.arange(n)
+    boxes = []
+    while occupied.any():
+        x0, y0, z0 = np.argwhere(occupied)[0]
+        x1, y1, z1 = x0, y0, z0
+        while x1 + 1 < shape[0] and occupied[x1 + 1, y0, z0]:
+            x1 += 1
+        while y1 + 1 < shape[1] and occupied[x0 : x1 + 1, y1 + 1, z0].all():
+            y1 += 1
+        while z1 + 1 < shape[2] and occupied[x0 : x1 + 1, y0 : y1 + 1, z1 + 1].all():
+            z1 += 1
+        box = (slice(x0, x1 + 1), slice(y0, y1 + 1), slice(z0, z1 + 1))
+        boxes.append(cell_at[box].ravel())
+        occupied[box] = False
+    return boxes
+
+
 def analyze_collection(sources, atol=QUAT_ATOL, min_cluster_cells=MIN_CLUSTER_CELLS):
     """Partition magnet objects into structure clusters (see
     :func:`analyze_structure`).
@@ -231,8 +273,17 @@ def analyze_collection(sources, atol=QUAT_ATOL, min_cluster_cells=MIN_CLUSTER_CE
         dtype=float,
     )
     rotations = R.from_quat([s.orientation.as_quat() for s in sources])
+    # The meshers put each body's cells in a Collection of their own, so the
+    # parent tells the bodies apart; a cell without one is a body by itself.
+    groups = np.array(
+        [
+            id(s.parent) if s.parent is not None else -1 - i
+            for i, s in enumerate(sources)
+        ],
+        dtype=np.int64,
+    )
     clusters = analyze_structure(
-        positions, dimensions, rotations, is_cuboid, atol, min_cluster_cells
+        positions, dimensions, rotations, is_cuboid, atol, min_cluster_cells, groups
     )
     return positions, clusters
 
@@ -244,6 +295,7 @@ def analyze_structure(
     is_cuboid,
     atol=QUAT_ATOL,
     min_cluster_cells=MIN_CLUSTER_CELLS,
+    groups=None,
 ):
     """Partition cells into structure clusters covering every cell exactly once.
 
@@ -264,6 +316,11 @@ def analyze_structure(
         ``"loose"`` cluster when there are at least this many of them, and
         join the ``"generic"`` cluster otherwise. ``1`` keeps every cuboid in
         a geometry cluster.
+    groups : ndarray (n,) of int, optional
+        A label per cell, typically the meshed body it came from. Cells of one
+        label are tried as a grid of their own before the spatial split, so
+        touching bodies with identical cells (a yoke and its legs) get a grid
+        each instead of one connected, non-box component.
 
     Returns
     -------
@@ -350,17 +407,55 @@ def analyze_structure(
                 clusters.append({"kind": "grid", "indices": members, **base, **info})
                 continue
 
-            # ...then per spatially-connected component (separate meshed
-            # bodies with identical cell geometry).
+            # ...then per meshed body (cells sharing a label), which touching
+            # bodies need: their cells form one connected component that is
+            # not a box...
+            assigned = np.zeros(members.size, dtype=bool)
+            if groups is not None:
+                g = np.asarray(groups)[members]
+                for label_g in np.unique(g):
+                    comp = np.nonzero(g == label_g)[0]
+                    if comp.size < MIN_GRID_CELLS:
+                        continue
+                    info = _detect_grid(pos_local[comp], dim0)
+                    if info is not None:
+                        clusters.append(
+                            {"kind": "grid", "indices": members[comp], **base, **info}
+                        )
+                        assigned[comp] = True
+            # ...then per spatially-connected component of what is left
+            # (separate meshed bodies with identical cell geometry).
             loose: list[np.ndarray] = []
-            for comp in _split_components(pos_local):
+            rest = np.nonzero(~assigned)[0]
+            for comp_r in _split_components(pos_local[rest]) if rest.size else []:
+                comp = rest[comp_r]
                 info = _detect_grid(pos_local[comp], dim0)
                 if info is not None and comp.size >= MIN_GRID_CELLS:
                     clusters.append(
                         {"kind": "grid", "indices": members[comp], **base, **info}
                     )
-                else:
-                    loose.append(comp)
+                    continue
+                # ...and a connected component that is not a box but sits on
+                # one lattice (touching bodies whose cells were flattened into
+                # one Collection) as full boxes.
+                boxes = (
+                    _split_boxes(pos_local[comp], dim0)
+                    if comp.size >= MIN_GRID_CELLS
+                    else None
+                )
+                for box in boxes or [np.arange(comp.size)]:
+                    sub = comp[box]
+                    info = (
+                        _detect_grid(pos_local[sub], dim0)
+                        if sub.size >= MIN_GRID_CELLS
+                        else None
+                    )
+                    if info is not None:
+                        clusters.append(
+                            {"kind": "grid", "indices": members[sub], **base, **info}
+                        )
+                    else:
+                        loose.append(sub)
             if loose:
                 comp = np.concatenate(loose)
                 clusters.append({"kind": "loose", "indices": members[comp], **base})
