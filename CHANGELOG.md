@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `get_H_ext(*sources)` no longer takes the `H_ext=` keyword, which was read and
+  immediately shadowed by the attribute lookup
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
 ### Added
 
 - `apply_demag(..., solver="iterative")`: a matrix-free GMRES solver next to the
