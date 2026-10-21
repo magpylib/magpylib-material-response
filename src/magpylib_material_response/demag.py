@@ -46,6 +46,7 @@ own axes (#50), so it enters the solve as one 3x3 tensor per cell,
 
 from __future__ import annotations
 
+import itertools
 from collections import Counter
 
 import magpylib as magpy
@@ -78,6 +79,13 @@ from magpylib_material_response.utils import timelog
 #: of dense. 2e7 float64 entries = 160 MB; dense blocks additionally allow
 #: deriving the reverse block by reciprocity (halving the build cost).
 DENSE_BLOCK_MAX_ENTRIES = 20_000_000
+# A block above DENSE_BLOCK_MAX_ENTRIES is sparsified only when its first chunk
+# shows that at least SPARSIFY_MIN_DROP of the entries can go; at high
+# susceptibility the row budget drops almost nothing, and a CSR holding most of
+# a block is slower and larger than the dense array. Above DENSE_BLOCK_MAX_BYTES
+# it is sparsified regardless.
+SPARSIFY_MIN_DROP = 0.5
+DENSE_BLOCK_MAX_BYTES = 2_000_000_000
 
 #: Every block is evaluated in observer chunks covering at most this many
 #: (observer, source) pairs per field evaluation. Memory grows with pairs, not
@@ -335,7 +343,9 @@ def _reciprocity_factor(cl_a, cl_b, interaction):
         return None
     if interaction == "newell":
         return float(np.prod(cl_a["dim"]) / np.prod(cl_b["dim"]))
-    if np.allclose(cl_a["dim"], cl_b["dim"]) and _same_orientation(cl_a, cl_b):
+    if np.allclose(cl_a["dim"], cl_b["dim"], rtol=1e-9, atol=0) and _same_orientation(
+        cl_a, cl_b
+    ):
         return 1.0
     return None
 
@@ -360,12 +370,21 @@ def _dedup_blocks(disp, scale, block):
     """
     flat = disp.reshape(-1, 3)
     keys = np.round(flat / (1e-9 * scale)).astype(np.int64)
-    uniq, inverse = np.unique(keys, axis=0, return_inverse=True)
-    if uniq.shape[0] > 0.25 * flat.shape[0]:
+    # One hashed key per row sorts several times faster than the rows; the
+    # gather below checks that no two different rows hashed alike.
+    with np.errstate(over="ignore"):
+        h = keys[:, 0] * np.int64(-7046029254386353131)
+        h ^= keys[:, 1] * np.int64(5591988499347399697)
+        h ^= keys[:, 2]
+    _, first, inverse = np.unique(h, return_index=True, return_inverse=True)
+    inverse = inverse.ravel()
+    if not np.array_equal(keys, keys[first[inverse]]):  # a hash collision
+        uniq, inverse = np.unique(keys, axis=0, return_inverse=True)
+        inverse = inverse.ravel()
+        first = np.zeros(uniq.shape[0], dtype=np.int64)
+        first[inverse[::-1]] = np.arange(flat.shape[0] - 1, -1, -1)
+    if first.shape[0] > 0.25 * flat.shape[0]:
         return block(disp)
-    # Representative displacement per unique key (first occurrence).
-    first = np.zeros(uniq.shape[0], dtype=np.int64)
-    first[inverse[::-1]] = np.arange(flat.shape[0] - 1, -1, -1)
     N_u = block(flat[first])
     return N_u[inverse].reshape((*disp.shape[:-1], 3, 3))
 
@@ -451,12 +470,74 @@ def _row_sparsify(block, row_budget):
     return rows, cols, block[rows, cols]
 
 
+def _grid_pair_table(cl_a, cl_b, interaction, rtol=1e-6):
+    """T between two grid clusters of one spacing and orientation, tabulated
+    over the index differences, in the grids' local frame.
+
+    Observer ``i`` at grid index ``p`` and source ``j`` at ``q`` are
+    ``origin_a - origin_b + spacing * (p - q)`` apart, so the block has at most
+    ``prod(Na + Nb - 1)`` distinct entries: ``table[p - q + Nb - 1]`` (per axis)
+    is the (3, 3) tensor of pair ``(i, j)``. Returns ``(table, index_a, index_b)``
+    with ``table`` of shape ``(*(Na + Nb - 1), 3, 3)`` and the grid indices of
+    the clusters' members, or ``None`` when the clusters do not share spacing
+    and orientation. A relative tolerance only: at nanometre scale an absolute
+    one would call different spacings equal.
+    """
+    if not (
+        cl_a["kind"] == "grid"
+        and cl_b["kind"] == "grid"
+        and _same_orientation(cl_a, cl_b)
+        and np.allclose(cl_a["spacing"], cl_b["spacing"], rtol=rtol, atol=0)
+    ):
+        return None
+    sa, sb = np.array(cl_a["shape"]), np.array(cl_b["shape"])
+    spacing = np.array(cl_a["spacing"])
+
+    def _index3(cl, shape):
+        n = cl["indices"].size
+        flat = np.empty(n, dtype=np.int64)
+        flat[cl["order"]] = np.arange(n)  # cluster member -> grid-flat index
+        return np.stack(
+            [
+                flat // (shape[1] * shape[2]),
+                (flat // shape[2]) % shape[1],
+                flat % shape[2],
+            ],
+            axis=1,
+        )
+
+    K = sa + sb - 1  # index differences span [-(Nb-1), Na-1] per axis
+    du = np.stack(np.meshgrid(*[np.arange(k) for k in K], indexing="ij"), axis=-1) - (
+        sb - 1
+    )
+    disp = (np.array(cl_a["origin"]) - np.array(cl_b["origin"])) + spacing * du
+    if interaction == "newell":
+        N = demag_block_general(disp, cl_b["dim"], cl_a["dim"])
+    else:
+        N = point_block(disp, cl_b["dim"])
+    return -N, _index3(cl_a, sa), _index3(cl_b, sb)
+
+
+def _grid_pair_keys(index_a, index_b, shape_b, K):
+    """Flat table indices of every (observer, source) pair: (n_a, n_b)."""
+    delta = index_a[:, None, :] - index_b[None, :, :] + (np.asarray(shape_b) - 1)
+    return (delta[..., 0] * K[1] + delta[..., 1]) * K[2] + delta[..., 2]
+
+
+def _droppable_fraction(block, row_budget):
+    """Fraction of a block's entries that the per-row budget allows to drop."""
+    csum = np.cumsum(np.sort(np.abs(block), axis=1), axis=1)
+    return (csum <= row_budget).sum() / block.size
+
+
 def _pair_block(cl_a, cl_b, magnets_list, positions, interaction, row_budget=None):
     """Build the T block for a cluster pair (observers ``a``, sources ``b``)
     under the solve's interaction rule.
 
-    Returns a dense ndarray when the block is small (or ``row_budget`` is
-    None), else a CSR matrix with per-row dropped sums below ``row_budget``.
+    Returns a dense ndarray when the block is small, when ``row_budget`` is
+    None, or when the budget would keep most of the entries anyway (the case
+    at high susceptibility); else a CSR matrix with per-row dropped sums below
+    ``row_budget``.
     """
     ia, ib = cl_a["indices"], cl_b["indices"]
     pos_a, pos_b = positions[ia], positions[ib]
@@ -469,7 +550,21 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, interaction, row_budget=Non
     if cuboid_sources and not cl_b["is_identity"]:
         rot_mat = cl_b["r_common"].as_matrix()
 
+    grid_pair = _grid_pair_table(cl_a, cl_b, interaction)
+    if grid_pair is not None:
+        # Two grids of one spacing: the kernel once per index difference for
+        # the whole block, every chunk a gather by its own keys.
+        table, index_a, index_b = grid_pair
+        K = np.array(table.shape[:3])
+        if rot_mat is not None:
+            table = np.einsum("ma,...ab,kb->...mk", rot_mat, table, rot_mat)
+        table = table.reshape(-1, 3, 3)
+
     def _dense_chunk(sl):
+        if grid_pair is not None:
+            keys = _grid_pair_keys(index_a[sl], index_b, cl_b["shape"], K)
+            N = table[keys]  # (n_chunk, n_b, 3m, 3k), global frame
+            return N.transpose(2, 0, 3, 1).reshape(3 * N.shape[0], 3 * n_b)
         if interaction == "newell":
             return _newell_block_T(pos_a[sl], pos_b, cl_a["dim"], cl_b["dim"], rot_mat)
         if cuboid_sources:
@@ -484,15 +579,28 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, interaction, row_budget=Non
             stop = min(start + chunk, n_a)
             yield start, stop, _dense_chunk(slice(start, stop))
 
+    chunks = _chunks()
+    first = next(chunks, None)
+    # Sparsify only when the first chunk shows it pays: at high susceptibility
+    # the row budget keeps nearly every entry.
+    if (
+        sparsify
+        and first is not None
+        and 72 * n_a * n_b <= DENSE_BLOCK_MAX_BYTES
+        and _droppable_fraction(first[2], row_budget) < SPARSIFY_MIN_DROP
+    ):
+        sparsify = False
+    all_chunks = itertools.chain([first], chunks) if first is not None else iter(())
+
     if not sparsify:
         # Rows of a block are m-major over its observers: (3, n_a, 3 n_b).
         block = np.empty((3, n_a, 3 * n_b))
-        for start, stop, part in _chunks():
+        for start, stop, part in all_chunks:
             block[:, start:stop] = part.reshape(3, stop - start, 3 * n_b)
         return block.reshape(3 * n_a, 3 * n_b)
 
     rows_all, cols_all, vals_all = [], [], []
-    for start, stop, block in _chunks():
+    for start, stop, block in all_chunks:
         r, c, v = _row_sparsify(block, row_budget)
         # Local rows are m-major over the chunk; map to m-major over n_a.
         n_ch = stop - start
@@ -565,6 +673,61 @@ def _fft_apply(op, v_flat):
     return H.T.ravel()
 
 
+def _fft_cross_op(cl_a, cl_b, interaction):
+    """The block of two grid clusters of one spacing as a zero-padded FFT
+    convolution on a box of ``Na + Nb - 1`` per axis, or ``None``.
+
+    Like the self-block kernel, but the index difference ``d`` runs over
+    ``[-(Nb - 1), Na - 1]``: position ``i < Na`` of the padded axis holds
+    ``d = i``, position ``i >= Na`` holds ``d = i - L``. The nine components
+    are kept (no symmetry assumed) in the grids' local frame.
+    """
+    grid_pair = _grid_pair_table(cl_a, cl_b, interaction)
+    if grid_pair is None:
+        return None
+    table, _, _ = grid_pair
+    sa, sb = np.array(cl_a["shape"]), np.array(cl_b["shape"])
+    L = sa + sb - 1
+    circ = [
+        np.where(np.arange(l) < na, np.arange(l), np.arange(l) - l) + (nb - 1)
+        for l, na, nb in zip(L, sa, sb, strict=True)
+    ]
+    kernel = table[np.ix_(*circ)]  # (Lx, Ly, Lz, 3, 3)
+    return {
+        "kind": "fft_cross",
+        "ia": cl_a["indices"],
+        "ib": cl_b["indices"],
+        "shape_a": tuple(int(v) for v in sa),
+        "shape_b": tuple(int(v) for v in sb),
+        "order_a": cl_a["order"],
+        "order_b": cl_b["order"],
+        "rot_mat": None if cl_b["is_identity"] else cl_b["r_common"].as_matrix(),
+        "L": tuple(int(v) for v in L),
+        "kernel_fft": np.fft.rfftn(kernel, axes=(0, 1, 2)),
+    }
+
+
+def _fft_cross_apply(op, v_flat):
+    """Apply a cross-grid block to component-major ``(3 n_b,)`` global-frame
+    polarizations; returns ``(3 n_a,)`` in the same layout."""
+    L, rot_mat = op["L"], op["rot_mat"]
+    M = v_flat.reshape(3, -1).T  # (n_b, 3) global
+    if rot_mat is not None:
+        M = M @ rot_mat  # to local frame
+    Mp = np.zeros((*L, 3))
+    sb = op["shape_b"]
+    Mp[: sb[0], : sb[1], : sb[2]] = M[op["order_b"]].reshape((*sb, 3))
+    M_fft = np.fft.rfftn(Mp, axes=(0, 1, 2))  # (Lx, Ly, Lz//2+1, 3)
+    H_fft = np.einsum("...mk,...k->...m", op["kernel_fft"], M_fft)
+    H_grid = np.fft.irfftn(H_fft, s=L, axes=(0, 1, 2))
+    sa = op["shape_a"]
+    H = np.empty((np.prod(sa), 3))
+    H[op["order_a"]] = H_grid[: sa[0], : sa[1], : sa[2]].reshape(-1, 3)
+    if rot_mat is not None:
+        H = H @ rot_mat.T  # back to global frame
+    return H.T.ravel()
+
+
 def _build_operator(
     magnets_list, positions, clusters, chi, solver_tol, min_log_time, interaction
 ):
@@ -612,6 +775,11 @@ def _build_operator(
             for idx_b, cl_b in enumerate(clusters):
                 if idx_b <= idx_a:
                     continue
+                cross = _fft_cross_op(cl_a, cl_b, interaction)
+                if cross is not None:
+                    ops.append(cross)
+                    ops.append(_fft_cross_op(cl_b, cl_a, interaction))
+                    continue
                 M_ab = _pair_block(
                     cl_a, cl_b, magnets_list, positions, interaction, row_budget
                 )
@@ -656,6 +824,8 @@ def _build_matvec(n, chi, ops):
             v_b = v3[:, op["ib"]].ravel()
             if op["kind"] == "fft":
                 h = _fft_apply(op, v_b)
+            elif op["kind"] == "fft_cross":
+                h = _fft_cross_apply(op, v_b)
             else:
                 h = np.asarray(op["M"] @ v_b).ravel()
             Tv[:, op["ia"]] += h.reshape(3, -1)
@@ -783,10 +953,6 @@ def demag_tensor(
     split: int
         Number of times the sources list is split before getH calculation ind demag
         tensor calculation. Implies point matching.
-
-    max_dist: float
-        Maximum distance-to-dimension ratio; farther interactions are dropped.
-        Implies point matching.
 
     max_dist: float
         Leaves out the interaction of two cells whose centroids lie `max_dist` or more
