@@ -529,8 +529,8 @@ them. It takes the iterative solver once FFT products cover a tenth of the
 interaction matrix, the cells of each grid among themselves and large grids of
 one spacing between each other. Below that, many small bodies or cells off any
 grid make the iterative solver slower, and it takes the direct one. Both give
-the same answer, to about `solver_tol`; the
-{ref}`method page <auto-solver>` has the measurements behind the rule.
+the same answer, to about `solver_tol`; the {ref}`method page <auto-solver>` has
+the measurements behind the rule.
 
 ## Where to go next
 
