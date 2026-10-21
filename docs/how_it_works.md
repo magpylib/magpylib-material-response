@@ -29,7 +29,6 @@ you can drag. The [method page](method.md) has the equations.
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-import html
 import itertools
 import time
 import warnings
@@ -37,8 +36,6 @@ import warnings
 import magpylib as magpy
 import numpy as np
 import plotly.graph_objects as go
-from comm import DummyComm
-from IPython.display import HTML
 from loguru import logger
 from magpylib_studio.widget import SceneWidget
 from plotly.colors import sample_colorscale
@@ -57,21 +54,8 @@ from magpylib_material_response.newell import demag_block_general, point_block
 MM = 1e-3  # lengths are in metres; this reads them in millimetres
 ORANGE, BLUE, GREY = "#eb6834", "#2a78d6", "#8a8984"
 logger.remove()  # loguru's own default sink would print the package log twice
-
-
-def show3d(title, *objects, height=430, **kwargs):
-    """A magpylib-studio view of ``objects``, saved into the page so that it
-    turns and zooms without a running Python; in a notebook,
-    ``magpy.show(*objects, backend="widget")`` draws it live. Made on a channel
-    to nowhere, so that the notebook does not also store it as a widget."""
-    with warnings.catch_warnings():  # objects built in a loop: only for editing
-        warnings.filterwarnings("ignore", message="magpylib-studio", category=UserWarning)
-        page = SceneWidget(*objects, comm=DummyComm(), **kwargs).to_html(title)
-    return HTML(
-        f'<div><iframe class="magpy-studio-frame" title="{html.escape(title)}" '
-        f'srcdoc="{html.escape(page)}" style="width: 100%; height: {height}px; border: 0">'
-        "</iframe></div>"
-    )
+# studio says that objects made in a loop are copies: it matters only for editing
+warnings.filterwarnings("ignore", message="magpylib-studio", category=UserWarning)
 ```
 
 +++ {"user_expressions": []}
@@ -138,7 +122,7 @@ lines = magpy.Sensor(
     style_arrows_y_show=False,
     style_arrows_z_show=False,
 )
-show3d("a magnet below an iron plate", iron, lines, field_lines=True)
+SceneWidget(iron, lines, field_lines=True)
 ```
 
 +++ {"user_expressions": []}
@@ -406,7 +390,7 @@ for cluster in analyze_collection(solved.sources_all)[1]:
         cells[i].style.color = kinds[cluster["kind"]][1]
         cells[i].style.magnetization.show = False
         groups[cluster["kind"]].append(cells[i])
-show3d("how the solver sees the cells", *(magpy.Collection(*group, style_label=kinds[k][0]) for k, group in groups.items() if group), height=380)
+magpy.show(*(magpy.Collection(*group, style_label=kinds[k][0]) for k, group in groups.items() if group), backend="widget")
 ```
 
 +++ {"user_expressions": []}

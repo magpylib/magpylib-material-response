@@ -39,14 +39,14 @@ html[data-theme="dark"]
 }
 
 /*
-The same for the magpylib-studio views, saved into iframes: webcode/studioSync.js
-paints them in the page's own colours.
+The same for the magpylib-studio views: the theme paints a light panel round
+every widget, and a studio view wears what it sits on.
 */
 html[data-theme="dark"]
   body
   .bd-content
   div.cell_output
-  div.text_html:has(iframe.magpy-studio-frame) {
+  div.widget-subarea:has(.magpy-scene) {
   background: none;
   padding: 0;
 }
