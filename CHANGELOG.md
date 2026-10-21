@@ -21,6 +21,11 @@ and this project adheres to
 
 ### Added
 
+- Documentation: a "How it works" page for engineers, with 3D views from
+  magpylib-studio and interactive charts: the cells, field lines through a
+  magnet and an iron plate, how two cells act on each other, how many cells are
+  needed, and how the solver is chosen
+  ([#78](https://github.com/magpylib/magpylib-material-response/pull/78)).
 - `apply_demag(..., solver="iterative")`: a matrix-free GMRES solver next to the
   dense direct solver (`solver="direct"`), with `solver_tol` and `max_iter`
   (iterations). Both solvers apply the same interaction rule. GMRES stops at a

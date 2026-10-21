@@ -37,3 +37,16 @@ html[data-theme="dark"]
   background: none;
   padding: 0;
 }
+
+/*
+The same for the magpylib-studio views, saved into iframes: webcode/studioSync.js
+paints them in the page's own colours.
+*/
+html[data-theme="dark"]
+  body
+  .bd-content
+  div.cell_output
+  div.text_html:has(iframe.magpy-studio-frame) {
+  background: none;
+  padding: 0;
+}
