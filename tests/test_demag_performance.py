@@ -18,6 +18,7 @@ from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response import demag
 from magpylib_material_response.demag import (
+    _assemble_T_dense,
     _check_interaction,
     _dedup_blocks,
     _grid_pair_table,
@@ -681,3 +682,17 @@ def test_tiny_grids_of_different_spacing_are_not_one_spacing():
     assert [c["kind"] for c in clusters] == ["grid", "grid"]
     assert _grid_pair_table(clusters[0], clusters[1], "point") is None
     assert _reciprocity_factor(clusters[0], clusters[1], "point") is None
+
+
+def test_dense_system_is_assembled_in_fortran_order():
+    """What LAPACK factors in place; a C-ordered matrix is copied first,
+    twice the matrix in memory."""
+    core = _u_core_cells()
+    cells = core.sources_all
+    positions, clusters = analyze_collection(cells)
+    T = _assemble_T_dense(cells, positions, clusters, "point")
+    assert T.flags.f_contiguous
+    assert not T.flags.c_contiguous
+    n = len(cells)
+    T2 = demag_tensor(cells).swapaxes(2, 3).reshape((3 * n, 3 * n)).T * magpy.mu_0
+    np.testing.assert_allclose(T, T2, rtol=0, atol=1e-12 * np.abs(T2).max())
