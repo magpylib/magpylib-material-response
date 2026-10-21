@@ -108,8 +108,9 @@ The mean polarization of the meshed sphere matches the exact result to about
   memory grows as N² and solve time faster: keep tetrahedra counts to a few
   thousand. `solver="iterative"` takes tetrahedra too, through blocks of
   point-matched fields, so the field evaluations dominate the cost with either
-  solver (see [solvers and performance](solver_performance.md)).
-  `interaction="newell"` needs cuboid cells.
+  solver and the default `solver="auto"` keeps the direct one (see
+  [solvers and performance](solver_performance.md)). `interaction="newell"`
+  needs cuboid cells.
 - `target_elems` is a lower-bound hint: TetGen inserts Steiner points to meet
   its quality constraints, so the resulting cell count is typically larger. The
   `minratio` and `mindihedral` arguments trade cell count against element

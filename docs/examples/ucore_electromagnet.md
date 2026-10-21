@@ -166,17 +166,18 @@ def timed_demag(collection, **kwargs):
     return out, time.perf_counter() - t0
 
 
-system_demag, t_cub = timed_demag(system_meshed)
+system_demag, t_cub = timed_demag(system_meshed, solver="direct")
 print(f"{n_cells} cuboid cells solved in {t_cub:.1f} s")
 ```
 
 +++ {"user_expressions": []}
 
 The three cuboids are three grids of identical cells, so the iterative solver
-(`solver="iterative"`) applies FFT products within each body and, for pairs of
-bodies large enough to pay for it, between them. Here the bodies are small and
-the dense solver is already quick; the structure the solver found and the
-agreement are what to look at, the gain grows with the cell count.
+(`solver="iterative"`, which the default `solver="auto"` takes for this model)
+applies FFT products within each body and, for pairs of bodies large enough to
+pay for it, between them. Here the bodies are small and the dense solver is
+already quick; the structure the solver found and the agreement are what to look
+at, the gain grows with the cell count.
 
 ```{code-cell} ipython3
 from magpylib_material_response.demag_fft import analyze_collection

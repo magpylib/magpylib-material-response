@@ -10,19 +10,33 @@ and this project adheres to
 
 ### Changed
 
+- `apply_demag` picks its solver by default (`solver="auto"`): the iterative
+  solver when FFT products cover at least a tenth of the interaction matrix, run
+  to `solver_tol / 100` so that it matches the direct solver to about
+  `solver_tol`, and the direct solver otherwise or when GMRES does not converge
+  ([#77](https://github.com/magpylib/magpylib-material-response/pull/77)).
 - `get_H_ext(*sources)` no longer takes the `H_ext=` keyword, which was read and
   immediately shadowed by the attribute lookup
   ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
 
 ### Added
 
+- Documentation: a "How it works" page for engineers, with 3D views from
+  magpylib-studio and interactive charts: the cells, field lines through a
+  magnet and an iron plate, how two cells act on each other, how many cells are
+  needed, and how the solver is chosen
+  ([#78](https://github.com/magpylib/magpylib-material-response/pull/78)).
 - `apply_demag(..., solver="iterative")`: a matrix-free GMRES solver next to the
-  dense direct solver (`solver="direct"`, the default), with `solver_tol` and
-  `max_iter` (iterations). Both solvers apply the same interaction rule. GMRES
-  stops at a residual below `solver_tol`; measured against the direct solver,
-  the polarization agrees to about 2 × `solver_tol` for hard magnets and 35 ×
-  `solver_tol` for soft iron at χ = 1000. GMRES that does not converge raises.
-  Boxes of cuboid cells on a uniform grid use FFT products (`demag_fft` module):
+  dense direct solver (`solver="direct"`), with `solver_tol` and `max_iter`
+  (iterations). Both solvers apply the same interaction rule. GMRES stops at a
+  residual below `solver_tol`; measured against the direct solver, the
+  polarization agrees to about 2 × `solver_tol` for hard magnets; for soft iron
+  at χ = 1000 the gap grows with the cell count, to 160 × `solver_tol` at 4,096
+  cells. GMRES that does not converge raises. Its block-Jacobi preconditioner
+  scales cells other than cuboids as cubes, so a grid with tetrahedra at χ =
+  1000 converges in 80 iterations instead of failing at 1,000
+  ([#77](https://github.com/magpylib/magpylib-material-response/pull/77)). Boxes
+  of cuboid cells on a uniform grid use FFT products (`demag_fft` module):
   32,768 cells of soft iron solve in about 4 s. Each meshed body is a grid of
   its own, told apart by the Collection its mesher made or, when the cells were
   flattened into one, by the boxes they fill on their lattice; a yoke with its

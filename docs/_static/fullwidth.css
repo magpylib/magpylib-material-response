@@ -37,3 +37,16 @@ html[data-theme="dark"]
   background: none;
   padding: 0;
 }
+
+/*
+The same for the magpylib-studio views: the theme paints a light panel round
+every widget, and a studio view wears what it sits on.
+*/
+html[data-theme="dark"]
+  body
+  .bd-content
+  div.cell_output
+  div.widget-subarea:has(.magpy-scene) {
+  background: none;
+  padding: 0;
+}

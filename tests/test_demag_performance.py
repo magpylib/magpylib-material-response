@@ -8,6 +8,7 @@ tolerance for *any* input — mixed bodies, rotations, anisotropy included.
 from __future__ import annotations
 
 import copy
+import itertools
 import time
 
 import magpylib as magpy
@@ -351,6 +352,113 @@ def test_invalid_solver_kwarg():
         apply_demag(coll, solver="banana")
 
 
+def _graded_cells():
+    """125 cuboids graded toward every face, as ``mesh_Cuboid`` with grading
+    would make them: no uniform grid."""
+    w = np.array([0.1, 0.2, 0.3, 0.2, 0.1])
+    c = np.cumsum(w) - w / 2
+    return magpy.Collection(
+        [
+            magpy.magnet.Cuboid(
+                dimension=w[[i, j, k]], position=c[[i, j, k]], polarization=(0, 0, 1)
+            )
+            for i, j, k in itertools.product(range(5), repeat=3)
+        ]
+    )
+
+
+def _spheres(n_side):
+    return magpy.Collection(
+        [
+            magpy.magnet.Sphere(diameter=0.2, position=p, polarization=(0, 0, 1))
+            for p in itertools.product(range(n_side), repeat=3)
+        ]
+    )
+
+
+def _small_bodies(k):
+    """``k`` meshed cubes of 27 cells, apart: each a grid of its own."""
+    cubes = []
+    for i in range(k):
+        cube = magpy.magnet.Cuboid(
+            dimension=(1, 1, 1), polarization=(0, 0, 1), position=(2 * i, 0, 0)
+        )
+        cubes.append(mesh_Cuboid(cube, 27))
+    return magpy.Collection(*cubes)
+
+
+@pytest.mark.parametrize(
+    ("make", "expected"),
+    [
+        (lambda: _build_uniform_collection(27), "iterative"),
+        (
+            lambda: magpy.Collection(_build_uniform_collection(27), _spheres(2)),
+            "iterative",
+        ),
+        (lambda: magpy.Collection(_build_uniform_collection(8), _spheres(3)), "direct"),
+        (lambda: _small_bodies(20), "direct"),
+        (_graded_cells, "direct"),
+    ],
+    ids=[
+        "grid",
+        "grid-and-fewer-spheres",
+        "grid-and-more-spheres",
+        "small-bodies",
+        "graded",
+    ],
+)
+def test_auto_solver_follows_the_cell_structure(make, expected):
+    """ "auto" goes by the share of the interaction matrix FFT products cover:
+    a grid's cells among themselves, large grids of one spacing between them."""
+    _, clusters = analyze_collection(make().sources_all)
+    assert demag._auto_solver(clusters)[0] == expected
+
+
+def test_iterative_preconditions_every_cell_type():
+    """Spheres beside a soft grid converge about as fast as the grid alone:
+    every cell is preconditioned, cells other than cuboids as cubes. Left
+    unscaled, they took 219 iterations here, past this test's cap."""
+    cube = magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 0))
+    spheres = [
+        magpy.magnet.Sphere(
+            diameter=0.3,
+            position=np.array(p) * 0.4 + (1.0, -0.4, -0.4),
+            polarization=(0, 0, 0),
+        )
+        for p in itertools.product(range(3), repeat=3)
+    ]
+    for src in (cube, *spheres):
+        src.susceptibility = 1000.0
+        src.H_ext = (0, 0, 1)
+    coll = magpy.Collection(mesh_Cuboid(cube, 125), *spheres)
+    direct = _pols(apply_demag(coll, solver="direct"))
+    iterative = _pols(apply_demag(coll, solver="iterative", max_iter=100))
+    np.testing.assert_allclose(iterative, direct, atol=1e-4 * np.abs(direct).max())
+
+
+def test_auto_solver_matches_direct():
+    """GMRES at solver_tol / 100 lands within about solver_tol of the direct
+    polarization, at high susceptibility too."""
+    coll = _build_uniform_collection(512, susceptibility=1000.0)
+    direct = _pols(apply_demag(coll, solver="direct"))
+    auto = _pols(apply_demag(coll))
+    np.testing.assert_allclose(auto, direct, atol=2e-6 * np.abs(direct).max())
+
+
+def test_auto_solver_falls_back_to_direct_only_when_it_fits():
+    """When GMRES does not converge, "auto" solves directly up to 2 GB of dense
+    matrix and raises beyond."""
+    small = _build_uniform_collection(512, susceptibility=1000.0)
+    np.testing.assert_allclose(
+        _pols(apply_demag(small, solver_tol=1e-14, max_iter=1)),
+        _pols(apply_demag(small, solver="direct")),
+        atol=1e-12,
+    )
+    large = _build_uniform_collection(5832, susceptibility=1000.0)
+    with pytest.raises(RuntimeError, match="direct solver would need"):
+        apply_demag(large, solver_tol=1e-14, max_iter=1)
+
+
 @pytest.mark.slow
 def test_fft_faster_than_direct():
     """At n=3375, the FFT-iterative path clearly outperforms the direct
@@ -473,7 +581,7 @@ def test_default_is_point_matching():
     """The default rule reproduces the historical point-matching solve, through
     every fast path, up to the far-field expansion (here none: all close)."""
     coll = _mixed_collection()
-    default = _pols(apply_demag(coll, susceptibility=0.5))
+    default = _pols(apply_demag(coll, susceptibility=0.5, solver="direct"))
     legacy = _pols(apply_demag(coll, susceptibility=0.5, split=2))
     np.testing.assert_allclose(default, legacy, rtol=0, atol=1e-12)
 
