@@ -530,14 +530,18 @@ def _droppable_fraction(block, row_budget):
     return (csum <= row_budget).sum() / block.size
 
 
-def _pair_block(cl_a, cl_b, magnets_list, positions, interaction, row_budget=None):
+def _pair_block(
+    cl_a, cl_b, magnets_list, positions, interaction, row_budget=None, sink=None
+):
     """Build the T block for a cluster pair (observers ``a``, sources ``b``)
     under the solve's interaction rule.
 
     Returns a dense ndarray when the block is small, when ``row_budget`` is
     None, or when the budget would keep most of the entries anyway (the case
     at high susceptibility); else a CSR matrix with per-row dropped sums below
-    ``row_budget``.
+    ``row_budget``. With ``sink``, a dense block is not built: each chunk goes
+    to ``sink(start, stop, part)``, ``part`` of shape ``(3, stop - start, 3 n_b)``
+    over the observers ``start:stop``, and nothing is returned.
     """
     ia, ib = cl_a["indices"], cl_b["indices"]
     pos_a, pos_b = positions[ia], positions[ib]
@@ -594,6 +598,10 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, interaction, row_budget=Non
 
     if not sparsify:
         # Rows of a block are m-major over its observers: (3, n_a, 3 n_b).
+        if sink is not None:
+            for start, stop, part in all_chunks:
+                sink(start, stop, part.reshape(3, stop - start, 3 * n_b))
+            return None
         block = np.empty((3, n_a, 3 * n_b))
         for start, stop, part in all_chunks:
             block[:, start:stop] = part.reshape(3, stop - start, 3 * n_b)
@@ -620,34 +628,60 @@ def _pair_block(cl_a, cl_b, magnets_list, positions, interaction, row_budget=Non
 def _assemble_T_dense(
     magnets_list, positions, clusters, interaction, min_log_time=None
 ):
-    """Assemble the full dense (3n, 3n) T in Fortran layout, global frame.
+    """Assemble the full dense (3n, 3n) T, global frame, in Fortran order.
 
-    Reverse cross-blocks are derived from the forward block by reciprocity
-    wherever it holds exactly (see :func:`_reciprocity_factor`) instead of a
-    second evaluation, the same shortcut the iterative operator build uses.
+    Fortran order is what LAPACK factors in place: `scipy.linalg.solve` on a
+    C-ordered matrix copies it first, twice the matrix in memory. Every chunk
+    of a block is written straight into T, and reverse cross-blocks come from
+    the forward chunk by reciprocity wherever it holds exactly (see
+    :func:`_reciprocity_factor`), so no block is ever held on its own.
     """
     n = len(magnets_list)
-    T = np.zeros((3 * n, 3 * n))
+    T = np.zeros((3 * n, 3 * n), order="F")
 
     def _flat(cl):
-        return (np.arange(3)[:, None] * n + cl["indices"][None, :]).ravel()
+        return np.arange(3)[:, None] * n + cl["indices"][None, :]  # (3, n_cl)
+
+    def _write(rows, cols, factor):
+        def sink(start, stop, part):
+            r = rows[:, start:stop].ravel()
+            T[np.ix_(r, cols.ravel())] = part.reshape(len(r), -1)
+            if factor is not None:
+                T[np.ix_(cols.ravel(), r)] = factor * part.reshape(len(r), -1).T
+
+        return sink
 
     with timelog("Demagnetization tensor assembly", min_log_time=min_log_time):
         for idx_a, cl_a in enumerate(clusters):
             rows = _flat(cl_a)
-            T[np.ix_(rows, rows)] = _pair_block(
-                cl_a, cl_a, magnets_list, positions, interaction
+            _pair_block(
+                cl_a,
+                cl_a,
+                magnets_list,
+                positions,
+                interaction,
+                sink=_write(rows, rows, None),
             )
             for cl_b in clusters[idx_a + 1 :]:
                 cols = _flat(cl_b)
-                M_ab = _pair_block(cl_a, cl_b, magnets_list, positions, interaction)
-                T[np.ix_(rows, cols)] = M_ab
                 factor = _reciprocity_factor(cl_a, cl_b, interaction)
-                if factor is not None:
-                    M_ba = factor * M_ab.T
-                else:
-                    M_ba = _pair_block(cl_b, cl_a, magnets_list, positions, interaction)
-                T[np.ix_(cols, rows)] = M_ba
+                _pair_block(
+                    cl_a,
+                    cl_b,
+                    magnets_list,
+                    positions,
+                    interaction,
+                    sink=_write(rows, cols, factor),
+                )
+                if factor is None:
+                    _pair_block(
+                        cl_b,
+                        cl_a,
+                        magnets_list,
+                        positions,
+                        interaction,
+                        sink=_write(cols, rows, None),
+                    )
     return T
 
 
@@ -1436,11 +1470,13 @@ def apply_demag(
 
         with timelog("Solving of linear system", min_log_time=min_log_time):
             if solver == "direct":
-                # In-place assembly of Q = I - S T reuses T's buffer (T is
-                # not needed afterwards), cutting peak memory ~2-3x compared
-                # to np.eye(3n) - S @ T which materializes three matrices.
-                Q = _subtract_susceptibility_product(np.ascontiguousarray(T), chi)
-                pol_new = scipy.linalg.solve(Q, rhs, overwrite_a=True)
+                # Q = I - S T is formed in T's own buffer and factored in
+                # place: T is Fortran-ordered for that, and a C copy here
+                # would cost twice the matrix.
+                Q = _subtract_susceptibility_product(T, chi)
+                pol_new = scipy.linalg.solve(
+                    Q, rhs, overwrite_a=True, check_finite=False
+                )
             else:
                 if T is not None:
                     matvec = _build_dense_matvec(chi, T)
