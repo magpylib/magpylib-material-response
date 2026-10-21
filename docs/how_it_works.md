@@ -59,174 +59,19 @@ ORANGE, BLUE, GREY = "#eb6834", "#2a78d6", "#8a8984"
 logger.remove()  # loguru's own default sink would print the package log twice
 
 
-def views(*titled, height=430):
-    """magpylib-studio views side by side, saved into the page so that they
-    turn and zoom without a running Python. In a notebook, show the view
-    itself, or draw any magpylib objects with
-    ``magpy.show(*objects, backend="widget")``."""
-    cells = []
-    for title, view in titled:
-        page = html.escape(view.to_html(title))
-        cells.append(
-            '<figure style="flex: 1 1 340px; margin: 0">'
-            f'<iframe class="magpy-studio-frame" title="{html.escape(title)}" '
-            f'srcdoc="{page}" style="width: 100%; height: {height}px; border: 0">'
-            f'</iframe><figcaption style="text-align: center">{title}</figcaption>'
-            "</figure>"
-        )
-    return HTML(
-        '<div style="display: flex; flex-wrap: wrap; gap: 12px">'
-        + "".join(cells)
-        + "</div>"
-    )
-
-
-def view_of(*objects, **kwargs):
-    """A studio view made only to be saved into the page: on a channel to
-    nowhere, so the notebook does not also keep it as a live widget."""
-    return SceneWidget(*objects, comm=DummyComm(), **kwargs)
-
-
-def leaves(node):
-    """The ids of the objects under a node of a view's object tree."""
-    if not node["children"]:
-        return [node["id"]]
-    return [i for child in node["children"] for i in leaves(child)]
-
-
-def cut_open(parts, coloured, j_max):
-    """A view of solved parts cut open at y = 0, with the field lines of B in
-    that plane. ``parts`` maps a name to the part's cells; the cells of the
-    parts named in ``coloured`` are coloured by the strength of their
-    polarization, up to ``j_max``, and the others show their own north and
-    south. The front halves are hidden, not removed: the field lines are still
-    those of the whole parts, and the legend shows the halves again."""
-    halves, front = [], []
-    for name, cells in parts.items():
-        cells = [c.copy() for c in cells]
-        if name in coloured:
-            strength = [np.linalg.norm(c.polarization) / j_max for c in cells]
-            for cell, colour in zip(
-                cells, sample_colorscale("Viridis", strength), strict=True
-            ):
-                cell.style.color = colour
-                cell.style.magnetization.show = False
-        else:
-            for cell in cells:
-                cell.style.color, cell.style.magnetization.show = "#d9534f", False
-        back = magpy.Collection(*(c for c in cells if c.position[1] > 0))
-        back.style.label = name
-        halves.append(back)
-        front_half = magpy.Collection(*(c for c in cells if c.position[1] < 0))
-        front_half.style.label = f"{name}, front"
-        halves.append(front_half)
-        front.append(front_half.style.label)
-    x, z = np.linspace(-25, 25, 26) * MM, np.linspace(-12, 12, 13) * MM
-    X, Z = np.meshgrid(x, z, indexing="ij")
-    plane = magpy.Sensor(pixel=np.stack([X, 0 * X, Z], axis=-1))
-    plane.style.label = "field lines of B"
-    plane.style.pixel.size = 0
-    plane.style.pixel.field.source = "B"
-    for axis in "xyz":
-        getattr(plane.style.arrows, axis).show = False
-    with warnings.catch_warnings():
-        # the halves were built in a loop, which matters only for editing
+def show3d(title, *objects, height=430, **kwargs):
+    """A magpylib-studio view of ``objects``, saved into the page so that it
+    turns and zooms without a running Python; in a notebook,
+    ``magpy.show(*objects, backend="widget")`` draws it live. Made on a channel
+    to nowhere, so that the notebook does not also store it as a widget."""
+    with warnings.catch_warnings():  # objects built in a loop: only for editing
         warnings.filterwarnings("ignore", message="magpylib-studio", category=UserWarning)
-        view = view_of(*halves, plane, field_lines=True)
-    view.hidden = [
-        i for node in view.tree if node["label"] in front for i in leaves(node)
-    ]
-    # Look at, and turn about, the middle of the cut rather than the middle of
-    # the halves left showing: the cut faces and the lines are what to see.
-    # (Studio takes the camera in metres; it has no argument for it yet.)
-    target = np.array([0.0, 0.0, -1.75 * MM])
-    look = np.array([0.55, -0.68, 0.48]) / np.linalg.norm([0.55, -0.68, 0.48])
-    view._camera = {
-        "projection": "perspective",
-        "position": (target + 0.045 * look).tolist(),
-        "target": target.tolist(),
-        "up": [0.0, 0.0, 1.0],
-        "zoom": 1.0,
-        "height": 0.06,
-        "near": 1e-5,
-        "far": 1.0,
-    }
-    return view
-
-
-def field_on_grid(get, xs, zs, y, sources):
-    """``get`` (``getB`` or ``getJ`` of a collection of ``sources`` cells) on
-    the grid xs x zs of the plane at ``y``, shape (len(zs), len(xs), 3): a slice
-    of the points at a time, so that a call holds at most 200,000 cell-point
-    pairs."""
-    X, Z = np.meshgrid(xs, zs)
-    points = np.column_stack([X.ravel(), np.full(X.size, y), Z.ravel()])
-    step = max(1, 200_000 // sources)
-    parts = [np.reshape(get(points[i : i + step]), (-1, 3)) for i in range(0, len(points), step)]
-    return np.nan_to_num(np.concatenate(parts)).reshape(*X.shape, 3)
-
-
-def even_field_lines(xs, zs, U, V, spacing):
-    """Evenly spaced lines of the field (U, V) on the grid xs x zs, as
-    matplotlib's streamplot spaces them: a line stops where it enters a square
-    of side ``spacing`` another line already crosses, and lines start from
-    squares no line crosses yet."""
-    nx, nz = int(np.ceil((xs[-1] - xs[0]) / spacing)), int(np.ceil((zs[-1] - zs[0]) / spacing))
-    taken = np.zeros((nz, nx), dtype=bool)
-    size = np.hypot(U, V)
-    u = np.divide(U, size, out=np.zeros_like(U), where=size > 0)
-    v = np.divide(V, size, out=np.zeros_like(V), where=size > 0)
-    dx, dz, h = xs[1] - xs[0], zs[1] - zs[0], spacing / 4
-
-    def direction(p):
-        fx, fz = (p[0] - xs[0]) / dx, (p[1] - zs[0]) / dz
-        i, j = int(fz), int(fx)
-        if not (0 <= i < len(zs) - 1 and 0 <= j < len(xs) - 1):
-            return None
-        a, b = fz - i, fx - j
-        w = ((1 - a) * (1 - b), (1 - a) * b, a * (1 - b), a * b)
-        d = np.array([
-            w[0] * f[i, j] + w[1] * f[i, j + 1] + w[2] * f[i + 1, j] + w[3] * f[i + 1, j + 1]
-            for f in (u, v)
-        ])
-        n = np.hypot(*d)
-        return None if n < 1e-9 else d / n
-
-    def square(p):
-        return int((p[1] - zs[0]) / spacing), int((p[0] - xs[0]) / spacing)
-
-    def half(seed, sign, mine):
-        p, path, at = np.array(seed), [], square(seed)
-        for _ in range(4000):
-            d = direction(p)
-            d = None if d is None else direction(p + 0.5 * h * sign * d)
-            if d is None:
-                break
-            p = p + h * sign * d
-            c = square(p)
-            if not (0 <= c[0] < nz and 0 <= c[1] < nx):
-                break
-            if c != at:
-                if taken[c] or c in mine:
-                    break
-                mine.add(c)
-                at = c
-            path.append(p)
-        return path
-
-    lines = []
-    edge_first = sorted(np.ndindex(nz, nx), key=lambda c: min(c[0], nz - 1 - c[0], c[1], nx - 1 - c[1]))
-    for i, j in edge_first:
-        if taken[i, j]:
-            continue
-        seed = (xs[0] + (j + 0.5) * spacing, zs[0] + (i + 0.5) * spacing)
-        mine = {(i, j)}
-        back, ahead = half(seed, -1.0, mine), half(seed, 1.0, mine)
-        if len(mine) >= 3:
-            for c in mine:
-                taken[c] = True
-            lines.append(np.array([*back[::-1], seed, *ahead]))
-    return lines
+        page = SceneWidget(*objects, comm=DummyComm(), **kwargs).to_html(title)
+    return HTML(
+        f'<div><iframe class="magpy-studio-frame" title="{html.escape(title)}" '
+        f'srcdoc="{html.escape(page)}" style="width: 100%; height: {height}px; border: 0">'
+        "</iframe></div>"
+    )
 ```
 
 +++ {"user_expressions": []}
@@ -267,99 +112,66 @@ iron = magnet_and_plate(1000)
 
 +++ {"user_expressions": []}
 
-The view shows both parts cut open in the middle, with the field lines of B in
-the cut. The magnet is red. The plate's cells are coloured by the strength of
-their polarization, from dark blue for none to yellow for 1 T. Turn the view
-with the mouse; the legend brings back the front halves.
+In the view, the plate's cells are coloured by the strength of their
+polarization, from dark blue for none to yellow for 1 T, and studio draws the
+field lines of B in the plane y = 0. Turn the view to look at the plate from
+below: the cells above the magnet's edges carry the most, where the flux turns
+into the plate.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-magnet_cells, plate_cells = (part.sources_all for part in iron.children)
-j_max = max(np.linalg.norm(c.polarization) for c in plate_cells)
-views(("a magnet below an iron plate, cut open", cut_open({"magnet": magnet_cells, "plate": plate_cells}, {"plate"}, j_max)))
+magnet, plate = iron.children
+iron.style.label, magnet.style.label, plate.style.label = "solved", "magnet", "iron plate"
+strength = np.array([np.linalg.norm(c.polarization) for c in plate.sources_all])
+for cell, colour in zip(plate.sources_all, sample_colorscale("Viridis", list(strength / strength.max())), strict=True):
+    cell.style.color, cell.style.magnetization.show = colour, False
+for cell in magnet.sources_all:
+    cell.style.color, cell.style.magnetization.show = "#d9534f", False
+x, z = np.meshgrid(np.linspace(-25, 25, 26) * MM, np.linspace(-12, 12, 13) * MM, indexing="ij")
+lines = magpy.Sensor(
+    pixel=np.stack([x, 0 * x, z], axis=-1),
+    style_label="field lines of B",
+    style_pixel_size=0,  # the lines, without the pixels
+    style_pixel_field_source="B",
+    style_arrows_x_show=False,
+    style_arrows_y_show=False,
+    style_arrows_z_show=False,
+)
+show3d("a magnet below an iron plate", iron, lines, field_lines=True)
 ```
 
 +++ {"user_expressions": []}
 
-The cells just above the magnet's edges carry the most polarization: that is
-where the flux turns into the plate. What the plate does with it depends on its
-susceptibility. The cut below shows the strength of B in colour, on a log scale,
-and its direction with evenly spaced field lines, through the iron too. Drag the
-slider from χ = 0, where the plate is not there for the field, to soft iron.
+What the plate does with the flux depends on its susceptibility. On the axis
+above the plate:
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-from scipy.ndimage import median_filter
-
-xs, zs = np.linspace(-25, 25, 196), np.linspace(-12, 12, 96)  # mm, off the cell faces
-LOW, HIGH = 0.0, 3.1  # log10 of |B| in mT: 1 mT to 1.26 T
-
-
-def cut_traces(solved, chi):
-    """|B| in colour and evenly spaced field lines, 0.05 mm behind the cut. In
-    a plate cell, the solver's own B, J (1 + 1/chi) at its centre: the field
-    inside a uniformly polarized cell swings from point to point, which is the
-    mesh's, not the iron's."""
-    cells = len(solved.sources_all)
-    y = 0.05 * MM
-    B = field_on_grid(solved.getB, xs * MM, zs * MM, y, cells)
-    plate = solved.children[1]
-    J = field_on_grid(plate.getJ, xs * MM, zs * MM, y, cells)
-    iron = np.linalg.norm(J, axis=-1) > 0
-    if chi:
-        B = np.where(iron[..., None], J * (1 + 1 / chi), B)
-    level = (np.log10(np.maximum(np.linalg.norm(B, axis=-1) * 1e3, 1e-3)) - LOW) / (HIGH - LOW)
-    # a cell edge just outside the iron leaves a dark speck one sample wide
-    level = np.where(iron, level, median_filter(level, size=3))
-    xl, zl = [], []
-    for line in even_field_lines(xs, zs, B[..., 0], B[..., 2], spacing=1.0):
-        line = np.round(line[::2], 2)
-        xl += [*line[:, 0], None]
-        zl += [*line[:, 1], None]
-    return [
-        go.Heatmap(
-            x=xs, y=zs, z=np.round(255 * np.clip(level, 0, 1)).astype(np.uint8), zmin=0, zmax=255,
-            colorscale="Viridis", hoverinfo="skip",
-            colorbar={"title": {"text": "|B|"}, "tickvals": [255 * (k - LOW) / (HIGH - LOW) for k in range(4)],
-                      "ticktext": ["1 mT", "10 mT", "100 mT", "1 T"]},
-        ),
-        go.Scatter(x=xl, y=zl, mode="lines", line={"color": "rgba(255, 255, 255, 0.8)", "width": 1}, hoverinfo="skip", showlegend=False),
-    ]
-
-
-chis = (0, 10, 100, 1000)
-cuts = {chi: cut_traces(iron if chi == 1000 else magnet_and_plate(chi), chi) for chi in chis}
-fig = go.Figure(data=cuts[1000])
-fig.add_shape(type="rect", x0=-5, x1=5, y0=-6.5, y1=-1.5, line={"color": ORANGE, "width": 2})
-fig.add_shape(type="rect", x0=-15, x1=15, y0=0, y1=3, line={"color": "white", "width": 1})
-fig.frames = [go.Frame(name=str(chi), data=cuts[chi]) for chi in chis]
+above = np.linspace(4, 20, 81) * MM
+fig = go.Figure()
+for chi, colour in ((0, GREY), (10, "#86b6ef"), (100, BLUE), (1000, "#0b3c8c")):
+    solved = iron if chi == 1000 else magnet_and_plate(chi)
+    Bz = solved.getB(np.column_stack([0 * above, 0 * above, above]))[:, 2]
+    name = "χ = 0, as if there were no plate" if chi == 0 else f"χ = {chi}"
+    fig.add_trace(go.Scatter(x=above / MM, y=Bz * 1e3, name=name, line={"color": colour, "width": 2}))
 fig.update_layout(
-    xaxis={"title": {"text": "x (mm)"}, "range": [-25, 25], "constrain": "domain"},
-    yaxis={"title": {"text": "z (mm)"}, "range": [-12, 12], "scaleanchor": "x", "constrain": "domain"},
-    height=400,
+    xaxis={"title": {"text": "z on the axis (mm); the plate's top is at 3 mm"}},
+    yaxis={"title": {"text": "Bz (mT)"}, "type": "log"},
+    height=360,
     margin={"l": 60, "r": 20, "t": 20, "b": 40},
-    sliders=[{
-        "active": len(chis) - 1, "pad": {"t": 50},
-        "currentvalue": {"prefix": "plate susceptibility χ = "},
-        "steps": [
-            {"label": str(chi), "method": "animate",
-             "args": [[str(chi)], {"mode": "immediate", "frame": {"duration": 0, "redraw": True}, "transition": {"duration": 0}}]}
-            for chi in chis
-        ],
-    }],
+    legend={"x": 0.98, "y": 0.98, "xanchor": "right"},
 )
 fig
 ```
 
 +++ {"user_expressions": []}
 
-At χ = 10 the lines still cross the plate and go on above it. Soft iron draws
-the flux in, carries it sideways inside the plate and lets it out at the ends,
-and the space above the plate goes dark. On the axis, 3 mm above the plate, the
-field falls from 65 mT without the plate to 31 mT at χ = 10 and to 10 mT for
-soft iron.
+3 mm above the plate, at z = 6 mm, the field falls from 65 mT without the plate
+to 31 mT at χ = 10 and to 10 mT for soft iron. The iron draws the flux in,
+carries it sideways inside the plate and lets it out at its ends, and the space
+above it is shielded.
 
 ## Every cell feels every other cell
 
@@ -594,7 +406,7 @@ for cluster in analyze_collection(solved.sources_all)[1]:
         cells[i].style.color = kinds[cluster["kind"]][1]
         cells[i].style.magnetization.show = False
         groups[cluster["kind"]].append(cells[i])
-views(("how the solver sees the cells", view_of(*(magpy.Collection(*group, style_label=kinds[k][0]) for k, group in groups.items() if group))), height=380)
+show3d("how the solver sees the cells", *(magpy.Collection(*group, style_label=kinds[k][0]) for k, group in groups.items() if group), height=380)
 ```
 
 +++ {"user_expressions": []}

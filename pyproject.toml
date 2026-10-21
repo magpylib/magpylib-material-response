@@ -64,9 +64,8 @@ docs = [
   "plotly>=6.7",
   "magpylib-material-response[tetgen]",
   # 3D views with field lines, saved into the pages. Field lines are on studio's
-  # main, not released, and need magpylib/magpylib-studio#64 to fit in Read the
-  # Docs' memory: back to "magpylib-studio[widget]>=0.7" once both are out.
-  "magpylib-studio[widget] @ git+https://github.com/magpylib/magpylib-studio@ef77ea40a5833f47318ec78833a337399b71245b",
+  # main and not yet released: back to "magpylib-studio[widget]>=0.7" once they are.
+  "magpylib-studio[widget] @ git+https://github.com/magpylib/magpylib-studio@56348dc851943708b50ebdb5d9608d8846a046a9",
 ]
 
 [tool.hatch]
