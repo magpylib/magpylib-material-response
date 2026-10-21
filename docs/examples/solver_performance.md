@@ -27,8 +27,9 @@ the same system:
   exactly with LAPACK. Memory grows as (3N)² and time as N³, so it is the right
   choice up to a few thousand cells.
 - `solver="iterative"` — solves the same system matrix-free with GMRES. Cells on
-  uniform grids (the output of `mesh_Cuboid`) are handled by an O(N log N) FFT
-  convolution, so meshes with tens of thousands of cells stay fast and
+  uniform grids (the output of `mesh_Cuboid`, one grid per meshed body) are
+  handled by an O(N log N) FFT convolution, within a body and between bodies of
+  one cell size, so meshes with tens of thousands of cells stay fast and
   memory-light. If GMRES cannot reach `solver_tol` within `max_iter` iterations,
   a `RuntimeError` is raised — a partially converged result is never returned
   silently.
@@ -257,13 +258,14 @@ within a few hundred MB.
 
 ## Model topology matters
 
-The solvers assemble the interaction operator from _structure clusters_ (uniform
-grids of identical parallel cuboids → FFT, other cuboids sharing a shape and
-orientation → blocks computed once per distinct displacement, every other cell →
-one `magpy.getH` per pair), so the model topology decides which paths do the
-work — and how much the solver choice matters. Here the same comparison runs on
-characteristic topologies of similar total cell count (single-run timings —
-indicative, not statistics).
+The solvers assemble the interaction operator from _structure clusters_: each
+meshed body of identical parallel cuboids is a uniform grid → FFT products
+within it and, for large pairs, between two bodies of one cell size; other
+cuboids sharing a shape and orientation → blocks computed once per distinct
+displacement; every other cell → one `magpy.getH` per pair. So the model
+topology decides which paths do the work — and how much the solver choice
+matters. Here the same comparison runs on characteristic topologies of similar
+total cell count (single-run timings — indicative, not statistics).
 
 ```{code-cell} ipython3
 from collections import Counter
@@ -357,12 +359,16 @@ pd.DataFrame(topo_rows)
 
 What the rows show:
 
-- **Single body / a few parallel bodies** — everything runs on the FFT and
-  deduplicated cuboid paths; the iterative solver is ahead and scales far better
-  (previous section).
+- **Single body / a few parallel bodies** — everything runs on the FFT paths;
+  the iterative solver is ahead (about a third of the direct time for one body,
+  a bit over half for four, on this machine) and scales far better (previous
+  section). Bodies that touch count as separate grids too: a yoke with its legs
+  is three grids, not one connected component.
 - **Dozens of bodies** — the pairwise cross-blocks (one per body pair) start to
-  dominate the operator build. The iterative solver still wins, but its
-  advantage shrinks as the body count grows at fixed total cells.
+  dominate the operator build; between small bodies they are dense blocks from
+  one table of displacements, between large ones FFT products. The iterative
+  solver still wins (about 0.7 of the direct time here), but its advantage
+  shrinks as the body count grows at fixed total cells.
 - **Bodies rotated individually** — cross-blocks between differently oriented
   bodies share no displacements, so they are computed pair by pair in both
   directions, by both solvers alike: expect near parity. The self-blocks of each
@@ -382,7 +388,7 @@ What the rows show:
 | -------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------ |
 | One meshed body, up to a few thousand cells (~2000–3000) | FFT / deduplicated              | either; `direct` (default) is exact and tuning-free                |
 | One meshed body, large                                   | FFT self-block                  | `iterative` — O(N log N); the dense matrix takes 7 GB at 10⁴ cells |
-| Few parallel bodies                                      | FFT + deduplicated cross-blocks | `iterative` — cross-blocks are cheap                               |
+| Few parallel bodies, touching or not                     | FFT within and between bodies   | `iterative` — cross-blocks are cheap                               |
 | Dozens of bodies                                         | cross-blocks dominate the build | `iterative`, but advantage shrinks with body count                 |
 | Bodies rotated differently                               | pair-by-pair cross-blocks       | either — build cost is shared, expect parity                       |
 | Non-cuboid cells (cylinder, tetrahedra)                  | one `getH` per pair, dense      | either — cell field evaluation dominates; keep counts moderate     |

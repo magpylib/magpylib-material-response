@@ -94,6 +94,9 @@ DENSE_BLOCK_MAX_BYTES = 2_000_000_000
 KERNEL_PAIRS_PER_CALL = 200_000
 # A gather from a grid-pair table costs 72 B per pair, no kernel temporaries.
 TABLE_PAIRS_PER_CHUNK = 2_000_000
+# Between two grids of one spacing the block is an FFT convolution; below this
+# many entries a dense block from the same table is cheaper to apply.
+FFT_CROSS_MIN_ENTRIES = 1_000_000
 
 
 def _has_path(src):
@@ -815,7 +818,12 @@ def _build_operator(
             for idx_b, cl_b in enumerate(clusters):
                 if idx_b <= idx_a:
                     continue
-                cross = _fft_cross_op(cl_a, cl_b, interaction)
+                n_ab = 9 * len(cl_a["indices"]) * len(cl_b["indices"])
+                cross = (
+                    _fft_cross_op(cl_a, cl_b, interaction)
+                    if n_ab > FFT_CROSS_MIN_ENTRIES
+                    else None
+                )
                 if cross is not None:
                     ops.append(cross)
                     ops.append(

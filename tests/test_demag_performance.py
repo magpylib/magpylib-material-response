@@ -659,7 +659,8 @@ def test_flattened_touching_bodies_still_get_a_grid_each():
     ]
 
 
-def test_cross_grid_blocks_use_fft():
+def test_cross_grid_blocks_use_fft(monkeypatch):
+    monkeypatch.setattr(demag, "FFT_CROSS_MIN_ENTRIES", 0)  # the test bodies are small
     """Two grids of one spacing: the iterative solver's cross blocks are FFT
     convolutions that agree with the direct solver."""
     core = _u_core_cells()

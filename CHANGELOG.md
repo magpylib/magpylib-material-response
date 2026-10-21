@@ -26,14 +26,14 @@ and this project adheres to
   32,768 cells of soft iron solve in about 4 s. Each meshed body is a grid of
   its own, told apart by the Collection its mesher made or, when the cells were
   flattened into one, by the boxes they fill on their lattice; a yoke with its
-  legs, meshed with `mesh_all`, then gets FFT products within each body and
-  between bodies of one cell size. Grids with holes, such as voxelized round
-  bodies, and other cell types use dense blocks; a dense block is only
-  sparsified when that drops at least half of its entries, which at high
-  susceptibility it rarely does. The direct solver assembles its matrix in
-  Fortran order and factors it in place, in 1.1 times the matrix's memory where
-  `scipy.linalg.solve` on a C-ordered copy took 4 (3,773 cells: 1.9 GB instead
-  of 4.8)
+  legs, meshed with `mesh_all`, then gets FFT products within each body and, for
+  pairs large enough to pay for it, between bodies of one cell size. Grids with
+  holes, such as voxelized round bodies, and other cell types use dense blocks;
+  a dense block is only sparsified when that drops at least half of its entries,
+  which at high susceptibility it rarely does. The direct solver assembles its
+  matrix in Fortran order and factors it in place, in 1.1 times the matrix's
+  memory where `scipy.linalg.solve` on a C-ordered copy took 4 (3,773 cells: 1.9
+  GB instead of 4.8)
   ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
 - `apply_demag(..., interaction="newell")`: cells act on each other through the
   field averaged over each cell, the volume-averaged Newell tensor (`newell`
