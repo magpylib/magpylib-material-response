@@ -159,15 +159,40 @@ magpy.show(system_meshed, plane_shown)
 ```
 
 ```{code-cell} ipython3
-def timed_demag(collection):
+def timed_demag(collection, **kwargs):
     """apply_demag with wall-clock timing, quoted with the results below."""
     t0 = time.perf_counter()
-    out = apply_demag(collection)
+    out = apply_demag(collection, **kwargs)
     return out, time.perf_counter() - t0
 
 
 system_demag, t_cub = timed_demag(system_meshed)
 print(f"{n_cells} cuboid cells solved in {t_cub:.1f} s")
+```
+
++++ {"user_expressions": []}
+
+The three cuboids are three grids of identical cells, so the iterative solver
+(`solver="iterative"`) applies FFT products within each body and, for pairs of
+bodies large enough to pay for it, between them. Here the bodies are small and
+the dense solver is already quick; the structure the solver found and the
+agreement are what to look at, the gain grows with the cell count.
+
+```{code-cell} ipython3
+from magpylib_material_response.demag_fft import analyze_collection
+
+cells = [s for s in system_meshed.sources_all if isinstance(s, magpy.magnet.Cuboid)]
+_, clusters = analyze_collection(cells)
+print("structure:", ", ".join(f"{c['kind']} of {len(c['indices'])} cells" for c in clusters))
+
+system_iter, t_iter = timed_demag(system_meshed, solver="iterative")
+pol = lambda coll: np.array(  # noqa: E731
+    [s.polarization for s in coll.sources_all if isinstance(s, magpy.magnet.Cuboid)]
+)
+print(
+    f"iterative: {t_iter:.1f} s, polarizations within "
+    f"{np.abs(pol(system_iter) - pol(system_demag)).max():.1e} T of the direct solve"
+)
 ```
 
 +++ {"user_expressions": []}

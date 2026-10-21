@@ -197,12 +197,15 @@ rings into enough sectors that it does.
    gives the shortcuts).
 2. Build the right-hand side from the remanent polarizations, `H_ext`, and the
    field of the current sources at the cell centroids.
-3. Call `numpy.linalg.solve(Q, rhs)` and write each cell's polarization back,
-   expressed in the cell's own frame.
+3. Factor $\mathbf{Q}$ in place with LAPACK (`scipy.linalg.solve`) and write
+   each cell's polarization back, expressed in the cell's own frame.
 
 The solve is direct, exact up to floating-point rounding. Memory grows with
 $N^2$ — the matrix alone takes $(3N)^2 \times 8$ bytes, 650 MB for 3,000 cells —
-and time with up to $N^3$.
+and time with up to $N^3$. The matrix is assembled in Fortran order, every chunk
+of a block written straight into it, so the solve stays within about 1.1 times
+the matrix (a C-ordered matrix would be copied before the factorization, twice
+the matrix in memory).
 
 ### 4.2 Iterative solver (`solver="iterative"`)
 
@@ -267,18 +270,26 @@ grid spacing may exceed the cell size.
 exactly one:
 
 - **grid**: identical cuboids with one orientation whose centres fill a complete
-  uniform grid, one cluster per connected body;
+  uniform grid, one cluster per meshed body. Bodies are told apart by the
+  Collection their mesher put the cells in, or, when the cells were flattened
+  into one Collection, by the full boxes they fill on their lattice, so a yoke
+  with its legs is three grids and not one connected, non-box component;
 - **loose**: identical parallel cuboids without that grid;
 - **generic**: everything else — other cell types, rotated singletons and, under
   point matching, groups smaller than `MIN_CLUSTER_CELLS` (8).
 
 Clusters only decide _how fast_ a block is computed, never which rule it
 follows. Grid self-blocks are FFT convolutions in the iterative solver (a grid
-smaller than `MIN_GRID_CELLS`, 16, is treated as loose); every other block is
-computed once per distinct displacement when fewer than 25 % of the
-displacements are distinct, and reverse blocks follow by reciprocity where it is
-exact: $\mathsf{T}_{BA} = (V_A / V_B)\,\mathsf{T}_{AB}^\mathsf{T}$ for volume
-averaging between parallel cuboid clusters, $\mathsf{T}_{BA} =
+smaller than `MIN_GRID_CELLS`, 16, is treated as loose), and so is the block
+between two grids of one spacing and orientation when it is large
+(`FFT_CROSS_MIN_ENTRIES`): the displacement is $\mathbf{o}_A - \mathbf{o}*B +
+\mathbf{p} \odot (\mathbf{i} - \mathbf{j})$ for grid indices $\mathbf{i}$,
+$\mathbf{j}$, a convolution on a box of $N_A + N_B - 1$ per axis. The same index
+differences give the dense solver that block from one table, without sorting.
+Every other block is computed once per distinct displacement when fewer than 25
+% of the displacements are distinct, and reverse blocks follow by reciprocity
+where it is exact: $\mathsf{T}*{BA} = (V_A / V_B)\,\mathsf{T}_{AB}^\mathsf{T}$
+for volume averaging between parallel cuboid clusters, $\mathsf{T}_{BA} =
 \mathsf{T}_{AB}^\mathsf{T}$ for point matching when both clusters share one cell
 shape and orientation. Each FFT block works in its cluster's own frame, rotating
 the polarization in and the field back, so the solve runs in the global frame.
@@ -286,7 +297,10 @@ the polarization in and the field back, so the solve runs in the global frame.
 ### 5.3 Bounded sparsification of large blocks
 
 In the iterative solver, a block with more than `DENSE_BLOCK_MAX_ENTRIES`
-entries is stored sparse. Entries are dropped per observer row, smallest first,
+entries is stored sparse when that pays: its first chunk must show that at least
+half of the entries can go (`SPARSIFY_MIN_DROP`), which at high susceptibility
+the budget below rarely allows, and then the block stays dense up to
+`DENSE_BLOCK_MAX_BYTES`. Entries are dropped per observer row, smallest first,
 only while the sum of the dropped magnitudes stays within a budget:
 
 $$
