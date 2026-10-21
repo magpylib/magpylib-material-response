@@ -1,7 +1,9 @@
 # Method of Moments for Demagnetization
 
 This page describes the physics and numerical method behind `apply_demag`, from
-the material model to the linear system and the two solvers.
+the material model to the linear system and the two solvers. For the ideas
+first, with 3D views and charts to play with, see
+[How it works](how_it_works.md).
 
 ---
 
@@ -238,6 +240,8 @@ point-matched blocks vary with the cell's shape, and scaling tetrahedra by them
 triples the iterations; leaving such cells unscaled puts them about $\chi$ away
 from the scaled cuboids, where GMRES stalls. A grid with 650 tetrahedra at χ =
 1000 converges in 80 iterations this way, and not in 1,000 without.
+
+(auto-solver)=
 
 ### 4.3 Automatic choice (`solver="auto"`, the default)
 

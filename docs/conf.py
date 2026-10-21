@@ -157,3 +157,5 @@ def setup(app):
     app.connect("html-page-context", _strip_plotly_mathjax)
     # Fit plotly figures to their container and follow the dark theme.
     app.add_js_file("webcode/plotlySync.js")
+    # Keep the magpylib-studio views, saved into iframes, in the page's theme.
+    app.add_js_file("webcode/studioSync.js")

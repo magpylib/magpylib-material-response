@@ -9,6 +9,7 @@
 :maxdepth: 2
 
 quickstart
+how_it_works
 examples/index
 ```
 
