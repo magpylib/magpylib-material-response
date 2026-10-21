@@ -1,8 +1,8 @@
 """Demagnetization / material-response solver.
 
 The self-consistent polarization of ``n`` interacting cells is the solution
-of ``(I - S T) J = J0 + S B_ext`` where ``S`` is the (diagonal)
-susceptibility matrix and ``T`` the demag interaction operator. The
+of ``(I - S T) J = J0 + S B_ext`` where ``S`` is the block-diagonal
+susceptibility matrix (one 3x3 block per cell, its susceptibility along its own axes) and ``T`` the demag interaction operator. The
 ``H_ext`` object attribute is interpreted as the applied flux density
 ``B_ext`` in Tesla (B-field convention, consistent with polarization).
 
@@ -92,6 +92,8 @@ DENSE_BLOCK_MAX_BYTES = 2_000_000_000
 #: with output entries: about 0.8 kB per pair for cuboids and about 3 kB for
 #: tetrahedra in magpylib's kernels, so one chunk stays below about 0.6 GB.
 KERNEL_PAIRS_PER_CALL = 200_000
+# A gather from a grid-pair table costs 72 B per pair, no kernel temporaries.
+TABLE_PAIRS_PER_CHUNK = 2_000_000
 
 
 def _has_path(src):
@@ -283,7 +285,7 @@ def _check_interaction(interaction, magnets_list, atol=QUAT_ATOL):
     if interaction not in INTERACTIONS:
         msg = f"interaction must be one of {INTERACTIONS}; got {interaction!r}"
         raise ValueError(msg)
-    if interaction == "point":
+    if interaction == "point" or len(magnets_list) == 0:
         return
     others = Counter(
         type(m).__name__ for m in magnets_list if not isinstance(m, Cuboid)
@@ -578,7 +580,10 @@ def _pair_block(
     def _chunks():
         # Observer chunks bounded by kernel pairs, which is what costs memory;
         # a single call over all n_a * n_b pairs of 5,000 tetrahedra needs ~97 GB.
-        chunk = max(1, KERNEL_PAIRS_PER_CALL // max(n_b, 1))
+        pairs = (
+            TABLE_PAIRS_PER_CHUNK if grid_pair is not None else KERNEL_PAIRS_PER_CALL
+        )
+        chunk = max(1, pairs // max(n_b, 1))
         for start in range(0, n_a, chunk):
             stop = min(start + chunk, n_a)
             yield start, stop, _dense_chunk(slice(start, stop))
@@ -778,6 +783,7 @@ def _build_operator(
     row_budget = 0.1 * solver_tol / (chi_eff * max(K, 1))
 
     ops = []
+    dense_bytes = 0
     with timelog("Demag operator build", min_log_time=min_log_time):
         for idx_a, cl_a in enumerate(clusters):
             if cl_a["kind"] == "grid":
@@ -812,7 +818,9 @@ def _build_operator(
                 cross = _fft_cross_op(cl_a, cl_b, interaction)
                 if cross is not None:
                     ops.append(cross)
-                    ops.append(_fft_cross_op(cl_b, cl_a, interaction))
+                    ops.append(
+                        _fft_cross_op(cl_a=cl_b, cl_b=cl_a, interaction=interaction)
+                    )
                     continue
                 M_ab = _pair_block(
                     cl_a, cl_b, magnets_list, positions, interaction, row_budget
@@ -845,6 +853,19 @@ def _build_operator(
                         "M": M_ba,
                     }
                 )
+    dense_bytes = sum(
+        op["M"].nbytes for op in ops if op["kind"] == "mat" and not sp.issparse(op["M"])
+    )
+    n = sum(len(cl["indices"]) for cl in clusters)
+    if dense_bytes > DENSE_BLOCK_MAX_BYTES:
+        logger.warning(
+            "The iterative operator holds {gb:.1f} GB of dense blocks between cells that "
+            "share no grid; at this susceptibility the row budget drops little, so it "
+            "costs about as much as the direct solver's {gb_direct:.1f} GB. Fewer cells, "
+            "or cells on grids, would help.",
+            gb=dense_bytes / 1e9,
+            gb_direct=72 * n * n / 1e9,
+        )
     return ops
 
 
@@ -1042,6 +1063,8 @@ def demag_tensor(
     if not legacy:
         # Assembly under the chosen rule, returned in the legacy
         # (3, n, n, 3) pre-mu_0 layout.
+        if nof_src == 0:
+            return np.zeros((3, 0, 0, 3))
         positions, clusters = _analyze_collection(list(src_list), interaction)
         T2 = _assemble_T_dense(
             list(src_list), positions, clusters, interaction, min_log_time=min_log_time
@@ -1313,7 +1336,8 @@ def apply_demag(
         ``"direct"`` (default) builds the dense ``Q`` matrix and calls
         :func:`numpy.linalg.solve` — exact within floating-point precision.
         ``"iterative"`` solves matrix-free with :func:`scipy.sparse.linalg.gmres`
-        and a diagonal Jacobi preconditioner; uniform-grid clusters of cells
+        and a block-Jacobi preconditioner (each cell's own 3x3 block);
+        uniform-grid clusters of cells
         use an FFT-accelerated :math:`O(n \\log n)` matvec. GMRES stops when the
         residual is below ``solver_tol`` relative to the right-hand side. The
         polarization then agrees with the direct solver to about ``solver_tol``
