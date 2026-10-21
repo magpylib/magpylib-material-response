@@ -32,6 +32,11 @@ Two evaluation strategies apply the chosen rule, so ``solver="direct"`` and
   uniform-grid clusters (:mod:`magpylib_material_response.demag_fft`), dense
   or row-sum-bounded sparse blocks for everything else.
 
+``solver="auto"`` (default) picks between them from the cell structure: the
+iterative solver when FFT products cover at least a tenth of the interaction
+matrix, else the direct one, which is then as fast or faster, since GMRES
+applies the rest as blocks built pair by pair, as the direct solver builds them.
+
 Cells sharing a cuboid shape and orientation make every block fast under
 either rule: the tensor depends only on the displacement, so it is computed
 once per distinct displacement, reverse blocks follow by reciprocity, and
@@ -97,6 +102,22 @@ TABLE_PAIRS_PER_CHUNK = 2_000_000
 # Between two grids of one spacing the block is an FFT convolution; below this
 # many entries a dense block from the same table is cheaper to apply.
 FFT_CROSS_MIN_ENTRIES = 1_000_000
+
+#: ``solver="auto"`` takes the iterative solver when FFT products cover at least
+#: this share of the interaction matrix's entries: the self-blocks of uniform
+#: grids and the blocks between large grids of one spacing. Measured on 39
+#: models at chi = 1000, GMRES was then as fast or faster and lighter (three
+#: cubes of three cell sizes, 40 %: 8.3 s and 1.0 GB against 9.2 s and 1.9 GB;
+#: a grid with 3,900 tetrahedra, 26 %: 99 s against 112 s). Below it, many small
+#: bodies or cells off any grid made it slower (100 cubes of 27 cells, 1 %:
+#: 6.2 s against 5.1 s; 1,728 cuboids of 216 sizes, 0 %: 61 s against 34 s).
+AUTO_MIN_FFT_SHARE = 0.1
+#: Under ``solver="auto"`` GMRES runs to ``solver_tol`` times this factor. At
+#: chi = 1000 a GMRES polarization at ``solver_tol`` lies 160 times
+#: ``solver_tol`` from the direct one on 4,096 grid cells and 580 times on
+#: 32,768; a hundredfold tighter residual brings that to 1-10 times, for about
+#: 20 % more time.
+AUTO_TOL_FACTOR = 0.01
 
 
 def _has_path(src):
@@ -281,6 +302,7 @@ def get_H_ext(*sources):
 
 #: The interaction rules ``apply_demag`` and ``demag_tensor`` accept.
 INTERACTIONS = ("point", "newell")
+SOLVERS = ("auto", "direct", "iterative")
 
 
 def _check_interaction(interaction, magnets_list, atol=QUAT_ATOL):
@@ -327,6 +349,31 @@ def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL):
         n_generic=counts.get("generic", 0),
     )
     return positions, clusters
+
+
+def _auto_solver(clusters):
+    """The solver ``solver="auto"`` takes for these clusters, and the share of
+    the interaction matrix's entries covered by FFT products it decided by,
+    counted as :func:`_build_operator` builds them."""
+    n = sum(len(cl["indices"]) for cl in clusters)
+    grids = [cl for cl in clusters if cl["kind"] == "grid"]
+    sizes = [len(cl["indices"]) for cl in grids]
+    entries = sum(m * m for m in sizes)
+    for (i, cl_a), (j, cl_b) in itertools.combinations(enumerate(grids), 2):
+        if 9 * sizes[i] * sizes[j] > FFT_CROSS_MIN_ENTRIES and _same_lattice(
+            cl_a, cl_b
+        ):
+            entries += 2 * sizes[i] * sizes[j]
+    share = entries / (n * n) if n else 0.0
+    return ("iterative" if share >= AUTO_MIN_FFT_SHARE else "direct"), share
+
+
+def _solve_direct(T, chi, rhs):
+    """LU solve of (I - S T) x = rhs. Q is formed in T's own buffer and factored
+    in place: T is Fortran-ordered for that, and a C copy would cost twice the
+    matrix."""
+    Q = _subtract_susceptibility_product(T, chi)
+    return scipy.linalg.solve(Q, rhs, overwrite_a=True, check_finite=False)
 
 
 def _same_orientation(cl_a, cl_b, atol=QUAT_ATOL):
@@ -475,6 +522,19 @@ def _row_sparsify(block, row_budget):
     return rows, cols, block[rows, cols]
 
 
+def _same_lattice(cl_a, cl_b, rtol=1e-6):
+    """Whether two clusters are grids of one spacing and orientation, so that
+    the block between them depends on the index difference only. A relative
+    tolerance only: at nanometre scale an absolute one would call different
+    spacings equal."""
+    return (
+        cl_a["kind"] == "grid"
+        and cl_b["kind"] == "grid"
+        and _same_orientation(cl_a, cl_b)
+        and np.allclose(cl_a["spacing"], cl_b["spacing"], rtol=rtol, atol=0)
+    )
+
+
 def _grid_pair_table(cl_a, cl_b, interaction, rtol=1e-6):
     """T between two grid clusters of one spacing and orientation, tabulated
     over the index differences, in the grids' local frame.
@@ -485,15 +545,9 @@ def _grid_pair_table(cl_a, cl_b, interaction, rtol=1e-6):
     is the (3, 3) tensor of pair ``(i, j)``. Returns ``(table, index_a, index_b)``
     with ``table`` of shape ``(*(Na + Nb - 1), 3, 3)`` and the grid indices of
     the clusters' members, or ``None`` when the clusters do not share spacing
-    and orientation. A relative tolerance only: at nanometre scale an absolute
-    one would call different spacings equal.
+    and orientation (:func:`_same_lattice`).
     """
-    if not (
-        cl_a["kind"] == "grid"
-        and cl_b["kind"] == "grid"
-        and _same_orientation(cl_a, cl_b)
-        and np.allclose(cl_a["spacing"], cl_b["spacing"], rtol=rtol, atol=0)
-    ):
+    if not _same_lattice(cl_a, cl_b, rtol):
         return None
     sa, sb = np.array(cl_a["shape"]), np.array(cl_b["shape"])
     spacing = np.array(cl_a["spacing"])
@@ -808,6 +862,7 @@ def _build_operator(
                 ops.append(
                     {
                         "kind": "mat",
+                        "self": cl_a["kind"],
                         "ia": cl_a["indices"],
                         "ib": cl_a["indices"],
                         "M": _pair_block(
@@ -907,11 +962,28 @@ def _build_dense_matvec(chi, T):
     return matvec
 
 
-def _self_demag_diagonal(n, clusters, interaction):
-    """Fortran-flat (3n,) diagonal of the cells' own demag factors under the
-    solve's rule, rotated to the global frame per cluster (zero for generic
-    cells): the Jacobi preconditioner."""
-    Nself_flat = np.zeros(3 * n)
+def _diagonal_blocks(M, m):
+    """The (m, 3, 3) diagonal blocks of a component-major (3m, 3m) block of T,
+    dense or sparse: each cell's own field per unit of its own polarization."""
+    k = np.arange(m)
+    out = np.empty((m, 3, 3))
+    for a in range(3):
+        for b in range(3):
+            out[:, a, b] = np.asarray(M[a * m + k, b * m + k]).ravel()
+    return out
+
+
+def _self_blocks(n, clusters, interaction, ops):
+    """Each cell's own (3, 3) block of T in the global frame, shape (n, 3, 3),
+    for the block-Jacobi preconditioner. Cuboid clusters take their cells'
+    self-demagnetizing factors under the solve's rule, rotated with the cluster.
+    Other cells take the isotropic part of their stored self-block, ``tr/3``
+    times the identity, which is ``-I/3`` for any cell whose centroid lies
+    inside it: their full point-matched blocks vary with the cell's shape, and
+    scaling tetrahedra by them triples the iterations (35 to 220 on 1,931
+    cells at chi = 1000), while leaving them unscaled puts them about chi away
+    from the scaled cuboids, where restarted GMRES stalls."""
+    T_self = np.zeros((n, 3, 3))
     for cl in clusters:
         if cl["kind"] == "generic":
             continue
@@ -919,23 +991,25 @@ def _self_demag_diagonal(n, clusters, interaction):
             Ns = self_demag_factors(cl["dim"])  # (3,) local frame
         else:
             Ns = np.diag(point_block(np.zeros(3), cl["dim"]))
-        if cl["is_identity"]:
-            diag_m = Ns
-        else:
+        block = -np.diag(Ns)
+        if not cl["is_identity"]:
             rot_mat = cl["r_common"].as_matrix()
-            diag_m = (rot_mat**2) @ Ns  # diag of R diag(Ns) R^T
-        for m in range(3):
-            Nself_flat[m * n + cl["indices"]] = diag_m[m]
-    return Nself_flat
+            block = rot_mat @ block @ rot_mat.T
+        T_self[cl["indices"]] = block
+    for op in ops:
+        if op.get("self") == "generic":
+            own = _diagonal_blocks(op["M"], len(op["ia"]))
+            T_self[op["ia"]] = (
+                np.trace(own, axis1=1, axis2=2)[:, None, None] / 3 * np.eye(3)
+            )
+    return T_self
 
 
 #: GMRES restart length: iterations per cycle before the Krylov space is rebuilt.
 GMRES_RESTART = 20
 
 
-def _solve_iterative(
-    *, n, chi, rhs, rhs_shape, matvec, Nself_flat, solver_tol, max_iter
-):
+def _solve_iterative(*, n, chi, rhs, rhs_shape, matvec, T_self, solver_tol, max_iter):
     """GMRES solve of (I - S T) x = rhs with block-Jacobi preconditioning.
 
     Raises ``RuntimeError`` when GMRES does not reach ``solver_tol`` — a
@@ -943,11 +1017,11 @@ def _solve_iterative(
     """
     Q_op = LinearOperator((3 * n, 3 * n), matvec=matvec, dtype=float)
 
-    # Block-Jacobi preconditioner: each cell's 3x3 block of Q from its own
-    # demag factors, I + chi_i diag(N_self,i) (identity for generic cells),
-    # so a rotated anisotropic susceptibility is preconditioned exactly.
-    N_self = Nself_flat.reshape(3, n).T  # (n, 3)
-    blocks = np.eye(3) + chi * N_self[:, None, :]
+    # Block-Jacobi preconditioner: each cell's own 3x3 block of Q,
+    # I - chi_i T_ii, exact for every cell type, orientation and anisotropy.
+    # Leaving some cells unscaled would put their part of the spectrum about
+    # chi away from the rest, where restarted GMRES stalls.
+    blocks = np.eye(3) - chi @ T_self
     singular = np.abs(np.linalg.det(blocks)) < 1e-12
     blocks[singular] = np.eye(3)
     blocks_inv = np.linalg.inv(blocks)
@@ -1269,7 +1343,7 @@ def apply_demag(
     split=1,
     min_log_time=None,
     style=None,
-    solver="direct",
+    solver="auto",
     solver_tol=1e-6,
     max_iter=1000,
     interaction="point",
@@ -1339,26 +1413,42 @@ def apply_demag(
     style: dict
         Set collection style. If `inplace=False` only affects the copied collection
 
-    solver: {"direct", "iterative"}
-        Linear solver to use. Both apply the same ``interaction`` rule.
-        ``"direct"`` (default) builds the dense ``Q`` matrix and calls
-        :func:`numpy.linalg.solve` — exact within floating-point precision.
+    solver: {"auto", "direct", "iterative"}
+        Linear solver to use. All apply the same ``interaction`` rule and give the
+        same polarization to about ``solver_tol``, so this sets only time and
+        memory.
+        ``"auto"`` (default) takes ``"iterative"`` when FFT products cover at
+        least a tenth of the interaction matrix: the cells of each uniform grid
+        (meshed cuboids of one size and orientation) among themselves, and large
+        grids of one spacing between each other. There it is as fast or faster
+        and needs less memory, often far less. Otherwise, and for
+        ``pairs_matching``, ``max_dist`` and ``split``, it takes ``"direct"``.
+        Its log says which it took and why. It runs GMRES to
+        ``solver_tol / 100``, so the polarization agrees with the direct solver
+        to about ``solver_tol`` on a few thousand cells and ``10 * solver_tol``
+        on 32,768 (measured at ``chi = 1000``). When GMRES does not converge, it
+        falls back to the direct solver if the dense matrix takes at most 2 GB
+        (about 5,000 cells), and raises otherwise.
+        ``"direct"`` builds the dense ``Q`` matrix and solves it by LU
+        decomposition, exact within floating-point precision.
         ``"iterative"`` solves matrix-free with :func:`scipy.sparse.linalg.gmres`
-        and a block-Jacobi preconditioner (each cell's own 3x3 block);
+        and a block-Jacobi preconditioner (one 3x3 block per cell);
         uniform-grid clusters of cells
         use an FFT-accelerated :math:`O(n \\log n)` matvec. GMRES stops when the
         residual is below ``solver_tol`` relative to the right-hand side. The
         polarization then agrees with the direct solver to about ``solver_tol``
-        for hard magnets; for soft ones the gap can grow up to about
-        ``chi * solver_tol / 3`` (35 times ``solver_tol`` measured at
-        ``chi = 1000``), so tighten ``solver_tol`` for high susceptibilities.
+        for hard magnets; for soft ones the gap grows with the cell count, to
+        160 times ``solver_tol`` on 4,096 cells and 580 times on 32,768
+        (measured at ``chi = 1000``), so tighten ``solver_tol`` for high
+        susceptibilities.
 
     solver_tol: float
-        Relative residual tolerance passed to GMRES when ``solver="iterative"``.
+        Relative residual tolerance of GMRES when ``solver="iterative"``;
+        ``solver="auto"`` runs GMRES to ``solver_tol / 100``.
 
     max_iter: int
-        Maximum number of GMRES iterations when ``solver="iterative"``, rounded up
-        to whole restart cycles of 20. Non-convergence raises ``RuntimeError``.
+        Maximum number of GMRES iterations, rounded up to whole restart cycles of
+        20. Non-convergence raises ``RuntimeError`` under ``solver="iterative"``.
 
     interaction: {"point", "newell"}
         How cells act on each other, see above. ``"newell"`` does not combine
@@ -1375,8 +1465,8 @@ def apply_demag(
     a parent's), given as mu_0 * H in tesla, and to the field of the current
     sources in `collection` at its centroid.
     """
-    if solver not in ("direct", "iterative"):
-        msg = f"solver must be 'direct' or 'iterative'; got {solver!r}"
+    if solver not in SOLVERS:
+        msg = f"solver must be one of {SOLVERS}; got {solver!r}"
         raise ValueError(msg)
     if interaction not in INTERACTIONS:
         msg = f"interaction must be one of {INTERACTIONS}; got {interaction!r}"
@@ -1488,8 +1578,20 @@ def apply_demag(
                 T *= magpy.mu_0
                 T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
             positions, clusters = None, None
+            auto = False
+            if solver == "auto":
+                solver = "direct"
         else:
             positions, clusters = _analyze_collection(magnets_list, interaction)
+            auto = solver == "auto"
+            if auto:
+                solver, share = _auto_solver(clusters)
+                logger.info(
+                    "solver='auto' chose {solver}: FFT covers {share:.0%} of the "
+                    "interactions",
+                    share=share,
+                    solver=solver,
+                )
             T = None
             if solver == "direct":
                 T = _assemble_T_dense(
@@ -1502,39 +1604,66 @@ def apply_demag(
 
         with timelog("Solving of linear system", min_log_time=min_log_time):
             if solver == "direct":
-                # Q = I - S T is formed in T's own buffer and factored in
-                # place: T is Fortran-ordered for that, and a C copy here
-                # would cost twice the matrix.
-                Q = _subtract_susceptibility_product(T, chi)
-                pol_new = scipy.linalg.solve(
-                    Q, rhs, overwrite_a=True, check_finite=False
-                )
+                pol_new = _solve_direct(T, chi, rhs)
             else:
+                tol = solver_tol * AUTO_TOL_FACTOR if auto else solver_tol
                 if T is not None:
                     matvec = _build_dense_matvec(chi, T)
-                    Nself_flat = np.zeros(3 * n)
+                    own = _diagonal_blocks(T, n)
+                    T_self = (
+                        np.trace(own, axis1=1, axis2=2)[:, None, None] / 3 * np.eye(3)
+                    )
                 else:
                     ops = _build_operator(
                         magnets_list,
                         positions,
                         clusters,
                         chi,
-                        solver_tol,
+                        tol,
                         min_log_time,
                         interaction,
                     )
                     matvec = _build_matvec(n, chi, ops)
-                    Nself_flat = _self_demag_diagonal(n, clusters, interaction)
-                pol_new = _solve_iterative(
-                    n=n,
-                    chi=chi,
-                    rhs=rhs.ravel(),
-                    rhs_shape=rhs.shape,
-                    matvec=matvec,
-                    Nself_flat=Nself_flat,
-                    solver_tol=solver_tol,
-                    max_iter=max_iter,
-                )
+                    T_self = _self_blocks(n, clusters, interaction, ops)
+                gmres_failure = None
+                try:
+                    pol_new = _solve_iterative(
+                        n=n,
+                        chi=chi,
+                        rhs=rhs.ravel(),
+                        rhs_shape=rhs.shape,
+                        matvec=matvec,
+                        T_self=T_self,
+                        solver_tol=tol,
+                        max_iter=max_iter,
+                    )
+                except RuntimeError as err:
+                    if not auto:
+                        raise
+                    if 72 * n * n > DENSE_BLOCK_MAX_BYTES:
+                        msg = (
+                            f"{err} solver='auto' ran GMRES to solver_tol / "
+                            f"{1 / AUTO_TOL_FACTOR:g}, and the direct solver would "
+                            f"need {72 * n * n / 1e9:.1f} GB."
+                        )
+                        raise RuntimeError(msg) from err
+                    # Leave the except block first: its traceback holds the
+                    # GMRES frames, and with them the operator.
+                    gmres_failure = str(err)
+                if gmres_failure is not None:
+                    logger.warning(
+                        "solver='auto': {err} Falling back to the direct solver.",
+                        err=gmres_failure,
+                    )
+                    ops = matvec = None  # free the operator before the dense T
+                    T = _assemble_T_dense(
+                        magnets_list,
+                        positions,
+                        clusters,
+                        interaction,
+                        min_log_time=min_log_time,
+                    )
+                    pol_new = _solve_direct(T, chi, rhs)
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
 

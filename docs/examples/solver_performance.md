@@ -23,9 +23,9 @@ of each cell at the centroids of the others by default, or averaged over them
 with `interaction="newell"`, see the [method page](../method.md)), so they solve
 the same system:
 
-- `solver="direct"` (default) — assembles the dense system matrix and solves it
-  exactly with LAPACK. Memory grows as (3N)² and time as N³, so it is the right
-  choice up to a few thousand cells.
+- `solver="direct"` — assembles the dense system matrix and solves it exactly
+  with LAPACK. Memory grows as (3N)² and time as N³, so it is the right choice
+  up to a few thousand cells.
 - `solver="iterative"` — solves the same system matrix-free with GMRES. Cells on
   uniform grids (the output of `mesh_Cuboid`, one grid per meshed body) are
   handled by an O(N log N) FFT convolution, within a body and between bodies of
@@ -33,6 +33,10 @@ the same system:
   memory-light. If GMRES cannot reach `solver_tol` within `max_iter` iterations,
   a `RuntimeError` is raised — a partially converged result is never returned
   silently.
+
+The default, `solver="auto"`, takes the iterative solver when FFT products cover
+at least a tenth of the interaction matrix and the direct one otherwise; the
+table at the end of this page shows why.
 
 This example verifies the agreement on typical use cases and measures the
 performance crossover.
@@ -386,17 +390,23 @@ What the rows show:
 
 | Model topology                                           | Interaction paths               | Recommendation                                                     |
 | -------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------ |
-| One meshed body, up to a few thousand cells (~2000–3000) | FFT / deduplicated              | either; `direct` (default) is exact and tuning-free                |
+| One meshed body, up to a few thousand cells (~2000–3000) | FFT / deduplicated              | either; `direct` is exact and tuning-free                          |
 | One meshed body, large                                   | FFT self-block                  | `iterative` — O(N log N); the dense matrix takes 7 GB at 10⁴ cells |
 | Few parallel bodies, touching or not                     | FFT within and between bodies   | `iterative` — cross-blocks are cheap                               |
 | Dozens of bodies                                         | cross-blocks dominate the build | `iterative`, but advantage shrinks with body count                 |
 | Bodies rotated differently                               | pair-by-pair cross-blocks       | either — build cost is shared, expect parity                       |
 | Non-cuboid cells (cylinder, tetrahedra)                  | one `getH` per pair, dense      | either — cell field evaluation dominates; keep counts moderate     |
 
+`solver="auto"` measures this for your model: it counts the share of the
+interaction matrix that FFT products cover and takes `iterative` from a tenth
+on. The package log (`configure_logging()`) says which solver it took and why.
+
 Two knobs control the iterative solver: `solver_tol` (relative residual, default
-`1e-6`) and `max_iter` (default 1000 iterations). Non-convergence raises a
-`RuntimeError` with guidance rather than returning an inaccurate result. To see
-the detected structure for your own model, enable the package logging
+`1e-6`) and `max_iter` (default 1000 iterations). With `solver="iterative"`,
+non-convergence raises a `RuntimeError` with guidance rather than returning an
+inaccurate result. `solver="auto"` runs GMRES to `solver_tol / 100` and, when it
+does not converge, falls back to the direct solver if the dense matrix fits in 2
+GB. To see the detected structure for your own model, enable the package logging
 (`magpylib_material_response.configure_logging()`) — the cluster summary is
 logged at the start of every solve. Both solvers take `interaction="newell"` on
 meshes of parallel cuboids, through the same fast paths.

@@ -190,7 +190,7 @@ rings into enough sectors that it does.
 
 ## 4. Solvers
 
-### 4.1 Direct solver (`solver="direct"`, the default)
+### 4.1 Direct solver (`solver="direct"`)
 
 1. Assemble the full $3N \times 3N$ matrix $\mathbf{Q} = \mathbf{I} -
    \mathbf{S}\,\mathbf{T}$, block by block under the chosen rule (section 5
@@ -216,8 +216,9 @@ system.
 
 GMRES stops when the residual falls below `solver_tol` relative to the
 right-hand side, which bounds the residual, not the error. Measured against the
-direct solve, the polarizations agree to about 2 × `solver_tol` for hard magnets
-and 35 × `solver_tol` for soft iron at $\chi = 1000$: tighten `solver_tol` for
+direct solve, the polarizations agree to about 2 × `solver_tol` for hard
+magnets. For soft iron at $\chi = 1000$ the gap grows with the cell count, to
+160 × `solver_tol` at 4,096 cells and 580 × at 32,768: tighten `solver_tol` for
 high susceptibilities. `max_iter` caps the iterations, rounded up to restart
 cycles of 20; GMRES that does not converge raises `RuntimeError` rather than
 return a partial result. The solve starts from the right-hand side.
@@ -225,14 +226,46 @@ return a partial result. The solve starts from the right-hand side.
 The preconditioner is block-Jacobi, one 3×3 block per cell:
 
 $$
-\mathbf{M}_i = \mathbf{I} + \boldsymbol{\chi}_i \, \operatorname{diag}\bigl(\mathsf{N}_i\bigr)
+\mathbf{M}_i = \mathbf{I} + \boldsymbol{\chi}_i \, \mathsf{N}_i
 $$
 
-with $\boldsymbol{\chi}_i$ the cell's susceptibility tensor and
-$\operatorname{diag}(\mathsf{N}_i)$ the diagonal of its self-demagnetizing
-tensor in the global frame (the identity for cells other than cuboids). That is
-the cell's own block of $\mathbf{Q}$ for cubes and unrotated cuboids, and an
-approximation of it otherwise.
+with $\boldsymbol{\chi}_i$ the cell's susceptibility tensor and $\mathsf{N}_i$
+its self-demagnetizing tensor under the solve's rule, in the global frame. For
+cuboids that is the cell's own block of $\mathbf{Q}$, rotated with the cell.
+Other cells take $\mathsf{N}_i = \mathbf{I}/3$, the isotropic part of their own
+block, whose trace is 1 for any cell with its centroid inside. Their full
+point-matched blocks vary with the cell's shape, and scaling tetrahedra by them
+triples the iterations; leaving such cells unscaled puts them about $\chi$ away
+from the scaled cuboids, where GMRES stalls. A grid with 650 tetrahedra at χ =
+1000 converges in 80 iterations this way, and not in 1,000 without.
+
+### 4.3 Automatic choice (`solver="auto"`, the default)
+
+The two solvers give the same polarization, so the choice is one of time and
+memory, and it follows from the cell structure that section 5 detects. `"auto"`
+counts the entries of the interaction matrix that FFT products cover: the cells
+of each uniform grid among themselves, and large grids of one spacing between
+each other. From a tenth on, it takes the iterative solver. Below, it takes the
+direct one: GMRES applies the rest as blocks built pair by pair, as the direct
+solver builds them, and many small bodies or cells off any grid make it slower.
+Measured on soft iron at $\chi = 1000$, out of 39 models:
+
+| Model                         | Cells | FFT   | Direct         | Iterative      | `"auto"`  |
+| ----------------------------- | ----- | ----- | -------------- | -------------- | --------- |
+| one cube, identical cells     | 4,096 | 100 % | 3.4 s, 2.1 GB  | 0.41 s, 0.2 GB | iterative |
+| three cubes, three cell sizes | 3,240 | 40 %  | 9.2 s, 1.9 GB  | 8.3 s, 1.0 GB  | iterative |
+| a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
+| 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
+| voxelized sphere              | 1,304 | 3 %   | 0.80 s, 0.3 GB | 1.35 s, 0.3 GB | direct    |
+| tetrahedra                    | 1,931 | 0     | 9.3 s, 1.1 GB  | 9.1 s, 1.1 GB  | direct    |
+| cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
+
+Under `"auto"` GMRES runs to `solver_tol / 100`, so the polarization stays
+within about `solver_tol` of the direct solve on a few thousand cells and within
+10 × `solver_tol` on 32,768. If GMRES does not converge, `"auto"` falls back to
+the direct solver when its matrix takes at most 2 GB (about 5,000 cells), and
+raises otherwise. With the legacy options below, `"auto"` takes the direct
+solver.
 
 ### Legacy options
 

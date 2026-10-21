@@ -85,10 +85,11 @@ builds a coil-driven soft core this way.
 
 ## Large meshes and the two interaction rules
 
-For meshes too large for the dense solver, `solver="iterative"` solves the same
-system matrix-free with GMRES, using FFT products on grids of identical cuboids,
-one grid per meshed body and FFT products between bodies of one cell size too
-(see [solvers and performance](examples/solver_performance.md)).
+Large meshes need no setting. The default `solver="auto"` solves meshes made
+mostly of grids of identical cuboids, as `mesh_Cuboid` and `mesh_all` make them,
+matrix-free with GMRES and FFT products, and other meshes with the dense direct
+solver. Pass `solver="direct"` or `solver="iterative"` to choose yourself (see
+[solvers and performance](examples/solver_performance.md)).
 
 By default each cell's field is taken at the centroids of the others (point
 matching). With `interaction="newell"` it is averaged over each cell instead:
