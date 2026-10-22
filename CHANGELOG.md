@@ -21,6 +21,13 @@ and this project adheres to
 
 ### Added
 
+- `convergence.mesh_study`: solves a model on meshes of increasing resolution
+  and estimates the error of the finest, as a whole and per sensor, by the grid
+  convergence index (Richardson extrapolation over the three finest meshes, the
+  error relative to the finest value, a safety factor of 1.25). It gives no
+  estimate while the results do not change steadily, and warns when the meshes
+  barely grow
+  ([#67](https://github.com/magpylib/magpylib-material-response/pull/67)).
 - Documentation: a "How it works" page for engineers, with 3D views from
   magpylib-studio and interactive charts: the cells, field lines through a
   magnet and an iron plate, how two cells act on each other, how many cells are
@@ -96,13 +103,6 @@ and this project adheres to
 
 ### Added
 
-- Mesh-convergence tools: `convergence.mesh_study` solves a model on meshes of
-  increasing resolution and estimates the error of the finest by Richardson
-  extrapolation, with the observed order, declining when the results do not yet
-  change steadily; `mesh_Cuboid(..., grading=...)`, also through `mesh_all`,
-  shrinks the cells toward the faces, which brings a soft iron cube of 512 cells
-  within 0.3 % of its converged moment, against 2.3 % with identical cells
-  ([#67](https://github.com/magpylib/magpylib-material-response/pull/67)).
 - Serialization (`to_json` / `from_json`) now supports `magnet.Sphere`,
   `magnet.Tetrahedron`, and `magnet.TriangularMesh` — demagnetized tetrahedral
   meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded

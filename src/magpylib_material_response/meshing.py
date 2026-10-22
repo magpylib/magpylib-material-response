@@ -35,19 +35,7 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     return coll
 
 
-def _graded_edges(side, n, grading):
-    """Cell boundaries along one side of length `side`, cut into `n` cells whose
-    sizes grow geometrically from both faces to the middle, the middle cells
-    `grading` times the size of those at the faces."""
-    half = (n + 1) // 2
-    growth = grading ** (1 / max(half - 1, 1))
-    sizes = growth ** np.arange(half)
-    sizes = np.concatenate([sizes, sizes[::-1] if n % 2 == 0 else sizes[-2::-1]])
-    sizes = sizes / sizes.sum() * side
-    return np.concatenate([[0.0], np.cumsum(sizes)]) - side / 2
-
-
-def mesh_Cuboid(cuboid, target_elems, verbose=False, grading=1.0, **kwargs):
+def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
     """
     Split Magpylib cuboid up into small cuboid cells
 
@@ -64,26 +52,11 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, grading=1.0, **kwargs):
         as in magpylib's force mesher.
     verbose: bool
         If True, prints out meshing information
-    grading: float, default 1
-        Size of the middle cells over the size of the cells at the faces, along
-        each side with three or more cells. With a value above 1 the cells shrink
-        geometrically toward every face, where the magnetization of a
-        high-permeability body concentrates; the number of cells per side is
-        unchanged. 1 gives identical cells.
 
     Returns
     -------
     discretization: magpylib.Collection
         Collection of Cuboid cells
-
-    Notes
-    -----
-    For a soft iron cube (susceptibility 1000) in a uniform field, a grading of 3
-    keeps 512 to 4,096 cells within 0.4 % of the converged moment, where
-    identical cells are 2.3 % (512) to 1.2 % (1,728) off; a grading of 6
-    overshoots. Graded cells are not identical, so options that reuse the
-    interaction of identical cell pairs, such as ``pairs_matching``, gain less
-    from them.
     """
     if not isinstance(cuboid, magpy.magnet.Cuboid):
         msg = (
@@ -109,24 +82,6 @@ def mesh_Cuboid(cuboid, target_elems, verbose=False, grading=1.0, **kwargs):
 
     # secure input type
     nnn = np.array(nnn, dtype=int)
-    if grading < 1:
-        msg = f"grading must be 1 or more, got {grading}."
-        raise ValueError(msg)
-    if grading != 1:
-        edges = [_graded_edges(d, n, grading) for d, n in zip(dim0, nnn, strict=True)]
-        centres = [(e[:-1] + e[1:]) / 2 for e in edges]
-        sizes = [np.diff(e) for e in edges]
-        cells = [
-            magpy.magnet.Cuboid(
-                polarization=pol0,
-                dimension=(sizes[0][i], sizes[1][j], sizes[2][k]),
-                position=(centres[0][i], centres[1][j], centres[2][k]),
-            )
-            for i in range(nnn[0])
-            for j in range(nnn[1])
-            for k in range(nnn[2])
-        ]
-        return _collection_from_obj_and_cells(cuboid, cells, **kwargs)
 
     # new dimension
     new_dim = dim0 / nnn
@@ -579,7 +534,6 @@ def mesh_all(
     min_elems=8,
     per_child_elems=False,
     inplace=False,
-    grading=1.0,
     **kwargs,
 ):
     """
@@ -601,9 +555,6 @@ def mesh_all(
     inplace : bool, optional, default=False
         If True, meshing will be performed in-place, modifying the original object.
         If False, a new object will be created.
-    grading : float, optional, default=1
-        Passed to :func:`mesh_Cuboid` for cuboid children: cells shrink toward the
-        faces when above 1. Other cell types ignore it.
 
     Returns
     -------
@@ -652,7 +603,7 @@ def mesh_all(
         kw = kwargs if parent is None else {}
         child_meshed = None
         if isinstance(child, magpy.magnet.Cuboid):
-            child_meshed = mesh_Cuboid(child, targ_elems, grading=grading, **kw)
+            child_meshed = mesh_Cuboid(child, targ_elems, **kw)
         elif isinstance(child, (magpy.magnet.Cylinder, magpy.magnet.CylinderSegment)):
             child_meshed = mesh_Cylinder(child, targ_elems, **kw)
         elif isinstance(child, magpy.magnet.TriangularMesh):

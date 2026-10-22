@@ -505,34 +505,3 @@ def test_mesh_all_returns_the_mesh_of_a_magnet_in_a_collection():
     assert isinstance(meshed, magpy.Collection)
     assert meshed.parent is outer
     assert len(meshed.sources_all) == 8
-
-
-def test_mesh_Cuboid_grading_tiles_the_cuboid():
-    """Graded cells fill the cuboid, shrinking toward the faces: with the same
-    polarization they reproduce the field of the unmeshed magnet."""
-    magnet = magpy.magnet.Cuboid(
-        dimension=(0.02, 0.01, 0.03), polarization=(0.1, 0.2, 1), position=(0.1, 0, 0)
-    )
-    magnet.rotate_from_angax(30, "z")
-    mesh = mesh_Cuboid(magnet, (4, 3, 5), grading=3)
-    sides = np.array([c.dimension for c in mesh.sources_all])
-    assert sides[:, 0].max() / sides[:, 0].min() == pytest.approx(3)
-    probes = [(0.1, 0, 0.03), (0.13, 0.01, 0), (0.08, -0.02, 0.01)]
-    np.testing.assert_allclose(mesh.getB(probes), magnet.getB(probes), rtol=1e-12)
-    with pytest.raises(ValueError, match="grading"):
-        mesh_Cuboid(magnet, 8, grading=0.5)
-
-
-@pytest.mark.parametrize(("grading", "low", "high"), [(1, 1.5, 3.0), (3, 0.0, 0.5)])
-def test_grading_cuts_the_error_of_a_soft_cube(grading, low, high):
-    """Soft iron (susceptibility 1000) in 10 mT, 512 cells: identical cells miss
-    the converged moment by over 1.5 %, cells three times smaller at the faces
-    than in the middle by under 0.5 %. The converged moment, 0.02889 A m^2, is
-    V * H0 / (N + 1/chi) with N = 1/3.6442, the polarizability of a perfectly
-    permeable cube (that of a conducting cube, 3.6442 a^3)."""
-    cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
-    cube.susceptibility = 1000
-    cube.H_ext = (0, 0, 0.01)
-    cells = apply_demag(mesh_Cuboid(cube, 512, grading=grading)).sources_all
-    moment = sum(c.polarization[2] * np.prod(c.dimension) for c in cells) / magpy.mu_0
-    assert low < abs(moment - 0.02889) / 0.02889 * 100 < high
