@@ -56,6 +56,37 @@ Helpers behind the `pairs_matching` and `max_dist` options of `apply_demag`:
 .. autofunction:: magpylib_material_response.polyline.move_grid_along_polyline
 ```
 
+## Structure analysis and FFT kernels — `demag_fft`
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.demag_fft.analyze_collection
+
+.. autofunction:: magpylib_material_response.demag_fft.analyze_structure
+
+.. autofunction:: magpylib_material_response.demag_fft.detect_uniform_grid
+
+.. autofunction:: magpylib_material_response.demag_fft.build_fft_kernel
+
+.. autofunction:: magpylib_material_response.demag_fft.demag_fft_matvec
+```
+
+## Interaction tensors — `newell`
+
+The two interaction rules of `apply_demag`: the field at a point (`point_block`,
+the default) and the field averaged over a cell (the Newell tensors).
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.newell.point_block
+
+.. autofunction:: magpylib_material_response.newell.demag_block
+
+.. autofunction:: magpylib_material_response.newell.demag_block_general
+
+.. autofunction:: magpylib_material_response.newell.demag_tensor_newell
+
+.. autofunction:: magpylib_material_response.newell.self_demag_factors
+```
+
 ## Utilities
 
 ```{eval-rst}

@@ -30,9 +30,9 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  # >=6.0 once magpylib 6.0 is out: a pre-release floor lets later pre-releases in
-  "magpylib>=6.0.0rc0",
+  "magpylib>=6.0",
   "loguru>=0.5.0",
+  "scipy>=1.12",
 ]
 
 [project.optional-dependencies]
@@ -62,6 +62,10 @@ docs = [
   "sphinx_autodoc_typehints",
   "pandas",
   "plotly>=6.7",
+  "magpylib-material-response[tetgen]",
+  # 3D views with field lines, saved into the pages. Field lines are on studio's
+  # main and not yet released: back to "magpylib-studio[widget]>=0.7" once they are.
+  "magpylib-studio[widget] @ git+https://github.com/magpylib/magpylib-studio@56348dc851943708b50ebdb5d9608d8846a046a9",
 ]
 
 [tool.hatch]
@@ -80,6 +84,7 @@ env-vars.PYTHONWARNDEFAULTENCODING = "1"
 minversion = "9.0"
 addopts = ["-ra", "--showlocals"]
 strict = true
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 filterwarnings = [
   "error",
 ]

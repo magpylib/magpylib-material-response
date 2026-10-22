@@ -9,6 +9,9 @@ Executable examples, in suggested reading order:
 - [U-core electromagnet](ucore_electromagnet.md) — current sources driving a
   soft core: a swept multi-turn coil built with the polyline helpers, the field
   on a plane above the poles, and a cuboid- vs tetrahedral-mesh comparison.
+- [Solvers and performance](solver_performance.md) — the direct and the
+  iterative solver: their agreement, their time and memory as meshes grow, and
+  which interactions take the fast paths.
 - [Mesh convergence](mesh_convergence.md) — estimating the error of a mesh with
   `mesh_study`, and cells refined toward the faces of a soft iron cube.
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
@@ -22,6 +25,7 @@ Executable examples, in suggested reading order:
 cuboids_demagnetization
 soft_magnets
 ucore_electromagnet
+solver_performance
 mesh_convergence
 tetrahedral_meshes
 ```

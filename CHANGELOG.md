@@ -8,6 +8,92 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- `apply_demag` picks its solver by default (`solver="auto"`): the iterative
+  solver when FFT products cover at least a tenth of the interaction matrix, run
+  to `solver_tol / 100` so that it matches the direct solver to about
+  `solver_tol`, and the direct solver otherwise or when GMRES does not converge
+  ([#77](https://github.com/magpylib/magpylib-material-response/pull/77)).
+- `get_H_ext(*sources)` no longer takes the `H_ext=` keyword, which was read and
+  immediately shadowed by the attribute lookup
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
+### Added
+
+- Documentation: a "How it works" page for engineers, with 3D views from
+  magpylib-studio and interactive charts: the cells, field lines through a
+  magnet and an iron plate, how two cells act on each other, how many cells are
+  needed, and how the solver is chosen
+  ([#78](https://github.com/magpylib/magpylib-material-response/pull/78)).
+- `apply_demag(..., solver="iterative")`: a matrix-free GMRES solver next to the
+  dense direct solver (`solver="direct"`), with `solver_tol` and `max_iter`
+  (iterations). Both solvers apply the same interaction rule. GMRES stops at a
+  residual below `solver_tol`; measured against the direct solver, the
+  polarization agrees to about 2 × `solver_tol` for hard magnets; for soft iron
+  at χ = 1000 the gap grows with the cell count, to 160 × `solver_tol` at 4,096
+  cells. GMRES that does not converge raises. Its block-Jacobi preconditioner
+  scales cells other than cuboids as cubes, so a grid with tetrahedra at χ =
+  1000 converges in 80 iterations instead of failing at 1,000
+  ([#77](https://github.com/magpylib/magpylib-material-response/pull/77)). Boxes
+  of cuboid cells on a uniform grid use FFT products (`demag_fft` module):
+  32,768 cells of soft iron solve in about 4 s. Each meshed body is a grid of
+  its own, told apart by the Collection its mesher made or, when the cells were
+  flattened into one, by the boxes they fill on their lattice; a yoke with its
+  legs, meshed with `mesh_all`, then gets FFT products within each body and, for
+  pairs large enough to pay for it, between bodies of one cell size. Grids with
+  holes, such as voxelized round bodies, and other cell types use dense blocks;
+  a dense block is only sparsified when that drops at least half of its entries,
+  which at high susceptibility it rarely does. The direct solver assembles its
+  matrix in Fortran order and factors it in place, in 1.1 times the matrix's
+  memory where `scipy.linalg.solve` on a C-ordered copy took 4 (3,773 cells: 1.9
+  GB instead of 4.8)
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `apply_demag(..., interaction="newell")`: cells act on each other through the
+  field averaged over each cell, the volume-averaged Newell tensor (`newell`
+  module, generalized to cells of different sizes), instead of the field at each
+  cell's centroid, which stays the default (`interaction="point"`). It is the
+  Galerkin form of the problem: for a soft body with positive susceptibility in
+  a uniform field, the induced moment along the field never exceeds the
+  converged value and rises each time every cell is split, so a mesh study knows
+  which side the answer is on. At equal cell count neither rule is more accurate
+  in general. It needs every cell to be a cuboid, all with one orientation, and
+  raises otherwise instead of mixing the two rules, which would make results
+  jump when a body turns slightly. `demag_tensor` takes the same argument
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- Cuboid cells sharing a shape and orientation are fast under either rule: each
+  distinct displacement is computed once (between two grids of one spacing by
+  index arithmetic, without a sort, which took most of a dense assembly),
+  reverse blocks follow by reciprocity, and uniform grids use FFT products. Far
+  apart, where the closed forms lose precision, both rules switch to a far-field
+  expansion
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `demag_fft.analyze_collection(sources)`: splits a collection into grid, loose
+  and generic clusters covering every cell once
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `scipy>=1.12` dependency
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
+### Changed
+
+- The direct solver assembles in place (about 2-3x less peak memory), derives
+  reverse blocks by reciprocity, and every block is built in chunks of at most
+  200,000 (observer, source) pairs. 1,757 tetrahedra: 16.8 s and 7.7 GB before,
+  7.5 s and 1.7 GB after
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+- `timelog` no longer blocks on exit and skips its watchdog thread while package
+  logging is silent (a 27-cell solve went from about 0.5 s to 5 ms)
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
+### Fixed
+
+- Meshing edge cases (thin segments, empty voxel grids), scale-relative
+  tolerances in inside-masks and in `trimesh_from_model3d`, and a latent import
+  error in `get_dataset`
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+
+## [0.5.0] - 2026-10-19
+
 ### Added
 
 - Mesh-convergence tools: `convergence.mesh_study` solves a model on meshes of
@@ -19,8 +105,8 @@ and this project adheres to
   ([#67](https://github.com/magpylib/magpylib-material-response/pull/67)).
 - Serialization (`to_json` / `from_json`) now supports `magnet.Sphere`,
   `magnet.Tetrahedron`, and `magnet.TriangularMesh` — demagnetized tetrahedral
-  meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded.
-
+  meshes produced by `mesh_TriangularMesh()` can be persisted and reloaded
+  ([#55](https://github.com/magpylib/magpylib-material-response/pull/55)).
 - `mesh_TriangularMesh()` — meshes a `magnet.TriangularMesh` into conforming
   tetrahedral cells using [TetGen](https://tetgen.pyvista.org/). Quality and
   cell count are controlled via `target_elems`, `minratio`, and `mindihedral`.
@@ -33,6 +119,10 @@ and this project adheres to
   in addition to `magnet.Cuboid` and `magnet.Cylinder`.
 - Optional dependency group `tetgen` (`tetgen>=0.8.3`).
   ([#41](https://github.com/magpylib/magpylib-material-response/pull/41)).
+- Documentation: a page on the method, a quickstart, an API reference and new
+  examples
+  ([#53](https://github.com/magpylib/magpylib-material-response/pull/53),
+  [#65](https://github.com/magpylib/magpylib-material-response/pull/65)).
 
 ### Changed
 
@@ -56,7 +146,9 @@ and this project adheres to
   no longer gets up to twice the requested cells. The count follows the request
   less closely; a triple still sets the divisions. The cells are the ones
   magpylib's force mesher produces
-  ([magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
+  ([#56](https://github.com/magpylib/magpylib-material-response/pull/56),
+  [#57](https://github.com/magpylib/magpylib-material-response/pull/57),
+  [magpylib#1023](https://github.com/magpylib/magpylib/pull/1023)).
 
 ### Fixed
 
@@ -64,12 +156,15 @@ and this project adheres to
   lies inside it. Demagnetization matches the field at the centroid, and for
   wide sectors of a thin ring that point lay outside the material: in a
   transverse field, a 4-5 mm tube meshed with 12 cells came out with the wrong
-  sign. Thin rings can now get more cells than `target_elems`.
+  sign. Thin rings can now get more cells than `target_elems`
+  ([#51](https://github.com/magpylib/magpylib-material-response/pull/51)).
 - `apply_demag` refuses objects whose dimension, polarization, current or other
-  property varies along a path (with magpylib versions that allow this), not
-  only position paths, instead of failing inside the solver.
+  property varies along a path, not only position paths, instead of failing
+  inside the solver
+  ([#51](https://github.com/magpylib/magpylib-material-response/pull/51)).
 - `to_json` writes a path-valued `current` or `diameter`, and a susceptibility
-  given as a numpy array, instead of raising.
+  given as a numpy array, instead of raising
+  ([#51](https://github.com/magpylib/magpylib-material-response/pull/51)).
 - The legacy options run again: `split` no longer crashes when a chunk holds a
   single cell; `max_dist` no longer crashes, and refuses negative values and the
   `pairs_matching` or `split` it silently ignored; `pairs_matching=True`

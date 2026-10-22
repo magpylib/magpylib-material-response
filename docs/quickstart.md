@@ -20,7 +20,8 @@ Magpylib treats magnet polarization as fixed. This package adds the **material
 response**: mesh the magnets into cells, give them a susceptibility, and
 `apply_demag` computes the self-consistent polarization of every cell — the
 demagnetization of the magnets themselves and the magnetization of soft parts
-nearby. All quantities are SI (m, T).
+nearby. All quantities are SI (m, T). [How it works](how_it_works.md) shows what
+happens inside, with 3D views.
 
 ```{code-cell} ipython3
 import magpylib as magpy
@@ -82,6 +83,29 @@ Current sources (`magpy.current.*`) placed in the collection also drive the
 material response: their field at each cell's centroid adds to the applied
 field. The [U-core electromagnet example](examples/ucore_electromagnet.md)
 builds a coil-driven soft core this way.
+
+## Large meshes and the two interaction rules
+
+Large meshes need no setting. The default `solver="auto"` solves meshes made
+mostly of grids of identical cuboids, as `mesh_Cuboid` and `mesh_all` make them,
+matrix-free with GMRES and FFT products, and other meshes with the dense direct
+solver. Pass `solver="direct"` or `solver="iterative"` to choose yourself (see
+[solvers and performance](examples/solver_performance.md)).
+
+By default each cell's field is taken at the centroids of the others (point
+matching). With `interaction="newell"` it is averaged over each cell instead:
+
+```{code-cell} ipython3
+coll_point = apply_demag(mesh, susceptibility=0.3)
+coll_newell = apply_demag(mesh, susceptibility=0.3, interaction="newell")
+```
+
+Both converge to the same answer, and at equal cell count neither is more
+accurate in general. The Newell rule needs cuboid cells with one orientation. In
+return, for a soft body with positive susceptibility in a uniform applied field,
+its induced moment along the field never exceeds the converged value and rises
+each time every cell is split into smaller ones, so a convergence study knows
+which side the answer lies on (see the [method page](method.md)).
 
 ## Meshing helpers
 
