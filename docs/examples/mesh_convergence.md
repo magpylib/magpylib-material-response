@@ -147,9 +147,9 @@ fig
 
 The bars are the estimated error at each point, too small to see on the scale of
 the field: 0.03 % for the whole profile, 0.1 % at the worst point, at the end of
-the array. Against the same study on 3,840 to 245,760 cells, itself good to
-0.03 %, the finest mesh here is 0.02 % off overall and 0.08 % at that point,
-under the estimate at all 21 points.
+the array. Against the same study on 3,840 to 245,760 cells, itself good to 0.03
+%, the finest mesh here is 0.02 % off overall and 0.08 % at that point, under
+the estimate at all 21 points.
 
 ## A steel sheet shielding a sensor
 
@@ -197,7 +197,9 @@ def per_entry(value):
 
 
 for study, reference in zip((concentrator, halbach, shield), finer, strict=True):
-    off = per_entry(study.values[-1] - reference.estimate) / per_entry(reference.estimate)
+    off = per_entry(study.values[-1] - reference.estimate) / per_entry(
+        reference.estimate
+    )
     print(f"reference {per_entry(reference.estimate)}, within {reference.errors}")
     print(f"finest mesh here off by {off}, estimated {study.errors}")
 ```
