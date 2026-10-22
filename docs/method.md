@@ -222,7 +222,7 @@ direct solve, the polarizations agree to about 2 × `solver_tol` for hard
 magnets. For soft iron at $\chi = 1000$ the gap grows with the cell count, to
 160 × `solver_tol` at 4,096 cells and 580 × at 32,768: tighten `solver_tol` for
 high susceptibilities. `max_iter` caps the iterations, rounded up to restart
-cycles of 20; GMRES that does not converge raises `RuntimeError` rather than
+cycles of 100; GMRES that does not converge raises `RuntimeError` rather than
 return a partial result. The solve starts from the right-hand side.
 
 The preconditioner is block-Jacobi, one 3×3 block per cell:

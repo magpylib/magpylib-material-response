@@ -1006,7 +1006,11 @@ def _self_blocks(n, clusters, interaction, ops):
 
 
 #: GMRES restart length: iterations per cycle before the Krylov space is rebuilt.
-GMRES_RESTART = 20
+#: Against 20, 100 takes 15 to 55 % fewer iterations on soft iron (388 instead of
+#: 835 on 262,144 cells, 61 s instead of 101 s) and lets a 1 mm mu-metal sheet
+#: (chi = 1e4) converge within max_iter, for about 2 kB more memory per cell (0.6 GB
+#: at 262,144 cells).
+GMRES_RESTART = 100
 
 
 def _solve_iterative(*, n, chi, rhs, rhs_shape, matvec, T_self, solver_tol, max_iter):
@@ -1448,7 +1452,7 @@ def apply_demag(
 
     max_iter: int
         Maximum number of GMRES iterations, rounded up to whole restart cycles of
-        20. Non-convergence raises ``RuntimeError`` under ``solver="iterative"``.
+        100. Non-convergence raises ``RuntimeError`` under ``solver="iterative"``.
 
     interaction: {"point", "newell"}
         How cells act on each other, see above. ``"newell"`` does not combine
