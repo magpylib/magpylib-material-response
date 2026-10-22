@@ -180,7 +180,11 @@ $\mathbf{T}$ in the component-major layout of $\mathbf{J}$.
 
 The diagonal block is $\mathsf{T}_{ii} = -\mathsf{N}_i$, the demagnetizing
 tensor of cell $i$: at its centroid under point matching, averaged over it (the
-magnetometric factors) under volume averaging. Either way its trace is 1:
+magnetometric factors) under volume averaging. Either way its trace is 1. The
+tensor at a point is $\mathsf{N} = -\nabla\nabla\psi$ with $\psi(\mathbf{r}) =
+\frac{1}{4\pi}\int_V \frac{\mathrm{d}V'}{|\mathbf{r} - \mathbf{r}'|}$, and
+Poisson's equation gives $\nabla^2\psi = -1$ inside the cell; the average over
+the cell keeps the trace (Moskowitz and Della Torre 1966):
 
 $$N_{xx}^{(i)} + N_{yy}^{(i)} + N_{zz}^{(i)} = 1$$
 
@@ -211,10 +215,10 @@ the matrix in memory).
 
 ### 4.2 Iterative solver (`solver="iterative"`)
 
-GMRES never assembles $\mathbf{Q}$: it only needs the product $\mathbf{v}
-\mapsto \mathbf{Q}\,\mathbf{v}$, which the FFT kernels and the stored blocks of
-section 5 provide. Both solvers apply the same entries, so they solve the same
-system.
+GMRES (Saad and Schultz 1986) never assembles $\mathbf{Q}$: it only needs the
+product $\mathbf{v} \mapsto \mathbf{Q}\,\mathbf{v}$, which the FFT kernels and
+the stored blocks of section 5 provide. Both solvers apply the same entries, so
+they solve the same system.
 
 GMRES stops when the residual falls below `solver_tol` relative to the
 right-hand side, which bounds the residual, not the error. Measured against the
@@ -406,6 +410,17 @@ each other are not convolutions.
 1. Newell, A. J., Williams, W., & Dunlop, D. J. (1993). _A generalization of the
    demagnetizing tensor for nonuniform magnetization._ Journal of Geophysical
    Research: Solid Earth, 98(B6), 9551–9555.
+   [doi:10.1029/93JB00694](https://doi.org/10.1029/93JB00694)
 
 2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of magnetostatic
    moment method._ IEEE Transactions on Magnetics, 42(4), 515–520.
+   [doi:10.1109/TMAG.2006.870929](https://doi.org/10.1109/TMAG.2006.870929)
+
+3. Moskowitz, R., & Della Torre, E. (1966). _Theoretical aspects of
+   demagnetization tensors._ IEEE Transactions on Magnetics, 2(4), 739–744.
+   [doi:10.1109/TMAG.1966.1065973](https://doi.org/10.1109/TMAG.1966.1065973)
+
+4. Saad, Y., & Schultz, M. H. (1986). _GMRES: a generalized minimal residual
+   algorithm for solving nonsymmetric linear systems._ SIAM Journal on
+   Scientific and Statistical Computing, 7(3), 856–869.
+   [doi:10.1137/0907058](https://doi.org/10.1137/0907058)
