@@ -615,3 +615,131 @@ def mesh_all(
             if child is obj:
                 obj = child_meshed
     return obj
+
+
+def _responds(src):
+    """Whether `src` responds to fields: a magnet whose susceptibility, its own
+    or its nearest parent's, is set and not zero."""
+    if isinstance(src, BaseCurrent):
+        return False
+    while src is not None:
+        chi = getattr(src, "susceptibility", None)
+        if chi is not None:
+            return bool(np.any(np.asarray(chi, dtype=float) != 0))
+        src = src.parent
+    return False
+
+
+def _thinnest(obj):
+    """The smallest extent of a part that mesh_uniform meshes."""
+    if isinstance(obj, magpy.magnet.CylinderSegment):
+        r1, r2, h, *_ = obj.dimension
+        return float(min(r2 - r1, h))
+    if isinstance(obj, magpy.magnet.TriangularMesh):
+        return float(np.ptp(obj.vertices, axis=0).min())
+    return float(min(obj.dimension))  # Cuboid, Cylinder (diameter, height)
+
+
+def mesh_uniform(obj, cells_across, inplace=False, max_cells=1_000_000, **kwargs):
+    """
+    Mesh every part that responds to fields into cells of one size,
+    ``cells_across`` cells across the thinnest such part.
+
+    A part responds when its susceptibility, set on itself or on a parent
+    collection, is not zero. Each side of a cuboid is cut into
+    ``round(side / size)`` cells, so cuboids whose sides are multiples of the size
+    become grids of one spacing, which the solver multiplies by FFT, also between
+    parts. Cylinders, cylinder segments and triangular meshes get their own mesher
+    with as many cells as their volume holds at that size. Parts that do not
+    respond and current sources stay as they are: meshing a uniformly polarized
+    magnet does not change its field.
+
+    Parameters
+    ----------
+    obj : magpylib.Collection or magnet
+        The model to mesh.
+    cells_across : int
+        Cells across the thinnest part that responds.
+    inplace : bool, optional, default=False
+        If True, mesh `obj` itself; if False, a copy.
+    max_cells : int, optional, default=1_000_000
+        Refuse to make more cells than this. The cell size comes from the
+        thinnest part, so a thin shim beside a large yoke can ask for millions.
+
+    Returns
+    -------
+    magpylib.Collection or magnet
+        The meshed model, with the collection hierarchy of `obj`.
+
+    Raises
+    ------
+    ValueError
+        If no part responds, `cells_across` is below 1, or the mesh would exceed
+        `max_cells`.
+    TypeError
+        If a part that responds has a shape this function cannot mesh.
+    """
+    if cells_across < 1:
+        msg = f"cells_across must be at least 1, got {cells_across}."
+        raise ValueError(msg)
+    supported = (
+        magpy.magnet.Cuboid,
+        magpy.magnet.Cylinder,
+        magpy.magnet.CylinderSegment,
+        magpy.magnet.TriangularMesh,
+    )
+
+    def parts(model):
+        children = model.sources_all if isinstance(model, magpy.Collection) else [model]
+        return [c for c in children if _responds(c)]
+
+    def cells_of(part, size):
+        """Divisions of a cuboid, or the cell count of any other part."""
+        if isinstance(part, magpy.magnet.Cuboid):
+            return tuple(max(1, round(d / size)) for d in part.dimension)
+        return max(1, round(get_volume(part) / size**3))
+
+    responding = parts(obj)
+    if not responding:
+        msg = "No part has a susceptibility other than zero: nothing to mesh."
+        raise ValueError(msg)
+    unsupported = Counter(
+        c.__class__.__name__ for c in responding if not isinstance(c, supported)
+    )
+    if unsupported:
+        msg = (
+            f"mesh_uniform cannot mesh {dict(unsupported)}; "
+            f"it meshes {[s.__name__ for s in supported]}."
+        )
+        raise TypeError(msg)
+    thinnest = min(_thinnest(c) for c in responding)
+    size = thinnest / cells_across
+    total = sum(int(np.prod(cells_of(c, size))) for c in responding)
+    if total > max_cells:
+        msg = (
+            f"cells_across={cells_across} would make about {total:,} cells, more "
+            f"than max_cells={max_cells:,}: the cell size follows the thinnest part, "
+            f"{thinnest:.3g} m across. Lower cells_across, raise max_cells, or mesh "
+            "that part with its own mesher."
+        )
+        raise ValueError(msg)
+    if not inplace:
+        obj = obj.copy(**kwargs)
+    for child in parts(obj):
+        parent = child.parent
+        kw = kwargs if parent is None else {}
+        if isinstance(child, magpy.magnet.Cuboid):
+            meshed = mesh_Cuboid(child, cells_of(child, size), **kw)
+        else:
+            mesher = (
+                mesh_TriangularMesh
+                if isinstance(child, magpy.magnet.TriangularMesh)
+                else mesh_Cylinder
+            )
+            meshed = mesher(child, cells_of(child, size), **kw)
+        child.parent = None
+        if parent is not None:
+            parent.add(meshed)
+        if child is obj:
+            obj = meshed
+    return obj

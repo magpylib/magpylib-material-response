@@ -13,6 +13,7 @@ from magpylib_material_response.meshing import (
     mesh_Cylinder,
     mesh_thin_CylinderSegment_with_cuboids,
     mesh_TriangularMesh,
+    mesh_uniform,
     slice_Cuboid,
     voxelize,
 )
@@ -327,6 +328,46 @@ def test_mesh_TriangularMesh():
     # TypeError on wrong input type
     with pytest.raises(TypeError):
         mesh_TriangularMesh(cuboid, target_elems=10)
+
+
+def test_mesh_uniform_gives_every_responding_part_cells_of_one_size():
+    soft = magpy.magnet.Cuboid(dimension=(4e-3, 2e-3, 2e-3), polarization=(0, 0, 0))
+    soft.susceptibility = 1000
+    block = magpy.magnet.Cuboid(
+        dimension=(6e-3,) * 3, position=(0.01, 0, 0), polarization=(0, 0, 0)
+    )
+    inner = magpy.Collection(block)
+    inner.susceptibility = 0.05
+    hard = magpy.magnet.Cuboid(
+        dimension=(6e-3,) * 3, position=(-0.01, 0, 0), polarization=(0, 0, 1)
+    )
+    hard.susceptibility = 0
+    rod = magpy.magnet.Cylinder(
+        dimension=(2e-3, 4e-3), position=(0, 0.01, 0), polarization=(0, 0, 0)
+    )
+    rod.susceptibility = 1000
+    coil = magpy.current.Circle(diameter=0.02, current=1)
+    model = magpy.Collection(soft, inner, hard, rod, coil)
+
+    meshed = mesh_uniform(model, 2)  # 1 mm cells: two across the 2 mm parts
+
+    cuboids = [c for c in meshed.sources_all if isinstance(c, magpy.magnet.Cuboid)]
+    cells = [c for c in cuboids if np.allclose(c.dimension, 1e-3)]
+    assert len(cells) == 4 * 2 * 2 + 6 * 6 * 6
+    (kept,) = [c for c in cuboids if np.allclose(c.dimension, 6e-3)]
+    np.testing.assert_allclose(kept.polarization, (0, 0, 1))
+    in_block = [c for c in cells if c.position[0] > 6e-3]
+    assert len(in_block) == 216
+    assert {c.parent.parent.susceptibility for c in in_block} == {0.05}
+    segments = [
+        c for c in meshed.sources_all if isinstance(c, magpy.magnet.CylinderSegment)
+    ]
+    assert 6 <= len(segments) <= 26  # about pi * 1**2 * 4 = 12.6 cells of 1 mm^3
+    assert len(model.sources_all) == 5
+    with pytest.raises(ValueError, match="nothing to mesh"):
+        mesh_uniform(magpy.Collection(hard.copy()), 2)
+    with pytest.raises(ValueError, match="max_cells"):
+        mesh_uniform(model, 100, max_cells=10_000)
 
 
 def test_thin_cylinder_segment_extreme_aspect_ratio():

@@ -25,7 +25,10 @@ error relative to the finest value, times a factor of safety of 1.25. It gives
 one error for the whole quantity and one per sensor, and none while the results
 do not yet change steadily.
 
-Three parts from sensor and actuator design follow. Each study runs here in
+Three parts from sensor and actuator design follow. The levels passed to
+`mesh_study`, such as `(4, 8, 16)`, are cells across the thinnest part that
+responds: its default mesher, `mesh_uniform`, cuts every such part into cells of
+that one size, which the solver multiplies by FFT. Each study runs here in
 seconds; the same study on meshes eight times finer, run separately, shows how
 good its estimate is.
 
@@ -35,26 +38,8 @@ import numpy as np
 import plotly.graph_objects as go
 
 from magpylib_material_response.convergence import mesh_study
-from magpylib_material_response.meshing import mesh_Cuboid
 
 MM = 1e-3  # lengths in metres, written in millimetres
-
-
-def uniform_cells(collection, n):
-    """A mesher for mesh_study: every part with a susceptibility cut into cubes
-    of one size, n across the thinnest part. Parts of one cell size are grids of
-    one spacing, which the solver multiplies by FFT, also between parts."""
-    parts = collection.sources_all
-    soft = [p for p in parts if getattr(p, "susceptibility", 0)]
-    size = min(min(p.dimension) for p in soft) / n
-    return magpy.Collection(
-        *(
-            mesh_Cuboid(p, tuple(max(1, round(d / size)) for d in p.dimension))
-            if p in soft
-            else p.copy()
-            for p in parts
-        )
-    )
 
 
 def report(study, labels, unit, scale=1.0):
@@ -89,7 +74,7 @@ def gain(solved):
     return (magpy.getB(solved, sensors)[:, 0] + B0) / B0
 
 
-concentrator = mesh_study(magpy.Collection(bar), gain, (4, 8, 16), mesher=uniform_cells)
+concentrator = mesh_study(magpy.Collection(bar), gain, (4, 8, 16))
 report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
 ```
 
@@ -123,7 +108,7 @@ array = magpy.Collection(*magnets, plate)
 x = np.linspace(-15, 15, 21)
 profile = np.column_stack([x, 0 * x, np.full(21, 5.0)]) * MM  # 2 mm above the magnets
 
-halbach = mesh_study(array, profile, (2, 4, 8), mesher=uniform_cells)
+halbach = mesh_study(array, profile, (2, 4, 8))
 print(f"cells {halbach.cells.tolist()}, order {halbach.order:.2f}, solve of the finest {halbach.seconds[-1]:.1f} s")
 print(f"error of the whole profile {halbach.error:.3%}, of the worst point {np.nanmax(halbach.errors):.3%}")
 magpy.show(array, backend="widget")
@@ -167,16 +152,16 @@ sheet = magpy.magnet.Cuboid(
 sheet.susceptibility = 1000
 behind = np.array([(0, 0, 9), (6, 0, 9), (12, 0, 9)]) * MM
 
-shield = mesh_study(magpy.Collection(magnet, sheet), behind, (1, 2, 4), mesher=uniform_cells)
+shield = mesh_study(magpy.Collection(magnet, sheet), behind, (1, 2, 4))
 report(shield, ["axis", "6 mm out", "12 mm out"], "mT", 1e3)
 ```
 
 +++ {"user_expressions": []}
 
 On the axis the residual field falls from 12.4 mT on the coarsest mesh to 6.1
-mT. The same study on 4,609 to 294,913 cells puts the three sensors at 5.52,
+mT. The same study on 4,608 to 294,912 cells puts the three sensors at 5.52,
 5.85 and 8.80 mT, to within 3.3 %, 1.1 % and 0.09 %. Against these, the finest
-mesh here is 10.1 %, 3.2 % and 0.26 % off, and `mesh_study` said 13.6 %, 4.7 %
+mesh here is 10.0 %, 3.2 % and 0.26 % off, and `mesh_study` said 13.6 %, 4.7 %
 and 0.23 %. The last falls 0.03 % short, less than the uncertainty of its
 reference: the error is an estimate, not a bound.
 
@@ -186,9 +171,9 @@ reference: the error is an estimate, not a bound.
 
 ```python
 finer = [
-    mesh_study(bar.parent, gain, (8, 16, 32), mesher=uniform_cells),
-    mesh_study(array, profile, (4, 8, 16), mesher=uniform_cells),
-    mesh_study(sheet.parent, behind, (2, 4, 8), mesher=uniform_cells),
+    mesh_study(bar.parent, gain, (8, 16, 32)),
+    mesh_study(array, profile, (4, 8, 16)),
+    mesh_study(sheet.parent, behind, (2, 4, 8)),
 ]
 
 
