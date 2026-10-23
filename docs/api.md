@@ -20,10 +20,21 @@ Helpers behind the `pairs_matching` and `max_dist` options of `apply_demag`:
 .. autofunction:: magpylib_material_response.demag.match_pairs
 ```
 
+## Mesh convergence — `convergence`
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.convergence.mesh_study
+
+.. autoclass:: magpylib_material_response.convergence.MeshStudy
+   :members: from_values
+```
+
 ## Meshing — `meshing`
 
 ```{eval-rst}
 .. autofunction:: magpylib_material_response.meshing.mesh_all
+
+.. autofunction:: magpylib_material_response.meshing.mesh_uniform
 
 .. autofunction:: magpylib_material_response.meshing.mesh_Cuboid
 

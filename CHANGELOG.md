@@ -21,6 +21,15 @@ and this project adheres to
 
 ### Added
 
+- `convergence.mesh_study`: solves a model on meshes of increasing resolution
+  and estimates the error of the finest, as a whole and per sensor, by the grid
+  convergence index (Richardson extrapolation over the three finest meshes, the
+  error relative to the finest value, a safety factor of 1.25). It gives no
+  estimate while the results do not change steadily, and warns when the meshes
+  barely grow. Its default mesher, `meshing.mesh_uniform`, gives every part that
+  responds cells of one size; `MeshStudy.from_values` gives the same estimate
+  for results from another solver
+  ([#67](https://github.com/magpylib/magpylib-material-response/pull/67)).
 - Documentation: a "How it works" page for engineers, with 3D views from
   magpylib-studio and interactive charts: the cells, field lines through a
   magnet and an iron plate, how two cells act on each other, how many cells are
