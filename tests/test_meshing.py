@@ -330,6 +330,18 @@ def test_mesh_TriangularMesh():
         mesh_TriangularMesh(cuboid, target_elems=10)
 
 
+def test_mesh_TriangularMesh_warns_when_the_surface_sets_the_count():
+    pytest.importorskip("tetgen", reason="tetgen optional dependency not installed")
+    angles = np.linspace(0, 2 * np.pi, 64, endpoint=False)
+    ring = np.column_stack([5e-3 * np.cos(angles), 5e-3 * np.sin(angles)])
+    points = np.vstack([np.column_stack([ring, np.full(64, z)]) for z in (-5e-3, 5e-3)])
+    cylinder = magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 1), points=points
+    )
+    with pytest.warns(UserWarning, match="keeps every triangle of the surface"):
+        mesh_TriangularMesh(cylinder, target_elems=50)
+
+
 def test_mesh_uniform_gives_every_responding_part_cells_of_one_size():
     soft = magpy.magnet.Cuboid(dimension=(4e-3, 2e-3, 2e-3), polarization=(0, 0, 0))
     soft.susceptibility = 1000

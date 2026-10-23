@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import warnings
 from collections import Counter
 from itertools import product
 
@@ -432,6 +433,12 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
     return _collection_from_obj_and_cells(obj, cells, **kwargs)
 
 
+#: TetGen makes about twice the target on a simple surface: the target caps the
+#: cell volume, and the cells come out smaller. Past this ratio the surface, not
+#: the target, sets the count.
+TETGEN_MAX_OVERSHOOT = 4
+
+
 def mesh_TriangularMesh(
     obj,
     target_elems,
@@ -454,7 +461,12 @@ def mesh_TriangularMesh(
     obj : magpy.magnet.TriangularMesh
         Input object to be discretized.
     target_elems : int
-        Target number of tetrahedra. Sets ``maxvolume = obj.volume / target_elems``.
+        Sets the largest cell volume, ``obj.volume / target_elems``. TetGen makes
+        cells smaller than that where its quality limits ask for it, so a simple
+        surface gives about twice the target. A detailed surface sets a floor:
+        TetGen keeps every input triangle, so a 64-sided cylinder gives about
+        6,900 cells for any target up to 1,000. A warning says when the count
+        exceeds ``TETGEN_MAX_OVERSHOOT`` times the target.
     minratio : float, default 1.5
         TetGen quality constraint — maximum radius-edge ratio. Lower values give
         better-shaped tetrahedra but more cells. 1.0 is near-equilateral; 2.0 is
@@ -514,6 +526,13 @@ def mesh_TriangularMesh(
     if tet_verts.shape[0] == 0:
         msg = "TetGen produced no tetrahedra — check surface normals are outward-facing"
         raise ValueError(msg)
+    if len(tet_verts) > TETGEN_MAX_OVERSHOOT * target_elems:
+        warnings.warn(
+            f"TetGen made {len(tet_verts)} tetrahedra for target_elems={target_elems}: "
+            "it keeps every triangle of the surface, and this surface needs more cells "
+            "than the target. A surface with fewer facets, or cuboid cells, gives fewer.",
+            stacklevel=2,
+        )
 
     if verbose:
         logger.info(

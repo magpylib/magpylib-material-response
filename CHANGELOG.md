@@ -96,6 +96,14 @@ and this project adheres to
 
 ### Fixed
 
+- `solver="auto"` and `"iterative"` converge on thin sheets of very high
+  susceptibility, where GMRES ran out of iterations (a 1 mm mu-metal sheet, χ =
+  10,000): GMRES restarts every 100 iterations instead of 20, which also takes
+  15 to 55 % fewer iterations on soft iron, for about 2 kB more memory per cell.
+  `mesh_TriangularMesh` warns when the surface, not `target_elems`, sets the
+  cell count, and its docstring says that the target caps the cell volume
+  ([#80](https://github.com/magpylib/magpylib-material-response/pull/80)).
+
 - Meshing edge cases (thin segments, empty voxel grids), scale-relative
   tolerances in inside-masks and in `trimesh_from_model3d`, and a latent import
   error in `get_dataset`
