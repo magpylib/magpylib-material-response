@@ -6,18 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Changed
-
-- `apply_demag` picks its solver by default (`solver="auto"`): the iterative
-  solver when FFT products cover at least a tenth of the interaction matrix, run
-  to `solver_tol / 100` so that it matches the direct solver to about
-  `solver_tol`, and the direct solver otherwise or when GMRES does not converge
-  ([#77](https://github.com/magpylib/magpylib-material-response/pull/77)).
-- `get_H_ext(*sources)` no longer takes the `H_ext=` keyword, which was read and
-  immediately shadowed by the attribute lookup
-  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
+## [0.6.0] - 2026-10-23
 
 ### Added
 
@@ -85,6 +74,14 @@ and this project adheres to
 
 ### Changed
 
+- `apply_demag` picks its solver by default (`solver="auto"`): the iterative
+  solver when FFT products cover at least a tenth of the interaction matrix, run
+  to `solver_tol / 100` so that it matches the direct solver to about
+  `solver_tol`, and the direct solver otherwise or when GMRES does not converge
+  ([#77](https://github.com/magpylib/magpylib-material-response/pull/77)).
+- `get_H_ext(*sources)` no longer takes the `H_ext=` keyword, which was read and
+  immediately shadowed by the attribute lookup
+  ([#52](https://github.com/magpylib/magpylib-material-response/pull/52)).
 - The direct solver assembles in place (about 2-3x less peak memory), derives
   reverse blocks by reciprocity, and every block is built in chunks of at most
   200,000 (observer, source) pairs. 1,757 tetrahedra: 16.8 s and 7.7 GB before,
@@ -103,7 +100,6 @@ and this project adheres to
   `mesh_TriangularMesh` warns when the surface, not `target_elems`, sets the
   cell count, and its docstring says that the target caps the cell volume
   ([#80](https://github.com/magpylib/magpylib-material-response/pull/80)).
-
 - Meshing edge cases (thin segments, empty voxel grids), scale-relative
   tolerances in inside-masks and in `trimesh_from_model3d`, and a latent import
   error in `get_dataset`
@@ -310,14 +306,18 @@ and this project adheres to
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/v0.4.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.6.0...HEAD
+[0.6.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.5.0...0.6.0
+[0.5.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.4.0...0.5.0
 [0.4.0]:
-  https://github.com/magpylib/magpylib-material-response/compare/v0.3.1...v0.4.0
+  https://github.com/magpylib/magpylib-material-response/compare/0.3.1...0.4.0
 [0.3.1]:
-  https://github.com/magpylib/magpylib-material-response/compare/v0.3.0...v0.3.1
+  https://github.com/magpylib/magpylib-material-response/compare/0.3.0...0.3.1
 [0.3.0]:
-  https://github.com/magpylib/magpylib-material-response/compare/v0.2.1a0...v0.3.0
+  https://github.com/magpylib/magpylib-material-response/compare/0.2.1a0...0.3.0
 [0.2.1a0]:
-  https://github.com/magpylib/magpylib-material-response/compare/v0.2.0a0...v0.2.1a0
+  https://github.com/magpylib/magpylib-material-response/compare/0.2.0a0...0.2.1a0
 [0.2.0a0]:
-  https://github.com/magpylib/magpylib-material-response/releases/tag/v0.2.0a0
+  https://github.com/magpylib/magpylib-material-response/releases/tag/0.2.0a0
