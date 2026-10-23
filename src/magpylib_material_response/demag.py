@@ -979,7 +979,8 @@ def _self_blocks(n, clusters, interaction, ops):
     self-demagnetizing factors under the solve's rule, rotated with the cluster.
     Other cells take the isotropic part of their stored self-block, ``tr/3``
     times the identity, which is ``-I/3`` for any cell whose centroid lies
-    inside it: their full point-matched blocks vary with the cell's shape, and
+    inside it (the demagnetizing tensor has trace 1 inside a body; see the
+    method page): their full point-matched blocks vary with the cell's shape, and
     scaling tetrahedra by them triples the iterations (35 to 220 on 1,931
     cells at chi = 1000), while leaving them unscaled puts them about chi away
     from the scaled cuboids, where restarted GMRES stalls."""

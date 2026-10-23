@@ -277,7 +277,12 @@ The answer converges as the cells shrink, slowly: halving the cell size, which
 takes eight times the cells, cuts the error to about a third. Soft iron is the
 hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
-Its magnetic moment is known to 0.1 %:
+Its magnetic moment, 0.02889 A m², is known to 0.1 %: finite-element solutions
+of rising order and mesh density converge to it
+([#76](https://github.com/magpylib/magpylib-material-response/issues/76)). The
+polarizability of a cube of infinite susceptibility, 3.6443 times its volume
+(Helsing and Perfekt 2013), gives 0.028895 A m², 0.02 % away, through $m = VH /
+(1/3.6443 + 1/\chi)$, which is exact for ellipsoids:
 
 ```{code-cell} ipython3
 def soft_cube():
@@ -298,7 +303,7 @@ def moment(solved):
     return sum(c.volume * c.orientation.apply(c.polarization)[2] for c in solved.sources_all) / magpy.mu_0
 
 
-EXACT = 0.02889  # A m², the converged moment of this cube
+EXACT = 0.02889  # A m², the converged moment of this cube (#76)
 runs = []
 for rule in ("point", "newell"):
     for n in (27, 64, 216, 512, 1728, 4096):
@@ -410,3 +415,10 @@ the measurements behind the rule.
   and mesh any shape with tetrahedra.
 - The [method page](method.md) has the equations, the two interaction rules and
   the fast paths.
+
+## References
+
+1. Helsing, J., & Perfekt, K.-M. (2013). _On the polarizability and capacitance
+   of the cube._ Applied and Computational Harmonic Analysis, 34(3), 445–468.
+   [doi:10.1016/j.acha.2012.07.006](https://doi.org/10.1016/j.acha.2012.07.006).
+   The limit polarizability of a cube, 3.6443 times its volume, is in Table 1.

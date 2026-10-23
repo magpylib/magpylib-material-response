@@ -12,6 +12,9 @@ Executable examples, in suggested reading order:
 - [Solvers and performance](solver_performance.md) — the direct and the
   iterative solver: their agreement, their time and memory as meshes grow, and
   which interactions take the fast paths.
+- [Mesh convergence](mesh_convergence.md) — how fine a mesh must be, and the
+  error of the finest, with `mesh_study` on a flux concentrator, a Halbach array
+  on back iron and a steel shield.
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
   `TriangularMesh` magnet with TetGen, checked against the exact solution for a
   magnetized sphere.
@@ -24,5 +27,6 @@ cuboids_demagnetization
 soft_magnets
 ucore_electromagnet
 solver_performance
+mesh_convergence
 tetrahedral_meshes
 ```
