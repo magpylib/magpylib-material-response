@@ -63,9 +63,9 @@ docs = [
   "pandas",
   "plotly>=6.7",
   "magpylib-material-response[tetgen]",
-  # 3D views with field lines, saved into the pages. Field lines are on studio's
-  # main and not yet released: back to "magpylib-studio[widget]>=0.7" once they are.
-  "magpylib-studio[widget] @ git+https://github.com/magpylib/magpylib-studio@56348dc851943708b50ebdb5d9608d8846a046a9",
+  # 3D views with field lines, saved into the pages; 0.7.1 draws unsolved soft
+  # parts in the neutral colour.
+  "magpylib-studio[widget]>=0.7.1",
 ]
 
 [tool.hatch]
