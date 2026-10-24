@@ -272,14 +272,7 @@ Under `"auto"` GMRES runs to `solver_tol / 100`, so the polarization stays
 within about `solver_tol` of the direct solve on a few thousand cells and within
 10 × `solver_tol` on 32,768. If GMRES does not converge, `"auto"` falls back to
 the direct solver when its matrix takes at most 2 GB (about 5,000 cells), and
-raises otherwise. With the legacy option below, `"auto"` takes the direct
-solver.
-
-### Legacy option
-
-`split=k` runs the field evaluations in $k$ chunks of source cells, bounding the
-memory of the field evaluation. It takes the point-matching path with the dense
-matrix and does not combine with `interaction="newell"`.
+raises otherwise.
 
 ---
 
@@ -362,9 +355,6 @@ $$
 ```text
 apply_demag(collection, solver=..., interaction=...)
 │
-├─ 0. Legacy option split?
-│      YES → point-matched dense tensor (refused with interaction="newell")
-│
 ├─ 1. Collect the magnet cells; one 3×3 susceptibility tensor per cell,
 │      R diag(χ) Rᵀ; check the rule ("newell": all cells cuboid, one
 │      orientation, else raise); refuse objects with paths
@@ -393,7 +383,6 @@ apply_demag(collection, solver=..., interaction=...)
 | Single uniform grid   | $O(N \log N)$                          | $O(N \log N)$               |
 | $K$ grid clusters     | $O(N \log N + \sum_{A\neq B} n_A n_B)$ | $O(N \log N + \text{nnz})$  |
 | Loose / generic cells | $O(n^2)$ for those cells               | $O(n^2)$ or $O(\text{nnz})$ |
-| Legacy (`split`)      | $O(N^2)$ dense                         | $O(N^2)$                    |
 
 Measured on one meshed cube (Apple Silicon, $\chi = 3$, `solver_tol=1e-8`, point
 matching): the iterative solver is about 40 times faster than the direct one at

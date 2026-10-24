@@ -51,6 +51,14 @@ def _pols(coll):
     return np.array([s.polarization for s in coll.sources_all])
 
 
+def _getH_tensor(cells):
+    """The point-matched tensor straight from ``magpy.getH``, in the layout of
+    ``demag_tensor``: a reference independent of the solver's own formulas."""
+    n = len(cells)
+    T2 = demag._point_block_T(cells, np.array([c.centroid for c in cells]))
+    return T2.reshape((3, n, 3, n)).transpose((2, 3, 1, 0)) / magpy.mu_0
+
+
 def _interactions(coll):
     """Every rule that applies to these cells: always point, Newell when all
     cells are parallel cuboids."""
@@ -496,31 +504,18 @@ def test_three_magnet_scalar_susceptibilities_stay_isotropic():
 
 
 def test_distant_bodies_interact_as_with_point_matching():
-    """A magnet and an iron cube 2,000 cells apart: the induced polarization from
-    the Newell blocks matches point matching, which the exact formulas alone
-    missed by orders of magnitude at this distance."""
+    """A magnet and an iron cube 2,000 cells apart: the Newell blocks between
+    them match point matching, which the exact formulas alone missed by orders
+    of magnitude at this distance."""
     a = 0.01
-
-    def bodies():
-        magnet = mesh_Cuboid(
-            magpy.magnet.Cuboid(dimension=(a, a, a), polarization=(0, 0, 1.2)), 64
-        )
-        iron = mesh_Cuboid(
-            magpy.magnet.Cuboid(
-                dimension=(a, a, a), polarization=(0, 0, 0), position=(0, 0, 5.0)
-            ),
-            64,
-        )
-        return magpy.Collection(magnet, iron)
-
-    chi = [0.05] * 64 + [1000.0] * 64
-    newell = apply_demag(bodies(), susceptibility=chi, interaction="newell")
-    point = apply_demag(bodies(), susceptibility=chi, split=2)
-    jz = [
-        np.mean([c.polarization[2] for c in res.children[1].sources_all])
-        for res in (newell, point)
-    ]
-    np.testing.assert_allclose(jz[0], jz[1], rtol=1e-2)
+    magnet = mesh_Cuboid(magpy.magnet.Cuboid(dimension=(a, a, a)), 64)
+    iron = mesh_Cuboid(
+        magpy.magnet.Cuboid(dimension=(a, a, a), position=(0, 0, 5.0)), 64
+    )
+    cells = magnet.sources_all + iron.sources_all
+    newell = demag_tensor(cells, interaction="newell")[:, :64, 64:]
+    point = _getH_tensor(cells)[:, :64, 64:]
+    np.testing.assert_allclose(newell, point, rtol=0, atol=1e-2 * np.abs(point).max())
 
 
 # ── the two interaction rules ───────────────────────────────────────────────
@@ -564,23 +559,21 @@ def _mixed_collection():
 
 
 def test_default_is_point_matching():
-    """The default rule reproduces the historical point-matching solve, through
+    """The default rule reproduces magpylib's point-matched field, through
     every fast path, up to the far-field expansion (here none: all close)."""
-    coll = _mixed_collection()
-    default = _pols(apply_demag(coll, susceptibility=0.5, solver="direct"))
-    legacy = _pols(apply_demag(coll, susceptibility=0.5, split=2))
-    np.testing.assert_allclose(default, legacy, rtol=0, atol=1e-12)
+    cells = _mixed_collection().sources_all
+    T = demag_tensor(cells) * magpy.mu_0
+    np.testing.assert_allclose(T, _getH_tensor(cells) * magpy.mu_0, rtol=0, atol=1e-12)
 
 
 @pytest.mark.parametrize(
-    ("build", "kwargs", "match"),
+    ("build", "match"),
     [
-        (_mixed_collection, {}, "needs every cell to be a Cuboid"),
+        (_mixed_collection, "needs every cell to be a Cuboid"),
         (
             lambda: _build_uniform_collection(27).rotate_from_angax(
                 1e-6, "x", anchor=None
             ),
-            {},
             None,
         ),
         (
@@ -588,27 +581,20 @@ def test_default_is_point_matching():
                 _build_uniform_collection(8),
                 _build_uniform_collection(8).rotate_from_angax(10, "x"),
             ),
-            {},
             "turned against each other",
         ),
-        (lambda: _build_uniform_collection(27), {"split": 2}, "does not combine"),
     ],
-    ids=[
-        "cylinder-and-tetrahedron",
-        "all-turned-alike",
-        "turned-bodies",
-        "legacy-option",
-    ],
+    ids=["cylinder-and-tetrahedron", "all-turned-alike", "turned-bodies"],
 )
-def test_newell_refuses_cells_it_cannot_cover(build, kwargs, match):
+def test_newell_refuses_cells_it_cannot_cover(build, match):
     """The Newell rule applies to every pair or not at all: it raises rather
     than mixing rules. Cells all turned alike are parallel, so they pass."""
     coll = build()
     if match is None:
-        apply_demag(coll, susceptibility=0.5, interaction="newell", **kwargs)
+        apply_demag(coll, susceptibility=0.5, interaction="newell")
         return
     with pytest.raises(ValueError, match=match):
-        apply_demag(coll, susceptibility=0.5, interaction="newell", **kwargs)
+        apply_demag(coll, susceptibility=0.5, interaction="newell")
 
 
 def test_unknown_interaction_is_refused():

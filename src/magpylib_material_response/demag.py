@@ -1010,16 +1010,6 @@ def _build_matvec(n, chi, ops):
     return matvec
 
 
-def _build_dense_matvec(chi, T):
-    """Return matvec ``v -> (I - S T) @ v`` for dense T."""
-
-    def matvec(v_flat):
-        Tv = T @ v_flat
-        return v_flat - _apply_susceptibility(chi, Tv)
-
-    return matvec
-
-
 def _diagonal_blocks(M, m):
     """The (m, 3, 3) diagonal blocks of a component-major (3m, 3m) block of T,
     dense or sparse: each cell's own field per unit of its own polarization."""
@@ -1126,7 +1116,6 @@ def _solve_iterative(*, n, chi, rhs, rhs_shape, matvec, T_self, solver_tol, max_
 def demag_tensor(
     src_list,
     *,
-    split=False,
     min_log_time=None,
     interaction="point",
 ):
@@ -1135,19 +1124,12 @@ def demag_tensor(
 
     Every pair follows ``interaction``, the same rule as in
     :func:`apply_demag`: the field at each cell's centre (``"point"``, the
-    default) or averaged over each cell (``"newell"``). The legacy option
-    ``split`` takes the historical point-matching path, which gives the same
-    tensor up to the far-field expansion of
-    :func:`~magpylib_material_response.newell.point_block`.
+    default) or averaged over each cell (``"newell"``).
 
     Parameters
     ----------
     src_list: sequence of magpylib magnet sources
         Each source is treated as a magnetic cell.
-
-    split: int
-        Number of times the sources list is split before getH calculation in demag
-        tensor calculation. Implies point matching.
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
@@ -1155,8 +1137,7 @@ def demag_tensor(
 
     interaction: {"point", "newell"}
         Interaction rule, see :func:`apply_demag`. ``"newell"`` needs every
-        source to be a Cuboid, all with one orientation, and does not combine
-        with ``split``.
+        source to be a Cuboid, all with one orientation.
 
     Returns
     -------
@@ -1174,69 +1155,16 @@ def demag_tensor(
 
     TODO: allow multi-point matching
     """
-    nof_src = len(src_list)
-
-    splitting = split > 1
     _check_interaction(interaction, list(src_list))
-    if splitting and interaction == "newell":
-        msg = (
-            "split takes the legacy point-matching path and does not combine "
-            "with interaction='newell'."
-        )
-        raise ValueError(msg)
-    if not splitting:
-        # Assembly under the chosen rule, returned in the legacy
-        # (3, n, n, 3) pre-mu_0 layout.
-        if nof_src == 0:
-            return np.zeros((3, 0, 0, 3))
-        positions, clusters = _analyze_collection(list(src_list), interaction)
-        T2 = _assemble_T_dense(
-            list(src_list), positions, clusters, interaction, min_log_time=min_log_time
-        )
-        n = nof_src
-        # T2[(m, j), (k, i)] -> legacy T[k, i, j, m], pre-mu_0.
-        return T2.reshape((3, n, 3, n)).transpose((2, 3, 1, 0)) / magpy.mu_0
-
-    pos0 = np.array([src.centroid for src in src_list])
-    rotQ0 = [src.orientation.as_quat() for src in src_list]
-    rot0 = R.from_quat(rotQ0)
-
-    saved_pols = [src.polarization for src in src_list]
-    try:
-        H_point = []
-        for unit_pol in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
-            pol_all = rot0.inv().apply(unit_pol)
-            # point matching field and demag tensor
-            with timelog(f"getH with unit_pol={unit_pol}", min_log_time=min_log_time):
-                for src, pol in zip(src_list, pol_all, strict=False):
-                    src.polarization = pol
-                src_list_split = np.array_split(src_list, split)
-                with logger.contextualize(
-                    task="Splitting field calculation", split=split
-                ):
-                    H_unit_pol = []
-                    for split_ind, src_list_subset in enumerate(src_list_split):
-                        logger.info(
-                            "Sources subset {subset_num}/{total_subsets}",
-                            subset_num=split_ind + 1,
-                            total_subsets=len(src_list_split),
-                        )
-                        if src_list_subset.size > 0:
-                            # getH squeezes the source axis of a one-source chunk
-                            H_sub = np.reshape(
-                                magpy.getH(src_list_subset.tolist(), pos0),
-                                (len(src_list_subset), len(pos0), 3),
-                            )
-                            H_unit_pol.append(H_sub)
-                    H_unit_pol = np.concatenate(H_unit_pol, axis=0)
-                H_point.append(H_unit_pol)  # shape (n_cells, n_pos, 3_xyz)
-    finally:
-        for src, pol in zip(src_list, saved_pols, strict=False):
-            if pol is not None:
-                src.polarization = pol
-
-    # shape (3_unit_pol, n_cells, n_pos, 3_xyz)
-    return np.array(H_point).reshape((3, nof_src, nof_src, 3))
+    n = len(src_list)
+    if n == 0:
+        return np.zeros((3, 0, 0, 3))
+    positions, clusters = _analyze_collection(list(src_list), interaction)
+    T2 = _assemble_T_dense(
+        list(src_list), positions, clusters, interaction, min_log_time=min_log_time
+    )
+    # T2[(m, j), (k, i)] -> T[k, i, j, m], pre-mu_0.
+    return T2.reshape((3, n, 3, n)).transpose((2, 3, 1, 0)) / magpy.mu_0
 
 
 def apply_demag(
@@ -1244,7 +1172,6 @@ def apply_demag(
     susceptibility=None,
     inplace=False,
     *,
-    split=1,
     min_log_time=None,
     style=None,
     solver="auto",
@@ -1290,10 +1217,6 @@ def apply_demag(
         If False, applies demagnetization on a copy of the input collection and returns
         the demagnetized collection
 
-    split: int
-        Number of times the sources list is split before getH calculation in demag
-        tensor calculation. Forces the legacy point-matched tensor for all pairs.
-
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
         will not be logged. If ``None`` (default), the value set by
@@ -1311,8 +1234,7 @@ def apply_demag(
         least a tenth of the interaction matrix: the cells of each uniform grid
         (meshed cuboids of one size and orientation) among themselves, and large
         grids of one spacing between each other. There it is as fast or faster
-        and needs less memory, often far less. Otherwise, and for ``split``, it
-        takes ``"direct"``.
+        and needs less memory, often far less. Otherwise it takes ``"direct"``.
         Its log says which it took and why. It runs GMRES to
         ``solver_tol / 100``, so the polarization agrees with the direct solver
         to about ``solver_tol`` on a few thousand cells and ``10 * solver_tol``
@@ -1341,8 +1263,7 @@ def apply_demag(
         100. Non-convergence raises ``RuntimeError`` under ``solver="iterative"``.
 
     interaction: {"point", "newell"}
-        How cells act on each other, see above. ``"newell"`` does not combine
-        with ``split``.
+        How cells act on each other, see above.
 
     Returns
     -------
@@ -1445,70 +1366,44 @@ def apply_demag(
 
         rhs = pol_total + _apply_susceptibility(chi, H_ext)  # shape (3n, 1)
 
-        # ── demag operator: legacy point-matching or the chosen rule ────────
+        # ── demag operator under the chosen rule ────────────────────────────
         _check_interaction(interaction, magnets_list)
-        legacy = not (split is False or split == 1)
-        if legacy and interaction == "newell":
-            msg = (
-                "split takes the legacy point-matching path and does not combine "
-                "with interaction='newell'."
+        positions, clusters = _analyze_collection(magnets_list, interaction)
+        auto = solver == "auto"
+        if auto:
+            solver, share = _auto_solver(clusters)
+            logger.info(
+                "solver='auto' chose {solver}: FFT covers {share:.0%} of the "
+                "interactions",
+                share=share,
+                solver=solver,
             )
-            raise ValueError(msg)
-        if legacy:
-            with timelog(
-                "Demagnetization tensor calculation", min_log_time=min_log_time
-            ):
-                T = demag_tensor(magnets_list, split=split)
-                T *= magpy.mu_0
-                T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
-            positions, clusters = None, None
-            auto = False
-            if solver == "auto":
-                solver = "direct"
-        else:
-            positions, clusters = _analyze_collection(magnets_list, interaction)
-            auto = solver == "auto"
-            if auto:
-                solver, share = _auto_solver(clusters)
-                logger.info(
-                    "solver='auto' chose {solver}: FFT covers {share:.0%} of the "
-                    "interactions",
-                    share=share,
-                    solver=solver,
-                )
-            T = None
-            if solver == "direct":
-                T = _assemble_T_dense(
-                    magnets_list,
-                    positions,
-                    clusters,
-                    interaction,
-                    min_log_time=min_log_time,
-                )
+        T = None
+        if solver == "direct":
+            T = _assemble_T_dense(
+                magnets_list,
+                positions,
+                clusters,
+                interaction,
+                min_log_time=min_log_time,
+            )
 
         with timelog("Solving of linear system", min_log_time=min_log_time):
             if solver == "direct":
                 pol_new = _solve_direct(T, chi, rhs)
             else:
                 tol = solver_tol * AUTO_TOL_FACTOR if auto else solver_tol
-                if T is not None:
-                    matvec = _build_dense_matvec(chi, T)
-                    own = _diagonal_blocks(T, n)
-                    T_self = (
-                        np.trace(own, axis1=1, axis2=2)[:, None, None] / 3 * np.eye(3)
-                    )
-                else:
-                    ops = _build_operator(
-                        magnets_list,
-                        positions,
-                        clusters,
-                        chi,
-                        tol,
-                        min_log_time,
-                        interaction,
-                    )
-                    matvec = _build_matvec(n, chi, ops)
-                    T_self = _self_blocks(n, clusters, interaction, ops)
+                ops = _build_operator(
+                    magnets_list,
+                    positions,
+                    clusters,
+                    chi,
+                    tol,
+                    min_log_time,
+                    interaction,
+                )
+                matvec = _build_matvec(n, chi, ops)
+                T_self = _self_blocks(n, clusters, interaction, ops)
                 gmres_failure = None
                 try:
                     pol_new = _solve_iterative(
