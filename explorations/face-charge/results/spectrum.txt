@@ -1,0 +1,42 @@
+asm 2.8107988749979995
+eig 1.3148667910136282
+shape [1. 1. 1.] max|Im lam| 2.3515601341150438e-17  Re lam range -0.2328837175424014 [0.3162 0.3162 0.5   ]
+ axis 0: sum w=0.998897 (expect 1)  sum w n=0.334320  min w=-9.36e-02  neg mass=1.58e-01  n-support of 99.9% mass: 107 modes, n in [0.184,0.732]
+   J=1 poles n_j=[0.3347]  max rel err over chi in [1e-3,1e6]: 1.7e-01
+   J=2 poles n_j=[0.2351 0.5999]  max rel err over chi in [1e-3,1e6]: 1.9e-02
+   J=3 poles n_j=[0.2113 0.4111 0.6653]  max rel err over chi in [1e-3,1e6]: 2.8e-03
+   J=4 poles n_j=[0.1977 0.3143 0.5504 0.703 ]  max rel err over chi in [1e-3,1e6]: 3.6e-04
+   J=6 poles n_j=[0.1852 0.2491 0.3642 0.5124 0.6316 0.7303]  max rel err over chi in [1e-3,1e6]: 2.0e-06
+ axis 1: sum w=0.994742 (expect 1)  sum w n=0.332320  min w=-1.01e-01  neg mass=1.93e-01  n-support of 99.9% mass: 105 modes, n in [0.184,0.732]
+   J=1 poles n_j=[0.3341]  max rel err over chi in [1e-3,1e6]: 1.7e-01
+   J=2 poles n_j=[0.2349 0.6007]  max rel err over chi in [1e-3,1e6]: 1.9e-02
+   J=3 poles n_j=[0.2112 0.4101 0.6654]  max rel err over chi in [1e-3,1e6]: 2.8e-03
+   J=4 poles n_j=[0.1976 0.314  0.5515 0.7031]  max rel err over chi in [1e-3,1e6]: 3.5e-04
+   J=6 poles n_j=[0.1852 0.249  0.364  0.5135 0.6317 0.7304]  max rel err over chi in [1e-3,1e6]: 2.0e-06
+ axis 2: sum w=0.996831 (expect 1)  sum w n=0.333330  min w=-1.11e-01  neg mass=2.16e-01  n-support of 99.9% mass: 101 modes, n in [0.184,0.732]
+   J=1 poles n_j=[0.3344]  max rel err over chi in [1e-3,1e6]: 1.7e-01
+   J=2 poles n_j=[0.235  0.6003]  max rel err over chi in [1e-3,1e6]: 1.9e-02
+   J=3 poles n_j=[0.2113 0.4106 0.6654]  max rel err over chi in [1e-3,1e6]: 2.8e-03
+   J=4 poles n_j=[0.1977 0.3141 0.5509 0.7031]  max rel err over chi in [1e-3,1e6]: 3.6e-04
+   J=6 poles n_j=[0.1852 0.249  0.3641 0.5129 0.6316 0.7304]  max rel err over chi in [1e-3,1e6]: 2.0e-06
+asm 2.7191804999893066
+eig 1.3530624169798102
+shape [2.   1.   0.25] max|Im lam| 2.926274793051264e-09  Re lam range -0.2764260828468963 [0.3715 0.4376 0.5   ]
+ axis 0: sum w=1.000000 (expect 1)  sum w n=0.098530  min w=-6.30e-08  neg mass=1.60e-07  n-support of 99.9% mass: 49 modes, n in [0.062,0.732]
+   J=1 poles n_j=[0.0985]  max rel err over chi in [1e-3,1e6]: 3.0e-01
+   J=2 poles n_j=[0.0692 0.5679]  max rel err over chi in [1e-3,1e6]: 5.9e-02
+   J=3 poles n_j=[0.0635 0.314  0.6737]  max rel err over chi in [1e-3,1e6]: 7.0e-03
+   J=4 poles n_j=[0.0625 0.2594 0.5415 0.7119]  max rel err over chi in [1e-3,1e6]: 5.4e-04
+   J=6 poles n_j=[0.0624 0.2381 0.3302 0.472  0.6124 0.7279]  max rel err over chi in [1e-3,1e6]: 2.2e-06
+ axis 1: sum w=1.000000 (expect 1)  sum w n=0.200332  min w=-4.39e-08  neg mass=8.77e-08  n-support of 99.9% mass: 57 modes, n in [0.129,0.734]
+   J=1 poles n_j=[0.2003]  max rel err over chi in [1e-3,1e6]: 1.8e-01
+   J=2 poles n_j=[0.1566 0.612 ]  max rel err over chi in [1e-3,1e6]: 2.8e-02
+   J=3 poles n_j=[0.1451 0.3138 0.6756]  max rel err over chi in [1e-3,1e6]: 6.9e-03
+   J=4 poles n_j=[0.1343 0.2189 0.5476 0.7107]  max rel err over chi in [1e-3,1e6]: 8.3e-04
+   J=6 poles n_j=[0.1295 0.1954 0.3267 0.4952 0.6325 0.7327]  max rel err over chi in [1e-3,1e6]: 4.0e-06
+ axis 2: sum w=1.000000 (expect 1)  sum w n=0.706056  min w=-9.63e-08  neg mass=1.06e-07  n-support of 99.9% mass: 55 modes, n in [0.206,0.776]
+   J=1 poles n_j=[0.7061]  max rel err over chi in [1e-3,1e6]: 8.3e-02
+   J=2 poles n_j=[0.3432 0.7674]  max rel err over chi in [1e-3,1e6]: 5.7e-03
+   J=3 poles n_j=[0.293  0.5255 0.7732]  max rel err over chi in [1e-3,1e6]: 7.2e-04
+   J=4 poles n_j=[0.2563 0.3834 0.63   0.7752]  max rel err over chi in [1e-3,1e6]: 1.1e-04
+   J=6 poles n_j=[0.2082 0.3067 0.4321 0.5833 0.7028 0.7763]  max rel err over chi in [1e-3,1e6]: 3.6e-07
