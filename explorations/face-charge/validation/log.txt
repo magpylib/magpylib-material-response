@@ -53,3 +53,11 @@
 - 2026-10-24 17:16 B: MoM 128 per magnet: 253 cells, 0.1 s
 - 2026-10-24 17:16 B: MoM 256 per magnet: 466 cells, 0.2 s
 - 2026-10-24 17:16 B: done. Face charge m=6: max error 3.4e-03 vs reference; MoM finest: 7.5e-03
+- 2026-10-24 17:17 C: start
+- 2026-10-24 17:17 C: face charge m=3: 1368 unknowns, build 0.4 s, couple+solve 0.0 s, field 0.0 s
+- 2026-10-24 17:17 C: face charge m=4: 2304 unknowns, build 1.0 s, couple+solve 0.1 s, field 0.0 s
+- 2026-10-24 17:17 C: face charge m=6: 5040 unknowns, build 4.3 s, couple+solve 0.4 s, field 0.0 s
+- 2026-10-24 17:17 C: MoM study level 512 cells, 0.1 s
+- 2026-10-24 17:17 C: MoM study level 4096 cells, 1.2 s
+- 2026-10-24 17:17 C: MoM study level 32768 cells, 8.0 s
+- 2026-10-24 17:17 C: done. Face charge m=6: max error 2.3e-04 vs reference; MoM finest: 2.9e-03

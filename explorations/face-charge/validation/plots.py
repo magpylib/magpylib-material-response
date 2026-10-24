@@ -96,9 +96,13 @@ def plot(cid):
         fc_n = [x["unknowns"] for x in r["fc"]]
         m_err = [x["error"]["max"] * 100 for x in r["mom"]]
         m_n = [3 * x["cells"] for x in r["mom"]]
+        if "ref_uncertainty" in c:
+            ax.axhspan(1e-4, 100 * c["ref_uncertainty"], color=INK2, alpha=0.12, lw=0,
+                       label=f"within the reference's own uncertainty ({100 * c['ref_uncertainty']:g} %)")
         ax.loglog(m_n, m_err, "o--", color=MOM, ms=6, label="MoM (unknowns = 3 × cells)")
         ax.loglog(fc_n, fc_err, "o-", color=FC, ms=6, label="face charge")
         ax.set_xlabel("unknowns")
+        ax.set_ylim(bottom=0.5 * min(fc_err + m_err + [100 * c.get("ref_uncertainty", 1)]))
         ax.set_ylabel("max error vs reference (%)")
         ax.legend(frameon=False, fontsize=8.5)
         ax.set_title(f"{cid}. {r['title']}", loc="left", fontsize=10, color=INK)

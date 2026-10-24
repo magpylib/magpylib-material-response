@@ -4,13 +4,13 @@ Each documented example of material-response, solved by the face-charge method
 and by the MoM as its page runs it, both against the page's reference. This file
 is rewritten by `report.py` after every case; `run.py` appends the log below.
 
-**2 of 6 cases done.** Next: C.
+**3 of 6 cases done.** Next: D.
 
 | Case | Model | Status | Reference | Face charge, finest level | MoM, docs settings, finest |
 | --- | --- | --- | --- | --- | --- |
 | A | Three magnets, χ 0.3 to 1, two rotated (cuboids_demagnetization) | done | ANSYS (FEMdata_test_cuboids), 301 points | 8,064 unknowns, 13.4 s: **max 0.64 %**, rms 0.13 % (last refinement changed it by 0.002 %) | 256 per magnet, 0.5 s: **max 0.64 %**, rms 0.18 % |
 | B | Hard magnet (χ 0.5) and a turned soft cube (χ 3999) (soft_magnets) | done | ANSYS (FEMdata_test_softmag), Bx and Bz, 3 lines of 1001 points | 9,504 unknowns, 18.8 s: **max 0.34 %**, rms 0.027 % (last refinement changed it by 0.002 %) | 256 per magnet, 0.2 s: **max 0.75 %**, rms 0.12 % |
-| C | Flux concentrator, χ 4000 bar in the Earth's field (mesh_convergence) | todo | docs: MoM study on 4,096 to 262,144 cells, within 0.14 % | | |
+| C | Flux concentrator, χ 4000 bar in the Earth's field (mesh_convergence) | done | docs: MoM study on 4,096 to 262,144 cells, within 0.14 % | 5,040 unknowns, 4.7 s: **max 0.023 %**, rms 0.015 % (last refinement changed it by 0.024 %) | 32768 cells, 8.0 s: **max 0.29 %**, rms 0.19 % |
 | D | Halbach array of 5 magnets (χ 0.05) on back iron (χ 1000) (mesh_convergence) | todo | MoM study (2, 4, 8) extrapolated; docs: good to 0.03 % against 245,760 cells | | |
 | E | Shielding sheet (24×24×1 mm, χ 1000) behind a magnet (mesh_convergence) | todo | docs: MoM study on 4,608 to 294,912 cells, within 3.3 %, 1.1 %, 0.09 % | | |
 | F | U-core electromagnet (3 cuboids, χ 999) driven by a 16-winding coil (ucore_electromagnet) | todo | FEM (scikit-fem P2, explore/cells-and-fem), h = [3.0, 2.0, 1.5, 1.2, 1.0] mm, extrapolated over the three finest (order 1.17) | | |
@@ -95,6 +95,29 @@ error has none, it looks like the FEM's mesh noise. The worst point for both is
 0.5 mm under the hard magnet's edge: Bx is 60.12 mT by face charge, 59.68 by
 ANSYS, 60.52 by the MoM, which approaches face charge as it refines.
 
+### C. Flux concentrator, χ 4000 bar in the Earth's field (mesh_convergence)
+
+Reference: docs: MoM study on 4,096 to 262,144 cells, within 0.14 %. Compared: gain at 3 observers.
+
+| Method | Size | Time | Max error | RMS error |
+| --- | ---: | ---: | ---: | ---: |
+| face charge, m = 3 | 1,368 unknowns | 0.4 s | 0.073 % | 0.051 % |
+| face charge, m = 4 | 2,304 unknowns | 1.0 s | 0.033 % | 0.027 % |
+| face charge, m = 6 | 5,040 unknowns | 4.7 s | 0.023 % | 0.015 % |
+| MoM, 512 cells | 512 cells | 89 ms | 2 % | 1.3 % |
+| MoM, 4096 cells | 4,096 cells | 1.2 s | 0.81 % | 0.52 % |
+| MoM, 32768 cells | 32,768 cells | 8.0 s | 0.29 % | 0.19 % |
+| MoM study's extrapolation | | | 0.066 % | 0.042 % |
+
+![C: the compared values and both errors](results/C.png)
+
+**Reading.** Face charge gives the gains 4.2594, 3.3468 and 2.1679 at m = 6,
+within 0.023 % of the reference's 4.259, 3.346 and 2.168. That reference is a
+MoM study on up to 262,144 cells, good to 0.14 % and quoted to four digits, so
+face charge agrees with it as closely as it can be read. Already at m = 3 (0.4
+s) face charge is within 0.073 %. The MoM at the page's finest level, 32,768
+cells in 8.0 s, is 0.29 % off; its study's extrapolation, 0.066 %.
+
 
 ## Log
 
@@ -153,3 +176,11 @@ ANSYS, 60.52 by the MoM, which approaches face charge as it refines.
 - 2026-10-24 17:16 B: MoM 128 per magnet: 253 cells, 0.1 s
 - 2026-10-24 17:16 B: MoM 256 per magnet: 466 cells, 0.2 s
 - 2026-10-24 17:16 B: done. Face charge m=6: max error 3.4e-03 vs reference; MoM finest: 7.5e-03
+- 2026-10-24 17:17 C: start
+- 2026-10-24 17:17 C: face charge m=3: 1368 unknowns, build 0.4 s, couple+solve 0.0 s, field 0.0 s
+- 2026-10-24 17:17 C: face charge m=4: 2304 unknowns, build 1.0 s, couple+solve 0.1 s, field 0.0 s
+- 2026-10-24 17:17 C: face charge m=6: 5040 unknowns, build 4.3 s, couple+solve 0.4 s, field 0.0 s
+- 2026-10-24 17:17 C: MoM study level 512 cells, 0.1 s
+- 2026-10-24 17:17 C: MoM study level 4096 cells, 1.2 s
+- 2026-10-24 17:17 C: MoM study level 32768 cells, 8.0 s
+- 2026-10-24 17:17 C: done. Face charge m=6: max error 2.3e-04 vs reference; MoM finest: 2.9e-03

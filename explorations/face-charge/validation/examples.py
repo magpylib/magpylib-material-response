@@ -129,7 +129,7 @@ def case_C():
         "title": "Flux concentrator, χ 4000 bar in the Earth's field (mesh_convergence)",
         "build": build_C, "observers": C_SENSORS, "quantity": gain_of_B, "unit": "gain",
         "reference": np.array([4.259, 3.346, 2.168]),
-        "ref_source": "docs: MoM study on 4,096 to 262,144 cells, within 0.14 %",
+        "ref_source": "docs: MoM study on 4,096 to 262,144 cells, within 0.14 %", "ref_uncertainty": 0.0014,
         "fc_levels": [3, 4, 6], "mom_study": lambda: _study(build_C, gain, (4, 8, 16), C_SENSORS),
         "study_gives": "quantity",
     }
@@ -182,7 +182,7 @@ def case_E():
         "title": "Shielding sheet (24×24×1 mm, χ 1000) behind a magnet (mesh_convergence)",
         "build": build_E, "observers": E_BEHIND, "quantity": lambda B: np.linalg.norm(B, axis=1) * 1e3, "unit": "|B| mT",
         "reference": np.array([5.52, 5.85, 8.80]),
-        "ref_source": "docs: MoM study on 4,608 to 294,912 cells, within 3.3 %, 1.1 %, 0.09 %",
+        "ref_source": "docs: MoM study on 4,608 to 294,912 cells, within 3.3 %, 1.1 %, 0.09 %", "ref_uncertainty": 0.033,
         "fc_levels": [2, 3], "mom_study": lambda: _study(build_E, E_BEHIND, (1, 2, 4), E_BEHIND),
     }
 
