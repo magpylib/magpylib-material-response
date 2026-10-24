@@ -16,10 +16,11 @@ and this project adheres to
   memory warning missed it: a magnet on an iron plate meshed at 0.4 mm ran for
   more than 12 minutes. The block now stays dense unless sparsifying pays, at
   any size, and the warning shows: 2 minutes and 10 GB. Whether it pays is
-  judged on cells spread over the body, not on its first slab, and below 2 GB
-  only from 90 % dropped, where the single-threaded sparse product keeps up. A
-  sparse block peaks at a third of the memory while built, and a reverse block
-  given by reciprocity is no longer copied
+  judged on cells drawn at random across the body, not on its first slab, and
+  only from 90 % dropped, as the sparse product is single-threaded; from 60 %
+  when the blocks would pass 2 GB in all. A sparse block peaks at a third of the
+  memory while built, and a reverse block given by reciprocity is no longer
+  copied
   ([#86](https://github.com/magpylib/magpylib-material-response/pull/86)).
 
 ## [0.6.0] - 2026-10-23

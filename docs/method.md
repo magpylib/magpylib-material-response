@@ -338,14 +338,15 @@ the polarization in and the field back, so the solve runs in the global frame.
 ### 5.3 Bounded sparsification of large blocks
 
 In the iterative solver, a block with more than `DENSE_BLOCK_MAX_ENTRIES`
-entries is stored sparse when that pays: one chunk of observers spread over the
-whole body must show that at least 90 % of the entries can go
-(`SPARSIFY_MIN_DROP`), as a sparse product runs on one thread and is only then
-about as fast as the dense one. Above `DENSE_BLOCK_MAX_BYTES` (2 GB) memory
-comes first and 60 % suffices (`SPARSIFY_MIN_DROP_LARGE`): a sparse matrix takes
-12 bytes per kept entry against 8 per dense entry, and about 20 while it is
-built. At high susceptibility the budget below rarely allows either, and the
-block stays dense at any size. When the explicit blocks pass
+entries is stored sparse when that pays: at least 64 observers, drawn at random
+across the body, must show that at least 90 % of the entries can go
+(`SPARSIFY_MIN_DROP`). A sparse product runs on one thread: at 90 % dropped it
+takes about 1.7 times as long as the dense one, for a sixth of the memory. When
+the explicit blocks would pass `DENSE_BLOCK_MAX_BYTES` (2 GB) dense in all,
+memory comes first and 60 % suffices (`SPARSIFY_MIN_DROP_LARGE`): a sparse
+matrix takes 12 bytes per kept entry against 8 per dense entry, and about 20
+while it is built. At high susceptibility the budget below rarely allows either,
+and blocks stay dense at any size. When the explicit blocks pass
 `DENSE_BLOCK_MAX_BYTES` in all, the solve logs a warning. Entries are dropped
 per observer row, smallest first, only while the sum of the dropped magnitudes
 stays within a budget:
