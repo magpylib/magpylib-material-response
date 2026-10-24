@@ -4,15 +4,15 @@ A homogeneous, isotropic, linear part is fully described by the charge on its
 surface, so a CAD part needs only its surface triangles (a magpylib
 `TriangularMesh`), no tetrahedra. This folder builds that solver step by step.
 
-**Status: steps 1 to 3 of 4 done.** Next: step 4, compression, which would also
-let a fine export's narrow facet strips share panels.
+**Status: steps 1 to 3 of 4 done, and narrow facets share panels (3c).** Next:
+step 4, compression: assembly still grows with the square of the triangles.
 
-| Step | What                                                                                                                                                      | Status |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1    | Linear charge per triangle; checked on a sphere and on a cube given as triangles                                                                          | done   |
-| 2    | Grade the mesh toward sharp edges (by the angle between neighbours); cube as triangles, then the U-core as one closed mesh against FEM                    | done   |
-| 3    | (a) a cylinder exported with 32, 64, 128 sides against the MoM on the exact `Cylinder`; (b) a CAD-like part (fillets, a hole) against the tetrahedral MoM | done   |
-| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                                    | todo   |
+| Step | What                                                                                                                                                                                      | Status |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1    | Linear charge per triangle; checked on a sphere and on a cube given as triangles                                                                                                          | done   |
+| 2    | Grade the mesh toward sharp edges (by the angle between neighbours); cube as triangles, then the U-core as one closed mesh against FEM                                                    | done   |
+| 3    | (a) a cylinder exported with 32, 64, 128 sides against the MoM on the exact `Cylinder`; (b) a CAD-like part (fillets, a hole) against the tetrahedral MoM; (c) narrow facets share panels | done   |
+| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                                                                    | todo   |
 
 ## Step 1: the solver
 
@@ -192,10 +192,52 @@ convex, the hole's chords short), and the cap's area is checked.
 - **Cost of a fine export.** Each facet strip of the hole and the fillets is a
   flat face of its own, cut into its own layers, so the unknowns grow with the
   facets: 5,142, 9,012, 16,224 at m = 2 for 15°, 7.5°, 3.75° (30,024 at 3.75°, m
-  = 4, not run). Panels that span several near-coplanar strips, or compression
-  (step 4), would keep a fine export as cheap as a crude one.
+  = 4, not run). Step 3c lets the strips share panels.
 
 ![Step 3b: the export's top face and the face-charge mesh; the cube check of the tetrahedral MoM; both methods on the same export; finer exports](results/step3_plate.png)
+
+## Step 3c: narrow facets share panels
+
+`refine_rings(groups=True)` joins the ring cells of one layer along one rim, on
+one smooth face, into runs as long as the last layer's size (the cuboid grid's
+cell length along an edge), turning by at most 30°. `MacroBody` (in
+`tri_solver.py`) gives each run one linear charge, the Galerkin projection of
+the triangles' basis: the triangles keep the exact geometry, and the operator is
+projected chunk by chunk as it is assembled, so the triangles' matrix is never
+stored. Cells within ℓ of a real corner and interior cells keep panels of their
+own, so boxes do not change (`step3_groups.py`, `results/step3_groups.*`).
+
+- **Exact where it should be:** one group per triangle reproduces `TriBody` to
+  2e-14, and without groups the mesh is bit for bit the earlier one.
+- **The basis has to follow the band.** A linear charge along the run's mean
+  tangent plane varies along one fixed direction, which turns away from the
+  rim's normal along a curved band (about 30° per run on the cylinder's cap) and
+  misses the charge's steep rise toward the rim: 2.3e-3 off 1 mm from the
+  cylinder's rim at m = 4, twice the ungrouped mesh's own change from m = 3
+  to 4. In the band's own coordinates, arc length along the rim and distance
+  from it (both linear on every cell), 2.5e-4.
+- **Accuracy at m = 4, against one charge per triangle** on the same export:
+  plate, 15°, 4.8e-5 to 2.5e-4; cylinder, 128 sides, 7.6e-5 to 2.5e-4 along the
+  axis and 2.7e-4 to 9.6e-4 across. Each is about the size of the ungrouped
+  mesh's own change from m = 3 to 4 (3.3e-5 to 3.9e-4 on the plate, 2.2e-4 to
+  1.2e-3 on the cylinder), so sharing costs no more than one level of m.
+- **Unknowns:** plate at m = 4, 11,136, 17,454 and 30,024 for 15°, 7.5° and
+  3.75° become 5,259, 6,147 and 7,773; the cylinder at m = 4, 11,544 becomes
+  1,266. The whole run peaked at 3.4 GB, where one charge per triangle at 3.75°,
+  m = 2 needed 6.5 GB.
+- **Faceting, now at m = 4 on every export:** the moment converges at order
+  2.06, the 15° export 2.6e-3 off the smooth part, 7.5° 6.2e-4, 3.75° 1.5e-4.
+- **Time does not drop:** assembly runs over the triangles and grows with their
+  square (15° export, m = 4: 18.9 s shared, 20.1 s not; 3.75°, m = 4: about 2
+  min). That is step 4's job. The times in `step3_groups.json` for the band runs
+  on the plate were taken while other jobs loaded the machine (load average 35);
+  re-timed alone, the three bases take the same.
+- **Not covered:** interior cells on curved faces keep their own panels (the
+  cylinder mantle's middle strips), and a run's charge is linear, so a rim much
+  tighter than the last layer's size needs shorter runs (the 30° limit does
+  that).
+
+![Step 3c: unknowns for each export, shared and not; the difference sharing makes on the plate and the cylinder, against the ungrouped mesh's own change from m = 3 to 4](results/step3_groups.png)
 
 ## How to resume
 
@@ -204,4 +246,5 @@ a minute). Each step writes `results/step<k>.*`. `python step3_cylinder.py` runs
 only the cases missing from `results/step3_cylinder.json` (all of them: about 30
 minutes, 26 of which are the MoM) and redraws the figure;
 `python step3_plate.py` likewise (about 12 minutes, 7.7 GB at most, with the
-material-response worktree's `src` on `PYTHONPATH`).
+material-response worktree's `src` on `PYTHONPATH`); `python step3_groups.py`
+likewise (about 12 minutes, 3.4 GB).

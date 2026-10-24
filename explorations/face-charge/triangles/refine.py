@@ -183,24 +183,25 @@ def _convex(poly, nrm, tol):
     return True
 
 
-def _merge_coplanar(V, F, tol):
+def _merge_coplanar(V, F, tol, ids=False):
     """The mesh's flat faces as convex polygons: neighbouring coplanar triangles
-    merged while the union stays convex. Returns [(polygon (k, 3), normal)]."""
+    merged while the union stays convex. Returns [(polygon (k, 3), normal)], with
+    one of the polygon's triangles as a third item if ids."""
     n = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
     n /= np.linalg.norm(n, axis=1)[:, None]
-    polys = [[list(f), n[t]] for t, f in enumerate(F)]  # vertex index loops
+    polys = [[list(f), n[t], t] for t, f in enumerate(F)]  # vertex index loops
     merged = True
     while merged:
         merged = False
         edge_at = {}
-        for pi, (loop, _) in enumerate(polys):
+        for pi, (loop, *_) in enumerate(polys):
             for i in range(len(loop)):
                 edge_at[(loop[i], loop[(i + 1) % len(loop)])] = pi
         for (u, v), pi in edge_at.items():
             pj = edge_at.get((v, u))
             if pj is None or pj == pi or polys[pi] is None or polys[pj] is None:
                 continue
-            (la, na), (lb, nb) = polys[pi], polys[pj]
+            (la, na, ta), (lb, nb, _) = polys[pi], polys[pj]
             if na @ nb < 1 - 1e-9:
                 continue
             # splice: la has u -> v, lb has v -> u
@@ -215,11 +216,11 @@ def _merge_coplanar(V, F, tol):
             loop = [loop[i] for i in keep]
             if not _convex(V[loop], na, tol):
                 continue
-            polys[pi], polys[pj] = [loop, na], None
+            polys[pi], polys[pj] = [loop, na, ta], None
             merged = True
             break
         polys = [p for p in polys if p is not None]
-    return [(V[loop], nrm) for loop, nrm in polys]
+    return [(V[loop], nrm, t) if ids else (V[loop], nrm) for loop, nrm, t in polys]
 
 
 def _cut_poly(poly, a, w, d, tol):
@@ -275,7 +276,7 @@ def _split_cells(polys, h, tol):
     """Cut every convex cell longer than h, across its longest side and then
     across the other direction, into equal pieces: rectangles stay rectangles."""
     out = []
-    for poly, nrm in polys:
+    for poly, nrm, *rest in polys:
         sides = np.roll(poly, -1, axis=0) - poly
         u = sides[np.argmax(np.linalg.norm(sides, axis=1))]
         u = u / np.linalg.norm(u)
@@ -294,7 +295,7 @@ def _split_cells(polys, h, tol):
                     parts = nxt
                 new += parts
             pieces = new
-        out += [(p, nrm) for p in pieces]
+        out += [(p, nrm, *rest) for p in pieces]
     return out
 
 
@@ -334,58 +335,199 @@ def _offset(P, n, shift, tol):
     return out
 
 
-def refine_rings(V, F, ell, m, g=2.5, angle=20.0, corner=30.0):
+def refine_rings(V, F, ell, m, g=2.5, angle=20.0, corner=30.0, groups=False):
     """Graded triangles by rings: each flat face's convex polygons are offset
     inward along their sharp edges at ell (k/m)^g, which gives straight layers on a
     box and rings on a faceted disc. Where two sharp edges turn by more than
     `corner` degrees, the cells near that corner are also cut parallel to the other
     edge, as on the cuboid grid; a curved rim turns by 360/N and gets plain rings.
-    The rest is cut into equal pieces of the last layer's size, then fanned."""
+    The rest is cut into equal pieces of the last layer's size, then fanned.
+
+    With groups, also a group per triangle and its band frame (see _ring_groups):
+    the ring cells of one layer along one rim, on one smooth face, joined into runs
+    as long as the last layer's size, so that narrow facets can share one linear
+    charge in the band's own coordinates, along the rim and away from it."""
     span = np.max(np.ptp(V, axis=0))
     tol = 1e-9 * span
     segs = sharp_edges(V, F, angle)
     levels = ell * (np.arange(1, m + 1) / m) ** g
-    cells = []
-    for P, n in _merge_coplanar(V, F, tol):
+    cells, corners = [], []
+    for P, n, rep in _merge_coplanar(V, F, tol, ids=True):
         k = len(P)
         sharp = np.array([_on_sharp(P[i], P[(i + 1) % k], segs, 1e-6 * span) for i in range(k)])
         t = np.roll(P, -1, axis=0) - P
         t /= np.linalg.norm(t, axis=1)[:, None]
         nu = np.cross(n, t)
         rings, inner = [], P
-        for d in levels:
+        for li, d in enumerate(levels):
             Q = _offset(P, n, np.where(sharp, d, 0.0), tol)
             if Q is None:
                 break
             for i in range(k):
                 quad = np.array([inner[i], inner[(i + 1) % k], Q[(i + 1) % k], Q[i]])
                 if sharp[i]:
-                    rings.append(quad)
+                    rings.append((quad, ("ring", rep, 0.5 * (P[i] + P[(i + 1) % k]), li)))
             inner = Q
-        local = [r for r in rings] + [inner]
+        local = rings + [(inner, ("interior", rep))]
         # real corners: cut the cells near them parallel to the other edge too
         for j in range(k):
             i = j - 1
             if not (sharp[i] and sharp[j]) or np.degrees(np.arccos(np.clip(t[i] @ t[j], -1, 1))) <= corner:
                 continue
+            corners.append(P[j])
             # cells along edge i are cut parallel to edge j, and the other way
             # round: a long strip is split only where it reaches the corner
             for d in levels:
                 for near, w in ((nu[i], nu[j]), (nu[j], nu[i])):
                     nxt = []
-                    for c in local:
+                    for c, tag in local:
                         if (c.mean(0) - P[j]) @ near < ell:
-                            nxt += _cut_poly(c, P[j], w, d, tol)
+                            nxt += [(p, tag) for p in _cut_poly(c, P[j], w, d, tol)]
                         else:
-                            nxt.append(c)
+                            nxt.append((c, tag))
                     local = nxt
-        cells += [(c, n) for c in local if len(c) >= 3]
+        cells += [(c, n, tag) for c, tag in local if len(c) >= 3]
     h_far = ell * (1 - ((m - 1) / m) ** g)
     cells = _split_cells(cells, h_far, tol)
-    T = []
-    for c, _ in cells:
+    gid, band = (_ring_groups(cells, V, F, segs, angle, corner, h_far, ell, np.array(corners).reshape(-1, 3))
+                 if groups else (None, None))
+    T, G, B = [], [], []
+    for ci, (c, _, _) in enumerate(cells):
         for q in range(1, len(c) - 1):
             tri = (c[0], c[q], c[q + 1])
             if np.linalg.norm(np.cross(tri[1] - tri[0], tri[2] - tri[0])) > tol**2:
                 T.append(tri)
-    return np.array(T)
+                if groups:
+                    G.append(gid[ci])
+                    B.append(band[ci])
+    return (np.array(T), np.array(G), np.array(B)) if groups else np.array(T)
+
+
+def _smooth_parts(V, F, angle):
+    """A label per triangle: triangles joined across edges no sharper than angle."""
+    n = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    n /= np.linalg.norm(n, axis=1)[:, None]
+    parent = list(range(len(F)))
+
+    def root(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    edges = {}
+    for t, (a, b, c) in enumerate(F):
+        for u, v in ((a, b), (b, c), (c, a)):
+            edges.setdefault((min(u, v), max(u, v)), []).append(t)
+    for ta, tb in edges.values():
+        if np.degrees(np.arccos(np.clip(n[ta] @ n[tb], -1, 1))) <= angle:
+            parent[root(ta)] = root(tb)
+    return np.array([root(t) for t in range(len(F))])
+
+
+def _chains(segs, corner):
+    """The sharp segments joined end to end into rims, through vertices where
+    exactly two meet and turn by at most `corner` degrees. Per segment: its rim,
+    its start and unit direction along the rim, its length, and the rim length
+    before it; per rim: its length and whether it closes."""
+    S = len(segs)
+    at = {}
+    for k in range(S):
+        for e in (0, 1):
+            at.setdefault(tuple(segs[k, e]), []).append((k, e))
+    cmin = np.cos(np.radians(corner))
+
+    def step(k, fwd):
+        here = at[tuple(segs[k, 1] if fwd else segs[k, 0])]
+        other = [q for q in here if q[0] != k]
+        if len(here) != 2 or len(other) != 1:
+            return None
+        k2, e2 = other[0]
+        t1 = (segs[k, 1] - segs[k, 0]) * (1 if fwd else -1)
+        t2 = (segs[k2, 1] - segs[k2, 0]) * (1 if e2 == 0 else -1)
+        if t1 @ t2 < cmin * np.linalg.norm(t1) * np.linalg.norm(t2):
+            return None
+        return k2, e2 == 0
+
+    rim = -np.ones(S, int)
+    a, t, s0 = np.zeros((S, 3)), np.zeros((S, 3)), np.zeros(S)
+    L = np.linalg.norm(segs[:, 1] - segs[:, 0], axis=1)
+    lengths, closed = [], []
+    for k in range(S):
+        if rim[k] >= 0:
+            continue
+        cur, loop = (k, False), False
+        while (r := step(*cur)) is not None:
+            if r[0] == k:
+                loop = True
+                break
+            cur = r
+        path = [(k, True) if loop else (cur[0], not cur[1])]
+        while (r := step(*path[-1])) is not None and r[0] != path[0][0]:
+            path.append(r)
+        acc = 0.0
+        for kk, fwd in path:
+            rim[kk] = len(lengths)
+            a[kk] = segs[kk, 0] if fwd else segs[kk, 1]
+            t[kk] = (segs[kk, 1] - segs[kk, 0]) * (1 if fwd else -1) / L[kk]
+            s0[kk] = acc
+            acc += L[kk]
+        lengths.append(acc)
+        closed.append(loop)
+    return rim, a, t, L, s0, np.array(lengths), np.array(closed)
+
+
+def _ring_groups(cells, V, F, segs, angle, corner, h, ell, corners):
+    """A group per cell. Ring cells of one layer along one rim, on one smooth
+    face, are joined in order along the rim into runs no longer than h whose
+    normals stay within `corner` degrees; cells within ell of a real corner and
+    interior cells keep a group of their own, so the grading toward corners and
+    the interior's sizes are unchanged. Returns the groups and, per cell, its band
+    frame (rim point a, unit t along the rim, unit nu away from it in the cell's
+    plane, arc length s0 at a, rim length if closed else 0), NaN outside bands:
+    s = s0 + (x - a).t and d = (x - a).nu are linear on the cell."""
+    part = _smooth_parts(V, F, angle)
+    rim, a, t, L, s0, lengths, closed = _chains(segs, corner)
+    span = np.max(np.ptp(V, axis=0))
+    gid = np.arange(len(cells))
+    band = np.full((len(cells), 11), np.nan)
+
+    def arc(X, sel):
+        u = np.clip(np.einsum("ksd,sd->ks", X[:, None] - a[sel][None], t[sel]), 0, L[sel])
+        dist = np.linalg.norm(X[:, None] - (a[sel][None] + u[..., None] * t[sel][None]), axis=2)
+        j = dist.argmin(1)
+        return s0[sel][j] + u[np.arange(len(X)), j]
+
+    mids = 0.5 * (segs[:, 0] + segs[:, 1])
+    bands = {}
+    for ci, (c, _, tag) in enumerate(cells):
+        if tag[0] != "ring" or (len(corners) and np.linalg.norm(corners - c.mean(0), axis=1).min() < ell):
+            continue
+        _, rep, mid, li = tag
+        u = np.clip(np.einsum("sd,sd->s", mid - a, t), 0, L)
+        k = np.linalg.norm(mid - (a + u[:, None] * t), axis=1).argmin()
+        bands.setdefault((part[rep], rim[k], li), []).append(ci)
+        nu = np.cross(cells[ci][1], t[k])
+        nu *= np.sign((c.mean(0) - a[k]) @ nu) or 1.0
+        band[ci] = [*a[k], *t[k], *nu, s0[k], lengths[rim[k]] if closed[rim[k]] else 0.0]
+    for (_, r, _), members in bands.items():
+        sel = np.flatnonzero(rim == r)
+        ext = []
+        for ci in members:
+            c = cells[ci][0]
+            sc = arc(c.mean(0)[None], sel)[0]
+            sv = arc(c, sel)
+            if closed[r]:
+                sv = sv - lengths[r] * np.round((sv - sc) / lengths[r])
+            ext.append((sc, sv.min(), sv.max()))
+        order = np.argsort([e[0] for e in ext])
+        start = end = None
+        for o in order:
+            ci, (_, lo, hi) = members[o], ext[o]
+            n = cells[ci][1]
+            if (start is None or hi - start > h * (1 + 1e-6) or lo - end > 1e-6 * span
+                    or n @ n0 < np.cos(np.radians(corner))):
+                head, start, end, n0 = ci, lo, hi, n
+            gid[ci] = head
+            end = max(end, hi)
+    return gid, band

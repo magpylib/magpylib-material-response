@@ -10,6 +10,7 @@ no flux to each other, as the closed form gives exactly.
 
 import numpy as np
 import scipy.linalg
+import scipy.sparse
 
 from tri import FOUR_PI, field, frames, normal_field, normal_field_mm
 
@@ -172,3 +173,139 @@ class TriBody:
 
     def moment(self, c):
         return np.einsum("fa,fad->d", c.reshape(self.F, 3), self.first) @ self.R.T
+
+
+class MacroBody(TriBody):
+    """A TriBody whose charge is linear across groups of triangles (macro panels):
+    the Galerkin projection of the triangle basis onto one density a + b xi + c eta
+    per group. A band of narrow facets on a curved face then carries 3 unknowns
+    instead of 3 per facet, while the triangles keep the exact geometry. xi and eta
+    are the band's own coordinates, arc length along its rim and distance from it,
+    where bands gives them (refine_rings(groups=True)): a fixed direction in the
+    mean tangent plane turns away from the rim's normal along a curved band, about
+    30 deg on a 5 mm cylinder's cap, and missed the steep rise of the charge toward
+    the rim (2e-3 1 mm from it). Elsewhere, the mean tangent plane. The operator
+    is projected chunk by chunk as it is assembled, so the triangles' matrix is
+    never stored."""
+
+    def __init__(self, vertices, faces, groups, bands=None, **kw):
+        V = np.asarray(vertices, float)[np.asarray(faces)]
+        order = np.argsort(np.asarray(groups), kind="stable")  # a group's triangles together
+        super().__init__(V[order].reshape(-1, 3), np.arange(3 * len(V)).reshape(-1, 3), **kw)
+        _, self.g = np.unique(np.asarray(groups)[order], return_inverse=True)
+        self.Ng = int(self.g.max()) + 1
+        self.Nm = 3 * self.Ng
+        cen, n, e1, e2, s, area = self.fr
+        A = np.bincount(self.g, area, self.Ng)
+        o = np.stack([np.bincount(self.g, area * cen[:, d], self.Ng) for d in range(3)], 1) / A[:, None]
+        ng = np.stack([np.bincount(self.g, area * n[:, d], self.Ng) for d in range(3)], 1)
+        ng /= np.linalg.norm(ng, axis=1)[:, None]
+        first = np.searchsorted(self.g, np.arange(self.Ng))
+        t1 = e1[first] - np.einsum("gd,gd->g", e1[first], ng)[:, None] * ng
+        weak = np.linalg.norm(t1, axis=1) < 0.1
+        t1[weak] = (e2[first] - np.einsum("gd,gd->g", e2[first], ng)[:, None] * ng)[weak]
+        t1 /= np.linalg.norm(t1, axis=1)[:, None]
+        t2 = np.cross(ng, t1)
+        sg = np.sqrt(A)
+        gi = self.g
+        # per triangle: directions of xi and eta, and their values at its centroid
+        dir1, dir2 = t1[gi], t2[gi]
+        x1 = np.einsum("fd,fd->f", cen - o[gi], dir1)
+        x2 = np.einsum("fd,fd->f", cen - o[gi], dir2)
+        if bands is not None:
+            bd = np.asarray(bands, float)[order]
+            inband = np.isfinite(bd[:, 0])
+            whole = np.bincount(gi, ~inband, self.Ng) == 0  # every triangle of the group in a band
+            use = whole[gi]
+            a, tt, nu, s0, Lr = bd[:, 0:3], bd[:, 3:6], bd[:, 6:9], bd[:, 9], bd[:, 10]
+            sc = s0 + np.einsum("fd,fd->f", cen - a, tt)
+            ref = sc[first][gi]  # unwrap closed rims about the group's first triangle
+            sc = np.where(use & (Lr > 0), sc - Lr * np.round((sc - ref) / np.where(Lr > 0, Lr, 1)), sc)
+            dc = np.einsum("fd,fd->f", cen - a, nu)
+            sm = np.bincount(gi, np.where(use, area * sc, 0), self.Ng) / A
+            dm = np.bincount(gi, np.where(use, area * dc, 0), self.Ng) / A
+            dir1, dir2 = np.where(use[:, None], tt, dir1), np.where(use[:, None], nu, dir2)
+            x1, x2 = np.where(use, sc - sm[gi], x1), np.where(use, dc - dm[gi], x2)
+        P = np.zeros((self.F, 3, 3))  # triangle (c0, c1, c2) from group (a, b, c)
+        P[:, 0, 0] = 1.0
+        for col, t, x in ((1, dir1, x1), (2, dir2, x2)):
+            P[:, 0, col] = x / sg[gi]
+            P[:, 1, col] = s * np.einsum("fd,fd->f", e1, t) / sg[gi]
+            P[:, 2, col] = s * np.einsum("fd,fd->f", e2, t) / sg[gi]
+        self.P = P
+        rows = (3 * np.arange(self.F)[:, None, None] + np.arange(3)[None, :, None]).repeat(3, 2)
+        cols = (3 * gi[:, None, None] + np.arange(3)[None, None, :]).repeat(3, 1)
+        self.Ps = scipy.sparse.csr_matrix((P.ravel(), (rows.ravel(), cols.ravel())), shape=(self.Nd, self.Nm))
+
+    def fine(self, c):
+        """Triangle coefficients from group coefficients."""
+        return self.Ps @ c
+
+    def assemble(self, chunk=2_000_000, far_k=0, near_factor=1.0):
+        """G (Nm, Nm) in the group basis: TriBody.assemble's two passes, each
+        projected as it is computed; the far pass's values for near and own pairs
+        are dropped before projecting, so nothing is subtracted."""
+        F, Nm = self.F, self.Nm
+        Gm = np.zeros((Nm, Nm))
+        PsT = self.Ps.T.tocsr()
+        I, J = self.near_pairs(near_factor)
+        by_j = np.argsort(J, kind="stable")
+        I, J = I[by_j], J[by_j]
+        P, W, B = self.quad(far_k)
+        nq = P.shape[1]
+        step = max(1, chunk // (nq * F))
+        for j0 in range(0, F, step):
+            j1 = min(j0 + step, F)
+            js = np.arange(j0, j1)
+            flux = -normal_field_mm(P[js].reshape(-1, 3), self.V, self.fr) / FOUR_PI
+            Gc = np.einsum("ajqi,jq,jqb->iajb", flux.reshape(3, len(js), nq, F), W[js], B[js])
+            k0, k1 = np.searchsorted(J, [j0, j1])
+            Gc[I[k0:k1], :, J[k0:k1] - j0, :] = 0.0
+            Gc[js, :, js - j0, :] = 0.0
+            c0, c1 = 3 * self.g[j0], 3 * self.g[j1 - 1] + 3
+            X = PsT @ Gc.reshape(3 * F, 3 * len(js))
+            Gm[:, c0:c1] += X @ self.Ps[3 * j0 : 3 * j1, c0:c1].toarray()
+        Pk, Wk, Bk = self.quad(self.near_level)
+        Q = Pk.shape[1]
+        kstep = max(1, 200_000 // Q)
+        a3 = np.arange(3)
+        for k0 in range(0, len(I), kstep):
+            i, j = I[k0 : k0 + kstep], J[k0 : k0 + kstep]
+            ii = np.repeat(i, Q)
+            fr = tuple(a[ii] for a in self.fr)
+            En = normal_field(Pk[j].reshape(-1, 3), self.V[ii], fr, pairs=True)
+            D = np.einsum("akq,kq,kqb->kab", -En.reshape(3, len(i), Q) / FOUR_PI, Wk[j], Bk[j])
+            D = np.einsum("kra,krs,ksb->kab", self.P[i], D, self.P[j])
+            idx = (3 * self.g[i][:, None, None] + a3[None, :, None]) * Nm + 3 * self.g[j][:, None, None] + a3[None, None, :]
+            np.add.at(Gm.reshape(-1), idx.ravel(), D.ravel())
+        return Gm
+
+    def solve(self, H_fun=None, G=None, load=None):
+        """Group coefficients; TriBody.fine turns them into triangle ones."""
+        Gm = self.assemble() if G is None else G.copy()
+        Nm = self.Nm
+        A = np.zeros((Nm + 1, Nm + 1))
+        A[:Nm, :Nm] = -Gm
+        del Gm
+        Mf = np.einsum("fra,frs,fsb->fab", self.P, (1 / self.chi + 0.5) * self.mass, self.P)
+        idx = (3 * self.g[:, None, None] + np.arange(3)[None, :, None]) * (Nm + 1) + 3 * self.g[:, None, None] + np.arange(3)[None, None, :]
+        np.add.at(A.reshape(-1), idx.ravel(), Mf.ravel())  # A's rows are Nm + 1 long
+        e = np.zeros(self.Nd)
+        e[0::3] = self.fr[5]
+        em = self.Ps.T @ e
+        A[:Nm, Nm], A[Nm, :Nm] = em, em / e.sum()
+        rhs = np.zeros(Nm + 1)
+        if load is not None:
+            rhs[:Nm] += self.Ps.T @ load
+        elif H_fun is not None:
+            rhs[:Nm] += self.Ps.T @ self.load(H_fun)
+        if self.J0 is not None:
+            m0n = self.fr[1] @ (self.J0 / MU0)
+            rhs[:Nm] += self.Ps.T @ (np.einsum("f,fa->fa", m0n, self.mass[:, 0, :])).ravel() / self.chi
+        return scipy.linalg.solve(A, rhs, overwrite_a=True, overwrite_b=True, check_finite=False)[:Nm]
+
+    def B(self, X, c, chunk=4_000_000):
+        return super().B(X, self.fine(c), chunk)
+
+    def moment(self, c):
+        return super().moment(self.fine(c))

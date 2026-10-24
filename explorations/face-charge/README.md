@@ -282,8 +282,9 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
   - any closed triangle mesh (a `TriangularMesh`, a CAD export) is solved in
     `triangles/`, graded automatically toward its sharp edges; see
     `triangles/PROGRESS.md`. Cylinders work as exported facets, with the error
-    falling as 1/N²; a fine export costs more unknowns until compression lets
-    narrow facets share panels;
+    falling as 1/N²; narrow facets share panels, so a fine export costs few more
+    unknowns, but assembly still grows with the square of the triangles until
+    compression;
   - spheres and ellipsoids are closed form already.
 - **Novelty is not checked.** The pieces are known (see below); whether this
   combination exists as a tool is not.
