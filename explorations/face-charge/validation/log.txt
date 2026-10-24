@@ -1,1 +1,28 @@
 - 2026-10-24 17:07 set up: six cases (A–F), harness, U-core FEM references copied from explore/cells-and-fem
+- 2026-10-24 17:08 A: start
+- 2026-10-24 17:08 A: face charge m=3: 4536 unknowns, build 2.0 s, couple+solve 2.2 s, field 0.1 s
+- 2026-10-24 17:08 A: face charge m=4: 8064 unknowns, build 5.9 s, couple+solve 7.4 s, field 0.1 s
+- 2026-10-24 17:10 A: face charge m=6: 18144 unknowns, build 29.2 s, couple+solve 46.9 s, field 0.2 s
+- 2026-10-24 17:10 A: MoM 1 per magnet: 3 cells, 0.0 s
+- 2026-10-24 17:10 A: MoM 2 per magnet: 4 cells, 0.0 s
+- 2026-10-24 17:10 A: MoM 8 per magnet: 28 cells, 0.0 s
+- 2026-10-24 17:10 A: MoM 16 per magnet: 70 cells, 0.0 s
+- 2026-10-24 17:10 A: MoM 32 per magnet: 99 cells, 0.0 s
+- 2026-10-24 17:10 A: MoM 64 per magnet: 182 cells, 0.1 s
+- 2026-10-24 17:10 A: MoM 128 per magnet: 378 cells, 0.2 s
+- 2026-10-24 17:10 A: MoM 256 per magnet: 682 cells, 0.4 s
+- 2026-10-24 17:10 A: done. Face charge m=6: max error 6.4e-03 vs reference; MoM finest: 6.4e-03
+- 2026-10-24 17:12 A redone: its first run had NaN at x = -2.00 mm (sensor in a face plane, on a panel edge's extension; lin_rect now lifts such observers 1e-12 of the panel off the plane), masked by nan-aware errors; run.py now refuses NaN. Levels 2, 3, 4: m = 6 bought nothing at 7.3 GB.
+- 2026-10-24 17:12 A: start
+- 2026-10-24 17:12 A: face charge m=2: 2016 unknowns, build 0.5 s, couple+solve 0.4 s, field 0.0 s
+- 2026-10-24 17:12 A: face charge m=3: 4536 unknowns, build 2.0 s, couple+solve 2.2 s, field 0.1 s
+- 2026-10-24 17:12 A: face charge m=4: 8064 unknowns, build 6.0 s, couple+solve 7.4 s, field 0.1 s
+- 2026-10-24 17:13 A: MoM 1 per magnet: 3 cells, 0.0 s
+- 2026-10-24 17:13 A: MoM 2 per magnet: 4 cells, 0.0 s
+- 2026-10-24 17:13 A: MoM 8 per magnet: 28 cells, 0.0 s
+- 2026-10-24 17:13 A: MoM 16 per magnet: 70 cells, 0.0 s
+- 2026-10-24 17:13 A: MoM 32 per magnet: 99 cells, 0.0 s
+- 2026-10-24 17:13 A: MoM 64 per magnet: 182 cells, 0.1 s
+- 2026-10-24 17:13 A: MoM 128 per magnet: 378 cells, 0.2 s
+- 2026-10-24 17:13 A: MoM 256 per magnet: 682 cells, 0.5 s
+- 2026-10-24 17:13 A: done. Face charge m=4: max error 6.4e-03 vs reference; MoM finest: 6.4e-03

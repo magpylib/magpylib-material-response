@@ -9,7 +9,8 @@ import sys
 import numpy as np
 
 import fc
-from cases import CASES
+from examples import CASES
+from plots import plot
 from report import write_progress
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +28,8 @@ def err(q, ref):
     """Max and RMS error over the observers. Fields (n, k): |difference| per
     point over the largest |reference|; values (n,): relative per point."""
     q, ref = np.asarray(q, float), np.asarray(ref, float)
+    if np.isnan(q[~np.isnan(ref)]).any():
+        raise ValueError(f"NaN in a result at {np.isnan(q).sum()} entries")
     if q.ndim == 2:
         d = np.sqrt(np.nansum((q - ref) ** 2, axis=1))
         scale = np.nanmax(np.sqrt(np.nansum(ref**2, axis=1)))
@@ -115,4 +118,5 @@ if __name__ == "__main__":
             continue
         log(f"{cid}: start")
         run_case(cid)
+        plot(cid)
         write_progress()

@@ -18,6 +18,10 @@ def lin_rect(P, Q, W, p1, p2, q1, q2, want_inplane=True):
     p q w, ...broadcast shape). With want_inplane=False only the w comps."""
     pc, hp = 0.5 * (p1 + p2), 0.5 * (p2 - p1)
     qc, hq = 0.5 * (q1 + q2), 0.5 * (q2 - q1)
+    # An observer exactly in the panel's plane, on the extension of an edge line,
+    # makes two corner logs infinite where they cancel: lift it off the plane by
+    # 1e-12 of the panel, which leaves the field unchanged to that order.
+    W = np.where(W == 0, 1e-12 * np.maximum(hp, hq), W)
     sW = np.where(W < 0, -1.0, 1.0)
     aW = np.abs(W)
     W2 = W * W

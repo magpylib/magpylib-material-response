@@ -14,7 +14,7 @@ import time
 import magpylib as magpy
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))  # the study: multibody, bem, p1
 from multibody import MU0, Body, add_contact_lines, field_B, solve_system  # noqa: E402
 
 

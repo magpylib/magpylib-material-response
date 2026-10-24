@@ -3,7 +3,7 @@
 import json
 import os
 
-from cases import CASES
+from examples import CASES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -47,6 +47,11 @@ def write_progress():
         if "mom_estimate_error" in r:
             e = r["mom_estimate_error"]
             lines.append(f"| MoM study's extrapolation | | | {pct(e['max'])} | {pct(e['rms'])} |")
+        if os.path.exists(os.path.join(HERE, "results", f"{cid}.png")):
+            lines += ["", f"![{cid}: the compared values and both errors](results/{cid}.png)"]
+        note = os.path.join(HERE, "notes", f"{cid}.md")
+        if os.path.exists(note):
+            lines += ["", open(note).read().strip()]
         details += lines + [""]
     todo = [c for c in CASES if c not in done]
     status = f"**{len(done)} of {len(CASES)} cases done.** " + (f"Next: {todo[0]}." if todo else "All done.")

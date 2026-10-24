@@ -75,7 +75,7 @@ def case_A():
         "build": build_A, "observers": obs, "comps": [0, 1, 2],
         "reference": np.stack([v["Bx"], v["By"], v["Bz"]], 1),
         "ref_source": "ANSYS (FEMdata_test_cuboids), 301 points",
-        "fc_levels": [3, 4, 6], "mom": lambda: _docs_loop(build_A, obs),
+        "fc_levels": [2, 3, 4], "mom": lambda: _docs_loop(build_A, obs),
     }
 
 
