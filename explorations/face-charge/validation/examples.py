@@ -97,7 +97,10 @@ def case_B():
 
     obs = np.concatenate([np.linspace((-0.004, 0, z), (0.006, 0, z), 1001) for z in (-0.001, -0.003, -0.005)])
     v = get_dataset("FEMdata_test_softmag")["results"][0]["value"]
-    ref = np.stack([v["Bx"], np.full(len(v["Bx"]), np.nan), v["Bz"]], 1)
+    # The page gives each line as a 1001-step path; its dataframe, and so the
+    # dataset, interleaves the three lines step by step. Here they are in blocks.
+    lines = lambda a: np.asarray(a).reshape(1001, 3).T.reshape(-1)  # noqa: E731
+    ref = np.stack([lines(v["Bx"]), np.full(3003, np.nan), lines(v["Bz"])], 1)
     return {
         "title": "Hard magnet (χ 0.5) and a turned soft cube (χ 3999) (soft_magnets)",
         "build": build_B, "observers": obs, "comps": [0, 2],

@@ -26,3 +26,30 @@
 - 2026-10-24 17:13 A: MoM 128 per magnet: 378 cells, 0.2 s
 - 2026-10-24 17:13 A: MoM 256 per magnet: 682 cells, 0.5 s
 - 2026-10-24 17:13 A: done. Face charge m=4: max error 6.4e-03 vs reference; MoM finest: 6.4e-03
+- 2026-10-24 17:14 B: start
+- 2026-10-24 17:14 B: face charge m=3: 2376 unknowns, build 0.7 s, couple+solve 0.5 s, field 0.3 s
+- 2026-10-24 17:14 B: face charge m=4: 4224 unknowns, build 1.9 s, couple+solve 1.6 s, field 0.5 s
+- 2026-10-24 17:15 B: face charge m=6: 9504 unknowns, build 9.3 s, couple+solve 9.2 s, field 1.1 s
+- 2026-10-24 17:15 B: MoM 1 per magnet: 2 cells, 0.0 s
+- 2026-10-24 17:15 B: MoM 2 per magnet: 3 cells, 0.0 s
+- 2026-10-24 17:15 B: MoM 8 per magnet: 20 cells, 0.0 s
+- 2026-10-24 17:15 B: MoM 16 per magnet: 43 cells, 0.0 s
+- 2026-10-24 17:15 B: MoM 32 per magnet: 72 cells, 0.0 s
+- 2026-10-24 17:15 B: MoM 64 per magnet: 118 cells, 0.0 s
+- 2026-10-24 17:15 B: MoM 128 per magnet: 253 cells, 0.1 s
+- 2026-10-24 17:15 B: MoM 256 per magnet: 466 cells, 0.2 s
+- 2026-10-24 17:15 B: done. Face charge m=6: max error 1.0e+00 vs reference; MoM finest: 1.0e+00
+- 2026-10-24 17:16 B redone: the dataset interleaves the three sensor lines step by step (the page's dataframe order); the first run read it in blocks, so both methods showed ~100 % error.
+- 2026-10-24 17:16 B: start
+- 2026-10-24 17:16 B: face charge m=3: 2376 unknowns, build 0.7 s, couple+solve 0.5 s, field 0.3 s
+- 2026-10-24 17:16 B: face charge m=4: 4224 unknowns, build 1.9 s, couple+solve 1.7 s, field 0.5 s
+- 2026-10-24 17:16 B: face charge m=6: 9504 unknowns, build 9.4 s, couple+solve 9.4 s, field 1.1 s
+- 2026-10-24 17:16 B: MoM 1 per magnet: 2 cells, 0.0 s
+- 2026-10-24 17:16 B: MoM 2 per magnet: 3 cells, 0.0 s
+- 2026-10-24 17:16 B: MoM 8 per magnet: 20 cells, 0.0 s
+- 2026-10-24 17:16 B: MoM 16 per magnet: 43 cells, 0.0 s
+- 2026-10-24 17:16 B: MoM 32 per magnet: 72 cells, 0.0 s
+- 2026-10-24 17:16 B: MoM 64 per magnet: 118 cells, 0.0 s
+- 2026-10-24 17:16 B: MoM 128 per magnet: 253 cells, 0.1 s
+- 2026-10-24 17:16 B: MoM 256 per magnet: 466 cells, 0.2 s
+- 2026-10-24 17:16 B: done. Face charge m=6: max error 3.4e-03 vs reference; MoM finest: 7.5e-03

@@ -37,7 +37,8 @@ def _lines(obs):
     """Observer index groups along x: one per distinct (y, z)."""
     keys = np.round(obs[:, 1:] * 1e9).astype(np.int64)
     _, inv = np.unique(keys, axis=0, return_inverse=True)
-    return [np.flatnonzero(inv == k) for k in range(inv.max() + 1)]
+    groups = [np.flatnonzero(inv == k) for k in range(inv.max() + 1)]
+    return sorted(groups, key=lambda g: -obs[g[0], 2])  # the line nearest above first
 
 
 def plot(cid):
