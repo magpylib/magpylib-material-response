@@ -207,9 +207,11 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
      the plate's axes. Panels that follow the footprint (triangles) would fix
      that.
 
-8. **Why the MoM jumps from 7 s to over 12 minutes** (`probe_jump.py`,
-   `csr_bytes.py`, `run_04.py`, `mom_dense_cross.patch`; `mom_jump.txt`,
-   `mom_jump_patched_run.txt`). Two causes, on main's code (0.6.0):
+8. **Why the MoM jumps from 7 s to over 12 minutes** (`run_04.py`;
+   `mom_jump.txt`, `mom_jump_patched_run.txt`). `mom_jump.txt` is the output of
+   two scripts that probed 0.6.0's internals, `probe_jump.py` and
+   `csr_bytes.py`. They and the one-line patch were removed after the fix was
+   merged; they are in commit 6c96cdf. Two causes, on main's code (0.6.0):
    1. **The grids stop matching.** At 0.5 mm the plate and the magnet share one
       0.5 mm lattice, and the block between them is an FFT. At 0.4 mm the
       plate's 5 mm side gets 12 cells of 0.4167 mm while the magnet keeps 0.4
@@ -219,8 +221,8 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
    2. **Above 2 GB the block is sparsified regardless,** without the first-chunk
       check that it pays. At χ = 1000 the row budget is 5e-13, so the CSR keeps
       99 % of the entries:
-      - 7.2 GB per direction stored (12 bytes per entry, int32 indices,
-        `csr_bytes.py`);
+      - 7.2 GB per direction stored (12 bytes per entry, int32 indices, measured
+        on the real block);
       - about 29 GB while built: 24-byte triplets per entry, copied once more by
         the concatenation before the CSR is made;
       - the reverse direction is built again;
@@ -233,9 +235,9 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
       cells differ in shape.
 
    **Fix:** drop the `72 * n_a * n_b <= DENSE_BLOCK_MAX_BYTES` condition, so the
-   first chunk decides at every size (`mom_dense_cross.patch`, one line, kept as
-   the record). The 0.4 mm case then took 2 min 2 s: 1 min 39 s building 9.7 GB
-   of dense blocks, 22 s of GMRES, peak 10.0 GB. The existing warning fired.
+   first chunk decides at every size (one line). The 0.4 mm case then took 2 min
+   2 s: 1 min 39 s building 9.7 GB of dense blocks, 22 s of GMRES, peak 10.0 GB.
+   The existing warning fired.
 
    **Merged as 8cd79ea**
    ([#86](https://github.com/magpylib/magpylib-material-response/pull/86),
@@ -256,8 +258,6 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
    **Checked on merged main** (`mom_jump_main86_run.txt`): the 0.4 mm case takes
    2 min 10 s (beside the test suite), peak 9.9 GB, and warns about 9.7 GB of
    explicit blocks. Its B at the 16 sensors equals the patched run's to 3e-14.
-   `probe_jump.py` and `csr_bytes.py` diagnose 0.6.0's code; run against main
-   they say so and stop.
    - **Still worth doing:** warn before building, from the predicted size, and
      name a cell size that every body's sides are multiples of. The warning now
      comes after the build.
@@ -305,7 +305,7 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
 | `multibody.py`                                                                    | coupled axis-aligned bodies: contact coupling, footprint lines, coupled solve               |
 | `t_split.py`, `t_split_nc.py`                                                     | touching halves vs the merged block, matching and non-matching meshes                       |
 | `t_rot.py`, `t_yoke_turn.py`                                                      | rotated bodies: exact checks, magnet turned 30° on the plate                                |
-| `probe_jump.py`, `csr_bytes.py`, `run_04.py`, `mom_dense_cross.patch`, `figures/` | why the MoM jumps at 0.4 mm, and the one-line fix                                           |
+| `run_04.py`, `figures/`                                                           | the MoM on the 0.4 mm magnet-on-plate case; the source of the #86 figure                    |
 | `yoke_case.py`, `t_yoke.py`, `t_yoke_mr.py`, `yoke_compare.py`, `t_yoke_speed.py` | magnet on plate: face-charge levels, MoM levels, comparison, timing                         |
 | `*.npy`                                                                           | reference fields (the reference runs take minutes and up to 6 GB)                           |
 
