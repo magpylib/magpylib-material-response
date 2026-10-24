@@ -495,21 +495,6 @@ def test_three_magnet_scalar_susceptibilities_stay_isotropic():
     np.testing.assert_allclose(per_cell, [[0.1] * 3, [0.2] * 3, [0.3] * 3])
 
 
-def test_split_with_singleton_subset():
-    """Regression: getH squeezes the source axis for a 1-source subset,
-    which broke the legacy split concatenation."""
-    cubes = [
-        magpy.magnet.Cuboid(
-            polarization=(0, 0, 1), dimension=(1e-3,) * 3, position=(3e-3 * i, 0, 0)
-        )
-        for i in range(3)
-    ]
-    coll = magpy.Collection(*cubes)
-    c_split = apply_demag(coll, susceptibility=0.5, split=2)
-    c_pairs = apply_demag(coll, susceptibility=0.5, pairs_matching=True)
-    np.testing.assert_allclose(_pols(c_split), _pols(c_pairs), rtol=1e-10)
-
-
 def test_distant_bodies_interact_as_with_point_matching():
     """A magnet and an iron cube 2,000 cells apart: the induced polarization from
     the Newell blocks matches point matching, which the exact formulas alone
@@ -606,7 +591,7 @@ def test_default_is_point_matching():
             {},
             "turned against each other",
         ),
-        (lambda: _build_uniform_collection(27), {"split": 2}, "do not combine"),
+        (lambda: _build_uniform_collection(27), {"split": 2}, "does not combine"),
     ],
     ids=[
         "cylinder-and-tetrahedron",

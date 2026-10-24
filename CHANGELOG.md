@@ -8,6 +8,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** the `pairs_matching` and `max_dist` options of `apply_demag` and
+  `demag_tensor`, with their helpers `filter_distance` and `match_pairs`. The
+  default path is faster and exact: on 2,744 cuboid cells it takes 0.2 s where
+  `pairs_matching` took 10 s and 4 GB, and `max_dist` was 11 to 23 % off. The
+  arguments after `inplace` and after `src_list` are now keyword-only, so an old
+  positional call raises instead of shifting
+  ([#87](https://github.com/magpylib/magpylib-material-response/pull/87)).
+
 ### Fixed
 
 - `apply_demag`: a block between two bodies whose cells share no grid was always

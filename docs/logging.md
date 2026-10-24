@@ -81,10 +81,10 @@ configure_logging(min_log_time=0)
 configure_logging(min_log_time=10)
 ```
 
-This setting is also picked up by `apply_demag`, `demag_tensor`,
-`filter_distance`, and `match_pairs` whenever their own `min_log_time` argument
-is left at its default (`None`). Passing an explicit value to those functions
-still overrides the global setting for that call.
+This setting is also picked up by `apply_demag` and `demag_tensor` whenever
+their own `min_log_time` argument is left at its default (`None`). Passing an
+explicit value to those functions still overrides the global setting for that
+call.
 
 ## Environment Variables
 

@@ -1125,9 +1125,8 @@ def _solve_iterative(*, n, chi, rhs, rhs_shape, matvec, T_self, solver_tol, max_
 
 def demag_tensor(
     src_list,
-    pairs_matching=False,
+    *,
     split=False,
-    max_dist=0,
     min_log_time=None,
     interaction="point",
 ):
@@ -1136,28 +1135,19 @@ def demag_tensor(
 
     Every pair follows ``interaction``, the same rule as in
     :func:`apply_demag`: the field at each cell's centre (``"point"``, the
-    default) or averaged over each cell (``"newell"``). The legacy options
-    ``pairs_matching``, ``split`` and ``max_dist`` take the historical
-    point-matching path, which gives the same tensor up to the far-field
-    expansion of :func:`~magpylib_material_response.newell.point_block`.
+    default) or averaged over each cell (``"newell"``). The legacy option
+    ``split`` takes the historical point-matching path, which gives the same
+    tensor up to the far-field expansion of
+    :func:`~magpylib_material_response.newell.point_block`.
 
     Parameters
     ----------
     src_list: sequence of magpylib magnet sources
         Each source is treated as a magnetic cell.
 
-    pairs_matching: bool
-        If True, equivalent pair of interactions are identified and unique pairs are
-        calculated only once and copied to duplicates. Implies point matching.
-
     split: int
-        Number of times the sources list is split before getH calculation ind demag
+        Number of times the sources list is split before getH calculation in demag
         tensor calculation. Implies point matching.
-
-    max_dist: float
-        Leaves out the interaction of two cells whose centroids lie `max_dist` or more
-        times the larger side of the two cells apart. If `max_dist=0`, all
-        interactions are calculated.
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
@@ -1166,7 +1156,7 @@ def demag_tensor(
     interaction: {"point", "newell"}
         Interaction rule, see :func:`apply_demag`. ``"newell"`` needs every
         source to be a Cuboid, all with one orientation, and does not combine
-        with the legacy options.
+        with ``split``.
 
     Returns
     -------
@@ -1187,25 +1177,14 @@ def demag_tensor(
     nof_src = len(src_list)
 
     splitting = split > 1
-    if max_dist < 0:
-        msg = f"max_dist must be 0 (no filtering) or positive, got {max_dist}."
-        raise ValueError(msg)
-    if pairs_matching and splitting:
-        msg = "Pairs matching does not support splitting"
-        raise ValueError(msg)
-    if max_dist != 0 and (pairs_matching or splitting):
-        msg = "max_dist does not combine with pairs_matching or split."
-        raise ValueError(msg)
-
     _check_interaction(interaction, list(src_list))
-    legacy = pairs_matching or max_dist != 0 or splitting
-    if legacy and interaction == "newell":
+    if splitting and interaction == "newell":
         msg = (
-            "pairs_matching, max_dist and split take the legacy point-matching "
-            "path and do not combine with interaction='newell'."
+            "split takes the legacy point-matching path and does not combine "
+            "with interaction='newell'."
         )
         raise ValueError(msg)
-    if not legacy:
+    if not splitting:
         # Assembly under the chosen rule, returned in the legacy
         # (3, n, n, 3) pre-mu_0 layout.
         if nof_src == 0:
@@ -1218,18 +1197,9 @@ def demag_tensor(
         # T2[(m, j), (k, i)] -> legacy T[k, i, j, m], pre-mu_0.
         return T2.reshape((3, n, 3, n)).transpose((2, 3, 1, 0)) / magpy.mu_0
 
-    mask_inds = None
-    getH_params = {}
-    if max_dist != 0:
-        mask_inds, getH_params, pos0, rot0 = filter_distance(
-            src_list, max_dist, return_params=True, return_base_geo=True
-        )
-    elif pairs_matching:
-        getH_params, mask_inds, unique_inv_inds, pos0, rot0 = match_pairs(src_list)
-    else:
-        pos0 = np.array([src.centroid for src in src_list])
-        rotQ0 = [src.orientation.as_quat() for src in src_list]
-        rot0 = R.from_quat(rotQ0)
+    pos0 = np.array([src.centroid for src in src_list])
+    rotQ0 = [src.orientation.as_quat() for src in src_list]
+    rot0 = R.from_quat(rotQ0)
 
     saved_pols = [src.polarization for src in src_list]
     try:
@@ -1238,50 +1208,27 @@ def demag_tensor(
             pol_all = rot0.inv().apply(unit_pol)
             # point matching field and demag tensor
             with timelog(f"getH with unit_pol={unit_pol}", min_log_time=min_log_time):
-                if pairs_matching or max_dist != 0:
-                    polarization = np.repeat(pol_all, len(src_list), axis=0)
-                    if mask_inds is not None:
-                        polarization = polarization[mask_inds]
-                    # magpy.func replaces the deprecated string-based
-                    # functional interface (magpy.getH("Cuboid", ...))
-                    H_unique = magpy.func.cuboid_field(
-                        "H",
-                        observers=getH_params["observers"],
-                        dimensions=getH_params["dimension"],
-                        polarizations=polarization,
-                        positions=getH_params["position"],
-                        orientations=getH_params["orientation"],
-                        squeeze=False,
-                    )
-                    if max_dist != 0:
-                        H_temp = np.zeros((len(src_list) ** 2, 3))
-                        H_temp[mask_inds] = H_unique
-                        H_unit_pol = H_temp
-                    else:
-                        H_unit_pol = H_unique[unique_inv_inds]
-                else:
-                    for src, pol in zip(src_list, pol_all, strict=False):
-                        src.polarization = pol
-                    src_list_split = np.array_split(src_list, split)
-                    with logger.contextualize(
-                        task="Splitting field calculation", split=split
-                    ):
-                        H_unit_pol = []
-                        for split_ind, src_list_subset in enumerate(src_list_split):
-                            logger.info(
-                                "Sources subset {subset_num}/{total_subsets}",
-                                subset_num=split_ind + 1,
-                                total_subsets=len(src_list_split),
+                for src, pol in zip(src_list, pol_all, strict=False):
+                    src.polarization = pol
+                src_list_split = np.array_split(src_list, split)
+                with logger.contextualize(
+                    task="Splitting field calculation", split=split
+                ):
+                    H_unit_pol = []
+                    for split_ind, src_list_subset in enumerate(src_list_split):
+                        logger.info(
+                            "Sources subset {subset_num}/{total_subsets}",
+                            subset_num=split_ind + 1,
+                            total_subsets=len(src_list_split),
+                        )
+                        if src_list_subset.size > 0:
+                            # getH squeezes the source axis of a one-source chunk
+                            H_sub = np.reshape(
+                                magpy.getH(src_list_subset.tolist(), pos0),
+                                (len(src_list_subset), len(pos0), 3),
                             )
-                            if src_list_subset.size > 0:
-                                # getH squeezes the source axis of a one-source
-                                # chunk
-                                H_sub = np.reshape(
-                                    magpy.getH(src_list_subset.tolist(), pos0),
-                                    (len(src_list_subset), len(pos0), 3),
-                                )
-                                H_unit_pol.append(H_sub)
-                        H_unit_pol = np.concatenate(H_unit_pol, axis=0)
+                            H_unit_pol.append(H_sub)
+                    H_unit_pol = np.concatenate(H_unit_pol, axis=0)
                 H_point.append(H_unit_pol)  # shape (n_cells, n_pos, 3_xyz)
     finally:
         for src, pol in zip(src_list, saved_pols, strict=False):
@@ -1292,117 +1239,11 @@ def demag_tensor(
     return np.array(H_point).reshape((3, nof_src, nof_src, 3))
 
 
-def filter_distance(
-    src_list,
-    max_dist,
-    min_log_time=None,
-    return_params=False,
-    return_base_geo=False,
-):
-    """filter indices by distance parameter"""
-    with timelog("Distance filter", min_log_time=min_log_time):
-        all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
-        if not all_cuboids:
-            msg = "filter_distance only implemented if all sources are Cuboids"
-            raise ValueError(msg)
-        pos0 = np.array([src.centroid for src in src_list])
-        rotQ0 = [src.orientation.as_quat() for src in src_list]
-        rot0 = R.from_quat(rotQ0)
-        dim0 = [src.dimension for src in src_list]
-
-        pos2 = np.tile(pos0, (len(pos0), 1)) - np.repeat(pos0, len(pos0), axis=0)
-        dist2 = np.linalg.norm(pos2, axis=1)
-        dim2 = np.tile(dim0, (len(dim0), 1)), np.repeat(dim0, len(dim0), axis=0)
-        maxdim2 = np.concatenate(dim2, axis=1).max(axis=1)
-        mask = (dist2 / maxdim2) < max_dist
-        if return_params:
-            params = {
-                "observers": np.tile(pos0, (len(src_list), 1))[mask],
-                "position": np.repeat(pos0, len(src_list), axis=0)[mask],
-                "orientation": R.from_quat(np.repeat(rotQ0, len(src_list), axis=0))[
-                    mask
-                ],
-                "dimension": np.repeat(dim0, len(src_list), axis=0)[mask],
-            }
-        dsf = sum(mask) / len(mask) * 100
-    if dsf == 0:
-        logger.warning(
-            "No interaction pairs left after distance factor filtering",
-            percentage=f"{dsf:.2f}%",
-        )
-    else:
-        logger.info(
-            "Interaction pairs left after distance factor filtering",
-            percentage=f"{dsf:.2f}%",
-        )
-    out = [mask]
-    if return_params:
-        out.append(params)
-    if return_base_geo:
-        out.extend([pos0, rot0])
-    if len(out) == 1:
-        return out[0]
-    return tuple(out)
-
-
-def match_pairs(src_list, min_log_time=None):
-    """match all pairs of sources from `src_list`"""
-    with timelog("Pairs matching", min_log_time=min_log_time):
-        all_cuboids = all(isinstance(src, Cuboid) for src in src_list)
-        if not all_cuboids:
-            msg = "Pairs matching only implemented if all sources are Cuboids"
-            raise ValueError(msg)
-        pos0 = np.array([src.centroid for src in src_list])
-        rotQ0 = [src.orientation.as_quat() for src in src_list]
-        rot0 = R.from_quat(rotQ0)
-        dim0 = [src.dimension for src in src_list]
-        len_src = len(src_list)
-        num_of_pairs = len_src**2
-        with logger.contextualize(task="Match interactions pairs"):
-            logger.debug("Computing position differences")
-            pos2 = np.tile(pos0, (len_src, 1)) - np.repeat(pos0, len_src, axis=0)
-            logger.debug("Computing orientation differences")
-            rotQ2a = np.tile(rotQ0, (len_src, 1)).reshape((num_of_pairs, -1))
-            rotQ2b = np.repeat(rotQ0, len_src, axis=0).reshape((num_of_pairs, -1))
-            # The reused field depends on the source cell's own dimensions, not
-            # on a difference with the observer's (2 -> 4 and 3 -> 5 collide).
-            dim_src = np.repeat(dim0, len_src, axis=0)
-            # Round relative to the geometry's size: an absolute 1e-8 merges
-            # every pair of a mesh with cells below 1e-8 m.
-            geo_scale = max(
-                float(np.max(np.abs(pos2), initial=0.0)),
-                float(np.max(np.abs(dim0))),
-                np.finfo(float).tiny,
-            )
-            prop = np.concatenate(
-                [pos2 / geo_scale, rotQ2a, rotQ2b, dim_src / geo_scale], axis=1
-            )
-            prop = (prop + 1e-9).round(8)
-            logger.debug("Finding unique interaction pairs")
-            _, unique_inds, unique_inv_inds = np.unique(
-                prop, return_index=True, return_inverse=True, axis=0
-            )
-            perc = len(unique_inds) / len(unique_inv_inds) * 100
-            logger.info(
-                "Interaction pairs left after pair matching filtering",
-                percentage=f"{perc:.2f}%",
-            )
-
-        params = {
-            "observers": np.tile(pos0, (len(src_list), 1))[unique_inds],
-            "position": np.repeat(pos0, len(src_list), axis=0)[unique_inds],
-            "orientation": R.from_quat(rotQ2b)[unique_inds],
-            "dimension": dim_src[unique_inds],
-        }
-    return params, unique_inds, unique_inv_inds, pos0, rot0
-
-
 def apply_demag(
     collection,
     susceptibility=None,
     inplace=False,
-    pairs_matching=False,
-    max_dist=0,
+    *,
     split=1,
     min_log_time=None,
     style=None,
@@ -1449,23 +1290,9 @@ def apply_demag(
         If False, applies demagnetization on a copy of the input collection and returns
         the demagnetized collection
 
-    pairs_matching: bool
-        If True, equivalent pair of interactions are identified and unique pairs are
-        calculated only once and copied to duplicates. This parameter is not compatible
-        with `max_dist` or `split` and applies only cuboid cells. Forces the legacy
-        point-matched tensor for all pairs.
-
-    max_dist: float
-        Leaves out the interaction of two cells whose centroids lie `max_dist` or more
-        times the larger side of the two cells apart, an approximation. If
-        `max_dist=0`, all interactions are calculated. This parameter is not
-        compatible with `pairs_matching` or `split` and applies only cuboid cells. Forces
-        the legacy point-matched tensor for all pairs.
-
     split: int
-        Number of times the sources list is split before getH calculation ind demag
-        tensor calculation. This parameter is not compatible with `pairs_matching` or
-        `max_dist`. Forces the legacy point-matched tensor for all pairs.
+        Number of times the sources list is split before getH calculation in demag
+        tensor calculation. Forces the legacy point-matched tensor for all pairs.
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
@@ -1484,8 +1311,8 @@ def apply_demag(
         least a tenth of the interaction matrix: the cells of each uniform grid
         (meshed cuboids of one size and orientation) among themselves, and large
         grids of one spacing between each other. There it is as fast or faster
-        and needs less memory, often far less. Otherwise, and for
-        ``pairs_matching``, ``max_dist`` and ``split``, it takes ``"direct"``.
+        and needs less memory, often far less. Otherwise, and for ``split``, it
+        takes ``"direct"``.
         Its log says which it took and why. It runs GMRES to
         ``solver_tol / 100``, so the polarization agrees with the direct solver
         to about ``solver_tol`` on a few thousand cells and ``10 * solver_tol``
@@ -1515,7 +1342,7 @@ def apply_demag(
 
     interaction: {"point", "newell"}
         How cells act on each other, see above. ``"newell"`` does not combine
-        with ``pairs_matching``, ``max_dist`` or ``split``.
+        with ``split``.
 
     Returns
     -------
@@ -1620,24 +1447,18 @@ def apply_demag(
 
         # ── demag operator: legacy point-matching or the chosen rule ────────
         _check_interaction(interaction, magnets_list)
-        no_split = split is False or split == 1
-        legacy = pairs_matching or max_dist != 0 or not no_split
+        legacy = not (split is False or split == 1)
         if legacy and interaction == "newell":
             msg = (
-                "pairs_matching, max_dist and split take the legacy point-matching "
-                "path and do not combine with interaction='newell'."
+                "split takes the legacy point-matching path and does not combine "
+                "with interaction='newell'."
             )
             raise ValueError(msg)
         if legacy:
             with timelog(
                 "Demagnetization tensor calculation", min_log_time=min_log_time
             ):
-                T = demag_tensor(
-                    magnets_list,
-                    split=split,
-                    pairs_matching=pairs_matching,
-                    max_dist=max_dist,
-                )
+                T = demag_tensor(magnets_list, split=split)
                 T *= magpy.mu_0
                 T = T.swapaxes(2, 3).reshape((3 * n, 3 * n)).T  # shape ii, jj
             positions, clusters = None, None

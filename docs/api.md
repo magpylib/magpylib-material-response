@@ -12,14 +12,6 @@
 .. autofunction:: magpylib_material_response.demag.get_H_ext
 ```
 
-Helpers behind the `pairs_matching` and `max_dist` options of `apply_demag`:
-
-```{eval-rst}
-.. autofunction:: magpylib_material_response.demag.filter_distance
-
-.. autofunction:: magpylib_material_response.demag.match_pairs
-```
-
 ## Mesh convergence — `convergence`
 
 ```{eval-rst}
