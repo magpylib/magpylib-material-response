@@ -53,3 +53,47 @@ def panels_to_triangles(pan):
     tri[flip] = tri[flip][:, [0, 2, 1]]
     verts = tri.reshape(-1, 3)
     return verts, np.arange(len(verts)).reshape(-1, 3)
+
+
+def extrude(outline, y0, y1, cap_rects):
+    """Closed mesh of a planar outline (x, z), counter-clockwise, extruded along y.
+
+    The caps are given as rectangles (x0, x1, z0, z1) tiling the outline; they
+    are cut in two triangles each and merged back by the grader."""
+    verts, faces = [], []
+
+    def quad(a, b, c, d):  # outward when a, b, c, d run counter-clockwise seen from outside
+        i = len(verts)
+        verts.extend([a, b, c, d])
+        faces.extend([[i, i + 1, i + 2], [i, i + 2, i + 3]])
+
+    n = len(outline)
+    for k in range(n):
+        (xa, za), (xb, zb) = outline[k], outline[(k + 1) % n]
+        quad((xa, y0, za), (xb, y0, zb), (xb, y1, zb), (xa, y1, za))
+    for x0, x1, z0, z1 in cap_rects:
+        quad((x0, y0, z0), (x0, y0, z1), (x1, y0, z1), (x1, y0, z0))  # y = y0, normal -y
+        quad((x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1))  # y = y1, normal +y
+    v, f = np.array(verts, float), np.array(faces)
+    # weld coincident vertices so the mesh is closed and manifold
+    key = np.round(v / np.max(np.ptp(v, axis=0)) * 1e9).astype(np.int64)
+    _, idx, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    v, f = v[idx], inv[f]
+    # every edge once in each direction: one consistent orientation
+    directed = {(a, b) for tri in f for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0]))}
+    if len(directed) != 3 * len(f) or any((b, a) not in directed for a, b in directed):
+        raise ValueError("caps and walls do not close consistently")
+    tri = v[f]
+    if np.einsum("fd,fd->f", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum() < 0:
+        f = f[:, [0, 2, 1]]  # outward
+    return v, f
+
+
+def ucore():
+    """The U-core of the ucore_electromagnet page as one closed mesh (m)."""
+    outline = [(-0.05, -0.01), (-0.03, -0.01), (0.03, -0.01), (0.05, -0.01), (0.05, 0.01),
+               (0.05, 0.07), (0.03, 0.07), (0.03, 0.01), (-0.03, 0.01), (-0.03, 0.07),
+               (-0.05, 0.07), (-0.05, 0.01)]  # a vertex wherever a cap rectangle meets the wall
+    rects = [(-0.05, -0.03, -0.01, 0.01), (-0.03, 0.03, -0.01, 0.01), (0.03, 0.05, -0.01, 0.01),
+             (-0.05, -0.03, 0.01, 0.07), (0.03, 0.05, 0.01, 0.07)]  # conforming at x = +-0.03
+    return extrude(outline, -0.01, 0.01, rects)

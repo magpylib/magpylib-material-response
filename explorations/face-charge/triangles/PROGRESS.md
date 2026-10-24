@@ -4,7 +4,9 @@ A homogeneous, isotropic, linear part is fully described by the charge on its
 surface, so a CAD part needs only its surface triangles (a magpylib
 `TriangularMesh`), no tetrahedra. This folder builds that solver step by step.
 
-**Status: step 1 of 4 done.** Next: step 2, grading toward sharp edges.
+**Status: steps 1 and 2 of 4 done.** Next: make the mesh and the assembly lean
+(step 2 costs 2.3× the unknowns and 7.5 GB where the cuboid model needs 3,240),
+then step 3.
 
 | Step | What                                                                                                                                      | Status |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -38,6 +40,43 @@ mesh. `meshes.py`: icosphere, and cuboid panels cut into triangles.
 Cost so far: dense, 3,840 unknowns in 10 s (1,280 triangles). The pairs closer
 than twice their size are re-integrated on 16 sub-triangles each, one test
 triangle at a time in Python.
+
+## Step 2: grading toward sharp edges
+
+`refine.py`, `refine_cells`: sharp edges are the mesh edges whose triangles'
+normals differ by more than 20° (convex or re-entrant). The flat faces are
+merged back into convex polygons, so the export's diagonals are dropped. Along
+each sharp edge, the polygons of each face beside it are cut along lines
+parallel to it at the cuboid layers' distances ℓ (k/m)^g, k = 1..m, and the
+cells fanned into triangles. Where two sharp edges meet, the lines cross into
+the cuboid's grid. The rest is bisected (longest edge) down to g ℓ / m.
+
+Two dead ends on the way, kept in the code's history:
+
+- bisecting the edge longest in a stretched target metric made slivers, then
+  collinear triangles, near corners;
+- longest-edge bisection to an isotropic target is robust but costs 15 to 23
+  times the cuboid's unknowns, as it fills every edge with small triangles.
+
+Cutting the export's triangles without merging them back gave slivers where the
+diagonals cross the layers. In-plane observers on an edge's extension gave NaN,
+as in the rectangle kernel: they are now lifted 1e-12 of the triangle off its
+plane.
+
+- **Cube from 12 triangles** (`step2.py`, `results/step2.*`): −2.9e-3, −9.3e-4,
+  −4.4e-4 against Helsing & Perfekt at 576, 1,440 and 2,448 unknowns: the
+  hand-built cuboid panels, cut into triangles, give the same.
+- **U-core as one closed mesh** (44 triangles in, 32 sharp edges, two of them
+  re-entrant), χ 999, in its coil's field: at m = 2, 7,500 unknowns, Bz along
+  the line 30 mm above the poles is within 0.19 % of the extrapolated FEM at
+  worst (0.10 % RMS), peak 2.1581 mT against 2.1552. The FEM itself is good to
+  0.2 %. The three-cuboid model of the validation gets 0.15 % with 3,240.
+- **Cost:** 36 s and 7.5 to 9.9 GB for the U-core at m = 2; m = 3 (18,630
+  unknowns) would need about 45 GB dense and was not run. The mesh has about 2.4
+  times the cuboid grid's cells, and the assembly holds the operator twice and
+  loops over close pairs in Python.
+
+![Step 2: the cube graded from 12 triangles against the hand-built grading; the U-core as one mesh against FEM](results/step2.png)
 
 ## How to resume
 

@@ -1,0 +1,5 @@
+{'m': 2, 'triangles': 192, 'unknowns': 576, 'error': np.float64(-0.0028554393252250287), 'seconds': 0.7079008750151843}
+{'m': 3, 'triangles': 480, 'unknowns': 1440, 'error': np.float64(-0.0009327028614602995), 'seconds': 2.3526564160129055}
+{'m': 4, 'triangles': 816, 'unknowns': 2448, 'error': np.float64(-0.0004414860605859161), 'seconds': 5.015565167006571}
+{'m': 2, 'triangles_in': 44, 'sharp_edges': 32, 'triangles': 2500, 'unknowns': 7500, 'seconds': 36.44754604200716, 'peak_mT': 2.1581341942515775, 'fem_peak_mT': 2.155182876190942, 'max_error': 0.0019389982000481856, 'rms_error': 0.0010151301971725799}
+   peak RSS 9896 MB

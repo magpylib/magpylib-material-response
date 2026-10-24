@@ -50,6 +50,9 @@ def field(X, V, fr=None):
     cen, n, e1, e2, s, _ = frames(V) if fr is None else fr
     x = X[:, None, :]  # (M, 1, 3)
     w = np.sum((x - V[None, :, 0]) * n[None], axis=-1)  # (M, N)
+    # An observer exactly in the plane on an edge's extension makes two edge
+    # logs infinite where they cancel: lift it 1e-12 of the triangle off the plane.
+    w = np.where(w == 0, 1e-12 * s[None], w)
     rho = x - w[..., None] * n[None]
     sw = np.sign(w)
     aw = np.abs(w)
