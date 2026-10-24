@@ -64,7 +64,7 @@ def plot(cid):
         ref2, fc2, m2, names = ref2[:, keep], fc2[:, keep], m2[:, keep], [names[k] for k in keep]
         groups = _lines(obs)
         ncol = ref2.shape[1] * len(groups)
-        fig, axes = plt.subplots(2, ncol, figsize=(3.6 * ncol + 0.6, 5.2), dpi=170, sharex="col",
+        fig, axes = plt.subplots(2, ncol, figsize=(max(3.6 * ncol + 0.6, 10), 5.2), dpi=170, sharex="col",
                                  gridspec_kw={"height_ratios": [2.2, 1]}, squeeze=False)
         fig.patch.set_facecolor(SURF)
         scale = np.nanmax(np.sqrt(np.nansum(ref2**2, axis=1)))
@@ -78,7 +78,7 @@ def plot(cid):
                 a.plot(x, ref2[g, k] * unit, color=INK2, lw=2.4, alpha=0.45, label="reference")
                 a.plot(x, m2[g, k] * unit, color=MOM, lw=1.2, ls=(0, (4, 2)), label=mom_label)
                 a.plot(x, fc2[g, k] * unit, color=FC, lw=1.2, label=fc_label)
-                lbl = f"{name} ({'mT' if unit == 1e3 else r['unit'].split()[-1]})"
+                lbl = f"{name} (mT)" if unit == 1e3 else name
                 if len(groups) > 1:
                     lbl += f", z = {obs[g[0], 2] * 1e3:g} mm"
                 a.set_title(lbl, loc="left", fontsize=9, color=INK)
@@ -88,6 +88,13 @@ def plot(cid):
                 if col == 0:
                     b.set_ylabel("|error| (% of max |B|)")
                 col += 1
+        # log errors when one method is far below the other, so both show
+        e_fc = np.nanmax(np.abs(fc2 - ref2)) / scale
+        e_m = np.nanmax(np.abs(m2 - ref2)) / scale
+        if max(e_fc, e_m) > 20 * min(e_fc, e_m):
+            for b in axes[1]:
+                b.set_yscale("log")
+                b.set_ylim(bottom=max(1e-4, 0.05 * 100 * min(e_fc, e_m)))
         handles, labels = axes[0, 0].get_legend_handles_labels()
         fig.suptitle(f"{cid}. {r['title']}", x=0.01, ha="left", fontsize=11, color=INK)
         fig.text(0.01, 0.93, f"reference: {r['ref_source']}", fontsize=8.5, color=INK2)

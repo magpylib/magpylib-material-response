@@ -1,0 +1,65 @@
+{
+ "id": "F",
+ "title": "U-core electromagnet (3 cuboids, \u03c7 999) driven by a 16-winding coil (ucore_electromagnet)",
+ "ref_source": "FEM (scikit-fem P2, explore/cells-and-fem), h = [3.0, 2.0, 1.5, 1.2, 1.0] mm, extrapolated over the three finest (order 1.17)",
+ "unit": "Bz mT",
+ "observers": 161,
+ "fc": [
+  {
+   "m": 3,
+   "bodies": 3,
+   "unknowns": 3240,
+   "build_s": 0.8187493330042344,
+   "solve_s": 2.3097194170113653,
+   "eval_s": 0.029801790980855003,
+   "error": {
+    "max": 0.0015498450193966106,
+    "rms": 0.0008752245558298901,
+    "per_point": null
+   }
+  },
+  {
+   "m": 4,
+   "bodies": 3,
+   "unknowns": 5568,
+   "build_s": 2.2021571249933913,
+   "solve_s": 5.873536625003908,
+   "eval_s": 0.04239462499390356,
+   "error": {
+    "max": 0.0013524887202427552,
+    "rms": 0.0007332755658067319,
+    "per_point": null
+   }
+  },
+  {
+   "m": 6,
+   "bodies": 3,
+   "unknowns": 12528,
+   "build_s": 10.29385737501434,
+   "solve_s": 27.866019209002843,
+   "eval_s": 0.08603429098729976,
+   "error": {
+    "max": 0.001199723211559904,
+    "rms": 0.000622712615454546,
+    "per_point": null
+   }
+  }
+ ],
+ "mom": [
+  {
+   "label": "docs: 250 target",
+   "cells": 286,
+   "solve_s": 0.15618824999546632,
+   "error": {
+    "max": 0.22730031482737423,
+    "rms": 0.16736507672716125,
+    "per_point": null
+   }
+  }
+ ],
+ "fc_last_change": {
+  "max": 0.00017453621144859378,
+  "rms": 0.00012853561240820777,
+  "per_point": null
+ }
+}

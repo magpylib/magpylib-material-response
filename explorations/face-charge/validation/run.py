@@ -25,11 +25,14 @@ def log(msg):
 
 
 def err(q, ref):
-    """Max and RMS error over the observers. Fields (n, k): |difference| per
-    point over the largest |reference|; values (n,): relative per point."""
+    """Max and RMS error over the observers. Fields (n, k) and profiles of one
+    value (more than 10 points): |difference| per point over the largest
+    |reference|, as a profile crosses zero; a few sensors: relative per point."""
     q, ref = np.asarray(q, float), np.asarray(ref, float)
     if np.isnan(q[~np.isnan(ref)]).any():
         raise ValueError(f"NaN in a result at {np.isnan(q).sum()} entries")
+    if q.ndim == 1 and q.size > 10:
+        q, ref = q[:, None], ref[:, None]
     if q.ndim == 2:
         d = np.sqrt(np.nansum((q - ref) ** 2, axis=1))
         scale = np.nanmax(np.sqrt(np.nansum(ref**2, axis=1)))

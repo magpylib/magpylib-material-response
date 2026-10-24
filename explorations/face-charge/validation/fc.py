@@ -51,9 +51,9 @@ def solve(coll, m, observers, g=2.5):
     objs, fixed, applied = split(coll)
     bodies = []
     for obj, chi in objs:
-        J0 = np.asarray(obj.polarization, float)
+        J0 = None if obj.polarization is None else np.asarray(obj.polarization, float)
         bodies.append(Body(obj.dimension, position=obj.position, orientation=obj.orientation,
-                           chi=chi, J0=J0 if np.any(J0) else None, m=m, g=g))
+                           chi=chi, J0=J0 if J0 is not None and np.any(J0) else None, m=m, g=g))
     add_contact_lines(bodies)
     for b in bodies:
         b.build()

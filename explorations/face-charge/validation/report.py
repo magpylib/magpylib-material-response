@@ -56,6 +56,9 @@ def write_progress():
     todo = [c for c in CASES if c not in done]
     status = f"**{len(done)} of {len(CASES)} cases done.** " + (f"Next: {todo[0]}." if todo else "All done.")
     log = open(os.path.join(HERE, "log.txt")).read() if os.path.exists(os.path.join(HERE, "log.txt")) else ""
+    summary = os.path.join(HERE, "notes", "summary.md")
+    if os.path.exists(summary):
+        status += "\n\n" + open(summary).read().strip()
     text = f"""# Validation against the documented examples
 
 Each documented example of material-response, solved by the face-charge method
@@ -68,8 +71,8 @@ is rewritten by `report.py` after every case; `run.py` appends the log below.
 | --- | --- | --- | --- | --- | --- |
 {chr(10).join(rows)}
 
-Errors: for fields, |B − B_ref| at each observer over the largest |B_ref| on the
-set; for gains and single sensors, relative per point. Times: face charge is
+Errors: for fields and profiles, |B − B_ref| at each observer over the largest
+|B_ref| on the set; for gains and a few single sensors, relative per point. Times: face charge is
 mesh, assembly and solve; the MoM is `apply_demag` alone, without meshing. The
 face-charge mesh level m is set by hand, not converged by a study.
 

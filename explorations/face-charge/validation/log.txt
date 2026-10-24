@@ -75,3 +75,18 @@
 - 2026-10-24 17:21 E: MoM study level 4608 cells, 1.5 s
 - 2026-10-24 17:21 E: MoM study level 36864 cells, 11.9 s
 - 2026-10-24 17:21 E: done. Face charge m=3: max error 1.9e-03 vs reference; MoM finest: 1.0e-01
+- 2026-10-24 17:22 F: start
+- 2026-10-24 17:22 F failed at the start: its cuboids have polarization None, which fc.py turned into a NaN scalar; now None means no remanence.
+- 2026-10-24 17:23 F: start
+- 2026-10-24 17:23 F: face charge m=3: 3240 unknowns, build 0.8 s, couple+solve 2.4 s, field 0.0 s
+- 2026-10-24 17:23 F: face charge m=4: 5568 unknowns, build 2.2 s, couple+solve 6.2 s, field 0.0 s
+- 2026-10-24 17:23 F: face charge m=6: 12528 unknowns, build 10.3 s, couple+solve 27.9 s, field 0.1 s
+- 2026-10-24 17:23 F: MoM docs: 250 target: 286 cells, 0.2 s
+- 2026-10-24 17:23 F: done. Face charge m=6: max error 1.0e+00 vs reference; MoM finest: 1.0e+00
+- 2026-10-24 17:24 F redone: its Bz profile crosses zero, so the per-point relative error read 100 %; profiles of one value over 10 points are now measured like fields, against the largest |reference|.
+- 2026-10-24 17:24 F: start
+- 2026-10-24 17:24 F: face charge m=3: 3240 unknowns, build 0.8 s, couple+solve 2.3 s, field 0.0 s
+- 2026-10-24 17:24 F: face charge m=4: 5568 unknowns, build 2.2 s, couple+solve 5.9 s, field 0.0 s
+- 2026-10-24 17:25 F: face charge m=6: 12528 unknowns, build 10.3 s, couple+solve 27.9 s, field 0.1 s
+- 2026-10-24 17:25 F: MoM docs: 250 target: 286 cells, 0.2 s
+- 2026-10-24 17:25 F: done. Face charge m=6: max error 1.2e-03 vs reference; MoM finest: 2.3e-01
