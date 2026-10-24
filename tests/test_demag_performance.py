@@ -707,25 +707,34 @@ def test_touching_bodies_get_a_grid_each():
 
 @pytest.mark.parametrize(
     ("row_budget", "max_bytes", "sparse"),
-    [(1e-12, None, False), (1e9, None, True), (1e-12, 1, False)],
+    [(1e-12, 1, False), (1e-4, 1, True), (1e-4, None, False)],
     ids=[
         "keeps nearly all: dense",
-        "drops nearly all: sparse",
-        "keeps nearly all, above DENSE_BLOCK_MAX_BYTES: still dense",
+        "drops 79 %, little near the cube: sparse",
+        "drops 79 %, below DENSE_BLOCK_MAX_BYTES: dense",
     ],
 )
 def test_large_block_is_sparsified_only_when_it_pays(
     monkeypatch, row_budget, max_bytes, sparse
 ):
+    # Every block may go sparse, the bar takes ten chunks.
     monkeypatch.setattr(demag, "DENSE_BLOCK_MAX_ENTRIES", 1)
+    monkeypatch.setattr(demag, "KERNEL_PAIRS_PER_CALL", 16 * 27)
     if max_bytes is not None:
         monkeypatch.setattr(demag, "DENSE_BLOCK_MAX_BYTES", max_bytes)
-    coll = _build_uniform_collection(64)
-    positions, clusters = analyze_collection(coll.sources_all)
-    block = _pair_block(
-        clusters[0], clusters[0], coll.sources_all, positions, "point", row_budget
+    bar = magpy.magnet.Cuboid(dimension=(40, 2, 2), polarization=(0, 0, 1))
+    cube = magpy.magnet.Cuboid(
+        dimension=(2, 2, 2), position=(-21.5, 0, 0), polarization=(0, 0, 1)
     )
+    coll = magpy.Collection(mesh_Cuboid(bar, 160), mesh_Cuboid(cube, 27))
+    positions, clusters = analyze_collection(coll.sources_all)
+    cl_bar, cl_cube = sorted(clusters, key=lambda c: -len(c["indices"]))
+    args = (cl_bar, cl_cube, coll.sources_all, positions, "point")
+    block, full = _pair_block(*args, row_budget), _pair_block(*args)
     assert sp.issparse(block) is sparse
+    kept = block.toarray() if sparse else block
+    np.testing.assert_array_equal(kept[kept != 0], full[kept != 0])
+    assert np.abs(full - kept).sum(axis=1).max() <= row_budget
 
 
 def test_dedup_blocks_matches_direct_evaluation():

@@ -79,19 +79,26 @@ from magpylib_material_response.newell import (
 )
 from magpylib_material_response.utils import timelog
 
-#: A pair block with more dense entries than this is built in observer
-#: chunks and stored sparse (with a rigorous row-sum error budget) instead
-#: of dense. 2e7 float64 entries = 160 MB; dense blocks additionally allow
-#: deriving the reverse block by reciprocity (halving the build cost).
+#: A pair block with more dense entries than this may be stored sparse, with a
+#: rigorous row-sum error budget, when that pays (``SPARSIFY_MIN_DROP``).
+#: 2e7 float64 entries = 160 MB; dense blocks additionally allow deriving the
+#: reverse block by reciprocity (halving the build cost).
 DENSE_BLOCK_MAX_ENTRIES = 20_000_000
-# A block above DENSE_BLOCK_MAX_ENTRIES is sparsified only when its first chunk
-# shows that at least SPARSIFY_MIN_DROP of the entries can go, at any size: at
-# high susceptibility the row budget drops almost nothing, and a CSR holding most
-# of a block is slower than the dense array and larger (12 bytes per entry
-# instead of 8, and 24 per entry in triplets while it is built), and cannot give
-# the reverse block by reciprocity. Dense blocks above DENSE_BLOCK_MAX_BYTES in
-# all make the solve warn.
-SPARSIFY_MIN_DROP = 0.5
+# A block above DENSE_BLOCK_MAX_ENTRIES is sparsified only when one chunk of
+# observers spread over the body shows that at least SPARSIFY_MIN_DROP of the
+# entries can go: a CSR product runs on one thread, and on a 29 M-entry block
+# it matches the dense one only at about 94 % dropped. A block above
+# DENSE_BLOCK_MAX_BYTES puts memory first and is sparsified from
+# SPARSIFY_MIN_DROP_LARGE: a CSR takes 12 bytes per kept entry against 8 per
+# dense entry, and about 20 while it is built, so at 60 % dropped it is no
+# larger than the dense block even then. At high susceptibility the row budget
+# drops almost nothing, and the block stays dense at any size.
+SPARSIFY_MIN_DROP = 0.9
+SPARSIFY_MIN_DROP_LARGE = 0.6
+#: Above this many bytes memory comes first: a block is sparsified from
+#: ``SPARSIFY_MIN_DROP_LARGE``, the iterative solve warns when its explicit
+#: blocks pass it in all, and ``solver="auto"`` falls back to the direct solver
+#: only when the dense T stays below it.
 DENSE_BLOCK_MAX_BYTES = 2_000_000_000
 
 #: Every block is evaluated in observer chunks covering at most this many
@@ -511,17 +518,19 @@ def _point_block_T(srcs_b, pos_a):
 
 
 def _row_sparsify(block, row_budget):
-    """Per-row triplets keeping enough entries that the dropped ``|.|`` sum
-    stays below ``row_budget`` in every row (exact, entry-based bound)."""
-    A = np.abs(block)
-    order = np.argsort(A, axis=1)
-    srt = np.take_along_axis(A, order, axis=1)
-    csum = np.cumsum(srt, axis=1)
-    n_drop = (csum <= row_budget).sum(axis=1)  # smallest-k droppable per row
-    rank = np.argsort(order, axis=1)  # rank of each entry in its row
-    keep = rank >= n_drop[:, None]
+    """CSR rows keeping enough entries that the dropped ``|.|`` sum stays below
+    ``row_budget`` in every row (exact, entry-based bound): the kept count of
+    each row, and the kept columns (int32) and values in row order."""
+    mag = np.abs(block)
+    srt = np.sort(mag, axis=1)
+    n_drop = (np.cumsum(srt, axis=1) <= row_budget).sum(axis=1)  # smallest-k
+    # Keep each row from its smallest kept magnitude up; ties there stay too.
+    n = mag.shape[1]
+    floor = np.take_along_axis(srt, np.minimum(n_drop, n - 1)[:, None], axis=1)
+    floor[n_drop == n] = np.inf
+    keep = mag >= floor
     rows, cols = np.nonzero(keep)
-    return rows, cols, block[rows, cols]
+    return keep.sum(axis=1), cols.astype(np.int32), block[rows, cols]
 
 
 def _same_lattice(cl_a, cl_b, rtol=1e-6):
@@ -598,11 +607,13 @@ def _pair_block(
     under the solve's interaction rule.
 
     Returns a dense ndarray when the block is small, when ``row_budget`` is
-    None, or when the budget would keep most of the entries anyway (the case
-    at high susceptibility); else a CSR matrix with per-row dropped sums below
-    ``row_budget``. With ``sink``, a dense block is not built: each chunk goes
-    to ``sink(start, stop, part)``, ``part`` of shape ``(3, stop - start, 3 n_b)``
-    over the observers ``start:stop``, and nothing is returned.
+    None, or when the budget would keep more than ``1 - SPARSIFY_MIN_DROP`` of
+    the entries anyway (``1 - SPARSIFY_MIN_DROP_LARGE`` for a block above
+    ``DENSE_BLOCK_MAX_BYTES``; at high susceptibility it keeps nearly all of
+    them); else a CSR matrix with per-row dropped sums below ``row_budget``.
+    With ``sink``, a dense block is not built: each chunk goes to
+    ``sink(sel, part)``, ``part`` of shape ``(3, len(sel), 3 n_b)`` over the
+    observers ``sel`` (indices into ``a``), and nothing is returned.
     """
     ia, ib = cl_a["indices"], cl_b["indices"]
     pos_a, pos_b = positions[ia], positions[ib]
@@ -636,56 +647,64 @@ def _pair_block(
             return _point_cuboid_block_T(pos_a[sl], pos_b, cl_b["dim"], rot_mat)
         return _point_block_T([magnets_list[i] for i in ib], pos_a[sl])
 
-    def _chunks():
-        # Observer chunks bounded by kernel pairs, which is what costs memory;
-        # a single call over all n_a * n_b pairs of 5,000 tetrahedra needs ~97 GB.
-        pairs = (
-            TABLE_PAIRS_PER_CHUNK if grid_pair is not None else KERNEL_PAIRS_PER_CALL
-        )
-        chunk = max(1, pairs // max(n_b, 1))
-        for start in range(0, n_a, chunk):
-            stop = min(start + chunk, n_a)
-            yield start, stop, _dense_chunk(slice(start, stop))
+    # Observer chunks bounded by kernel pairs, which is what costs memory;
+    # a single call over all n_a * n_b pairs of 5,000 tetrahedra needs ~97 GB.
+    pairs = TABLE_PAIRS_PER_CHUNK if grid_pair is not None else KERNEL_PAIRS_PER_CALL
+    chunk = max(1, pairs // max(n_b, 1))
 
-    chunks = _chunks()
-    first = next(chunks, None)
-    # Sparsify only when the first chunk shows it pays: at high susceptibility
-    # the row budget keeps nearly every entry.
-    if (
-        sparsify
-        and first is not None
-        and _droppable_fraction(first[2], row_budget) < SPARSIFY_MIN_DROP
-    ):
-        sparsify = False
-    all_chunks = itertools.chain([first], chunks) if first is not None else iter(())
+    def _chunks(observers):
+        for k in range(0, len(observers), chunk):
+            sel = observers[k : k + chunk]
+            yield sel, _dense_chunk(sel)
+
+    chunks = _chunks(np.arange(n_a))
+    if sparsify:
+        # Sparsify only when it pays, judged on one chunk of observers spread
+        # over the whole body: consecutive cells are one slab of it, which may
+        # sit next to the source body or far from it.
+        n_s = min(chunk, n_a)
+        sampled = np.arange(n_s) * n_a // n_s
+        sample = _dense_chunk(sampled)
+        large = 72 * n_a * n_b > DENSE_BLOCK_MAX_BYTES
+        min_drop = SPARSIFY_MIN_DROP_LARGE if large else SPARSIFY_MIN_DROP
+        sparsify = _droppable_fraction(sample, row_budget) >= min_drop
+        if not sparsify:  # the sample is part of the dense block
+            rest = np.delete(np.arange(n_a), sampled)
+            chunks = itertools.chain([(sampled, sample)], _chunks(rest))
+        del sample
 
     if not sparsify:
         # Rows of a block are m-major over its observers: (3, n_a, 3 n_b).
         if sink is not None:
-            for start, stop, part in all_chunks:
-                sink(start, stop, part.reshape(3, stop - start, 3 * n_b))
+            for sel, part in chunks:
+                sink(sel, part.reshape(3, len(sel), 3 * n_b))
             return None
         block = np.empty((3, n_a, 3 * n_b))
-        for start, stop, part in all_chunks:
-            block[:, start:stop] = part.reshape(3, stop - start, 3 * n_b)
+        for sel, part in chunks:
+            block[:, sel] = part.reshape(3, len(sel), 3 * n_b)
         return block.reshape(3 * n_a, 3 * n_b)
 
-    rows_all, cols_all, vals_all = [], [], []
-    for start, stop, block in all_chunks:
-        r, c, v = _row_sparsify(block, row_budget)
-        # Local rows are m-major over the chunk; map to m-major over n_a.
-        n_ch = stop - start
-        m, i_loc = r // n_ch, r % n_ch
-        rows_all.append(m * n_a + start + i_loc)
-        cols_all.append(c)
-        vals_all.append(v)
-    return sp.csr_matrix(
-        (
-            np.concatenate(vals_all),
-            (np.concatenate(rows_all), np.concatenate(cols_all)),
-        ),
-        shape=(3 * n_a, 3 * n_b),
-    )
+    # Each chunk straight into CSR pieces, one per field component m: a chunk's
+    # rows are m-major over its own observers, the block's over all of them.
+    counts, cols, vals = [[], [], []], [[], [], []], [[], [], []]
+    for sel, part in chunks:
+        n_kept, c, v = _row_sparsify(part, row_budget)
+        n_kept = n_kept.reshape(3, len(sel))
+        ends = np.cumsum(n_kept.sum(axis=1))
+        for m, lo, hi in zip(range(3), [0, *ends[:2]], ends, strict=True):
+            counts[m].append(n_kept[m])
+            cols[m].append(c[lo:hi])
+            vals[m].append(v[lo:hi])
+
+    def _join(pieces):
+        # Free the pieces once joined: the CSR peaks at 20 bytes per entry.
+        out = np.concatenate([p for per_m in pieces for p in per_m])
+        pieces.clear()
+        return out
+
+    indptr = np.concatenate([[0], np.cumsum(_join(counts))])
+    data = _join(vals)
+    return sp.csr_matrix((data, _join(cols), indptr), shape=(3 * n_a, 3 * n_b))
 
 
 def _assemble_T_dense(
@@ -706,8 +725,8 @@ def _assemble_T_dense(
         return np.arange(3)[:, None] * n + cl["indices"][None, :]  # (3, n_cl)
 
     def _write(rows, cols, factor):
-        def sink(start, stop, part):
-            r = rows[:, start:stop].ravel()
+        def sink(sel, part):
+            r = rows[:, sel].ravel()
             T[np.ix_(r, cols.ravel())] = part.reshape(len(r), -1)
             if factor is not None:
                 T[np.ix_(cols.ravel(), r)] = factor * part.reshape(len(r), -1).T
@@ -831,17 +850,19 @@ def _build_operator(
     """Build the list of block operators representing T for the matvec.
 
     Self-blocks of grid clusters are FFT convolutions (exact); every other
-    block is dense when small, else sparsified with a per-row error budget
-    chosen so the total operator perturbation stays below
-    ``0.1 * solver_tol``:  ``|S (T - T~)|_inf <= chi_eff * K * row_budget``,
-    with ``chi_eff`` the largest row sum of ``|S|`` (at least 1).
+    block is dense, or sparse where a per-row error budget drops at least
+    ``SPARSIFY_MIN_DROP`` of it (``SPARSIFY_MIN_DROP_LARGE`` above
+    ``DENSE_BLOCK_MAX_BYTES``). The budget keeps the total operator
+    perturbation below ``0.1 * solver_tol``:
+    ``|S (T - T~)|_inf <= chi_eff * K * row_budget``, with ``chi_eff`` the
+    largest row sum of ``|S|`` (at least 1). A reverse block given by
+    reciprocity is the forward one transposed, a view with a ``scale``.
     """
     K = len(clusters)
     chi_eff = max(1.0, float(np.abs(chi).sum(axis=2).max()) if len(chi) else 1.0)
     row_budget = 0.1 * solver_tol / (chi_eff * max(K, 1))
 
     ops = []
-    dense_bytes = 0
     with timelog("Demag operator build", min_log_time=min_log_time):
         for idx_a, cl_a in enumerate(clusters):
             if cl_a["kind"] == "grid":
@@ -897,11 +918,12 @@ def _build_operator(
                         "M": M_ab,
                     }
                 )
+                op_ba = {"kind": "mat", "ia": cl_b["indices"], "ib": cl_a["indices"]}
                 factor = _reciprocity_factor(cl_a, cl_b, interaction)
                 if factor is not None and not sp.issparse(M_ab):
-                    M_ba = factor * M_ab.T
+                    op_ba.update(M=M_ab.T, scale=factor)
                 else:
-                    M_ba = _pair_block(
+                    op_ba["M"] = _pair_block(
                         cl_a=cl_b,
                         cl_b=cl_a,
                         magnets_list=magnets_list,
@@ -909,28 +931,27 @@ def _build_operator(
                         interaction=interaction,
                         row_budget=row_budget,
                     )
-                ops.append(
-                    {
-                        "kind": "mat",
-                        "ia": cl_b["indices"],
-                        "ib": cl_a["indices"],
-                        "M": M_ba,
-                    }
-                )
-    dense_bytes = sum(
-        op["M"].nbytes for op in ops if op["kind"] == "mat" and not sp.issparse(op["M"])
+                ops.append(op_ba)
+    held = sum(
+        _stored_bytes(op["M"])
+        for op in ops
+        if op["kind"] == "mat" and "scale" not in op
     )
-    n = sum(len(cl["indices"]) for cl in clusters)
-    if dense_bytes > DENSE_BLOCK_MAX_BYTES:
+    if held > DENSE_BLOCK_MAX_BYTES:
         logger.warning(
-            "The iterative operator holds {gb:.1f} GB of dense blocks between cells that "
-            "share no grid; at this susceptibility the row budget drops little, so it "
-            "costs about as much as the direct solver's {gb_direct:.1f} GB. Fewer cells, "
-            "or cells on grids, would help.",
-            gb=dense_bytes / 1e9,
-            gb_direct=72 * n * n / 1e9,
+            "The iterative operator holds {gb:.1f} GB of explicit blocks between cells "
+            "that share no grid spacing. Bodies meshed with one cell spacing get FFT "
+            "products instead; fewer cells also help.",
+            gb=held / 1e9,
         )
     return ops
+
+
+def _stored_bytes(M):
+    """Memory of a dense or CSR block."""
+    if sp.issparse(M):
+        return M.data.nbytes + M.indices.nbytes + M.indptr.nbytes
+    return M.nbytes
 
 
 def _build_matvec(n, chi, ops):
@@ -947,6 +968,8 @@ def _build_matvec(n, chi, ops):
                 h = _fft_cross_apply(op, v_b)
             else:
                 h = np.asarray(op["M"] @ v_b).ravel()
+                if "scale" in op:
+                    h *= op["scale"]
             Tv[:, op["ia"]] += h.reshape(3, -1)
         return v_flat - _apply_susceptibility(chi, Tv.ravel())
 
