@@ -272,23 +272,7 @@ Under `"auto"` GMRES runs to `solver_tol / 100`, so the polarization stays
 within about `solver_tol` of the direct solve on a few thousand cells and within
 10 × `solver_tol` on 32,768. If GMRES does not converge, `"auto"` falls back to
 the direct solver when its matrix takes at most 2 GB (about 5,000 cells), and
-raises otherwise. With the legacy options below, `"auto"` takes the direct
-solver.
-
-### Legacy options
-
-Three options of `apply_demag` trade generality for speed or memory. They take
-the point-matching path and do not combine with `interaction="newell"`:
-
-| Option                | Effect                                                                                                            |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `pairs_matching=True` | Cell pairs with the same offset, orientations and source dimensions are evaluated once; pays off on regular grids |
-| `max_dist=d`          | Pairs whose centroids lie $d$ or more times the larger cell side apart are dropped, an approximation              |
-| `split=k`             | The field evaluations run in $k$ chunks of source cells, bounding the memory of the field evaluation              |
-
-`pairs_matching` and `max_dist` take cuboid cells only; `split` takes any cell.
-`max_dist` does not combine with the other two, and `pairs_matching` does not
-combine with `split`.
+raises otherwise.
 
 ---
 
@@ -371,9 +355,6 @@ $$
 ```text
 apply_demag(collection, solver=..., interaction=...)
 │
-├─ 0. Legacy options (pairs_matching / max_dist / split)?
-│      YES → point-matched dense tensor (refused with interaction="newell")
-│
 ├─ 1. Collect the magnet cells; one 3×3 susceptibility tensor per cell,
 │      R diag(χ) Rᵀ; check the rule ("newell": all cells cuboid, one
 │      orientation, else raise); refuse objects with paths
@@ -397,12 +378,11 @@ apply_demag(collection, solver=..., interaction=...)
 
 ## 7. Complexity
 
-| Configuration                   | Operator build                         | Product per GMRES iteration |
-| ------------------------------- | -------------------------------------- | --------------------------- |
-| Single uniform grid             | $O(N \log N)$                          | $O(N \log N)$               |
-| $K$ grid clusters               | $O(N \log N + \sum_{A\neq B} n_A n_B)$ | $O(N \log N + \text{nnz})$  |
-| Loose / generic cells           | $O(n^2)$ for those cells               | $O(n^2)$ or $O(\text{nnz})$ |
-| Legacy (`split`, `max_dist`, …) | $O(N^2)$ dense                         | $O(N^2)$                    |
+| Configuration         | Operator build                         | Product per GMRES iteration |
+| --------------------- | -------------------------------------- | --------------------------- |
+| Single uniform grid   | $O(N \log N)$                          | $O(N \log N)$               |
+| $K$ grid clusters     | $O(N \log N + \sum_{A\neq B} n_A n_B)$ | $O(N \log N + \text{nnz})$  |
+| Loose / generic cells | $O(n^2)$ for those cells               | $O(n^2)$ or $O(\text{nnz})$ |
 
 Measured on one meshed cube (Apple Silicon, $\chi = 3$, `solver_tol=1e-8`, point
 matching): the iterative solver is about 40 times faster than the direct one at
