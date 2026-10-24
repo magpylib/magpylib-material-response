@@ -14,6 +14,12 @@ magnet and under 1 ms for a soft part. Accuracy is 3e-5 for the magnet and about
 material-response's MoM reaches 2.5 % on the same soft-part case with 32,768
 cells in 6 s.
 
+**Coupled bodies work too.** A magnet glued on an iron plate is within 2.4e-3 at
+every sensor with 3,888 unknowns, including the shielded side under the plate.
+There the MoM is off by 70 % with 17,152 cells. Moving a part takes a rebuild of
+about 3 s; a new polarization, χ or external field takes about 6 ms. Bodies may
+be placed and turned freely.
+
 ## The idea: no new physics, a different representation
 
 1. **Faces only.** With a uniform isotropic χ and a uniform remanence M0,
@@ -134,12 +140,111 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
      operator). It cuts the Schur decomposition about 10× and the solve about
      8×.
 
+7. **Coupled bodies** (`multibody.py`; `contact.txt`, `magnet_on_plate.txt`).
+   Each body's equation gets the other bodies' fields on its faces, computed
+   with the same weighted-solid-angle flux.
+   - **Contact.** Where two faces share a plane, the coplanar coupling is exact:
+     no principal value, and the one-sided limit gives −1/2 of the overlap
+     integral of the two charges. The overlap of a test panel with the other
+     body's panel is clipped as a polygon (a turned rectangle when the body is
+     turned in the plane) and integrated exactly, so the meshes need not match.
+   - **Rotation.** Each body has an orientation. The other body's Gauss points
+     and normals are mapped into the test panel's frame; loads and fields are
+     rotated in and out.
+   - **Footprint lines.** Each body's mesh is also graded toward the edges of
+     every body touching it (`add_contact_lines`). These are exact when the two
+     bodies are turned by multiples of 90° against each other. Otherwise they
+     only bound the footprint, because the mesh lines follow the body's axes.
+
+   Checks:
+   - **Two touching cubes, equal χ, matching meshes:** they reproduce the merged
+     20×10×10 block to 1e-13 (B and moment). Their interface charges cancel to
+     1e-12.
+   - **Halves meshed differently:** they converge to the merged block (1.3e-2,
+     9.6e-3, 3.7e-3), slower than matching meshes (1.1e-2, 4.2e-3, 9e-4). An
+     interface that should carry no charge is the worst case for non-matching
+     meshes.
+   - **Magnet on plate** (`yoke_case.py`): a 6×6×4 mm magnet (1.2 T, χ = 0.05)
+     off-centre on a 20×20×5 mm plate (χ = 1000). Sensors are 0.5–5 mm above the
+     magnet, beside it on the plate, under the plate (about 5 mT, shielded) and
+     off the plate's side. The face-charge levels m = 3, 4, 6 converge with
+     order 3.6; errors are against their Richardson limit.
+
+   | Method                       | Unknowns | Above magnet | Beside | Under plate | Plate side |
+   | ---------------------------- | -------: | :----------: | :----: | :---------: | :--------: |
+   | face charge, m = 3           |    3,888 |     2e-5     |  6e-4  |    2e-3     |    2e-3    |
+   | face charge, m = 4           |    6,912 |     9e-6     |  2e-4  |    8e-4     |    8e-4    |
+   | MoM, 1 mm cells (0.9 s)      |    6,432 |     4e-3     |  2e-2  |    300 %    |    20 %    |
+   | MoM, 0.5 mm cells (7.0 s)    |   51,456 |     1e-3     |  4e-3  |    70 %     |    4 %     |
+   | MoM, Richardson on 2, 1, 0.5 |        — |     2e-4     |  1e-3  |    10 %     |    8e-3    |
+   - **Independent check:** where the MoM converges, its own extrapolation lands
+     on the face-charge limit to 2e-4–1e-3. Under the plate it is still falling
+     toward it.
+   - **MoM at 0.4 mm cells** (32,250 cells) ran over 12 minutes and reached 10.8
+     GB before I stopped it, where 0.5 mm took 7.0 s; see finding 8. With the
+     fix of finding 8 it takes 2 min and 10 GB. It is still 40 % off under the
+     plate, and its extrapolation over 1, 0.5 and 0.4 mm lands on the
+     face-charge limit to 3e-5 above the magnet and 3e-2 under the plate
+     (`mom_jump.txt`).
+   - **Timing at m = 3:** plate self-block 1.7 s, cross blocks 0.8 s, LU 0.1 s.
+     After that, a repeat solve takes 6.3 ms and field output 0.2 ms per sensor.
+   - **Footprint lines are needed.** Without them the plate's mesh would depend
+     on its shape only (cacheable), but the error under the plate is 6e-2 at m =
+     4 and 1.6e-2 at m = 6.
+
+   Rotated bodies (`t_rot.py`, `t_yoke_turn.py`; `rotation.txt`):
+   - **Exact checks** (machine precision, 5e-15 to 7e-13):
+     - the axis-aligned results are unchanged;
+     - one body turned together with its field gives B turned;
+     - the whole magnet-on-plate turned by a random rotation gives every
+       sensor's B turned;
+     - the magnet turned 90° equals an unturned magnet with its x and y sides
+       swapped.
+   - **Magnet turned 30° on the plate:** it agrees with the MoM's extrapolation
+     to 3e-4 above the magnet and 3e-3 beside it. But the order falls from 3.6
+     to 1.85: m = 3 gives 5e-2 under the plate and 2e-2 beside the magnet, and m
+     = 6 gives 1e-2. The turned footprint edges cut across panels that follow
+     the plate's axes. Panels that follow the footprint (triangles) would fix
+     that.
+
+8. **Why the MoM jumps from 7 s to over 12 minutes** (`probe_jump.py`,
+   `run_04.py`, `mom_dense_cross.patch`; `mom_jump.txt`,
+   `mom_jump_patched_run.txt`). Two causes, on main's code (0.6.0):
+   1. **The grids stop matching.** At 0.5 mm the plate and the magnet share one
+      0.5 mm lattice, and the block between them is an FFT. At 0.4 mm the
+      plate's 5 mm side gets 12 cells of 0.4167 mm while the magnet keeps 0.4
+      mm. The block is then explicit: 608 M entries each way. `mesh_uniform` has
+      the same exposure, since it cuts each side into `round(side / size)`
+      cells.
+   2. **Above 2 GB the block is sparsified regardless,** without the first-chunk
+      check that it pays. At χ = 1000 the row budget is 5e-13, so the CSR keeps
+      99 % of the entries:
+      - 9.6 GB per direction stored, 14.5 GB while built;
+      - the reverse direction is built again;
+      - against 4.9 GB per direction dense.
+
+      The 2 GB warning counts dense blocks only, so it stays silent. The point
+      rule's reverse block is not a transpose here, because the two bodies'
+      cells differ in shape.
+
+   **Fix:** drop the `72 * n_a * n_b <= DENSE_BLOCK_MAX_BYTES` condition, so the
+   first chunk decides at every size (`mom_dense_cross.patch`, one line). The
+   0.4 mm case then takes 2 min 2 s: 1 min 39 s building 9.7 GB of dense blocks,
+   22 s of GMRES, peak 10.0 GB. The existing warning now fires.
+   - **Still worth doing:** warn or refuse before building, from the predicted
+     size, when grids do not share a spacing; and say which cell size would
+     match.
+   - **Not done:** a matrix-free or FMM cross block.
+
 ## Not done, and limits
 
 - **Anisotropic χ and saturation** bring back volume charge (div M ≠ 0). The
   faces-only shortcut does not cover them.
-- **Several bodies with χ** (magnet on a yoke, arrays) are not coupled yet.
-  Touching bodies need interface charges.
+- **Coupled bodies:** the contact footprint sets the mesh, so moving a part
+  means a rebuild of seconds. The NumPy closed-form assembly dominates that
+  rebuild; compiled kernels would cut it. A footprint turned against the other
+  body's axes converges at order 1.85 instead of 3.6; panels that follow the
+  footprint would need triangles.
 - **Sensors closer than about 0.25 mm** to a soft body's edge or corner see
   about 1e-2 error. Those are the singular edge zones.
 - **Evaluation** costs 30–120 µs per sensor. Many sensors need a far-field
@@ -156,21 +261,26 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
 
 ## Files
 
-| File                                                                  | What                                                                                        |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `bem.py`                                                              | constant-panel solver (collocation and Galerkin), rectangle kernel, meshes (`layer_panels`) |
-| `p1.py`                                                               | linear-density closed forms, P1 Galerkin assembly, load, moment, field                      |
-| `sym.py`                                                              | mirror-parity bases (Z₂³) that split the operator into 8 blocks                             |
-| `engine.py`                                                           | `CuboidResponse` (one Schur) and `SymCuboidResponse` (8 blocks, `fix_chi`)                  |
-| `cases.py`                                                            | test shapes, the magnet source, the sensors                                                 |
-| `ref.py`, `ref_p1.py`, `ref_lay.py`                                   | reference runs (constant, P1 power grading, P1 layered); write `*.npy`                      |
-| `conv.py`, `conv2.py`                                                 | convergence and cross-checks of the references                                              |
-| `t_rect*.py`, `t_lin.py`                                              | kernel checks                                                                               |
-| `t_cube*.py`, `t_geo.py`, `t_nq.py`, `t_gal_speed.py`, `t_p1cube.py`  | cube polarizability by discretization, quadrature checks                                    |
-| `t_spec.py`                                                           | spectrum, sum rules, few-pole fits in χ                                                     |
-| `t_engine.py`, `t_nqrhs.py`, `t_grade.py`, `t_sym.py`, `t_symeng*.py` | engine accuracy, grading, symmetry split, timing                                            |
-| `t_mr.py`, `t_mr2.py`, `t_mr_magnet.py`                               | material-response MoM on the same cases                                                     |
-| `*.npy`                                                               | reference fields (the reference runs take minutes and up to 6 GB)                           |
+| File                                                                              | What                                                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `bem.py`                                                                          | constant-panel solver (collocation and Galerkin), rectangle kernel, meshes (`layer_panels`) |
+| `p1.py`                                                                           | linear-density closed forms, P1 Galerkin assembly, load, moment, field                      |
+| `sym.py`                                                                          | mirror-parity bases (Z₂³) that split the operator into 8 blocks                             |
+| `engine.py`                                                                       | `CuboidResponse` (one Schur) and `SymCuboidResponse` (8 blocks, `fix_chi`)                  |
+| `cases.py`                                                                        | test shapes, the magnet source, the sensors                                                 |
+| `ref.py`, `ref_p1.py`, `ref_lay.py`                                               | reference runs (constant, P1 power grading, P1 layered); write `*.npy`                      |
+| `conv.py`, `conv2.py`                                                             | convergence and cross-checks of the references                                              |
+| `t_rect*.py`, `t_lin.py`                                                          | kernel checks                                                                               |
+| `t_cube*.py`, `t_geo.py`, `t_nq.py`, `t_gal_speed.py`, `t_p1cube.py`              | cube polarizability by discretization, quadrature checks                                    |
+| `t_spec.py`                                                                       | spectrum, sum rules, few-pole fits in χ                                                     |
+| `t_engine.py`, `t_nqrhs.py`, `t_grade.py`, `t_sym.py`, `t_symeng*.py`             | engine accuracy, grading, symmetry split, timing                                            |
+| `t_mr.py`, `t_mr2.py`, `t_mr_magnet.py`                                           | material-response MoM on the same cases                                                     |
+| `multibody.py`                                                                    | coupled axis-aligned bodies: contact coupling, footprint lines, coupled solve               |
+| `t_split.py`, `t_split_nc.py`                                                     | touching halves vs the merged block, matching and non-matching meshes                       |
+| `t_rot.py`, `t_yoke_turn.py`                                                      | rotated bodies: exact checks, magnet turned 30° on the plate                                |
+| `probe_jump.py`, `run_04.py`, `mom_dense_cross.patch`                             | why the MoM jumps at 0.4 mm, and the one-line fix                                           |
+| `yoke_case.py`, `t_yoke.py`, `t_yoke_mr.py`, `yoke_compare.py`, `t_yoke_speed.py` | magnet on plate: face-charge levels, MoM levels, comparison, timing                         |
+| `*.npy`                                                                           | reference fields (the reference runs take minutes and up to 6 GB)                           |
 
 Run from this folder with the package's environment, e.g. `python t_grade.py`.
 The `ref*.py` runs are heavy: `ref.py 40 48` peaks at about 6 GB. The `.npy`

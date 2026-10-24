@@ -1,0 +1,20 @@
+## probe_jump.py on main's code (9ff9fd0): cluster structure, solver choice, cost of the cross blocks
+package: /private/tmp/claude-501/-Users-alexandreboisselet-Documents-GitRepos-nosync-magpylib/2c090be5-504e-42d6-b335-5e72445e0c97/scratchpad/fc/src/magpylib_material_response/__init__.py
+h=0.6 mm: clusters [('grid', 700, (np.float64(0.6), np.float64(0.6), np.float64(0.5714))), ('grid', 8712, (np.float64(0.6061), np.float64(0.6061), np.float64(0.625)))]; auto -> iterative (FFT share 86%); same lattice False; cross 9*na*nb = 55M entries
+   block a<-b: forced sparse path False; row budget 5.0e-13; first chunk keeps 100.0% of entries (droppable 0.0%); per chunk kernel 0.23s + sparsify 0.17s, 32 chunks -> ~0.2 min; CSR ~1.3 GB while built, 0.9 GB as CSR, vs dense 0.4 GB
+h=0.5 mm: clusters [('grid', 1152, (np.float64(0.5), np.float64(0.5), np.float64(0.5))), ('grid', 16000, (np.float64(0.5), np.float64(0.5), np.float64(0.5)))]; auto -> iterative (FFT share 100%); same lattice True; cross 9*na*nb = 166M entries
+h=0.45 mm: clusters [('grid', 21296, (np.float64(0.4545), np.float64(0.4545), np.float64(0.4545))), ('grid', 1521, (np.float64(0.4615), np.float64(0.4615), np.float64(0.4444)))]; auto -> iterative (FFT share 88%); same lattice False; cross 9*na*nb = 292M entries
+   block a<-b: forced sparse path True; row budget 5.0e-13; first chunk keeps 100.0% of entries (droppable 0.0%); per chunk kernel 0.20s + sparsify 0.15s, 163 chunks -> ~1.0 min; CSR ~7.0 GB while built, 4.7 GB as CSR, vs dense 2.3 GB
+h=0.4 mm: clusters [('grid', 2250, (np.float64(0.4), np.float64(0.4), np.float64(0.4))), ('grid', 30000, (np.float64(0.4), np.float64(0.4), np.float64(0.4167)))]; auto -> iterative (FFT share 87%); same lattice False; cross 9*na*nb = 608M entries
+   block a<-b: forced sparse path True; row budget 5.0e-13; first chunk keeps 99.1% of entries (droppable 0.9%); per chunk kernel 0.19s + sparsify 0.18s, 375 chunks -> ~2.3 min; CSR ~14.5 GB while built, 9.6 GB as CSR, vs dense 4.9 GB
+## yoke_compare.py with the 0.4 mm MoM level from the patched run
+reference: face-charge Richardson on m = [3, 4, 6], observed order 3.62; |ref| at sensors: 453.3 103.6 4.7 14.7 374.8 104.6 4.6 14.0 248.3 108.5 4.5 11.8 77.8 99.5 3.8 6.2 mT
+errors per sensor (columns: above magnet, beside magnet, under plate, plate side; each at d = 0.5, 1, 2, 5 mm)
+  face charge m=3              2e-05 2e-05 2e-05 1e-05 | 6e-04 3e-04 7e-05 7e-06 | 2e-03 2e-03 1e-03 4e-04 | 2e-03 3e-04 3e-04 1e-04
+  face charge m=4              9e-06 7e-06 5e-06 4e-06 | 2e-04 9e-05 2e-05 2e-06 | 8e-04 7e-04 4e-04 1e-04 | 8e-04 1e-04 1e-04 5e-05
+  face charge m=6              2e-06 2e-06 1e-06 9e-07 | 5e-05 2e-05 5e-06 5e-07 | 2e-04 1e-04 9e-05 3e-05 | 2e-04 3e-05 3e-05 1e-05
+  MoM h=2.0 mm                 2e-02 2e-02 2e-02 2e-02 | 8e-02 9e-03 4e-02 3e-02 | 1e+01 8e+00 5e+00 1e+00 | 6e-01 5e-01 3e-01 9e-02
+  MoM h=1.0 mm                 4e-03 4e-03 3e-03 4e-03 | 2e-02 1e-02 1e-02 6e-03 | 3e+00 2e+00 1e+00 3e-01 | 2e-01 1e-01 8e-02 3e-02
+  MoM h=0.5 mm                 1e-03 1e-03 1e-03 1e-03 | 4e-03 3e-03 3e-03 2e-03 | 7e-01 5e-01 3e-01 8e-02 | 4e-02 3e-02 2e-02 7e-03
+  MoM h=0.4 mm                 7e-04 7e-04 6e-04 7e-04 | 2e-03 2e-03 2e-03 1e-03 | 4e-01 3e-01 2e-01 5e-02 | 3e-02 2e-02 1e-02 6e-03
+  MoM Richardson (order 1.86)  3e-05 2e-05 2e-05 3e-05 | 2e-03 2e-03 1e-03 3e-04 | 3e-02 3e-02 2e-02 4e-03 | 9e-03 8e-03 6e-03 4e-03

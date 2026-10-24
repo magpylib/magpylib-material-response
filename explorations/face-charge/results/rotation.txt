@@ -1,0 +1,23 @@
+## t_rot.py: exact consistency checks for rotated bodies
+1. axis-aligned magnet on plate, m=3, polygon contact vs old rectangle contact: max rel diff 4.9e-15
+2. one body turned with its field: max rel diff 7.0e-13
+3. whole assembly turned: max rel diff 5.0e-13; moment 5.8e-15
+4. magnet turned 90 deg vs sides swapped: max rel diff 1.6e-13
+## t_yoke_turn.py fc 3 4 6: magnet turned 30 deg about z, face charge (writes turn_fc_3_4_6.npy)
+face charge m=3: dofs 3240+648, 2.9s, Bz above magnet 1 mm 371.0536 mT
+face charge m=4: dofs 5760+1152, 9.4s, Bz above magnet 1 mm 371.1423 mT
+face charge m=6: dofs 12960+2592, 52.3s, Bz above magnet 1 mm 371.1872 mT
+## t_yoke_turn.py mom 2 / 1 0.5: same with the MoM
+MoM h=2.0 mm: 218 cells, apply_demag 0.1s, Bz above magnet 1 mm 364.9874 mT
+MoM h=1.0 mm: 2144 cells, apply_demag 1.5s, Bz above magnet 1 mm 369.9112 mT
+MoM h=0.5 mm: 17152 cells, apply_demag 26.0s, Bz above magnet 1 mm 370.8529 mT
+## yoke_compare.py on the turned case
+reference: face-charge Richardson on m = [3, 4, 6], observed order 1.85; |ref| at sensors: 453.4 105.8 4.6 14.7 374.8 107.4 4.6 14.0 248.3 114.2 4.4 11.8 77.8 108.4 3.8 6.2 mT
+errors per sensor (columns: above magnet, beside magnet, under plate, plate side; each at d = 0.5, 1, 2, 5 mm)
+  face charge m=3              4e-04 5e-04 6e-04 7e-04 | 2e-02 1e-02 6e-03 1e-03 | 5e-02 4e-02 3e-02 1e-02 | 8e-03 5e-03 3e-03 2e-03
+  face charge m=4              2e-04 2e-04 3e-04 4e-04 | 1e-02 1e-02 5e-03 8e-04 | 2e-02 2e-02 1e-02 6e-03 | 6e-03 5e-03 3e-03 1e-03
+  face charge m=6              9e-05 1e-04 1e-04 2e-04 | 6e-03 5e-03 3e-03 4e-04 | 1e-02 9e-03 7e-03 3e-03 | 3e-03 2e-03 2e-03 7e-04
+  MoM h=2.0 mm                 2e-02 2e-02 2e-02 2e-02 | 4e-02 4e-02 5e-02 3e-02 | 1e+01 9e+00 5e+00 1e+00 | 4e-01 3e-01 2e-01 7e-02
+  MoM h=1.0 mm                 4e-03 4e-03 3e-03 4e-03 | 2e-02 1e-02 1e-02 6e-03 | 3e+00 2e+00 1e+00 3e-01 | 1e-01 1e-01 7e-02 3e-02
+  MoM h=0.5 mm                 1e-03 1e-03 1e-03 1e-03 | 4e-03 5e-03 4e-03 2e-03 | 7e-01 5e-01 3e-01 8e-02 | 3e-02 3e-02 2e-02 8e-03
+  MoM Richardson (order 2.25)  3e-04 3e-04 3e-04 4e-04 | 3e-03 3e-03 2e-03 6e-04 | 3e-01 1e-01 7e-02 2e-02 | 8e-03 9e-03 7e-03 3e-03
