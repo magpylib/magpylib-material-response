@@ -1146,8 +1146,9 @@ def demag_tensor(
 
     Notes
     -----
-    Point-matched evaluation temporarily assigns unit polarizations to the
-    sources. Sources whose ``polarization`` is ``None`` keep the last unit
+    Cells whose field is taken from ``magpy.getH`` (cells that are not
+    cuboids, and small groups of cuboids) are given unit polarizations during
+    the evaluation. Sources whose ``polarization`` is ``None`` keep the last unit
     polarization afterwards (magpylib does not allow assigning ``None``
     back); all other sources are restored. ``apply_demag`` is unaffected —
     it operates on a copy and overwrites every polarization with the

@@ -12,8 +12,8 @@ and this project adheres to
 
 - **Breaking:** the `pairs_matching`, `max_dist` and `split` options of
   `apply_demag` and `demag_tensor`, with their helpers `filter_distance` and
-  `match_pairs`. Each forced the old dense, directly solved path. The default
-  path is faster and exact: on 2,744 cuboid cells it takes 0.2 s where
+  `match_pairs`. Each forced the old dense, directly solved path. On a cube
+  meshed into 2,744 cells the default path takes 0.2 s and 0.14 GB, where
   `pairs_matching` took 10 s and `split=4` 8.5 s, both with over 3 GB, and
   `max_dist` was 11 to 23 % off. The arguments after `inplace` and after
   `src_list` are now keyword-only, so an old positional call raises instead of

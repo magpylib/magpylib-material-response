@@ -51,14 +51,6 @@ def _pols(coll):
     return np.array([s.polarization for s in coll.sources_all])
 
 
-def _getH_tensor(cells):
-    """The point-matched tensor straight from ``magpy.getH``, in the layout of
-    ``demag_tensor``: a reference independent of the solver's own formulas."""
-    n = len(cells)
-    T2 = demag._point_block_T(cells, np.array([c.centroid for c in cells]))
-    return T2.reshape((3, n, 3, n)).transpose((2, 3, 1, 0)) / magpy.mu_0
-
-
 def _interactions(coll):
     """Every rule that applies to these cells: always point, Newell when all
     cells are parallel cuboids."""
@@ -503,19 +495,39 @@ def test_three_magnet_scalar_susceptibilities_stay_isotropic():
     np.testing.assert_allclose(per_cell, [[0.1] * 3, [0.2] * 3, [0.3] * 3])
 
 
-def test_distant_bodies_interact_as_with_point_matching():
+def test_distant_bodies_interact_as_with_point_matching(getH_tensor):
     """A magnet and an iron cube 2,000 cells apart: the Newell blocks between
-    them match point matching, which the exact formulas alone missed by orders
-    of magnitude at this distance."""
+    them match magpylib's field, which the exact formulas alone missed by
+    orders of magnitude at this distance, and so does the induced
+    polarization."""
     a = 0.01
-    magnet = mesh_Cuboid(magpy.magnet.Cuboid(dimension=(a, a, a)), 64)
-    iron = mesh_Cuboid(
-        magpy.magnet.Cuboid(dimension=(a, a, a), position=(0, 0, 5.0)), 64
-    )
-    cells = magnet.sources_all + iron.sources_all
+
+    def bodies():
+        magnet = mesh_Cuboid(
+            magpy.magnet.Cuboid(dimension=(a, a, a), polarization=(0, 0, 1.2)), 64
+        )
+        iron = mesh_Cuboid(
+            magpy.magnet.Cuboid(
+                dimension=(a, a, a), polarization=(0, 0, 0), position=(0, 0, 5.0)
+            ),
+            64,
+        )
+        return magpy.Collection(magnet, iron)
+
+    cells = bodies().sources_all
     newell = demag_tensor(cells, interaction="newell")[:, :64, 64:]
-    point = _getH_tensor(cells)[:, :64, 64:]
+    point = getH_tensor(cells)[:, :64, 64:]
     np.testing.assert_allclose(newell, point, rtol=0, atol=1e-2 * np.abs(point).max())
+
+    chi = [0.05] * 64 + [1000.0] * 64
+    jz = [
+        np.mean([c.polarization[2] for c in res.children[1].sources_all])
+        for res in (
+            apply_demag(bodies(), susceptibility=chi, interaction=rule)
+            for rule in ("newell", "point")
+        )
+    ]
+    np.testing.assert_allclose(jz[0], jz[1], rtol=1e-2)
 
 
 # ── the two interaction rules ───────────────────────────────────────────────
@@ -558,12 +570,12 @@ def _mixed_collection():
     return magpy.Collection(grid, loose, small, turned, cylinder, tetra)
 
 
-def test_default_is_point_matching():
+def test_default_is_point_matching(getH_tensor):
     """The default rule reproduces magpylib's point-matched field, through
     every fast path, up to the far-field expansion (here none: all close)."""
     cells = _mixed_collection().sources_all
     T = demag_tensor(cells) * magpy.mu_0
-    np.testing.assert_allclose(T, _getH_tensor(cells) * magpy.mu_0, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(T, getH_tensor(cells) * magpy.mu_0, rtol=0, atol=1e-12)
 
 
 @pytest.mark.parametrize(

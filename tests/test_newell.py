@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
 
-from magpylib_material_response.demag import apply_demag, demag_tensor
+from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_Cuboid
 from magpylib_material_response.newell import (
     POINT_FAR_FIELD_RATIO,
@@ -62,8 +62,8 @@ def test_newell_f_origin_zero():
     assert newell_g(0.0, 0.0, 0.0) == 0.0
 
 
-def test_demag_tensor_matches_magpylib_far_field():
-    """Newell volume-averaged tensor agrees with the point-matched tensor
+def test_demag_tensor_matches_magpylib_far_field(getH_tensor):
+    """Newell volume-averaged tensor agrees with magpylib point-matched tensor
     for well-separated cells. Volume averaging vs point sampling differs at
     O((d/r)^2), so the agreement is not exact for adjacent cells; we compare
     on a Frobenius-norm-normalised scale and require < 5 % relative deviation
@@ -77,7 +77,7 @@ def test_demag_tensor_matches_magpylib_far_field():
     T_newell = demag_tensor_newell(pos, [a, a, a], magpy.mu_0)
 
     cells = [magpy.magnet.Cuboid(dimension=(a, a, a), position=p) for p in pos]
-    T_magpy = demag_tensor(cells)
+    T_magpy = getH_tensor(cells)
 
     # Far-field mask: drop self and first-neighbour pairs.
     dists = np.linalg.norm(pos[:, None, :] - pos[None, :, :], axis=-1)
