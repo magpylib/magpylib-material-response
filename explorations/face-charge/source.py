@@ -19,6 +19,7 @@ import sys
 
 import magpylib as magpy
 import numpy as np
+from magpylib._src.exceptions import MagpylibBadUserInput  # not exported publicly
 from scipy.spatial.transform import Rotation
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "triangles"))
@@ -44,11 +45,16 @@ class LinearChargeTriangle(magpy.misc.CustomSource):
         self._chunk = chunk
         self._set(vertices, charge)
         super().__init__(position=position, orientation=orientation, style=style, **kwargs)
-        # The bound method, set past the field_func setter: magpylib's check reads
-        # the arguments with getfullargspec, which counts self. A bound method, unlike
-        # a closure, is rebound to the copy by copy(), and getB groups sources by it,
-        # so each source is evaluated with its own charge.
-        self._field_func = self._field
+        # A bound method, unlike a closure, follows copy() to the copy, and getB
+        # groups sources by it, so each source keeps its own charge. magpylib after
+        # 6.0.0 accepts it (#1045); 6.0.0 reads the arguments with getfullargspec,
+        # which counts self, so there it is set past the setter. 6.0.0 also caches
+        # its in_out check on the field function, which keeps the source alive for
+        # the session; #1054 fixes that too.
+        try:
+            self.field_func = self._field
+        except MagpylibBadUserInput:
+            self._field_func = self._field
         self._draw()
 
     # ── geometry and charge ────────────────────────────────────────────────

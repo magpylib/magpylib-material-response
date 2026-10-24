@@ -294,10 +294,17 @@ they are. Checks (`t_source.py`, a few seconds):
 - `show()` draws it in plotly and matplotlib; 192 triangles at 1,000 observers
   take 0.08 s.
 
-magpylib checks a custom field function's arguments with `getfullargspec`, which
-counts `self`, so a bound method is refused through `field_func`. The class sets
-it past the setter: unlike a closure, a bound method follows `copy()` to the
-copy, and `getB` groups sources by it, so each source keeps its own charge.
+The field function is a bound method: unlike a closure, it follows `copy()` to
+the copy, and `getB` groups sources by it, so each source keeps its own charge.
+magpylib after 6.0.0 accepts it
+([#1045](https://github.com/magpylib/magpylib/pull/1045)). 6.0.0 refuses it,
+reading the arguments with `getfullargspec`, which counts `self`, so there the
+class sets it past the setter. 6.0.0 also caches its check for an `in_out`
+argument on the field function, which keeps every such source alive for the
+session: a sweep that builds many sources holds them all.
+[#1054](https://github.com/magpylib/magpylib/pull/1054) fixes that; both fixes
+come with the next magpylib release, and the fallback can go once
+material-response requires it.
 
 ## Not done, and limits
 
