@@ -1,17 +1,19 @@
-"""A magpylib source for solved face-charge bodies: triangles whose magnetic
-surface charge varies linearly across each one.
+"""A magpylib source for solved face-charge bodies: a triangle mesh carrying a
+magnetic surface charge that varies linearly across each face.
 
-``LinearChargeTriangle`` holds one triangle or many (a whole solved body) and
-computes their field in closed form (``triangles/tri.py``, checked to 1e-9). It is
-a ``magpylib.misc.CustomSource``, so getB and getH, paths, collections and show()
-work without any change to magpylib; a field function and class in magpylib core
-could replace it later with the same parameters.
+``ChargeSheet`` is modelled on ``magpylib.current.TriangleSheet``: vertices,
+faces, and the charge at each face's corners. Its field is in closed form
+(``triangles/tri.py``, checked to 1e-9). It is a ``magpylib.misc.CustomSource``,
+so getB and getH, paths, collections and show() work with magpylib as it is; a
+field function and class in magpylib core could replace it later with the same
+parameters.
 
-The charge is the magnetic surface charge density sigma = M.n in A/m, given at
-each corner. The source carries the field of that charge: H everywhere, and
-B = mu0 H outside the bodies. Inside a magnetized body B also holds the body's
-magnetization, which the surface charge does not carry, so B there is not the
-body's B (H is).
+The charge is the magnetic surface charge density sigma = M.n in A/m. It is
+given per face corner, not per vertex, because the solved charge jumps from one
+face to the next. The source carries the field of that charge: H everywhere,
+and B = mu0 H outside the bodies. Inside a magnetized body B also holds the
+body's magnetization, which the surface charge does not carry, so B there is
+not the body's B (H is).
 """
 
 import os
@@ -27,23 +29,26 @@ from tri import FOUR_PI, frames  # noqa: E402
 from tri import field as _tri_field  # noqa: E402
 
 
-class LinearChargeTriangle(magpy.misc.CustomSource):
-    """Triangles with a magnetic surface charge that varies linearly across each.
+class ChargeSheet(magpy.misc.CustomSource):
+    """Magnetic surface charge on triangular faces, linear across each face.
 
     Parameters
     ----------
-    vertices : array-like, shape (3, 3) or (n, 3, 3)
-        Triangle corners in m, in the source's own frame.
-    charge : array-like, shape (3,) or (n, 3)
-        Surface charge density M.n at each corner, in A/m.
+    vertices : array-like, shape (n, 3)
+        Mesh points in m, in the source's own frame.
+    faces : array-like, shape (m, 3)
+        Triplets of vertex indices, one per triangle.
+    charge_densities : array-like, shape (m, 3)
+        Surface charge density M.n in A/m at each face's three corners, in the
+        order of its vertex indices.
     position, orientation, style, **kwargs
         As for any magpylib source.
     """
 
-    def __init__(self, vertices, charge, position=(0, 0, 0), orientation=None, style=None,
-                 chunk=2_000_000, **kwargs):
+    def __init__(self, vertices, faces, charge_densities, position=(0, 0, 0), orientation=None,
+                 style=None, chunk=2_000_000, **kwargs):
         self._chunk = chunk
-        self._set(vertices, charge)
+        self._set(vertices, faces, charge_densities)
         super().__init__(position=position, orientation=orientation, style=style, **kwargs)
         # A bound method, unlike a closure, follows copy() to the copy, and getB
         # groups sources by it, so each source keeps its own charge. magpylib after
@@ -55,40 +60,57 @@ class LinearChargeTriangle(magpy.misc.CustomSource):
             self.field_func = self._field
         except MagpylibBadUserInput:
             self._field_func = self._field
-        self._draw()
 
-    # ── geometry and charge ────────────────────────────────────────────────
+    # ── mesh and charge ────────────────────────────────────────────────────
     @property
     def vertices(self):
-        """Corners (n, 3, 3) in m, in the source's own frame."""
-        return self._V
+        """Mesh points (n, 3) in m, in the source's own frame."""
+        return self._vertices
 
     @vertices.setter
     def vertices(self, value):
-        self._set(value, self._q)
-        self._draw()
+        self._set(value, self._faces, self._q)
 
     @property
-    def charge(self):
-        """Surface charge M.n at the corners (n, 3), in A/m."""
+    def faces(self):
+        """Vertex index triplets (m, 3)."""
+        return self._faces
+
+    @faces.setter
+    def faces(self, value):
+        self._set(self._vertices, value, self._q)
+
+    @property
+    def charge_densities(self):
+        """Surface charge M.n at each face's corners (m, 3), in A/m."""
         return self._q
 
-    @charge.setter
-    def charge(self, value):
-        self._set(self._V, value)
+    @charge_densities.setter
+    def charge_densities(self, value):
+        self._set(self._vertices, self._faces, value)
 
-    def _set(self, vertices, charge):
-        V = np.asarray(vertices, float).reshape(-1, 3, 3)
-        q = np.asarray(charge, float).reshape(-1, 3)
-        if len(q) != len(V):
-            msg = f"charge needs one value per corner, shape ({len(V)}, 3); got {np.shape(charge)}"
+    @property
+    def triangles(self):
+        """Corners of each face (m, 3, 3) in m, in the source's own frame."""
+        return self._V
+
+    def _set(self, vertices, faces, charge_densities):
+        P = np.asarray(vertices, float).reshape(-1, 3)
+        F = np.asarray(faces, int).reshape(-1, 3)
+        q = np.asarray(charge_densities, float).reshape(-1, 3)
+        if len(q) != len(F):
+            msg = f"charge_densities needs one value per face corner, shape ({len(F)}, 3); got {np.shape(charge_densities)}"
             raise ValueError(msg)
-        self._V, self._q = V, q
-        self._fr = frames(V)
+        if F.size and (F.min() < 0 or F.max() >= len(P)):
+            msg = f"faces index vertices 0 to {len(P) - 1}; got {F.min()} to {F.max()}"
+            raise ValueError(msg)
+        self._vertices, self._faces, self._q = P, F, q
+        self._V = P[F]  # (m, 3, 3)
+        self._fr = frames(self._V)
         cen, _, e1, e2, s, _ = self._fr
-        d = V - cen[:, None]
-        A = np.stack([np.ones((len(V), 3)), np.einsum("nkd,nd->nk", d, e1) / s[:, None],
-                      np.einsum("nkd,nd->nk", d, e2) / s[:, None]], axis=-1)  # (n, corner, basis)
+        d = self._V - cen[:, None]
+        A = np.stack([np.ones((len(F), 3)), np.einsum("nkd,nd->nk", d, e1) / s[:, None],
+                      np.einsum("nkd,nd->nk", d, e2) / s[:, None]], axis=-1)  # (m, corner, basis)
         self._c = np.linalg.solve(A, q[..., None])[..., 0]  # charge = c0 + c1 u + c2 v
 
     # ── field ──────────────────────────────────────────────────────────────
@@ -99,22 +121,39 @@ class LinearChargeTriangle(magpy.misc.CustomSource):
             return out  # the source carries no magnetization of its own
         step = max(1, self._chunk // max(len(self._V), 1))
         for a in range(0, len(X), step):
-            E = _tri_field(X[a : a + step], self._V, self._fr)  # (3, m, n, 3)
-            out[a : a + step] = np.einsum("kmnd,nk->md", E, self._c) / FOUR_PI
+            E = _tri_field(X[a : a + step], self._V, self._fr)  # (3, k, m, 3)
+            out[a : a + step] = np.einsum("kxnd,nk->xd", E, self._c) / FOUR_PI
         return out if field == "H" else magpy.mu_0 * out
 
-    # ── display ────────────────────────────────────────────────────────────
-    def _draw(self):
-        V = self._V.reshape(-1, 3)
-        trace = magpy.graphics.model3d.make_TriangularMesh(vertices=V, faces=np.arange(len(V)).reshape(-1, 3),
-                                                            opacity=0.6)
-        self.style.model3d.data = []
-        self.style.model3d.showdefault = False
-        self.style.model3d.add_trace(trace)
+    # ── display ───────────────────────────────────────────────────────────
+    # blue negative, white zero, red positive; a tuple, as pyvista caches it
+    COLORSCALE = ((0.0, "#2166ac"), (0.5, "#f7f7f7"), (1.0, "#b2182b"))
 
-    # ── from the solvers ───────────────────────────────────────────────────
+    def get_trace(self, **kwargs):
+        """The faces coloured by the charge, linear across each one (plotly and
+        pyvista; matplotlib draws them in the object's colour). Corners are drawn
+        per face, as the charge jumps from one face to the next."""
+        P = self._V.reshape(-1, 3)
+        i, j, k = np.arange(len(P)).reshape(-1, 3).T
+        trace = {"type": "mesh3d", "x": P[:, 0], "y": P[:, 1], "z": P[:, 2], "i": i, "j": j, "k": k,
+                 "color": self.style.color, "intensity": self._q.ravel(), "colorscale": self.COLORSCALE,
+                 "cmid": 0.0, "showscale": False}
+        return {**trace, **kwargs}
+
+    # ── constructors ───────────────────────────────────────────────────────
     @classmethod
-    def from_triangles(cls, body, c, **kwargs):
+    def from_triangles(cls, triangles, charge_densities, **kwargs):
+        """From corners (m, 3, 3) and their charges (m, 3): coincident corners
+        become one vertex."""
+        T = np.asarray(triangles, float).reshape(-1, 3, 3)
+        P = T.reshape(-1, 3)
+        span = np.ptp(P, axis=0).max() or 1.0
+        key = np.round(P / (1e-9 * span)).astype(np.int64)
+        _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+        return cls(P[first], inv.reshape(-1, 3), charge_densities, **kwargs)
+
+    @classmethod
+    def from_tri_body(cls, body, c, **kwargs):
         """The source of a solved TriBody, MacroBody or HBody (triangles/tri_solver.py)."""
         c = np.asarray(c, float)
         if hasattr(body, "fine") and c.size == body.Nm:
@@ -125,13 +164,13 @@ class LinearChargeTriangle(magpy.misc.CustomSource):
         u = np.einsum("nkd,nd->nk", d, e1) / s[:, None]
         v = np.einsum("nkd,nd->nk", d, e2) / s[:, None]
         q = c[:, :1] + c[:, 1:2] * u + c[:, 2:3] * v
-        return cls(body.V, q, position=body.position, orientation=Rotation.from_matrix(body.R), **kwargs)
+        return cls.from_triangles(body.V, q, position=body.position, orientation=Rotation.from_matrix(body.R), **kwargs)
 
     @classmethod
     def from_cuboid(cls, body, c, **kwargs):
         """The source of a solved cuboid Body (multibody.py): each rectangular panel,
         whose charge is c0 + c1 s + c2 t across it (s, t from -1 to 1), as two
-        triangles carrying the same linear charge."""
+        faces carrying the same linear charge."""
         p = body.pan
         c = np.asarray(c, float).reshape(p.N, 3)
         idx = np.arange(p.N)
@@ -147,4 +186,4 @@ class LinearChargeTriangle(magpy.misc.CustomSource):
         n = np.cross(V[:, 1] - V[:, 0], V[:, 2] - V[:, 0])
         flip = np.einsum("fd,fd->f", n, np.concatenate([p.normal, p.normal])) < 0  # outward, for display
         V[flip], q[flip] = V[flip][:, [0, 2, 1]], q[flip][:, [0, 2, 1]]
-        return cls(V, q, position=body.position, orientation=Rotation.from_matrix(body.R), **kwargs)
+        return cls.from_triangles(V, q, position=body.position, orientation=Rotation.from_matrix(body.R), **kwargs)

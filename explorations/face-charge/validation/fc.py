@@ -16,7 +16,7 @@ import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))  # the study: multibody, bem, p1
 from multibody import MU0, Body, add_contact_lines, field_B, solve_system  # noqa: E402
-from source import LinearChargeTriangle  # noqa: E402
+from source import ChargeSheet  # noqa: E402
 
 
 def _inherited(obj, name):
@@ -60,7 +60,7 @@ def solve(coll, m, observers, g=2.5):
 
 def apply_face_charge(coll, m, g=2.5):
     """A copy of the collection in which every solved body is replaced by its
-    surface charge, a LinearChargeTriangle (source.py) at the same place in the
+    surface charge, a ChargeSheet (source.py) at the same place in the
     hierarchy; the other sources are copied as they are. Like a collection solved
     by material-response, getB of the copy excludes the applied field H_ext."""
     objs, _, bodies, coefs, _ = _solve_bodies(coll, m, g)
@@ -69,7 +69,7 @@ def apply_face_charge(coll, m, g=2.5):
     for (obj, _), body, c in zip(objs, bodies, coefs, strict=True):
         old = twin[id(obj)]
         label = obj.style.label or f"{type(obj).__name__}, face charge"
-        new = LinearChargeTriangle.from_cuboid(body, c, style_label=label)
+        new = ChargeSheet.from_cuboid(body, c, style_label=label)
         parent = old.parent
         parent.remove(old)
         parent.add(new)

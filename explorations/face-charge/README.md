@@ -265,13 +265,18 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
 
 ## Solved bodies as magpylib sources
 
-`source.py`, `LinearChargeTriangle`: triangles whose magnetic surface charge
-(M·n, in A/m, given at each corner) varies linearly across each one, in closed
-form. It is a `magpylib.misc.CustomSource`, so `getB`, `getH`, paths,
-collections and `show()` work with magpylib as it is; a field function and class
-in magpylib core could take its place later with the same parameters. It gives H
-everywhere and B outside the bodies: inside a magnetized body B also holds the
-magnetization, which the surface charge does not carry.
+`source.py`, `ChargeSheet`: a triangle mesh whose magnetic surface charge (M·n,
+in A/m) varies linearly across each face, in closed form. Like magpylib's
+`current.TriangleSheet` it takes `vertices` (n, 3), `faces` (m, 3) and a density
+per face corner, `charge_densities` (m, 3): per corner, not per vertex, as the
+solved charge jumps from one face to the next. It is a
+`magpylib.misc.CustomSource`, so `getB`, `getH`, paths, collections and `show()`
+work with magpylib as it is; a field function and class in magpylib core could
+take its place later with the same parameters. It gives H everywhere and B
+outside the bodies: inside a magnetized body B also holds the magnetization,
+which the surface charge does not carry. Its `get_trace`, the hook every
+magpylib class draws itself with, colours the faces by the charge in plotly and
+pyvista; matplotlib draws them in the object's colour.
 
 ```python
 import fc  # validation/fc.py
@@ -279,10 +284,12 @@ solved = fc.apply_face_charge(collection, m=3)  # a copy: each soft body is now 
 B = solved.getB(sensors)  # like getB of a collection solved by material-response
 ```
 
-`from_cuboid` and `from_triangles` turn a solved cuboid body or triangle body
-(TriBody, MacroBody, HBody) into a source; `fc.apply_face_charge` does it for a
-whole magpylib collection, keeping coils and magnets without susceptibility as
-they are. Checks (`t_source.py`, a few seconds):
+`from_cuboid` and `from_tri_body` turn a solved cuboid body or triangle body
+(TriBody, MacroBody, HBody) into a source, sharing coincident corners as
+vertices; `from_triangles` does the same from bare corners;
+`fc.apply_face_charge` does it for a whole magpylib collection, keeping coils
+and magnets without susceptibility as they are. Checks (`t_source.py`, a few
+seconds):
 
 - uniform charge against magpylib's own `misc.Triangle`: 5e-15;
 - linear charge against uniform pieces: 1.9e-3, 4.7e-4, 1.2e-4 at 64, 256 and
@@ -291,8 +298,8 @@ they are. Checks (`t_source.py`, a few seconds):
   5e-10); a collection through `apply_face_charge` against `fc.solve`: 1e-11;
 - a path of two positions turned 30°, against the same by hand: 5e-16; a copy
   with doubled charge, and two sources in one `getB`: exact;
-- `show()` draws it in plotly and matplotlib; 192 triangles at 1,000 observers
-  take 0.08 s.
+- `show()` draws it in plotly, matplotlib and pyvista, plotly's colours exactly
+  the charge; 192 faces at 1,000 observers take 0.09 s.
 
 The field function is a bound method: unlike a closure, it follows `copy()` to
 the copy, and `getB` groups sources by it, so each source keeps its own charge.
@@ -349,7 +356,7 @@ material-response requires it.
 | `t_engine.py`, `t_nqrhs.py`, `t_grade.py`, `t_sym.py`, `t_symeng*.py`             | engine accuracy, grading, symmetry split, timing                                            |
 | `t_mr.py`, `t_mr2.py`, `t_mr_magnet.py`                                           | material-response MoM on the same cases                                                     |
 | `multibody.py`                                                                    | coupled axis-aligned bodies: contact coupling, footprint lines, coupled solve               |
-| `source.py`, `t_source.py`                                                        | solved bodies as magpylib sources (`LinearChargeTriangle`), and its checks                  |
+| `source.py`, `t_source.py`                                                        | solved bodies as magpylib sources (`ChargeSheet`), and its checks                           |
 | `t_split.py`, `t_split_nc.py`                                                     | touching halves vs the merged block, matching and non-matching meshes                       |
 | `t_rot.py`, `t_yoke_turn.py`                                                      | rotated bodies: exact checks, magnet turned 30° on the plate                                |
 | `run_04.py`, `figures/`                                                           | the MoM on the 0.4 mm magnet-on-plate case; the source of the #86 figure                    |
