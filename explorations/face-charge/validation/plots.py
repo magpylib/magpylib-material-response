@@ -50,13 +50,18 @@ def plot(cid):
     mom_key = f"mom_{r['mom'][-1]['cells']}"
     ref, fcq, mq = d["reference"], d[fc_key], d[mom_key]
     fc_label = f"face charge, m = {r['fc'][-1]['m']} ({r['fc'][-1]['unknowns']:,} unknowns)"
-    mom_label = f"MoM, {r['mom'][-1]['label']} ({r['mom'][-1]['cells']:,} cells)"
+    lab = r["mom"][-1]["label"]
+    mom_label = f"MoM, {lab}" if lab.endswith("cells") else f"MoM, {lab} ({r['mom'][-1]['cells']:,} cells)"
 
     if ref.ndim == 2 or (ref.ndim == 1 and len(ref) > 10):  # fields along sensor lines
         comps = c.get("comps", [None])
         q2 = lambda a: a if a.ndim == 2 else a[:, None]  # noqa: E731
         ref2, fc2, m2 = q2(ref), q2(fcq), q2(mq)
         names = [NAMES[k] for k in comps] if comps[0] is not None else [r["unit"]]
+        # drop components that are zero by symmetry: their curves are roundoff
+        size = np.nanmax(np.abs(ref2))
+        keep = [k for k in range(ref2.shape[1]) if np.nanmax(np.abs(ref2[:, k])) > 1e-9 * size]
+        ref2, fc2, m2, names = ref2[:, keep], fc2[:, keep], m2[:, keep], [names[k] for k in keep]
         groups = _lines(obs)
         ncol = ref2.shape[1] * len(groups)
         fig, axes = plt.subplots(2, ncol, figsize=(3.6 * ncol + 0.6, 5.2), dpi=170, sharex="col",

@@ -61,3 +61,10 @@
 - 2026-10-24 17:17 C: MoM study level 4096 cells, 1.2 s
 - 2026-10-24 17:17 C: MoM study level 32768 cells, 8.0 s
 - 2026-10-24 17:17 C: done. Face charge m=6: max error 2.3e-04 vs reference; MoM finest: 2.9e-03
+- 2026-10-24 17:18 D: start
+- 2026-10-24 17:18 D: face charge m=3: 5616 unknowns, build 1.5 s, couple+solve 5.0 s, field 0.0 s
+- 2026-10-24 17:19 D: face charge m=4: 9984 unknowns, build 4.4 s, couple+solve 16.7 s, field 0.0 s
+- 2026-10-24 17:19 D: MoM study level 480 cells, 0.1 s
+- 2026-10-24 17:19 D: MoM study level 3840 cells, 0.7 s
+- 2026-10-24 17:19 D: MoM study level 30720 cells, 5.1 s
+- 2026-10-24 17:19 D: done. Face charge m=4: max error 8.4e-05 vs reference; MoM finest: 2.7e-04
