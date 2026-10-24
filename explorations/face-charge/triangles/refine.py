@@ -244,7 +244,9 @@ def _cut_poly(poly, a, w, d, tol):
 def refine_cells(V, F, ell, m, g=2.5, angle=20.0):
     """Like refine_layers, but the flat faces are first merged back into convex
     polygons, so the export's diagonals do not cross the layers: the cuts leave
-    convex cells (rectangles on a box), each fanned into triangles."""
+    convex cells (rectangles on a box). Cells longer than the last layer are cut
+    into equal pieces, as the cuboid grid's interior is, and each cell is fanned
+    into triangles. (Bisecting the fanned triangles instead gave 5 times as many.)"""
     span = np.max(np.ptp(V, axis=0))
     tol = 1e-9 * span
     polys = _merge_coplanar(V, F, tol)
@@ -263,18 +265,34 @@ def refine_cells(V, F, ell, m, g=2.5, angle=20.0):
                     else:
                         new.append((poly, pn))
                 polys = new
-    T = np.array([(p[0], p[k], p[k + 1]) for p, _ in polys for k in range(1, len(p) - 1)])
-    h_far = g * ell / m
-    for _ in range(40):
-        e = np.roll(T, -1, axis=1) - T
-        Ln = np.linalg.norm(e, axis=-1)
-        k = Ln.argmax(1)
-        split = Ln[np.arange(len(T)), k] > h_far
-        if not split.any():
-            break
-        S, kk = T[split], k[split]
-        i = np.arange(len(S))
-        a_, b_, c_ = S[i, kk], S[i, (kk + 1) % 3], S[i, (kk + 2) % 3]
-        p = 0.5 * (a_ + b_)
-        T = np.concatenate([T[~split], np.stack([a_, p, c_], 1), np.stack([p, b_, c_], 1)])
-    return T
+    # the interior: cells longer than the last layer cut across, into equal pieces
+    h_far = ell * (1 - ((m - 1) / m) ** g)
+    polys = _split_cells(polys, h_far, tol)
+    return np.array([(p[0], p[k], p[k + 1]) for p, _ in polys for k in range(1, len(p) - 1)])
+
+
+def _split_cells(polys, h, tol):
+    """Cut every convex cell longer than h, across its longest side and then
+    across the other direction, into equal pieces: rectangles stay rectangles."""
+    out = []
+    for poly, nrm in polys:
+        sides = np.roll(poly, -1, axis=0) - poly
+        u = sides[np.argmax(np.linalg.norm(sides, axis=1))]
+        u = u / np.linalg.norm(u)
+        pieces = [poly]
+        for w in (u, np.cross(nrm, u)):
+            new = []
+            for piece in pieces:
+                proj = (piece - piece[0]) @ w
+                lo, hi = proj.min(), proj.max()
+                k = int(np.ceil((hi - lo) / h - 1e-9))
+                parts = [piece]
+                for cut in lo + (hi - lo) * np.arange(1, k) / k:
+                    nxt = []
+                    for part in parts:
+                        nxt += _cut_poly(part, piece[0], w, cut, tol)
+                    parts = nxt
+                new += parts
+            pieces = new
+        out += [(p, nrm) for p in pieces]
+    return out

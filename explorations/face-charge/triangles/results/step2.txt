@@ -1,5 +1,7 @@
-{'m': 2, 'triangles': 192, 'unknowns': 576, 'error': np.float64(-0.0028554393252250287), 'seconds': 0.7079008750151843}
-{'m': 3, 'triangles': 480, 'unknowns': 1440, 'error': np.float64(-0.0009327028614602995), 'seconds': 2.3526564160129055}
-{'m': 4, 'triangles': 816, 'unknowns': 2448, 'error': np.float64(-0.0004414860605859161), 'seconds': 5.015565167006571}
-{'m': 2, 'triangles_in': 44, 'sharp_edges': 32, 'triangles': 2500, 'unknowns': 7500, 'seconds': 36.44754604200716, 'peak_mT': 2.1581341942515775, 'fem_peak_mT': 2.155182876190942, 'max_error': 0.0019389982000481856, 'rms_error': 0.0010151301971725799}
-   peak RSS 9896 MB
+{'m': 2, 'triangles': 192, 'unknowns': 576, 'error': np.float64(-0.0029054581174857708), 'seconds': 0.2245428339811042}
+{'m': 3, 'triangles': 432, 'unknowns': 1296, 'error': np.float64(-0.0009170468682416777), 'seconds': 0.6933577920135576}
+{'m': 4, 'triangles': 768, 'unknowns': 2304, 'error': np.float64(-0.00038551338887538034), 'seconds': 1.6516352920152713}
+{'m': 2, 'triangles_in': 44, 'sharp_edges': 32, 'triangles': 1096, 'unknowns': 3288, 'seconds': 2.9540253750164993, 'peak_mT': 2.1517084960213326, 'fem_peak_mT': 2.155182876190942, 'max_error': 0.001908643603817872, 'rms_error': 0.0011439848736841574}
+{'m': 3, 'triangles_in': 44, 'sharp_edges': 32, 'triangles': 2196, 'unknowns': 6588, 'seconds': 8.688513500004774, 'peak_mT': 2.152850033923184, 'fem_peak_mT': 2.155182876190942, 'max_error': 0.0013754987827901488, 'rms_error': 0.0007512012766489431}
+{'m': 4, 'triangles_in': 44, 'sharp_edges': 32, 'triangles': 3672, 'unknowns': 11016, 'seconds': 21.295872457994847, 'peak_mT': 2.15314554401354, 'fem_peak_mT': 2.155182876190942, 'max_error': 0.001247480858983709, 'rms_error': 0.0006609476682102195}
+   peak RSS 5353 MB

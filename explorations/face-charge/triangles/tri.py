@@ -84,3 +84,81 @@ def field(X, V, fr=None):
         g = e[None] / s[None, :, None]  # gradient of u (or v) in the plane
         out.append(psi_rho[..., None] * E0 - sumL[k] / s[None, :, None] - g * Phi[..., None])
     return np.stack(out)
+
+
+def normal_field(X, V, fr=None, pairs=False):
+    """n . E_k for densities (1, u, v): only the component along each triangle's
+    normal, which is all the Galerkin flux needs. With n.L_e = w f_e and g in the
+    plane, n . int psi (x - y)/R^3 dS = psi(rho) sign(w) sum beta - w sum (g.m) f.
+
+    X (M, 3), V (N, 3, 3): returns (3, M, N). With pairs=True, X and V have the
+    same length and observer i goes with triangle i only: returns (3, M)."""
+    cen, n, e1, e2, s, _ = frames(V) if fr is None else fr
+    if pairs:
+        x, Vb, nb, cb, e1b, e2b, sb = X, V, n, cen, e1, e2, s
+    else:
+        x = X[:, None, :]
+        Vb, nb, cb, e1b, e2b, sb = V[None], n[None], cen[None], e1[None], e2[None], s[None]
+    w = np.sum((x - Vb[..., 0, :]) * nb, axis=-1)
+    w = np.where(w == 0, 1e-12 * sb, w)
+    rho = x - w[..., None] * nb
+    aw = np.abs(w)
+    sum_beta = 0.0
+    sum_mf = [0.0, 0.0]
+    for i, j in ((0, 1), (1, 2), (2, 0)):
+        p, q = Vb[..., i, :], Vb[..., j, :]
+        t = (q - p) / np.linalg.norm(q - p, axis=-1)[..., None]
+        m = np.cross(t, nb)
+        lm = np.sum((p - x) * t, axis=-1)
+        lp = np.sum((q - x) * t, axis=-1)
+        P0 = np.sum((p - rho) * m, axis=-1)
+        Rm = np.linalg.norm(x - p, axis=-1)
+        Rp = np.linalg.norm(x - q, axis=-1)
+        R02 = P0**2 + w**2
+        f = _log_sum(Rp, lp, R02) - _log_sum(Rm, lm, R02)
+        sum_beta = sum_beta + np.arctan2(P0 * lp, R02 + aw * Rp) - np.arctan2(P0 * lm, R02 + aw * Rm)
+        for k, e in enumerate((e1b, e2b)):
+            sum_mf[k] = sum_mf[k] + np.sum(e * m, axis=-1) * f
+    En0 = np.sign(w) * sum_beta
+    out = [En0]
+    for k, e in enumerate((e1b, e2b)):
+        psi_rho = np.sum((rho - cb) * e, axis=-1) / sb
+        out.append(psi_rho * En0 - w * sum_mf[k] / sb)
+    return np.stack(out)
+
+
+def normal_field_mm(X, V, fr=None):
+    """normal_field for all observers against all triangles (3, M, N), with
+    every dot product as one matrix product: x.t, x.m, x.n, x.e and |x - p|^2 =
+    |x|^2 - 2 x.p + |p|^2. Only logs, arctangents and roots are per pair. Use it
+    for pairs farther apart than a triangle's size; the cancellation in |x - p|^2
+    grows as (size / distance)^2 times the rounding."""
+    cen, n, e1, e2, s, _ = frames(V) if fr is None else fr
+    xx = np.sum(X * X, axis=1)[:, None]
+    w = X @ n.T - np.sum(V[:, 0] * n, axis=1)[None]
+    w = np.where(w == 0, 1e-12 * s[None], w)
+    aw = np.abs(w)
+    xp = [X @ V[:, k].T for k in range(3)]
+    pp = [np.sum(V[:, k] ** 2, axis=1)[None] for k in range(3)]
+    R = [np.sqrt(np.maximum(xx - 2 * xp[k] + pp[k], 0.0)) for k in range(3)]
+    sum_beta = 0.0
+    sum_mf = [0.0, 0.0]
+    for i, j in ((0, 1), (1, 2), (2, 0)):
+        p, q = V[:, i], V[:, j]
+        t = (q - p) / np.linalg.norm(q - p, axis=1)[:, None]
+        m = np.cross(t, n)
+        xt, xm = X @ t.T, X @ m.T
+        lm = np.sum(p * t, axis=1)[None] - xt
+        lp = np.sum(q * t, axis=1)[None] - xt
+        P0 = np.sum(p * m, axis=1)[None] - xm
+        R02 = P0**2 + w**2
+        f = _log_sum(R[j], lp, R02) - _log_sum(R[i], lm, R02)
+        sum_beta = sum_beta + np.arctan2(P0 * lp, R02 + aw * R[j]) - np.arctan2(P0 * lm, R02 + aw * R[i])
+        for k, e in enumerate((e1, e2)):
+            sum_mf[k] = sum_mf[k] + np.sum(e * m, axis=1)[None] * f
+    En0 = np.sign(w) * sum_beta
+    out = [En0]
+    for k, e in enumerate((e1, e2)):
+        psi_rho = (X @ e.T - np.sum(cen * e, axis=1)[None]) / s[None]
+        out.append(psi_rho * En0 - w * sum_mf[k] / s[None])
+    return np.stack(out)

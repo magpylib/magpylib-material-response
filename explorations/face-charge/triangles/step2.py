@@ -31,11 +31,11 @@ for m in [2, 3, 4]:
 ref, p, hs, peaks = fem_ucore_reference()
 coil = [s for s in build_F().sources_all if isinstance(s, magpy.current.Polyline)]
 v, f = ucore()
-for m in [2]:  # m = 3 has 18,630 unknowns: about 45 GB dense
+for m in [2, 3, 4]:
     t = time.perf_counter()
     T = refine_cells(v, f, ell=0.01, m=m)
     b = TriBody(T.reshape(-1, 3), np.arange(3 * len(T)).reshape(-1, 3), chi=999.0)
-    c = b.solve(lambda x: magpy.getH(coil, x, sumup=True))
+    c = b.solve(load=b.load(lambda x: magpy.getH(coil, x, sumup=True)))
     Bz = (b.B(F_LINE, c) + magpy.getB(coil, F_LINE, sumup=True))[:, 2] * 1e3
     e = np.abs(Bz - ref) / np.abs(ref).max()
     out["ucore"].append({"m": m, "triangles_in": len(f), "sharp_edges": len(sharp_edges(v, f)), "triangles": len(T),
@@ -67,8 +67,9 @@ x = F_LINE[:, 0] * 1e3
 vF = np.load(os.path.join(HERE, "..", "validation", "results", "F.npz"))
 r = out["ucore"][-1]
 scale = np.abs(ref).max()
-a2.semilogy(x, 100 * np.abs(np.array(r["Bz_mT"]) - ref) / scale, color=BLUE, lw=1.4,
-            label=f"one closed mesh, graded ({r['unknowns']:,} unknowns)")
+for rr, ls in zip(out["ucore"], [(0, (1, 1.5)), (0, (5, 2)), "-"]):
+    a2.semilogy(x, 100 * np.abs(np.array(rr["Bz_mT"]) - ref) / scale, color=BLUE, lw=1.3, ls=ls,
+                label=f"one closed mesh, m = {rr['m']} ({rr['unknowns']:,} unknowns)")
 a2.semilogy(x, 100 * np.abs(vF["fc_m3"] - ref) / scale, color=AQUA, lw=1.2, ls=(0, (4, 2)), label="three cuboids, face charge (3,240 unknowns)")
 a2.axhspan(1e-4, 0.2, color=INK2, alpha=0.12, lw=0, label="within the FEM's own 0.2 %")
 a2.set_ylim(1e-3, 1); a2.set_xlabel("x (mm), 30 mm above the poles"); a2.set_ylabel("|Bz − FEM| (% of the peak)")

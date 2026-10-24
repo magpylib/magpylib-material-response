@@ -4,9 +4,9 @@ A homogeneous, isotropic, linear part is fully described by the charge on its
 surface, so a CAD part needs only its surface triangles (a magpylib
 `TriangularMesh`), no tetrahedra. This folder builds that solver step by step.
 
-**Status: steps 1 and 2 of 4 done.** Next: make the mesh and the assembly lean
-(step 2 costs 2.3× the unknowns and 7.5 GB where the cuboid model needs 3,240),
-then step 3.
+**Status: steps 1 and 2 of 4 done, and lean.** Next: step 3, a CAD-like part
+with fillets and a hole. (step 2 costs 2.3× the unknowns and 7.5 GB where the
+cuboid model needs 3,240), then step 3.
 
 | Step | What                                                                                                                                      | Status |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -37,9 +37,8 @@ mesh. `meshes.py`: icosphere, and cuboid panels cut into triangles.
 
 ![Step 1: icosphere errors against the faceting; cube polarizability for both solvers](results/step1.png)
 
-Cost so far: dense, 3,840 unknowns in 10 s (1,280 triangles). The pairs closer
-than twice their size are re-integrated on 16 sub-triangles each, one test
-triangle at a time in Python.
+Cost: dense; 3,840 unknowns in 2.4 s (1,280 triangles) since the lean step
+below.
 
 ## Step 2: grading toward sharp edges
 
@@ -71,12 +70,27 @@ plane.
   the line 30 mm above the poles is within 0.19 % of the extrapolated FEM at
   worst (0.10 % RMS), peak 2.1581 mT against 2.1552. The FEM itself is good to
   0.2 %. The three-cuboid model of the validation gets 0.15 % with 3,240.
-- **Cost:** 36 s and 7.5 to 9.9 GB for the U-core at m = 2; m = 3 (18,630
-  unknowns) would need about 45 GB dense and was not run. The mesh has about 2.4
-  times the cuboid grid's cells, and the assembly holds the operator twice and
-  loops over close pairs in Python.
+- **Lean mesh and assembly** (after the first version of this step, which cost
+  7,500 unknowns, 36 s and 7.5 to 9.9 GB at m = 2):
+  - the export's field was evaluated at 70,000 points in one magpylib call, 9.4
+    GB on its own: now in chunks of 5,000, with 7 points per triangle;
+  - the interior was bisected as triangles, 5 times the cells: long cells are
+    now cut across into equal pieces, so a box gives exactly two triangles per
+    cuboid panel;
+  - the coupling needs only the normal component: a kernel for it, with every
+    dot product as one matrix product (181 ns per pair), and the close pairs in
+    one batched call instead of a Python loop;
+  - close pairs were sized by sqrt(area), which missed the long thin layer
+    strips, and the U-core's peak wandered by 0.1 % between levels: sized by
+    their longest edge, it converges steadily.
+- **U-core now:** m = 2, 3, 4 at 3,288, 6,588 and 11,016 unknowns in 3.0, 8.7
+  and 21 s (5.4 GB at most): peak 2.1517, 2.1529, 2.1531 mT, within 0.19 %, 0.14
+  % and 0.12 % of the FEM (good to 0.2 %). The three-cuboid model gives 2.1524,
+  2.1529, 2.1532: the same geometry, the same answer. At m = 2 the one mesh
+  costs what the three cuboids do (3,240 unknowns, 3.1 s, 0.15 %).
+- **Cube from 12 triangles now:** −2.9e-3, −9.2e-4, −3.9e-4 in 0.2 to 1.7 s.
 
-![Step 2: the cube graded from 12 triangles against the hand-built grading; the U-core as one mesh against FEM](results/step2.png)
+![Step 2: the cube graded from 12 triangles against the hand-built grading; the U-core as one mesh against FEM, three levels](results/step2.png)
 
 ## How to resume
 
