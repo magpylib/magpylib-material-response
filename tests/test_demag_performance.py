@@ -25,6 +25,7 @@ from magpylib_material_response.demag import (
     _grid_pair_table,
     _pair_block,
     _reciprocity_factor,
+    _row_sparsify,
     apply_demag,
     demag_tensor,
     get_susceptibilities,
@@ -706,18 +707,42 @@ def test_touching_bodies_get_a_grid_each():
 
 
 @pytest.mark.parametrize(
-    ("row_budget", "sparse"),
-    [(1e-12, False), (1e9, True)],
-    ids=["keeps nearly all: dense", "drops nearly all: sparse"],
+    ("row_budget", "min_drop", "sparse"),
+    [(1e-12, 0.6, False), (1e-2, None, False), (3e-2, None, True)],
+    ids=[
+        "keeps nearly all: dense",
+        "drops 82 %, least next to the magnet: dense",
+        "drops 96 %: sparse",
+    ],
 )
-def test_large_block_is_sparsified_only_when_it_pays(monkeypatch, row_budget, sparse):
+def test_large_block_is_sparsified_only_when_it_pays(
+    monkeypatch, row_budget, min_drop, sparse
+):
+    # Every block may go sparse, in chunks of 32 plate cells. In the second
+    # case the first chunk (an edge) would show 98 % droppable, and every
+    # 32nd cell (the bottom layer) 99 %.
     monkeypatch.setattr(demag, "DENSE_BLOCK_MAX_ENTRIES", 1)
-    coll = _build_uniform_collection(64)
-    positions, clusters = analyze_collection(coll.sources_all)
-    block = _pair_block(
-        clusters[0], clusters[0], coll.sources_all, positions, "point", row_budget
+    monkeypatch.setattr(demag, "KERNEL_PAIRS_PER_CALL", 32 * 27)
+    plate = magpy.magnet.Cuboid(dimension=(16, 16, 8), polarization=(0, 0, 1))
+    magnet = magpy.magnet.Cuboid(
+        dimension=(4, 4, 4), position=(0, 0, 6.5), polarization=(0, 0, 1)
     )
+    coll = magpy.Collection(mesh_Cuboid(plate, 2048), mesh_Cuboid(magnet, 27))
+    positions, clusters = analyze_collection(coll.sources_all)
+    cl_plate, cl_magnet = sorted(clusters, key=lambda c: -len(c["indices"]))
+    args = (cl_plate, cl_magnet, coll.sources_all, positions, "point")
+    kwargs = {} if min_drop is None else {"min_drop": min_drop}
+    block, full = _pair_block(*args, row_budget, **kwargs), _pair_block(*args)
     assert sp.issparse(block) is sparse
+    kept = block.toarray() if sparse else block
+    np.testing.assert_array_equal(kept[kept != 0], full[kept != 0])
+    assert np.abs(full - kept).sum(axis=1).max() <= row_budget
+
+
+def test_sparsifying_keeps_nan():
+    n_kept, _, vals = _row_sparsify(np.array([[0.1, 0.2, np.nan, 5.0]]), 100)
+    assert n_kept[0] == 4
+    assert np.isnan(vals).any()
 
 
 def test_dedup_blocks_matches_direct_evaluation():

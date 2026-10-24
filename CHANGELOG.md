@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `apply_demag`: a block between two bodies whose cells share no grid was always
+  stored sparse above 2 GB. At high susceptibility that kept nearly every entry,
+  in more memory than the dense block and far more while it was built, and the
+  memory warning missed it: a magnet on an iron plate meshed at 0.4 mm ran for
+  more than 12 minutes. The block now stays dense unless sparsifying pays, at
+  any size, and the warning shows: 2 minutes and 10 GB. Whether it pays is
+  judged on cells drawn at random across the body, not on its first slab, and
+  only from 90 % dropped, as the sparse product is single-threaded; from 60 %
+  when the blocks would pass 2 GB in all. A sparse block peaks at a third of the
+  memory while built, and a reverse block given by reciprocity is no longer
+  copied
+  ([#86](https://github.com/magpylib/magpylib-material-response/pull/86)).
+
 ## [0.6.0] - 2026-10-23
 
 ### Added
