@@ -1,5 +1,5 @@
-"""Checks of source.py's ChargeSheet: against magpylib's own Triangle,
-against the solvers it is built from, and as a magpylib source (paths, show).
+"""Checks of source.py's ChargeSheet: against magpylib's own Triangle, against
+the solver it is built from, and as a magpylib source (paths, show).
 Prints one line per check; a few seconds."""
 import os
 import sys
@@ -8,17 +8,13 @@ import time
 import magpylib as magpy
 import numpy as np
 import pyvista as pv
-from scipy.spatial import ConvexHull
 from scipy.spatial.transform import Rotation as R
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-for sub in ("", "triangles", "validation"):
+for sub in ("", "validation"):
     sys.path.insert(0, os.path.join(HERE, sub))
 from source import ChargeSheet  # noqa: E402
 import fc  # noqa: E402
-from meshes import outward  # noqa: E402
-from refine import refine_rings  # noqa: E402
-from tri_solver import MU0, MacroBody, TriBody  # noqa: E402
 
 rng = np.random.default_rng(3)
 V = np.array([[0.0, 0.0, 0.0], [0.004, 0.001, 0.0], [0.001, 0.003, 0.0005]])  # a tilted triangle (m)
@@ -58,21 +54,7 @@ for k in (3, 4, 5):
     pieces = [magpy.misc.Triangle(vertices=bv @ V, polarization=magpy.mu_0 * (bv.mean(0) @ q) * n) for bv in bary]
     print(f"linear charge vs {len(pieces):4d} uniform pieces: {rel(H, magpy.getH(pieces, far, sumup=True)):.1e}")
 
-# 3. a solved triangle body: the source gives the solver's field
-v = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float) * 0.005
-v, f = outward(v, ConvexHull(v).simplices)
-T, G, Bd = refine_rings(v, f, 0.005, 2, groups=True)
-Vf, Ff = T.reshape(-1, 3), np.arange(3 * len(T)).reshape(-1, 3)
-H0 = np.array([0.0, 0.0, 0.01 / MU0])
-out = cen + rng.normal(size=(30, 3)) * 0.01
-out = out[np.abs(out).max(1) > 0.006]  # outside the cube
-for body in (TriBody(Vf, Ff, chi=1000.0, position=(0.001, 0, 0.002), orientation=R.from_euler("xz", (20, 35), degrees=True)),
-             MacroBody(Vf, Ff, G, Bd, chi=1000.0)):
-    c = body.solve(load=body.load(lambda p: np.tile(H0, (len(p), 1))))
-    s = ChargeSheet.from_tri_body(body, c)
-    print(f"{type(body).__name__:9s} solution as a source: B {rel(s.getB(out), body.B(out, c)):.1e} ({len(s.faces)} faces, {len(s.vertices)} vertices)")
-
-# 4. a magpylib collection solved by face charge, as magpylib sources
+# 3. a magpylib collection solved by face charge, as magpylib sources
 soft = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.004), position=(0, 0, 0), polarization=(0, 0, 0))
 soft.susceptibility = 1000.0
 soft.H_ext = (0.0, 0.0, 0.005)
@@ -86,7 +68,7 @@ sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
 print(f"apply_face_charge: {kinds}; getB vs fc.solve {rel(solved.getB(sensors), B_fc):.1e}; input untouched: {coll.sources_all[0] is soft}")
 print(f"the soft cuboid's sheet: {len(sheet.faces)} faces on {len(sheet.vertices)} vertices (corners shared, {3 * len(sheet.faces)} unshared)")
 
-# 5. paths and orientation behave as for any magpylib source
+# 4. paths and orientation behave as for any magpylib source
 p = one(V, q, position=[(0, 0, 0), (0.01, 0.0, 0.002)], orientation=R.from_euler("z", [[0], [30]], degrees=True))
 x = np.array([0.012, 0.004, 0.003])
 r1 = R.from_euler("z", 30, degrees=True)
@@ -101,14 +83,13 @@ Ha, Hb = a.getH(far), b.getH(far)
 both = magpy.getH([a, b], far, sumup=True)
 print(f"copy with doubled charge: {rel(Hb, 2 * Ha):.1e}; original kept: {rel(a.getH(far), H):.1e}; both in one getB: {rel(both, 3 * Ha):.1e}")
 
-# 6. show() draws it coloured by the charge, and a big source evaluates in reasonable time
+# 5. show() draws it coloured by the charge, and a big source evaluates in reasonable time
 pv.OFF_SCREEN = True
 for backend in ("plotly", "matplotlib", "pyvista"):
     fig = magpy.show(solved, backend=backend, return_fig=True)
 mesh = next(t for t in magpy.show(sheet, backend="plotly", return_fig=True).data if t.type == "mesh3d")
 print(f"show(): plotly, matplotlib and pyvista draw it; plotly colours by the charge: {rel(mesh.intensity, sheet.charge_densities.ravel()):.0e}")
-big = ChargeSheet.from_tri_body(body, c)
 X = rng.normal(size=(1000, 3)) * 0.02 + 0.03
 t = time.perf_counter()
-big.getB(X)
-print(f"getB of {len(big.faces)} faces at 1,000 observers: {time.perf_counter() - t:.2f} s")
+sheet.getB(X)
+print(f"getB of {len(sheet.faces)} faces at 1,000 observers: {time.perf_counter() - t:.2f} s")

@@ -1,8 +1,0 @@
-above the centroid, 0.5      densities 1, u, v: max rel diff 5.9e-12
-below, 0.05                  densities 1, u, v: max rel diff 1.5e-10
-0.02 above, near an edge     densities 1, u, v: max rel diff 1.7e-10
-far, below                   densities 1, u, v: max rel diff 1.8e-10
-in the plane, outside        densities 1, u, v: max rel diff 1.0e-09
-0.003 above the inside       densities 1, u, v: max rel diff 2.2e-10
-worst 1.0e-09
-rectangle as two triangles, uniform charge, against lin_rect: max rel diff 2.6e-13

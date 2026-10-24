@@ -1,4 +1,0 @@
-demag correction |B_chi - B_rigid| / |B_rigid| up to 0.027457094321504748
-MR    512 cells (0.1s): |MR - BEM|/|B| max d>=1mm 1.2e-03, all 5.9e-03;  relative to the demag correction itself: d>=1mm 0.06
-MR   4096 cells (0.5s): |MR - BEM|/|B| max d>=1mm 3.8e-04, all 3.3e-03;  relative to the demag correction itself: d>=1mm 0.02
-MR  32768 cells (4.1s): |MR - BEM|/|B| max d>=1mm 1.1e-04, all 1.5e-03;  relative to the demag correction itself: d>=1mm 0.01

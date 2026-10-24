@@ -3,10 +3,10 @@ magnetic surface charge that varies linearly across each face.
 
 ``ChargeSheet`` is modelled on ``magpylib.current.TriangleSheet``: vertices,
 faces, and the charge at each face's corners. Its field is in closed form
-(``triangles/tri.py``, checked to 1e-9). It is a ``magpylib.misc.CustomSource``,
-so getB and getH, paths, collections and show() work with magpylib as it is; a
-field function and class in magpylib core could replace it later with the same
-parameters.
+(``triangles/tri.py``; ``t_source.py`` checks it against magpylib's Triangle).
+It is a ``magpylib.misc.CustomSource``, so getB and getH, paths, collections and
+show() work with magpylib as it is; a field function and class in magpylib core
+could replace it later with the same parameters.
 
 The charge is the magnetic surface charge density sigma = M.n in A/m. It is
 given per face corner, not per vertex, because the solved charge jumps from one
@@ -151,20 +151,6 @@ class ChargeSheet(magpy.misc.CustomSource):
         key = np.round(P / (1e-9 * span)).astype(np.int64)
         _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
         return cls(P[first], inv.reshape(-1, 3), charge_densities, **kwargs)
-
-    @classmethod
-    def from_tri_body(cls, body, c, **kwargs):
-        """The source of a solved TriBody, MacroBody or HBody (triangles/tri_solver.py)."""
-        c = np.asarray(c, float)
-        if hasattr(body, "fine") and c.size == body.Nm:
-            c = body.fine(c)  # group coefficients to triangle ones
-        c = c.reshape(body.F, 3)
-        cen, _, e1, e2, s, _ = body.fr
-        d = body.V - cen[:, None]
-        u = np.einsum("nkd,nd->nk", d, e1) / s[:, None]
-        v = np.einsum("nkd,nd->nk", d, e2) / s[:, None]
-        q = c[:, :1] + c[:, 1:2] * u + c[:, 2:3] * v
-        return cls.from_triangles(body.V, q, position=body.position, orientation=Rotation.from_matrix(body.R), **kwargs)
 
     @classmethod
     def from_cuboid(cls, body, c, **kwargs):
