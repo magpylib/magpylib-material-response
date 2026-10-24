@@ -22,6 +22,7 @@ import sys
 import magpylib as magpy
 import numpy as np
 from magpylib._src.exceptions import MagpylibBadUserInput  # not exported publicly
+from matplotlib.colors import to_hex, to_rgb
 from scipy.spatial.transform import Rotation
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "triangles"))
@@ -126,18 +127,17 @@ class ChargeSheet(magpy.misc.CustomSource):
         return out if field == "H" else magpy.mu_0 * out
 
     # ── display ───────────────────────────────────────────────────────────
-    # blue negative, white zero, red positive; a tuple, as pyvista caches it
-    COLORSCALE = ((0.0, "#2166ac"), (0.5, "#f7f7f7"), (1.0, "#b2182b"))
-
     def get_trace(self, **kwargs):
-        """The faces coloured by the charge, linear across each one (plotly and
-        pyvista; matplotlib draws them in the object's colour). Corners are drawn
-        per face, as the charge jumps from one face to the next."""
+        """The faces coloured by the charge, linear across each one, in
+        magpylib's magnet colours: positive charge is a north pole (plotly and
+        pyvista; matplotlib draws the faces in the object's colour). Corners are
+        drawn per face, as the charge jumps from one face to the next."""
         P = self._V.reshape(-1, 3)
         i, j, k = np.arange(len(P)).reshape(-1, 3).T
+        q = self._q.ravel()
         trace = {"type": "mesh3d", "x": P[:, 0], "y": P[:, 1], "z": P[:, 2], "i": i, "j": j, "k": k,
-                 "color": self.style.color, "intensity": self._q.ravel(), "colorscale": self.COLORSCALE,
-                 "cmid": 0.0, "showscale": False}
+                 "color": self.style.color, "intensity": q,
+                 "colorscale": _colorscale(q.min(initial=0.0), q.max(initial=0.0)), "showscale": False}
         return {**trace, **kwargs}
 
     # ── constructors ───────────────────────────────────────────────────────
@@ -187,3 +187,24 @@ class ChargeSheet(magpy.misc.CustomSource):
         flip = np.einsum("fd,fd->f", n, np.concatenate([p.normal, p.normal])) < 0  # outward, for display
         V[flip], q[flip] = V[flip][:, [0, 2, 1]], q[flip][:, [0, 2, 1]]
         return cls.from_triangles(V, q, position=body.position, orientation=Rotation.from_matrix(body.R), **kwargs)
+
+
+def _colorscale(lo, hi):
+    """magpylib's magnet colours over the charge range [lo, hi]: the middle
+    colour at zero, the north (south) colour at the largest charge of either
+    sign. Built for the range, as pyvista takes no colour limits; a tuple, as
+    pyvista caches it."""
+    c = magpy.defaults.display.style.magnet.magnetization.color
+    middle = np.array(to_rgb(c.middle))
+    a = max(-lo, hi)
+    if a <= 0:
+        return ((0.0, to_hex(middle)), (1.0, to_hex(middle)))
+
+    def at(v):
+        end = np.array(to_rgb(c.north if v > 0 else c.south))
+        return to_hex(middle + abs(v) / a * (end - middle))
+
+    stops = [(0.0, at(lo))]
+    if lo < 0 < hi:
+        stops.append((-lo / (hi - lo), to_hex(middle)))
+    return (*stops, (1.0, at(hi)))

@@ -275,8 +275,9 @@ work with magpylib as it is; a field function and class in magpylib core could
 take its place later with the same parameters. It gives H everywhere and B
 outside the bodies: inside a magnetized body B also holds the magnetization,
 which the surface charge does not carry. Its `get_trace`, the hook every
-magpylib class draws itself with, colours the faces by the charge in plotly and
-pyvista; matplotlib draws them in the object's colour.
+magpylib class draws itself with, colours the faces by the charge in magpylib's
+magnet colours, positive charge being a north pole, in plotly and pyvista;
+matplotlib draws them in the object's colour.
 
 ```python
 import fc  # validation/fc.py
