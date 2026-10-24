@@ -1,5 +1,7 @@
-"""Closed triangle meshes for the tests: icosphere, and any cuboid panel mesh cut into triangles."""
+"""Closed triangle meshes for the tests: icosphere, cuboid panels cut into triangles,
+extrusions, and exports of a cylinder and of a filleted plate with a hole."""
 import numpy as np
+from scipy.spatial import Delaunay
 
 
 def icosphere(level, radius=1.0):
@@ -78,14 +80,18 @@ def extrude(outline, y0, y1, cap_rects):
     # weld coincident vertices so the mesh is closed and manifold
     key = np.round(v / np.max(np.ptp(v, axis=0)) * 1e9).astype(np.int64)
     _, idx, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
-    v, f = v[idx], inv[f]
-    # every edge once in each direction: one consistent orientation
+    return _closed_outward(v[idx], inv[f])
+
+
+def _closed_outward(v, f):
+    """Check that every edge runs once in each direction (closed, one consistent
+    orientation), and turn the faces outward."""
     directed = {(a, b) for tri in f for a, b in ((tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0]))}
     if len(directed) != 3 * len(f) or any((b, a) not in directed for a, b in directed):
         raise ValueError("caps and walls do not close consistently")
     tri = v[f]
     if np.einsum("fd,fd->f", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum() < 0:
-        f = f[:, [0, 2, 1]]  # outward
+        f = f[:, [0, 2, 1]]
     return v, f
 
 
@@ -118,3 +124,53 @@ def cylinder(n_sides, radius, height):
     if np.einsum("fd,fd->f", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum() < 0:
         f = f[:, [0, 2, 1]]
     return v, f
+
+
+def _area2(P):
+    """Twice the signed area of the polygon P (k, 2)."""
+    return float(np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1]))
+
+
+def plate(n_fillet, n_hole, size=(0.02, 0.012, 0.004), fillet=0.003, hole=(0.003, 0.0, 0.003)):
+    """A plate along z with filleted vertical edges and a round through-hole,
+    exported as a CAD tool would: n_fillet facets per 90 deg fillet, n_hole round
+    the hole, each straight side one quad, and caps triangulated between outline and
+    hole from their boundary vertices only, so they are long thin triangles (m).
+
+    size: (x, y, z) extents; hole: (x, y) of its centre and its radius."""
+    a, b, t = size[0] / 2, size[1] / 2, size[2] / 2
+    out = []
+    for k, (cx, cy) in enumerate(((a - fillet, b - fillet), (-a + fillet, b - fillet),
+                                  (-a + fillet, -b + fillet), (a - fillet, -b + fillet))):
+        phi = np.pi / 2 * (k + np.arange(n_fillet + 1) / n_fillet)
+        out += list(np.column_stack([cx + fillet * np.cos(phi), cy + fillet * np.sin(phi)]))
+    O = np.array(out)  # counter-clockwise
+    hx, hy, hr = hole
+    phi = 2 * np.pi * np.arange(n_hole) / n_hole
+    Hh = np.column_stack([hx + hr * np.cos(phi), hy + hr * np.sin(phi)])  # counter-clockwise
+    no, nh = len(O), len(Hh)
+    # the cap from its boundary vertices only, as exporters do: Delaunay keeps the
+    # convex outline and the hole's short chords; drop the triangles in the hole
+    P2 = np.concatenate([O, Hh])
+    cap = Delaunay(P2).simplices
+    c = P2[cap].mean(axis=1)
+    cap = cap[np.hypot(c[:, 0] - hx, c[:, 1] - hy) > hr * np.cos(np.pi / n_hole)]
+    tri2 = P2[cap]
+    e1, e2 = tri2[:, 1] - tri2[:, 0], tri2[:, 2] - tri2[:, 0]
+    area2 = e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]
+    cap[area2 < 0] = cap[area2 < 0][:, ::-1]
+    if not np.isclose(np.abs(area2).sum(), _area2(O) - _area2(Hh), rtol=1e-12):
+        raise ValueError("the cap's triangles overlap or leave gaps")
+    # vertices: top outline, top hole, bottom outline, bottom hole
+    v = np.concatenate([np.column_stack([O, np.full(no, t)]), np.column_stack([Hh, np.full(nh, t)]),
+                        np.column_stack([O, np.full(no, -t)]), np.column_stack([Hh, np.full(nh, -t)])])
+    top = cap.tolist()
+    f = top + [[x + no + nh for x in tri[::-1]] for tri in top]
+    ot, ht, ob, hb = 0, no, no + nh, 2 * no + nh
+    for k in range(no):
+        l = (k + 1) % no
+        f += [[ob + k, ob + l, ot + l], [ob + k, ot + l, ot + k]]
+    for k in range(nh):
+        l = (k + 1) % nh
+        f += [[hb + k, ht + l, hb + l], [hb + k, ht + k, ht + l]]
+    return _closed_outward(v, np.array(f))

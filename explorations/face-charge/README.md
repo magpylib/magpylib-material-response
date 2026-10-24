@@ -279,9 +279,11 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
 - **Build per shape** (0.1–2 s) could be cached by aspect ratio. Assembly could
   also be 8× cheaper using the symmetry; today the full operator is assembled.
 - **Other shapes:**
-  - polyhedra (`TriangularMesh`, `Tetrahedron`) would use linear-density
-    triangle closed forms;
-  - cylinders need faceting or curved-panel quadrature;
+  - any closed triangle mesh (a `TriangularMesh`, a CAD export) is solved in
+    `triangles/`, graded automatically toward its sharp edges; see
+    `triangles/PROGRESS.md`. Cylinders work as exported facets, with the error
+    falling as 1/N²; a fine export costs more unknowns until compression lets
+    narrow facets share panels;
   - spheres and ellipsoids are closed form already.
 - **Novelty is not checked.** The pieces are known (see below); whether this
   combination exists as a tool is not.

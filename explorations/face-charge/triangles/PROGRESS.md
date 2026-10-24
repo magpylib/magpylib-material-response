@@ -4,15 +4,15 @@ A homogeneous, isotropic, linear part is fully described by the charge on its
 surface, so a CAD part needs only its surface triangles (a magpylib
 `TriangularMesh`), no tetrahedra. This folder builds that solver step by step.
 
-**Status: steps 1, 2 and 3a of 4 done.** Next: step 3b, a CAD-like plate with
-fillets and a hole, against the tetrahedral MoM.
+**Status: steps 1 to 3 of 4 done.** Next: step 4, compression, which would also
+let a fine export's narrow facet strips share panels.
 
-| Step | What                                                                                                                                                      | Status           |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| 1    | Linear charge per triangle; checked on a sphere and on a cube given as triangles                                                                          | done             |
-| 2    | Grade the mesh toward sharp edges (by the angle between neighbours); cube as triangles, then the U-core as one closed mesh against FEM                    | done             |
-| 3    | (a) a cylinder exported with 32, 64, 128 sides against the MoM on the exact `Cylinder`; (b) a CAD-like part (fillets, a hole) against the tetrahedral MoM | 3a done, 3b todo |
-| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                                    | todo             |
+| Step | What                                                                                                                                                      | Status |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1    | Linear charge per triangle; checked on a sphere and on a cube given as triangles                                                                          | done   |
+| 2    | Grade the mesh toward sharp edges (by the angle between neighbours); cube as triangles, then the U-core as one closed mesh against FEM                    | done   |
+| 3    | (a) a cylinder exported with 32, 64, 128 sides against the MoM on the exact `Cylinder`; (b) a CAD-like part (fillets, a hole) against the tetrahedral MoM | done   |
+| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                                    | todo   |
 
 ## Step 1: the solver
 
@@ -148,9 +148,60 @@ now near either, as on the cuboid grid.
 
 ![Step 3a: faceting error against the number of sides; the field 1 mm from the rim and beside the mantle, face charge against the MoM on the exact cylinder](results/step3_cylinder.png)
 
+## Step 3b: a CAD-like part
+
+A soft-iron plate, 20 × 12 × 4 mm, with its four vertical edges filleted (r = 3
+mm) and a through-hole (r = 3 mm) 3 mm off centre; χ = 1000, μ0H = 10 mT along
+(0.8, 0.36, 0.48), so no symmetry helps either method. `meshes.plate` exports it
+as a CAD tool would: 15°, 7.5° or 3.75° per facet, each straight side one quad,
+and the caps triangulated from their boundary vertices only, so they are long
+thin triangles (208 triangles at 15°). Six observers: in the hole, 1 mm above
+the bridge beside it, 1 mm out from a fillet, 1 mm above the hole's rim, and two
+at 60 mm (`step3_plate.py`, `results/step3_plate.*`).
+
+A first cap triangulation stitched outline and hole by the shorter diagonal; it
+turned triangles over beside the off-centre hole and the area check caught it.
+Delaunay of the boundary vertices keeps both boundaries here (the outline is
+convex, the hole's chords short), and the cap's area is checked.
+
+- **Face charge on the export as given** (no meshing by hand): m = 2, 3, 4 at
+  5,142, 7,812 and 11,136 unknowns, 6, 12 and 21 s. m = 3 is within 3e-5 to
+  3.9e-4 of m = 4 at the observers, the moment within 9e-5. The refined mesh
+  keeps the export's area, volume and closure to round-off.
+- **The tetrahedral MoM on the same export** (`mesh_study` on TetGen cells at
+  1,582, 3,719 and 8,256 tets, 7, 40 and 248 s; the finest is about what fits in
+  memory, as its matrix is dense): 0.20 to 0.73 % from face charge at the finest
+  level, 0.26 % in the far field. Its levels do not change steadily (far Bx
+  52.60, 52.52, 52.52 µT against 52.66), so `mesh_study` gives no estimate.
+  TetGen's coarsest mesh is set by the export's long triangles (a target of 300
+  gave 1,582 tets), not by the target: the levels are not a clean refinement,
+  which is likely why they wander.
+- **Who is right: a cube from 12 triangles**, same χ and field, where face
+  charge is checked against Helsing & Perfekt (step 2). Face charge at m = 4, 5,
+  6 (2,304 to 5,328 unknowns, 2 to 6 s): 3.62755, 3.62833, 3.62867 (moment /
+  (volume × H)). The tetrahedral MoM at 1,529, 3,526 and 7,836 tets: −0.95,
+  −0.57 and −0.32 %, converging at order 1.6, and its extrapolation lands 0.12 %
+  from face charge, inside its own error (0.5 to 0.8 %). So at about 8,000 tets
+  the tetrahedral MoM is still about 0.3 % low where it converges cleanly, and
+  the plate's 0.26 % far-field gap, with the same sign, is that error.
+- **The export's facets matter more than either solver.** The moment converges
+  as 1/N² in the facets (order 1.95): the 15° export is 2.7e-3 off the smooth
+  part, 7.5° 7.0e-4, 3.75° 1.8e-4. The field 1 mm out from a fillet moves 0.76 %
+  from 15° to 7.5°. For 0.1 % in the far field, export at 7.5°; near curved
+  faces, finer.
+- **Cost of a fine export.** Each facet strip of the hole and the fillets is a
+  flat face of its own, cut into its own layers, so the unknowns grow with the
+  facets: 5,142, 9,012, 16,224 at m = 2 for 15°, 7.5°, 3.75° (30,024 at 3.75°, m
+  = 4, not run). Panels that span several near-coplanar strips, or compression
+  (step 4), would keep a fine export as cheap as a crude one.
+
+![Step 3b: the export's top face and the face-charge mesh; the cube check of the tetrahedral MoM; both methods on the same export; finer exports](results/step3_plate.png)
+
 ## How to resume
 
 From this folder, with material-response's environment: `python step1.py` (about
 a minute). Each step writes `results/step<k>.*`. `python step3_cylinder.py` runs
 only the cases missing from `results/step3_cylinder.json` (all of them: about 30
-minutes, 26 of which are the MoM) and redraws the figure.
+minutes, 26 of which are the MoM) and redraws the figure;
+`python step3_plate.py` likewise (about 12 minutes, 7.7 GB at most, with the
+material-response worktree's `src` on `PYTHONPATH`).
