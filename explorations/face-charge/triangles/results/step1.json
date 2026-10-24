@@ -1,0 +1,93 @@
+{
+ "sphere": [
+  {
+   "level": 1,
+   "triangles": 80,
+   "unknowns": 240,
+   "chi": 1.0,
+   "seconds": 0.25692266700207256,
+   "moment_vs_sphere": -0.12628314349586223,
+   "volume_vs_sphere": -0.12654679999693663,
+   "M_vs_exact": 0.0003018553267348789
+  },
+  {
+   "level": 1,
+   "triangles": 80,
+   "unknowns": 240,
+   "chi": 1000.0,
+   "seconds": 0.25158399998326786,
+   "moment_vs_sphere": -0.12342094636974199,
+   "volume_vs_sphere": -0.12654679999693663,
+   "M_vs_exact": 0.0035787305229217914
+  },
+  {
+   "level": 2,
+   "triangles": 320,
+   "unknowns": 960,
+   "chi": 1.0,
+   "seconds": 1.306826332991477,
+   "moment_vs_sphere": -0.03380523816505021,
+   "volume_vs_sphere": -0.03383925140141275,
+   "M_vs_exact": 3.520453134941981e-05
+  },
+  {
+   "level": 2,
+   "triangles": 320,
+   "unknowns": 960,
+   "chi": 1000.0,
+   "seconds": 1.2849367079907097,
+   "moment_vs_sphere": -0.033433258343568806,
+   "volume_vs_sphere": -0.03383925140141275,
+   "M_vs_exact": 0.00042021274247883156
+  },
+  {
+   "level": 3,
+   "triangles": 1280,
+   "unknowns": 3840,
+   "chi": 1.0,
+   "seconds": 9.553645665990189,
+   "moment_vs_sphere": -0.0086019902854102,
+   "volume_vs_sphere": -0.00860615737024506,
+   "M_vs_exact": 4.203258741286575e-06
+  },
+  {
+   "level": 3,
+   "triangles": 1280,
+   "unknowns": 3840,
+   "chi": 1000.0,
+   "seconds": 9.525284458999522,
+   "moment_vs_sphere": -0.008556459702051433,
+   "volume_vs_sphere": -0.00860615737024506,
+   "M_vs_exact": 5.01290870051907e-05
+  }
+ ],
+ "cube": [
+  {
+   "m": 2,
+   "rect_unknowns": 288,
+   "rect_error": -0.0034713626608072756,
+   "rect_seconds": 0.0484651250008028,
+   "tri_unknowns": 576,
+   "tri_error": -0.002936738264398775,
+   "tri_seconds": 0.692363333015237
+  },
+  {
+   "m": 3,
+   "rect_unknowns": 648,
+   "rect_error": -0.0010780028199942615,
+   "rect_seconds": 0.1186365419998765,
+   "tri_unknowns": 1296,
+   "tri_error": -0.0009933634819931925,
+   "tri_seconds": 2.0156037080159876
+  },
+  {
+   "m": 4,
+   "rect_unknowns": 1152,
+   "rect_error": -0.00044927642761205533,
+   "rect_seconds": 0.3031915829924401,
+   "tri_unknowns": 2304,
+   "tri_error": -0.0004588613309980394,
+   "tri_seconds": 4.635119499987923
+  }
+ ]
+}
