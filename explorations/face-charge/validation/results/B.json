@@ -1,135 +1,135 @@
 {
- "id": "B",
- "title": "Hard magnet (\u03c7 0.5) and a turned soft cube (\u03c7 3999) (soft_magnets)",
- "ref_source": "ANSYS (FEMdata_test_softmag), Bx and Bz, 3 lines of 1001 points",
- "unit": "B T",
- "observers": 3003,
- "fc": [
-  {
-   "m": 3,
-   "bodies": 2,
-   "unknowns": 2376,
-   "build_s": 0.6743348749878351,
-   "solve_s": 0.496311125025386,
-   "eval_s": 0.2731648749904707,
-   "error": {
-    "max": 0.003399313523352767,
-    "rms": 0.0002663236367423411,
+  "id": "B",
+  "title": "Hard magnet (\u03c7 0.5) and a turned soft cube (\u03c7 3999) (soft_magnets)",
+  "ref_source": "ANSYS (FEMdata_test_softmag), Bx and Bz, 3 lines of 1001 points",
+  "unit": "B T",
+  "observers": 3003,
+  "fc": [
+    {
+      "m": 3,
+      "bodies": 2,
+      "unknowns": 2376,
+      "build_s": 0.6743348749878351,
+      "solve_s": 0.496311125025386,
+      "eval_s": 0.2731648749904707,
+      "error": {
+        "max": 0.003399313523352767,
+        "rms": 0.0002663236367423411,
+        "per_point": null
+      }
+    },
+    {
+      "m": 4,
+      "bodies": 2,
+      "unknowns": 4224,
+      "build_s": 1.9460377090144902,
+      "solve_s": 1.6598252079857048,
+      "eval_s": 0.4751989170035813,
+      "error": {
+        "max": 0.0034252729966285068,
+        "rms": 0.00026618385738494963,
+        "per_point": null
+      }
+    },
+    {
+      "m": 6,
+      "bodies": 2,
+      "unknowns": 9504,
+      "build_s": 9.425449667003704,
+      "solve_s": 9.405894625000656,
+      "eval_s": 1.0661249580152798,
+      "error": {
+        "max": 0.0034355538873363602,
+        "rms": 0.00026611515214310257,
+        "per_point": null
+      }
+    }
+  ],
+  "mom": [
+    {
+      "label": "1 per magnet",
+      "cells": 2,
+      "solve_s": 0.0018311250023543835,
+      "error": {
+        "max": 0.10647321748900286,
+        "rms": 0.019689879470138574,
+        "per_point": null
+      }
+    },
+    {
+      "label": "2 per magnet",
+      "cells": 3,
+      "solve_s": 0.0013735420070588589,
+      "error": {
+        "max": 0.07095602064313952,
+        "rms": 0.012792235850385893,
+        "per_point": null
+      }
+    },
+    {
+      "label": "8 per magnet",
+      "cells": 20,
+      "solve_s": 0.00646237499313429,
+      "error": {
+        "max": 0.04702373473497722,
+        "rms": 0.00796279559215702,
+        "per_point": null
+      }
+    },
+    {
+      "label": "16 per magnet",
+      "cells": 43,
+      "solve_s": 0.018182125000748783,
+      "error": {
+        "max": 0.031985946385884576,
+        "rms": 0.005274483412650684,
+        "per_point": null
+      }
+    },
+    {
+      "label": "32 per magnet",
+      "cells": 72,
+      "solve_s": 0.025194749992806464,
+      "error": {
+        "max": 0.02252955609118158,
+        "rms": 0.0038134189590006543,
+        "per_point": null
+      }
+    },
+    {
+      "label": "64 per magnet",
+      "cells": 118,
+      "solve_s": 0.03924195800209418,
+      "error": {
+        "max": 0.01689591516512331,
+        "rms": 0.002791935102560819,
+        "per_point": null
+      }
+    },
+    {
+      "label": "128 per magnet",
+      "cells": 253,
+      "solve_s": 0.09135429098387249,
+      "error": {
+        "max": 0.010516728311432844,
+        "rms": 0.0017249703911216135,
+        "per_point": null
+      }
+    },
+    {
+      "label": "256 per magnet",
+      "cells": 466,
+      "solve_s": 0.220994041999802,
+      "error": {
+        "max": 0.007487478200163319,
+        "rms": 0.0011906379620737454,
+        "per_point": null
+      }
+    }
+  ],
+  "fc_last_change": {
+    "max": 1.7972856656928835e-5,
+    "rms": 4.010078382065155e-6,
     "per_point": null
-   }
-  },
-  {
-   "m": 4,
-   "bodies": 2,
-   "unknowns": 4224,
-   "build_s": 1.9460377090144902,
-   "solve_s": 1.6598252079857048,
-   "eval_s": 0.4751989170035813,
-   "error": {
-    "max": 0.0034252729966285068,
-    "rms": 0.00026618385738494963,
-    "per_point": null
-   }
-  },
-  {
-   "m": 6,
-   "bodies": 2,
-   "unknowns": 9504,
-   "build_s": 9.425449667003704,
-   "solve_s": 9.405894625000656,
-   "eval_s": 1.0661249580152798,
-   "error": {
-    "max": 0.0034355538873363602,
-    "rms": 0.00026611515214310257,
-    "per_point": null
-   }
   }
- ],
- "mom": [
-  {
-   "label": "1 per magnet",
-   "cells": 2,
-   "solve_s": 0.0018311250023543835,
-   "error": {
-    "max": 0.10647321748900286,
-    "rms": 0.019689879470138574,
-    "per_point": null
-   }
-  },
-  {
-   "label": "2 per magnet",
-   "cells": 3,
-   "solve_s": 0.0013735420070588589,
-   "error": {
-    "max": 0.07095602064313952,
-    "rms": 0.012792235850385893,
-    "per_point": null
-   }
-  },
-  {
-   "label": "8 per magnet",
-   "cells": 20,
-   "solve_s": 0.00646237499313429,
-   "error": {
-    "max": 0.04702373473497722,
-    "rms": 0.00796279559215702,
-    "per_point": null
-   }
-  },
-  {
-   "label": "16 per magnet",
-   "cells": 43,
-   "solve_s": 0.018182125000748783,
-   "error": {
-    "max": 0.031985946385884576,
-    "rms": 0.005274483412650684,
-    "per_point": null
-   }
-  },
-  {
-   "label": "32 per magnet",
-   "cells": 72,
-   "solve_s": 0.025194749992806464,
-   "error": {
-    "max": 0.02252955609118158,
-    "rms": 0.0038134189590006543,
-    "per_point": null
-   }
-  },
-  {
-   "label": "64 per magnet",
-   "cells": 118,
-   "solve_s": 0.03924195800209418,
-   "error": {
-    "max": 0.01689591516512331,
-    "rms": 0.002791935102560819,
-    "per_point": null
-   }
-  },
-  {
-   "label": "128 per magnet",
-   "cells": 253,
-   "solve_s": 0.09135429098387249,
-   "error": {
-    "max": 0.010516728311432844,
-    "rms": 0.0017249703911216135,
-    "per_point": null
-   }
-  },
-  {
-   "label": "256 per magnet",
-   "cells": 466,
-   "solve_s": 0.220994041999802,
-   "error": {
-    "max": 0.007487478200163319,
-    "rms": 0.0011906379620737454,
-    "per_point": null
-   }
-  }
- ],
- "fc_last_change": {
-  "max": 1.7972856656928835e-05,
-  "rms": 4.010078382065155e-06,
-  "per_point": null
- }
 }
