@@ -4,15 +4,14 @@ A homogeneous, isotropic, linear part is fully described by the charge on its
 surface, so a CAD part needs only its surface triangles (a magpylib
 `TriangularMesh`), no tetrahedra. This folder builds that solver step by step.
 
-**Status: steps 1 to 3 of 4 done, and narrow facets share panels (3c).** Next:
-step 4, compression: assembly still grows with the square of the triangles.
+**Status: all 4 steps done.** What is left is listed at the end of step 4.
 
 | Step | What                                                                                                                                                                                      | Status |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 1    | Linear charge per triangle; checked on a sphere and on a cube given as triangles                                                                                                          | done   |
 | 2    | Grade the mesh toward sharp edges (by the angle between neighbours); cube as triangles, then the U-core as one closed mesh against FEM                                                    | done   |
 | 3    | (a) a cylinder exported with 32, 64, 128 sides against the MoM on the exact `Cylinder`; (b) a CAD-like part (fillets, a hole) against the tetrahedral MoM; (c) narrow facets share panels | done   |
-| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                                                                    | todo   |
+| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                                                                    | done   |
 
 ## Step 1: the solver
 
@@ -239,6 +238,60 @@ own, so boxes do not change (`step3_groups.py`, `results/step3_groups.*`).
 
 ![Step 3c: unknowns for each export, shared and not; the difference sharing makes on the plate and the cylinder, against the ungrouped mesh's own change from m = 3 to 4](results/step3_groups.png)
 
+## Step 4: a hierarchical matrix
+
+`HBody` (in `tri_solver.py`) assembles `MacroBody`'s operator as a hierarchical
+matrix, each block projected onto the shared panels as it is made (`step4.py`,
+`results/step4.*`):
+
+- the triangles are split into a tree of clusters (halving the longest side, 32
+  per leaf);
+- a pair of clusters at least twice their size apart (and 3 longest edges) is
+  far: the kernel is interpolated on Chebyshev nodes in both boxes, 4 per side
+  at most, fewer along thin sides, so a block is a cluster operator ×
+  node-to-node kernel × cluster operator, the operators made once per cluster;
+- the other leaf pairs take the 7-point rule on both sides (within 6e-8 of the
+  closed form 4 triangle sizes apart), the closed form closer than 1.5 times
+  their sizes, and the near pass's refined rule as before.
+
+Checks were short runs on the plate, 2 to 60 s each:
+
+- **Same answers:** 4e-6 to 1.4e-5 from the dense assembly on every export, well
+  below the 1e-4 the mesh itself leaves. 6 nodes per side instead of 4 give
+  5e-8.
+- **Two mistakes caught by those checks.** Fewer interpolation nodes in
+  proportion to a side's length left 1e-2 at any number of nodes: a thin side
+  needs fewer nodes only as its length compares to the distance, which now sets
+  the count. And the close-pair search took one radius from the largest
+  triangle, so on graded meshes it sorted millions of candidates: 16.6 s at
+  10,000 triangles, 1.4 s with a radius per triangle, the same pairs (this
+  speeds up `TriBody` and `MacroBody` too).
+- **Coplanar pairs exchange no flux**, and they were half the close pairs (56 %
+  of the refined ones): dropped, the assembly takes a third less, with the same
+  answers.
+- **Time:** 2.1, 5.5 and 13.9 s against 4.5, 16.6 and 37.2 s dense at 1,714,
+  3,712 and 5,408 triangles; 21.5 s at 10,008 and 56 s at 18,216 (1.875°
+  export), where the dense assembly, at its measured F², would take about 130
+  and 440 s: 6 and 8 times faster. The solve stays small (11,508 unknowns in 3
+  s). Other jobs kept the load average at 4 to 12 during these runs.
+- **What dominates now:** the close leaves and the refined pairs, which grow
+  faster than the triangles on finer exports, as the hole's facet strips get
+  narrower but not shorter (4,200 close pairs per triangle at 18,216 against
+  3,600 at 10,008). Meshing (`refine_rings`, Python) takes 39 s at 18,216.
+- **Faceting, one more export:** 1.875° moves the far fields 1.0e-4 from 3.75°,
+  as the 1/N² of step 3 predicts (1.1e-4 on the moment), and the field 1 mm from
+  a fillet 5e-4.
+
+What is left, none of it needed at these sizes:
+
+- the close-range work and the meshing in compiled code (both are loops over
+  pairs or cells);
+- an iterative solve with the hierarchical blocks kept, beyond about 20,000
+  shared unknowns, where the dense solve's memory (3.2 GB) starts to count;
+- interior cells of curved faces sharing panels, like the bands do.
+
+![Step 4: assembly time against the triangles, dense and hierarchical; where the hierarchical assembly's time goes](results/step4.png)
+
 ## How to resume
 
 From this folder, with material-response's environment: `python step1.py` (about
@@ -247,4 +300,5 @@ only the cases missing from `results/step3_cylinder.json` (all of them: about 30
 minutes, 26 of which are the MoM) and redraws the figure;
 `python step3_plate.py` likewise (about 12 minutes, 7.7 GB at most, with the
 material-response worktree's `src` on `PYTHONPATH`); `python step3_groups.py`
-likewise (about 12 minutes, 3.4 GB).
+likewise (about 12 minutes, 3.4 GB); `python step4.py` likewise (about 4
+minutes, 5.3 GB).

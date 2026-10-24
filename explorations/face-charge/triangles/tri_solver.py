@@ -8,6 +8,8 @@ refined for pairs about as close as they are long. Triangles in one plane give
 no flux to each other, as the closed form gives exactly.
 """
 
+import time
+
 import numpy as np
 import scipy.linalg
 import scipy.sparse
@@ -122,10 +124,14 @@ class TriBody:
 
         cen = self.fr[0]
         size = np.linalg.norm(np.roll(self.V, -1, axis=1) - self.V, axis=-1).max(axis=1)
-        tree = cKDTree(cen)
-        pairs = np.array(sorted(tree.query_pairs(2 * factor * size.max())), dtype=int).reshape(-1, 2)
-        d = np.linalg.norm(cen[pairs[:, 0]] - cen[pairs[:, 1]], axis=1)
-        pairs = pairs[d < factor * (size[pairs[:, 0]] + size[pairs[:, 1]])]
+        # each triangle searches 2 factor its own size: every partner no larger
+        # than itself. One radius from the largest triangle returned millions of
+        # candidates on a graded mesh (16.6 s against 1.4 s at 10,000 triangles).
+        lists = cKDTree(cen).query_ball_point(cen, 2 * factor * size)
+        j = np.repeat(np.arange(len(cen)), [len(x) for x in lists])
+        i = np.concatenate(lists).astype(int)
+        keep = (i != j) & (size[i] <= size[j]) & (np.linalg.norm(cen[i] - cen[j], axis=1) < factor * (size[i] + size[j]))
+        pairs = np.unique(np.sort(np.stack([i[keep], j[keep]], 1), axis=1), axis=0)
         return np.concatenate([pairs[:, 0], pairs[:, 1]]), np.concatenate([pairs[:, 1], pairs[:, 0]])
 
     def load(self, H_fun, k=0, chunk=5000):
@@ -265,6 +271,12 @@ class MacroBody(TriBody):
             c0, c1 = 3 * self.g[j0], 3 * self.g[j1 - 1] + 3
             X = PsT @ Gc.reshape(3 * F, 3 * len(js))
             Gm[:, c0:c1] += X @ self.Ps[3 * j0 : 3 * j1, c0:c1].toarray()
+        self._add_near(Gm, I, J)
+        return Gm
+
+    def _add_near(self, Gm, I, J):
+        """Add the pairs (I, J), refined on 4^near_level sub-triangles, projected."""
+        Nm = self.Nm
         Pk, Wk, Bk = self.quad(self.near_level)
         Q = Pk.shape[1]
         kstep = max(1, 200_000 // Q)
@@ -278,7 +290,6 @@ class MacroBody(TriBody):
             D = np.einsum("kra,krs,ksb->kab", self.P[i], D, self.P[j])
             idx = (3 * self.g[i][:, None, None] + a3[None, :, None]) * Nm + 3 * self.g[j][:, None, None] + a3[None, None, :]
             np.add.at(Gm.reshape(-1), idx.ravel(), D.ravel())
-        return Gm
 
     def solve(self, H_fun=None, G=None, load=None):
         """Group coefficients; TriBody.fine turns them into triangle ones."""
@@ -309,3 +320,214 @@ class MacroBody(TriBody):
 
     def moment(self, c):
         return super().moment(self.fine(c))
+
+
+class HBody(MacroBody):
+    """MacroBody assembled as a hierarchical matrix. The triangles are split into
+    a tree of clusters (halving the longest side of the bounding box). A pair of
+    clusters whose gap is at least 1/eta times their larger size is far: the
+    kernel (y - x)/|y - x|^3 is interpolated on Chebyshev nodes in both boxes
+    (p per axis, fewer along a box's thin sides), so the block is test operator
+    x node-to-node kernel x source operator, the operators made once per cluster
+    and projected onto the groups. Both sides use the 7-point rule there; with
+    eta = 0.5 every far pair is at least twice its triangles' size apart, and no
+    pair that the near pass refines is far. Pairs of leaves that are not far are
+    computed by the 7-point rule on both sides too (within 6e-8 of the closed form
+    at 4 triangle sizes), except the pairs closer than close_factor times their
+    sizes, which take the closed form as MacroBody.assemble does, and the pairs
+    its near pass refines. p = 4 gives the solution to about 1e-5 on the plate,
+    p = 6 to 5e-8."""
+
+    def __init__(self, vertices, faces, groups, bands=None, leaf=32, eta=0.5, p=4, close_factor=1.5, **kw):
+        super().__init__(vertices, faces, groups, bands, **kw)
+        self.leaf, self.eta, self.p, self.close_factor = leaf, eta, p, close_factor
+        self.stats = {}
+
+    def _tree(self):
+        lo, hi = self.V.min(axis=1), self.V.max(axis=1)
+        cen = self.fr[0]
+        nodes, kids, todo = [np.arange(self.F)], [()], [0]
+        while todo:
+            k = todo.pop()
+            idx = nodes[k]
+            if len(idx) <= self.leaf:
+                continue
+            ax = np.argmax(hi[idx].max(0) - lo[idx].min(0))
+            order = idx[np.argsort(cen[idx, ax], kind="stable")]
+            half = len(order) // 2
+            kids[k] = (len(nodes), len(nodes) + 1)
+            nodes += [order[:half], order[half:]]
+            kids += [(), ()]
+            todo += [len(nodes) - 2, len(nodes) - 1]
+        boxes = [(lo[i].min(0), hi[i].max(0)) for i in nodes]
+        return nodes, kids, boxes
+
+    def _blocks(self, nodes, kids, boxes):
+        """Far pairs of clusters and near pairs of leaves. Far also needs a gap of
+        2 close_factor times the longest triangle edge in either cluster, so that
+        no pair taking the closed form or the refined rule is interpolated."""
+        edge = np.linalg.norm(np.roll(self.V, -1, axis=1) - self.V, axis=-1).max(axis=1)
+        hmax = [edge[idx].max() for idx in nodes]
+        far, near = [], []
+        stack = [(0, 0)]
+        while stack:
+            a, b = stack.pop()
+            (la, ha), (lb, hb) = boxes[a], boxes[b]
+            da, db = np.linalg.norm(ha - la), np.linalg.norm(hb - lb)
+            gap = np.linalg.norm(np.maximum(0, np.maximum(la - hb, lb - ha)))
+            if max(da, db) <= self.eta * gap and gap >= 2 * self.close_factor * max(hmax[a], hmax[b]):
+                far.append((a, b))
+            elif not kids[a] and not kids[b]:
+                near.append((a, b))
+            elif kids[a] and (not kids[b] or da >= db):
+                stack += [(c, b) for c in kids[a]]
+            else:
+                stack += [(a, c) for c in kids[b]]
+        return far, near
+
+    def _cheb(self, lo, hi, X):
+        """Nodes (n, 3) in the box and the Lagrange weights L (len(X), n) at X.
+
+        Interpolating along a side of length e at distance D from the box's
+        middle converges as rho^-p, rho = a + sqrt(a^2 - 1), a = 2 D / e. A far
+        partner is at least size / eta away (size: the diagonal), so a >= 1 + 2
+        size / (eta e): the box's longest side takes p nodes and a thinner side
+        the fewer that give the same error. Fewer in proportion to the side's
+        length instead left 1e-2 at any p."""
+        ext = hi - lo
+        size = np.linalg.norm(ext)
+
+        def rho(a):
+            return a + np.sqrt(a * a - 1)
+
+        a_max = 1 + 2 / self.eta  # the longest side's a for the closest far partner
+        ps = [1 if e <= 1e-12 * size else
+              max(1, int(np.ceil(self.p * np.log(rho(a_max)) / np.log(rho(1 + 2 * size / (self.eta * e))) - 1e-9))) for e in ext]
+        axes, Ls = [], []
+        for d in range(3):
+            n = ps[d]
+            t = np.cos((2 * np.arange(n) + 1) * np.pi / (2 * n))
+            x = 0.5 * (lo[d] + hi[d]) + 0.5 * ext[d] * t
+            L = np.ones((len(X), n))
+            for k in range(n):
+                for m_ in range(n):
+                    if m_ != k:
+                        L[:, k] *= (X[:, d] - x[m_]) / (x[k] - x[m_])
+            axes.append(x)
+            Ls.append(L)
+        nodes = np.stack(np.meshgrid(*axes, indexing="ij"), -1).reshape(-1, 3)
+        L = np.einsum("qa,qb,qc->qabc", *Ls).reshape(len(X), -1)
+        return nodes, L
+
+    def _not_coplanar(self, I, J):
+        cen, n = self.fr[0], self.fr[1]
+        span = np.ptp(self.V.reshape(-1, 3), axis=0).max()
+        cop = (np.abs(np.einsum("kd,kd->k", n[I], n[J])) > 1 - 1e-12) & \
+            (np.abs(np.einsum("kd,kd->k", cen[J] - cen[I], n[I])) < 1e-12 * span)
+        return I[~cop], J[~cop]
+
+    def _local(self, idx):
+        """The groups' columns that triangles idx touch, and their projection
+        (3 len(idx), 3 groups) restricted to them."""
+        rows = (3 * idx[:, None] + np.arange(3)).ravel()
+        Pl = self.Ps[rows]
+        cols = np.unique(Pl.indices)
+        return cols, Pl[:, cols]
+
+    def _block(self, A, B):
+        """G (|A|, 3, |B|, 3), test A and source B, as MacroBody.assemble's far pass."""
+        P, W, Bq = self._q
+        nq = P.shape[1]
+        fr = tuple(x[A] for x in self.fr)
+        flux = -normal_field_mm(P[B].reshape(-1, 3), self.V[A], fr) / FOUR_PI
+        return np.einsum("ajqi,jq,jqb->iajb", flux.reshape(3, len(B), nq, len(A)), W[B], Bq[B])
+
+    def assemble(self, near_factor=1.0):
+        t0 = time.perf_counter()
+        F, Nm = self.F, self.Nm
+        Gm = np.zeros((Nm, Nm))
+        self._q = self.quad(0)
+        P, W, Bq = self._q
+        nq = P.shape[1]
+        nodes, kids, boxes = self._tree()
+        far, near = self._blocks(nodes, kids, boxes)
+        # coplanar pairs exchange no flux: about half the close pairs on these
+        # meshes; dropped, they fall to the point rule, which gives 0 there too
+        I, J = self._not_coplanar(*self.near_pairs(near_factor))
+        Ic, Jc = self._not_coplanar(*self.near_pairs(self.close_factor))
+        F_ = np.arange(F)
+        # 1: closed form; 2: refined by the near pass, or own (zero here); else the point rule
+        kind = scipy.sparse.csr_matrix((np.r_[np.ones(len(Ic) + len(I)), 2 * np.ones(F)],
+                                        (np.r_[Ic, I, F_], np.r_[Jc, J, F_])), shape=(F, F))
+        t1 = time.perf_counter()
+        by_test = {}
+        for a, b in near:
+            by_test.setdefault(a, []).append(b)
+        npairs = nclose = 0
+        tclose = 0.0
+        n_ = self.fr[1]
+        wq = W[..., None] * Bq  # (F, nq, 3): w psi at each point
+        for a, bs in by_test.items():
+            A = nodes[a]
+            B = np.concatenate([nodes[b] for b in bs])
+            x, y = P[A].reshape(-1, 3), P[B].reshape(-1, 3)
+            c0 = x.mean(0)
+            x, y = x - c0, y - c0  # |x - y|^2 by products: pairs here are 2 sizes apart
+            nx = np.repeat(n_[A], nq, axis=0)
+            d2 = np.sum(x * x, 1)[:, None] + np.sum(y * y, 1)[None] - 2 * (x @ y.T)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                kn = (nx @ y.T - np.sum(nx * x, 1)[:, None]) / (d2 * np.sqrt(d2))  # own points: zeroed below
+            KB = np.matmul(kn.reshape(len(A) * nq, len(B), 1, nq), wq[B])  # (|A| nq, |B|, 1, 3)
+            G = np.matmul(wq[A].transpose(0, 2, 1), KB.reshape(len(A), nq, 3 * len(B)))  # (|A|, 3, 3 |B|)
+            G = -G.reshape(len(A), 3, len(B), 3) / FOUR_PI
+            z = kind[A][:, B].tocoo()
+            G[z.row[z.data >= 2], :, z.col[z.data >= 2], :] = 0.0
+            r, c = z.row[z.data == 1], z.col[z.data == 1]
+            if len(r):
+                tc = time.perf_counter()
+                i, j = A[r], B[c]
+                ii = np.repeat(i, nq)
+                fr = tuple(q[ii] for q in self.fr)
+                En = normal_field(P[j].reshape(-1, 3), self.V[ii], fr, pairs=True)
+                G[r, :, c, :] = np.einsum("akq,kq,kqb->kab", -En.reshape(3, len(i), nq) / FOUR_PI, W[j], Bq[j])
+                tclose += time.perf_counter() - tc
+            if not np.isfinite(G).all():
+                raise FloatingPointError("a close leaf block is not finite")
+            ca, Pa = self._local(A)
+            cb, Pb = self._local(B)
+            Gm[np.ix_(ca, cb)] += Pa.T @ (Pb.T @ G.reshape(3 * len(A), 3 * len(B)).T).T
+            npairs += len(A) * len(B)
+            nclose += len(r)
+        t2 = time.perf_counter()
+        # far pairs: interpolated, operators once per cluster
+        test, src = {}, {}
+        used = {a for a, _ in far} | {b for _, b in far}
+        n_ = self.fr[1]
+        for c in used:
+            idx = nodes[c]
+            X = P[idx].reshape(-1, 3)
+            xs, L = self._cheb(*boxes[c], X)
+            cols, Pl = self._local(idx)
+            wb = (W[idx][..., None] * Bq[idx]).reshape(len(idx), nq, 3)  # w psi_a at each point
+            Lq = L.reshape(len(idx), nq, -1)
+            # source: S[l, (j, b)] = sum_q w psi_b L_l
+            S = np.einsum("jqb,jql->ljb", wb, Lq).reshape(len(xs), 3 * len(idx))
+            src[c] = (xs, cols, (Pl.T @ S.T).T)
+            # test: T[(i, a), (l, d)] = sum_q w psi_a n_d L_l
+            T = np.einsum("iqa,iql,id->iald", wb, Lq, n_[idx]).reshape(3 * len(idx), 3 * len(xs))
+            test[c] = (xs, cols, Pl.T @ T)
+        t3 = time.perf_counter()
+        for a, b in far:
+            xa, ca, Ta = test[a]
+            xb, cb, Sb = src[b]
+            d = xb[None, :, :] - xa[:, None, :]  # (na, nb, 3): y - x
+            K = d / np.linalg.norm(d, axis=-1, keepdims=True) ** 3
+            K = K.transpose(0, 2, 1).reshape(3 * len(xa), len(xb))  # rows (node, component)
+            Gm[np.ix_(ca, cb)] += -(Ta @ K) @ Sb / FOUR_PI
+        t4 = time.perf_counter()
+        self._add_near(Gm, I, J)
+        t5 = time.perf_counter()
+        self.stats = {"far blocks": len(far), "near blocks": len(near), "near leaf pairs": npairs, "closed form pairs": nclose, "closed form s": tclose,
+                      "clusters": len(nodes), "setup s": t1 - t0, "near s": t2 - t1, "operators s": t3 - t2,
+                      "far s": t4 - t3, "refined s": t5 - t4}
+        return Gm
