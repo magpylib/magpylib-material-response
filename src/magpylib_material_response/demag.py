@@ -85,10 +85,12 @@ from magpylib_material_response.utils import timelog
 #: deriving the reverse block by reciprocity (halving the build cost).
 DENSE_BLOCK_MAX_ENTRIES = 20_000_000
 # A block above DENSE_BLOCK_MAX_ENTRIES is sparsified only when its first chunk
-# shows that at least SPARSIFY_MIN_DROP of the entries can go; at high
-# susceptibility the row budget drops almost nothing, and a CSR holding most of
-# a block is slower and larger than the dense array. Above DENSE_BLOCK_MAX_BYTES
-# it is sparsified regardless.
+# shows that at least SPARSIFY_MIN_DROP of the entries can go, at any size: at
+# high susceptibility the row budget drops almost nothing, and a CSR holding most
+# of a block is slower than the dense array and larger (12 bytes per entry
+# instead of 8, and 24 per entry in triplets while it is built), and cannot give
+# the reverse block by reciprocity. Dense blocks above DENSE_BLOCK_MAX_BYTES in
+# all make the solve warn.
 SPARSIFY_MIN_DROP = 0.5
 DENSE_BLOCK_MAX_BYTES = 2_000_000_000
 
@@ -652,7 +654,6 @@ def _pair_block(
     if (
         sparsify
         and first is not None
-        and 72 * n_a * n_b <= DENSE_BLOCK_MAX_BYTES
         and _droppable_fraction(first[2], row_budget) < SPARSIFY_MIN_DROP
     ):
         sparsify = False

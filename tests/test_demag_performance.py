@@ -706,12 +706,20 @@ def test_touching_bodies_get_a_grid_each():
 
 
 @pytest.mark.parametrize(
-    ("row_budget", "sparse"),
-    [(1e-12, False), (1e9, True)],
-    ids=["keeps nearly all: dense", "drops nearly all: sparse"],
+    ("row_budget", "max_bytes", "sparse"),
+    [(1e-12, None, False), (1e9, None, True), (1e-12, 1, False)],
+    ids=[
+        "keeps nearly all: dense",
+        "drops nearly all: sparse",
+        "keeps nearly all, above DENSE_BLOCK_MAX_BYTES: still dense",
+    ],
 )
-def test_large_block_is_sparsified_only_when_it_pays(monkeypatch, row_budget, sparse):
+def test_large_block_is_sparsified_only_when_it_pays(
+    monkeypatch, row_budget, max_bytes, sparse
+):
     monkeypatch.setattr(demag, "DENSE_BLOCK_MAX_ENTRIES", 1)
+    if max_bytes is not None:
+        monkeypatch.setattr(demag, "DENSE_BLOCK_MAX_BYTES", max_bytes)
     coll = _build_uniform_collection(64)
     positions, clusters = analyze_collection(coll.sources_all)
     block = _pair_block(

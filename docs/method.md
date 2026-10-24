@@ -340,9 +340,11 @@ the polarization in and the field back, so the solve runs in the global frame.
 In the iterative solver, a block with more than `DENSE_BLOCK_MAX_ENTRIES`
 entries is stored sparse when that pays: its first chunk must show that at least
 half of the entries can go (`SPARSIFY_MIN_DROP`), which at high susceptibility
-the budget below rarely allows, and then the block stays dense up to
-`DENSE_BLOCK_MAX_BYTES`. Entries are dropped per observer row, smallest first,
-only while the sum of the dropped magnitudes stays within a budget:
+the budget below rarely allows. Otherwise the block stays dense, at any size: a
+sparse matrix holding most of the entries would take more memory, and more still
+while it is built. When the dense blocks pass `DENSE_BLOCK_MAX_BYTES` (2 GB) in
+all, the solve logs a warning. Entries are dropped per observer row, smallest
+first, only while the sum of the dropped magnitudes stays within a budget:
 
 $$
 \sum_{\text{dropped } j} |T_{ij}| \;\le\; \varepsilon_\text{row} = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \|\mathbf{S}\|_\infty)\, K}
