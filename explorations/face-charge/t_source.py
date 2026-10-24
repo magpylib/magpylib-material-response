@@ -1,0 +1,104 @@
+"""Checks of source.py's LinearChargeTriangle: against magpylib's own Triangle,
+against the solvers it is built from, and as a magpylib source (paths, show).
+Prints one line per check; a few seconds."""
+import os
+import sys
+import time
+
+import magpylib as magpy
+import numpy as np
+from scipy.spatial import ConvexHull
+from scipy.spatial.transform import Rotation as R
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+for sub in ("", "triangles", "validation"):
+    sys.path.insert(0, os.path.join(HERE, sub))
+from source import LinearChargeTriangle  # noqa: E402
+import fc  # noqa: E402
+from meshes import outward  # noqa: E402
+from refine import refine_rings  # noqa: E402
+from tri_solver import MU0, MacroBody, TriBody  # noqa: E402
+
+rng = np.random.default_rng(3)
+V = np.array([[0.0, 0.0, 0.0], [0.004, 0.001, 0.0], [0.001, 0.003, 0.0005]])  # a tilted triangle (m)
+n = np.cross(V[1] - V[0], V[2] - V[0])
+n /= np.linalg.norm(n)
+cen = V.mean(0)
+obs = np.concatenate([cen + rng.normal(size=(40, 3)) * 0.01, cen + rng.normal(size=(40, 3)) * 0.0008])
+
+
+def rel(a, b):
+    return np.abs(np.asarray(a) - np.asarray(b)).max() / np.abs(np.asarray(b)).max()
+
+
+# 1. uniform charge = magpylib's Triangle, sigma = J.n / mu0
+J = np.array([0.3, -0.2, 0.9])
+sigma = J @ n / magpy.mu_0
+src = LinearChargeTriangle(V, [sigma] * 3)
+ref = magpy.misc.Triangle(vertices=V, polarization=J)
+print(f"uniform charge vs magpy.misc.Triangle: H {rel(src.getH(obs), ref.getH(obs)):.1e}, B {rel(src.getB(obs), ref.getB(obs)):.1e}")
+
+# 2. linear charge = limit of uniform-charge pieces at their centroids
+q = np.array([1e5, -3e4, 6e4])
+src = LinearChargeTriangle(V, q)
+far = obs[:40]
+H = src.getH(far)
+for k in (3, 4, 5):
+    bary = np.eye(3)[None]
+    for _ in range(k):
+        a, b, c = bary[:, 0], bary[:, 1], bary[:, 2]
+        ab, bc, ca = (a + b) / 2, (b + c) / 2, (c + a) / 2
+        bary = np.concatenate([np.stack(t, 1) for t in ((a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca))])
+    pieces = [magpy.misc.Triangle(vertices=bv @ V, polarization=magpy.mu_0 * (bv.mean(0) @ q) * n) for bv in bary]
+    print(f"linear charge vs {len(pieces):4d} uniform pieces: {rel(H, magpy.getH(pieces, far, sumup=True)):.1e}")
+
+# 3. a solved triangle body: the source gives the solver's field
+v = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float) * 0.005
+v, f = outward(v, ConvexHull(v).simplices)
+T, G, Bd = refine_rings(v, f, 0.005, 2, groups=True)
+Vf, Ff = T.reshape(-1, 3), np.arange(3 * len(T)).reshape(-1, 3)
+H0 = np.array([0.0, 0.0, 0.01 / MU0])
+out = cen + rng.normal(size=(30, 3)) * 0.01
+out = out[np.abs(out).max(1) > 0.006]  # outside the cube
+for body in (TriBody(Vf, Ff, chi=1000.0, position=(0.001, 0, 0.002), orientation=R.from_euler("xz", (20, 35), degrees=True)),
+             MacroBody(Vf, Ff, G, Bd, chi=1000.0)):
+    c = body.solve(load=body.load(lambda p: np.tile(H0, (len(p), 1))))
+    s = LinearChargeTriangle.from_triangles(body, c)
+    print(f"{type(body).__name__:9s} solution as a source: B {rel(s.getB(out), body.B(out, c)):.1e} ({len(s.vertices)} triangles)")
+
+# 4. a magpylib collection solved by face charge, as magpylib sources
+soft = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.004), position=(0, 0, 0), polarization=(0, 0, 0))
+soft.susceptibility = 1000.0
+soft.H_ext = (0.0, 0.0, 0.005)
+magnet = magpy.magnet.Cuboid(dimension=(0.004, 0.004, 0.003), position=(0, 0, 0.0045), polarization=(0, 0, 1.2))
+coll = magpy.Collection(soft, magnet)
+sensors = np.array([[0.0, 0.0, 0.009], [0.008, 0.0, 0.0], [0.0, 0.0, -0.005], [0.02, 0.01, 0.01]])
+B_fc, _ = fc.solve(coll, 3, sensors)
+solved = fc.apply_face_charge(coll, 3)
+kinds = sorted(type(s).__name__ for s in solved.sources_all)
+print(f"apply_face_charge: {kinds}; getB vs fc.solve {rel(solved.getB(sensors), B_fc):.1e}; input untouched: {coll.sources_all[0] is soft}")
+
+# 5. paths and orientation behave as for any magpylib source
+p = LinearChargeTriangle(V, q, position=[(0, 0, 0), (0.01, 0.0, 0.002)], orientation=R.from_euler("z", [[0], [30]], degrees=True))
+x = np.array([0.012, 0.004, 0.003])
+r1 = R.from_euler("z", 30, degrees=True)
+manual = r1.apply(LinearChargeTriangle(V, q).getH(r1.inv().apply(x - np.array([0.01, 0.0, 0.002]))))
+print(f"path of 2 positions, turned 30 deg: getH shape {p.getH(x).shape}, second step vs by hand {rel(p.getH(x)[1], manual):.1e}")
+
+# copy() rebinds the field to the copy; two sources in one getB keep their own charge
+a = LinearChargeTriangle(V, q)
+b = a.copy()
+b.charge = 2 * q
+Ha, Hb = a.getH(far), b.getH(far)
+both = magpy.getH([a, b], far, sumup=True)
+print(f"copy with doubled charge: {rel(Hb, 2 * Ha):.1e}; original kept: {rel(a.getH(far), H):.1e}; both in one getB: {rel(both, 3 * Ha):.1e}")
+
+# 6. show() draws it, and a big source evaluates in reasonable time
+for backend in ("plotly", "matplotlib"):
+    magpy.show(p, backend=backend, return_fig=True)
+print("show(): plotly and matplotlib draw it")
+big = LinearChargeTriangle.from_triangles(body, c)
+X = rng.normal(size=(1000, 3)) * 0.02 + 0.03
+t = time.perf_counter()
+big.getB(X)
+print(f"getB of {len(big.vertices)} triangles at 1,000 observers: {time.perf_counter() - t:.2f} s")

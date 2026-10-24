@@ -16,6 +16,7 @@ import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))  # the study: multibody, bem, p1
 from multibody import MU0, Body, add_contact_lines, field_B, solve_system  # noqa: E402
+from source import LinearChargeTriangle  # noqa: E402
 
 
 def _inherited(obj, name):
@@ -47,6 +48,37 @@ def split(coll):
 def solve(coll, m, observers, g=2.5):
     """B (T) at observers (n, 3), and timings and sizes."""
     observers = np.asarray(observers, float).reshape(-1, 3)
+    objs, fixed, bodies, coefs, (t0, t1, t2) = _solve_bodies(coll, m, g)
+    B = field_B(bodies, coefs, observers)
+    if fixed:
+        B = B + magpy.getB(fixed, observers, sumup=True)
+    t3 = time.perf_counter()
+    info = {"m": m, "bodies": len(bodies), "unknowns": int(sum(b.Nd for b in bodies)),
+            "build_s": t1 - t0, "solve_s": t2 - t1, "eval_s": t3 - t2}
+    return B, info
+
+
+def apply_face_charge(coll, m, g=2.5):
+    """A copy of the collection in which every solved body is replaced by its
+    surface charge, a LinearChargeTriangle (source.py) at the same place in the
+    hierarchy; the other sources are copied as they are. Like a collection solved
+    by material-response, getB of the copy excludes the applied field H_ext."""
+    objs, _, bodies, coefs, _ = _solve_bodies(coll, m, g)
+    out = coll.copy()
+    twin = dict(zip((id(s) for s in coll.sources_all), out.sources_all, strict=True))
+    for (obj, _), body, c in zip(objs, bodies, coefs, strict=True):
+        old = twin[id(obj)]
+        label = obj.style.label or f"{type(obj).__name__}, face charge"
+        new = LinearChargeTriangle.from_cuboid(body, c, style_label=label)
+        parent = old.parent
+        parent.remove(old)
+        parent.add(new)
+    return out
+
+
+def _solve_bodies(coll, m, g):
+    """Split, mesh and solve: (bodies' objects, fixed sources, bodies,
+    coefficients, (start, built, solved) times)."""
     t0 = time.perf_counter()
     objs, fixed, applied = split(coll)
     bodies = []
@@ -67,10 +99,4 @@ def solve(coll, m, observers, g=2.5):
 
     coefs = solve_system(bodies, H_ext)
     t2 = time.perf_counter()
-    B = field_B(bodies, coefs, observers)
-    if fixed:
-        B = B + magpy.getB(fixed, observers, sumup=True)
-    t3 = time.perf_counter()
-    info = {"m": m, "bodies": len(bodies), "unknowns": int(sum(b.Nd for b in bodies)),
-            "build_s": t1 - t0, "solve_s": t2 - t1, "eval_s": t3 - t2}
-    return B, info
+    return objs, fixed, bodies, coefs, (t0, t1, t2)

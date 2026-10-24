@@ -263,6 +263,42 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
      comes after the build.
    - **Not done:** a matrix-free or FMM cross block.
 
+## Solved bodies as magpylib sources
+
+`source.py`, `LinearChargeTriangle`: triangles whose magnetic surface charge
+(M·n, in A/m, given at each corner) varies linearly across each one, in closed
+form. It is a `magpylib.misc.CustomSource`, so `getB`, `getH`, paths,
+collections and `show()` work with magpylib as it is; a field function and class
+in magpylib core could take its place later with the same parameters. It gives H
+everywhere and B outside the bodies: inside a magnetized body B also holds the
+magnetization, which the surface charge does not carry.
+
+```python
+import fc  # validation/fc.py
+solved = fc.apply_face_charge(collection, m=3)  # a copy: each soft body is now its surface charge
+B = solved.getB(sensors)  # like getB of a collection solved by material-response
+```
+
+`from_cuboid` and `from_triangles` turn a solved cuboid body or triangle body
+(TriBody, MacroBody, HBody) into a source; `fc.apply_face_charge` does it for a
+whole magpylib collection, keeping coils and magnets without susceptibility as
+they are. Checks (`t_source.py`, a few seconds):
+
+- uniform charge against magpylib's own `misc.Triangle`: 5e-15;
+- linear charge against uniform pieces: 1.9e-3, 4.7e-4, 1.2e-4 at 64, 256 and
+  1,024 pieces, the second-order convergence of the pieces to it;
+- the solvers' own fields, as sources: 1.3e-10 (two values of μ0 differ by
+  5e-10); a collection through `apply_face_charge` against `fc.solve`: 1e-11;
+- a path of two positions turned 30°, against the same by hand: 5e-16; a copy
+  with doubled charge, and two sources in one `getB`: exact;
+- `show()` draws it in plotly and matplotlib; 192 triangles at 1,000 observers
+  take 0.08 s.
+
+magpylib checks a custom field function's arguments with `getfullargspec`, which
+counts `self`, so a bound method is refused through `field_func`. The class sets
+it past the setter: unlike a closure, a bound method follows `copy()` to the
+copy, and `getB` groups sources by it, so each source keeps its own charge.
+
 ## Not done, and limits
 
 - **Anisotropic χ and saturation** bring back volume charge (div M ≠ 0). The
@@ -306,6 +342,7 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
 | `t_engine.py`, `t_nqrhs.py`, `t_grade.py`, `t_sym.py`, `t_symeng*.py`             | engine accuracy, grading, symmetry split, timing                                            |
 | `t_mr.py`, `t_mr2.py`, `t_mr_magnet.py`                                           | material-response MoM on the same cases                                                     |
 | `multibody.py`                                                                    | coupled axis-aligned bodies: contact coupling, footprint lines, coupled solve               |
+| `source.py`, `t_source.py`                                                        | solved bodies as magpylib sources (`LinearChargeTriangle`), and its checks                  |
 | `t_split.py`, `t_split_nc.py`                                                     | touching halves vs the merged block, matching and non-matching meshes                       |
 | `t_rot.py`, `t_yoke_turn.py`                                                      | rotated bodies: exact checks, magnet turned 30° on the plate                                |
 | `run_04.py`, `figures/`                                                           | the MoM on the 0.4 mm magnet-on-plate case; the source of the #86 figure                    |
