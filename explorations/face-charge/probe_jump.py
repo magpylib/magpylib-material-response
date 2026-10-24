@@ -1,5 +1,5 @@
 """Why the magnet-on-plate MoM jumps from 7 s (0.5 mm) to >12 min, 10.8 GB (0.4 mm)."""
-import sys, time, numpy as np, magpylib as magpy
+import sys, time, numpy as np, scipy.sparse as sp, magpylib as magpy
 sys.path.insert(0, sys.argv[1])  # explorations/face-charge, for yoke_case
 import magpylib_material_response as mr
 from magpylib_material_response import demag as D
@@ -29,7 +29,13 @@ for h in [0.6, 0.5, 0.45, 0.4]:
     t = time.perf_counter(); r, c, v = D._row_sparsify(blk, row_budget); tsp = time.perf_counter() - t
     kept = len(v) / blk.size
     n_chunks = int(np.ceil(na / chunk))
+    # bytes per kept entry: triplets as _pair_block collects them (kept, then copied
+    # once by np.concatenate before the CSR is made), and the CSR as scipy stores it
+    m = sp.csr_matrix((v, (r, c)), shape=blk.shape)
+    trip = v.itemsize + c.itemsize + r.itemsize
+    csr_b = (m.data.nbytes + m.indices.nbytes) / m.nnz
     print(f"   block a<-b: forced sparse path {forced_sparse}; row budget {row_budget:.1e}; first chunk keeps {kept:.1%} of entries "
           f"(droppable {D._droppable_fraction(blk, row_budget):.1%}); per chunk kernel {tk:.2f}s + sparsify {tsp:.2f}s, {n_chunks} chunks "
-          f"-> ~{n_chunks*(tk+tsp)/60:.1f} min; CSR ~{9*na*nb*kept*(v.itemsize + c.itemsize + r.itemsize)/1e9:.1f} GB while built, "
-          f"{9*na*nb*kept*(v.itemsize + c.itemsize)/1e9:.1f} GB as CSR, vs dense {72*na*nb/1e9:.1f} GB", flush=True)
+          f"-> ~{n_chunks*(tk+tsp)/60:.1f} min; triplets {trip} B/entry, CSR {csr_b:.0f} B/entry (index {m.indices.dtype}): "
+          f"~{2*9*na*nb*kept*trip/1e9:.1f} GB while built (triplets + concatenated copy), {9*na*nb*kept*csr_b/1e9:.1f} GB as CSR, "
+          f"vs dense {72*na*nb/1e9:.1f} GB, per direction", flush=True)

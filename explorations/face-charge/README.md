@@ -208,7 +208,7 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
      that.
 
 8. **Why the MoM jumps from 7 s to over 12 minutes** (`probe_jump.py`,
-   `run_04.py`, `mom_dense_cross.patch`; `mom_jump.txt`,
+   `csr_bytes.py`, `run_04.py`, `mom_dense_cross.patch`; `mom_jump.txt`,
    `mom_jump_patched_run.txt`). Two causes, on main's code (0.6.0):
    1. **The grids stop matching.** At 0.5 mm the plate and the magnet share one
       0.5 mm lattice, and the block between them is an FFT. At 0.4 mm the
@@ -219,9 +219,14 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
    2. **Above 2 GB the block is sparsified regardless,** without the first-chunk
       check that it pays. At χ = 1000 the row budget is 5e-13, so the CSR keeps
       99 % of the entries:
-      - 9.6 GB per direction stored, 14.5 GB while built;
+      - 7.2 GB per direction stored (12 bytes per entry, int32 indices,
+        `csr_bytes.py`);
+      - about 29 GB while built: 24-byte triplets per entry, copied once more by
+        the concatenation before the CSR is made;
       - the reverse direction is built again;
       - against 4.9 GB per direction dense.
+
+      The run I stopped had reached 10.8 GB after 12 minutes, still building.
 
       The 2 GB warning counts dense blocks only, so it stays silent. The point
       rule's reverse block is not a transpose here, because the two bodies'
@@ -230,7 +235,9 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
    **Fix:** drop the `72 * n_a * n_b <= DENSE_BLOCK_MAX_BYTES` condition, so the
    first chunk decides at every size (`mom_dense_cross.patch`, one line). The
    0.4 mm case then takes 2 min 2 s: 1 min 39 s building 9.7 GB of dense blocks,
-   22 s of GMRES, peak 10.0 GB. The existing warning now fires.
+   22 s of GMRES, peak 10.0 GB. The existing warning now fires. Opened as
+   [#86](https://github.com/magpylib/magpylib-material-response/pull/86), with
+   the figure from `figures/pr86_dense_cross.py`.
    - **Still worth doing:** warn or refuse before building, from the predicted
      size, when grids do not share a spacing; and say which cell size would
      match.
@@ -278,7 +285,7 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
 | `multibody.py`                                                                    | coupled axis-aligned bodies: contact coupling, footprint lines, coupled solve               |
 | `t_split.py`, `t_split_nc.py`                                                     | touching halves vs the merged block, matching and non-matching meshes                       |
 | `t_rot.py`, `t_yoke_turn.py`                                                      | rotated bodies: exact checks, magnet turned 30° on the plate                                |
-| `probe_jump.py`, `run_04.py`, `mom_dense_cross.patch`                             | why the MoM jumps at 0.4 mm, and the one-line fix                                           |
+| `probe_jump.py`, `csr_bytes.py`, `run_04.py`, `mom_dense_cross.patch`, `figures/` | why the MoM jumps at 0.4 mm, and the one-line fix                                           |
 | `yoke_case.py`, `t_yoke.py`, `t_yoke_mr.py`, `yoke_compare.py`, `t_yoke_speed.py` | magnet on plate: face-charge levels, MoM levels, comparison, timing                         |
 | `*.npy`                                                                           | reference fields (the reference runs take minutes and up to 6 GB)                           |
 
