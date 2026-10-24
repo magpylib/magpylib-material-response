@@ -2,6 +2,10 @@
 import sys, numpy as np, scipy.sparse as sp, magpylib as magpy
 sys.path.insert(0, sys.argv[1])
 from magpylib_material_response import demag as D
+if not hasattr(D, "_droppable_fraction"):
+    sys.exit("This diagnoses 0.6.0's sparsification, which #86 replaced. Run it against 0.6.0:\n"
+             "  git worktree add /tmp/mr-060 0.6.0 && cp src/magpylib_material_response/_version.py /tmp/mr-060/src/magpylib_material_response/\n"
+             "  PYTHONPATH=/tmp/mr-060/src python " + sys.argv[0] + " <this folder>")
 from magpylib_material_response.meshing import mesh_Cuboid
 from yoke_case import YOKE, MAG
 h = 0.4

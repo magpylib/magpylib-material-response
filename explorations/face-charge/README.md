@@ -233,14 +233,34 @@ Numbers are from `results/`, produced by the scripts listed under each finding.
       cells differ in shape.
 
    **Fix:** drop the `72 * n_a * n_b <= DENSE_BLOCK_MAX_BYTES` condition, so the
-   first chunk decides at every size (`mom_dense_cross.patch`, one line). The
-   0.4 mm case then takes 2 min 2 s: 1 min 39 s building 9.7 GB of dense blocks,
-   22 s of GMRES, peak 10.0 GB. The existing warning now fires. Opened as
-   [#86](https://github.com/magpylib/magpylib-material-response/pull/86), with
-   the figure from `figures/pr86_dense_cross.py`.
-   - **Still worth doing:** warn or refuse before building, from the predicted
-     size, when grids do not share a spacing; and say which cell size would
-     match.
+   first chunk decides at every size (`mom_dense_cross.patch`, one line, kept as
+   the record). The 0.4 mm case then took 2 min 2 s: 1 min 39 s building 9.7 GB
+   of dense blocks, 22 s of GMRES, peak 10.0 GB. The existing warning fired.
+
+   **Merged as 8cd79ea**
+   ([#86](https://github.com/magpylib/magpylib-material-response/pull/86),
+   figure from `figures/pr86_dense_cross.py`). The PR got more than the one line
+   in review:
+   - whether to sparsify is judged on at least 64 observers drawn at random
+     across the body, not on the first slab;
+   - a block goes sparse only from 90 % dropped, because the sparse product runs
+     on one thread, or from 60 % when the explicit blocks would pass 2 GB in
+     all;
+   - the CSR is built per chunk, with int32 columns, at about 20 bytes per entry
+     at peak;
+   - a reverse block given by reciprocity is a transposed view with a scale, not
+     a copy;
+   - the warning counts sparse blocks too and names the cause (bodies whose
+     grids differ in spacing), and NaN entries are kept.
+
+   **Checked on merged main** (`mom_jump_main86_run.txt`): the 0.4 mm case takes
+   2 min 10 s (beside the test suite), peak 9.9 GB, and warns about 9.7 GB of
+   explicit blocks. Its B at the 16 sensors equals the patched run's to 3e-14.
+   `probe_jump.py` and `csr_bytes.py` diagnose 0.6.0's code; run against main
+   they say so and stop.
+   - **Still worth doing:** warn before building, from the predicted size, and
+     name a cell size that every body's sides are multiples of. The warning now
+     comes after the build.
    - **Not done:** a matrix-free or FMM cross block.
 
 ## Not done, and limits
