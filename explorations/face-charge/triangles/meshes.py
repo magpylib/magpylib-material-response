@@ -97,3 +97,24 @@ def ucore():
     rects = [(-0.05, -0.03, -0.01, 0.01), (-0.03, 0.03, -0.01, 0.01), (0.03, 0.05, -0.01, 0.01),
              (-0.05, -0.03, 0.01, 0.07), (0.03, 0.05, 0.01, 0.07)]  # conforming at x = +-0.03
     return extrude(outline, -0.01, 0.01, rects)
+
+
+def cylinder(n_sides, radius, height):
+    """A cylinder along z exported with n_sides flat facets, its caps fanned from
+    one rim vertex (no centre vertex), as STL exporters often do (m)."""
+    phi = 2 * np.pi * np.arange(n_sides) / n_sides
+    ring = np.column_stack([radius * np.cos(phi), radius * np.sin(phi)])
+    lo = np.column_stack([ring, np.full(n_sides, -height / 2)])
+    hi = np.column_stack([ring, np.full(n_sides, height / 2)])
+    v = np.concatenate([lo, hi])
+    f = []
+    for i in range(n_sides):
+        j = (i + 1) % n_sides
+        f += [[i, j, n_sides + j], [i, n_sides + j, n_sides + i]]  # mantle, outward
+    for i in range(1, n_sides - 1):
+        f += [[0, i + 1, i], [n_sides, n_sides + i, n_sides + i + 1]]  # bottom (-z), top (+z)
+    f = np.array(f)
+    tri = v[f]
+    if np.einsum("fd,fd->f", tri[:, 0], np.cross(tri[:, 1], tri[:, 2])).sum() < 0:
+        f = f[:, [0, 2, 1]]
+    return v, f

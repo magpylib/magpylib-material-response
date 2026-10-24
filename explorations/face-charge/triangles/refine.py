@@ -296,3 +296,96 @@ def _split_cells(polys, h, tol):
             pieces = new
         out += [(p, nrm) for p in pieces]
     return out
+
+
+def _on_sharp(p, q, segs, tol):
+    """True if the segment p-q lies along one of the sharp segments."""
+    a, b = segs[:, 0], segs[:, 1]
+    t = (b - a) / np.linalg.norm(b - a, axis=1)[:, None]
+    for x in (p, q, 0.5 * (p + q)):
+        s = np.clip(np.einsum("sd,sd->s", x - a, t), 0, np.linalg.norm(b - a, axis=1))
+        if np.min(np.linalg.norm(x - (a + s[:, None] * t), axis=1)) > tol:
+            return False
+    return True
+
+
+def _offset(P, n, shift, tol):
+    """Polygon P (k, 3), counter-clockwise about n, with edge i (P[i] -> P[i+1])
+    moved inward by shift[i]; None if an edge turns over (the offset is too deep)."""
+    k = len(P)
+    t = np.roll(P, -1, axis=0) - P
+    t /= np.linalg.norm(t, axis=1)[:, None]
+    nu = np.cross(n, t)  # inward
+    base = P + shift[:, None] * nu
+    out = np.empty_like(P)
+    for j in range(k):
+        i = j - 1  # edges i and j meet at vertex j
+        # base[i] + a t[i] = base[j] + b t[j], solved in the plane (t[j], nu[j])
+        A = np.array([[t[i] @ t[j], -1.0], [t[i] @ nu[j], 0.0]])
+        rhs = np.array([(base[j] - base[i]) @ t[j], (base[j] - base[i]) @ nu[j]])
+        if abs(np.linalg.det(A)) < 1e-12:
+            out[j] = base[j]
+            continue
+        a, _ = np.linalg.solve(A, rhs)
+        out[j] = base[i] + a * t[i]
+    e = np.roll(out, -1, axis=0) - out
+    if np.any(np.einsum("kd,kd->k", e, t) < tol):
+        return None
+    return out
+
+
+def refine_rings(V, F, ell, m, g=2.5, angle=20.0, corner=30.0):
+    """Graded triangles by rings: each flat face's convex polygons are offset
+    inward along their sharp edges at ell (k/m)^g, which gives straight layers on a
+    box and rings on a faceted disc. Where two sharp edges turn by more than
+    `corner` degrees, the cells near that corner are also cut parallel to the other
+    edge, as on the cuboid grid; a curved rim turns by 360/N and gets plain rings.
+    The rest is cut into equal pieces of the last layer's size, then fanned."""
+    span = np.max(np.ptp(V, axis=0))
+    tol = 1e-9 * span
+    segs = sharp_edges(V, F, angle)
+    levels = ell * (np.arange(1, m + 1) / m) ** g
+    cells = []
+    for P, n in _merge_coplanar(V, F, tol):
+        k = len(P)
+        sharp = np.array([_on_sharp(P[i], P[(i + 1) % k], segs, 1e-6 * span) for i in range(k)])
+        t = np.roll(P, -1, axis=0) - P
+        t /= np.linalg.norm(t, axis=1)[:, None]
+        nu = np.cross(n, t)
+        rings, inner = [], P
+        for d in levels:
+            Q = _offset(P, n, np.where(sharp, d, 0.0), tol)
+            if Q is None:
+                break
+            for i in range(k):
+                quad = np.array([inner[i], inner[(i + 1) % k], Q[(i + 1) % k], Q[i]])
+                if sharp[i]:
+                    rings.append(quad)
+            inner = Q
+        local = [r for r in rings] + [inner]
+        # real corners: cut the cells near them parallel to the other edge too
+        for j in range(k):
+            i = j - 1
+            if not (sharp[i] and sharp[j]) or np.degrees(np.arccos(np.clip(t[i] @ t[j], -1, 1))) <= corner:
+                continue
+            # cells along edge i are cut parallel to edge j, and the other way
+            # round: a long strip is split only where it reaches the corner
+            for d in levels:
+                for near, w in ((nu[i], nu[j]), (nu[j], nu[i])):
+                    nxt = []
+                    for c in local:
+                        if (c.mean(0) - P[j]) @ near < ell:
+                            nxt += _cut_poly(c, P[j], w, d, tol)
+                        else:
+                            nxt.append(c)
+                    local = nxt
+        cells += [(c, n) for c in local if len(c) >= 3]
+    h_far = ell * (1 - ((m - 1) / m) ** g)
+    cells = _split_cells(cells, h_far, tol)
+    T = []
+    for c, _ in cells:
+        for q in range(1, len(c) - 1):
+            tri = (c[0], c[q], c[q + 1])
+            if np.linalg.norm(np.cross(tri[1] - tri[0], tri[2] - tri[0])) > tol**2:
+                T.append(tri)
+    return np.array(T)

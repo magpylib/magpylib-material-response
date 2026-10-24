@@ -4,16 +4,15 @@ A homogeneous, isotropic, linear part is fully described by the charge on its
 surface, so a CAD part needs only its surface triangles (a magpylib
 `TriangularMesh`), no tetrahedra. This folder builds that solver step by step.
 
-**Status: steps 1 and 2 of 4 done, and lean.** Next: step 3, a CAD-like part
-with fillets and a hole. (step 2 costs 2.3× the unknowns and 7.5 GB where the
-cuboid model needs 3,240), then step 3.
+**Status: steps 1, 2 and 3a of 4 done.** Next: step 3b, a CAD-like plate with
+fillets and a hole, against the tetrahedral MoM.
 
-| Step | What                                                                                                                                      | Status |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1    | Linear charge per triangle; checked on a sphere and on a cube given as triangles                                                          | done   |
-| 2    | Grade the mesh toward sharp edges (by the angle between neighbours); cube as triangles, then the U-core as one closed mesh against FEM    | todo   |
-| 3    | A CAD-like part (fillets, a hole) against the tetrahedral MoM; a cylinder as `Cylinder` with curved panels vs as 32, 64, 128-sided meshes | todo   |
-| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                    | todo   |
+| Step | What                                                                                                                                                      | Status           |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| 1    | Linear charge per triangle; checked on a sphere and on a cube given as triangles                                                                          | done             |
+| 2    | Grade the mesh toward sharp edges (by the angle between neighbours); cube as triangles, then the U-core as one closed mesh against FEM                    | done             |
+| 3    | (a) a cylinder exported with 32, 64, 128 sides against the MoM on the exact `Cylinder`; (b) a CAD-like part (fillets, a hole) against the tetrahedral MoM | 3a done, 3b todo |
+| 4    | Compression for large meshes (fast multipole or hierarchical matrices)                                                                                    | todo             |
 
 ## Step 1: the solver
 
@@ -92,7 +91,66 @@ plane.
 
 ![Step 2: the cube graded from 12 triangles against the hand-built grading; the U-core as one mesh against FEM, three levels](results/step2.png)
 
+## Step 3a: a cylinder from its facets
+
+A soft-iron cylinder (R = 5 mm, H = 10 mm, χ = 1000) in a uniform 10 mT field,
+along its axis or across it, exported with 32, 64 or 128 flat sides
+(`meshes.cylinder`), against material-response's MoM on the exact `Cylinder`
+(`mesh_study` at 4, 8 and 16 cells across). Four observers: 1 mm above the top
+face and 1 mm inside the rim, 1 mm beside the mantle, and 50 mm away on the axis
+and across it (`step3_cylinder.py`, `results/step3_cylinder.*`).
+
+`refine.py`, `refine_rings`: step 2's layers are lines parallel to a straight
+edge; a rim turns a little at every facet, and those lines would cross the cap.
+Here each flat face's polygons are offset inward along their sharp edges at the
+layers' distances, so a cap gets rings and the mantle's strips straight layers.
+Where two sharp edges turn by more than 30°, the cells near the corner are also
+cut parallel to the other edge, as on the cuboid grid; a rim turns by 360°/N and
+gets plain rings. At first a corner's cells were cut only when near both edges;
+now near either, as on the cuboid grid.
+
+- **Faceting is second order and small.** The moment converges as 1/N² (order
+  1.99 along the axis, 1.97 across) and the volume the facets cut off is a fair
+  guide: 128 sides are 2.5e-4 off along the axis and 4.9e-4 across, 32 sides
+  4.0e-3 and 7.5e-3. The field 1 mm from the rim moves 1.1e-3 from 64 to 128
+  sides. A CAD export at a usual chord tolerance is good to about 1e-3: curved
+  panels are not needed.
+- **The mesh converges by m = 3 to 4.** At 128 sides, m = 3 → 4 changes the
+  field 1 mm from the rim by 0.11 %, the far field and the moment by 0.022 to
+  0.027 %; m = 4 is about 1e-4 from its limit, below the 2.5e-4 to 4.9e-4 of the
+  128 facets.
+- **Against the MoM on the exact cylinder** (|B| in mT; face charge at 128
+  sides, m = 4, 11,544 unknowns, 30 s and 6.7 GB; the MoM's three levels 13 min
+  per field, under 4.9 GB):
+
+  | Observer                   | Field | Face charge | MoM, 16 across | MoM, extrapolated |
+  | -------------------------- | ----- | ----------- | -------------- | ----------------- |
+  | 1 mm above, inside the rim | axial | 9.778       | 9.873          | 9.70 ± 2.4 %      |
+  | 1 mm beside the mantle     | axial | 9.579       | 9.514          | 9.59 ± 1.0 %      |
+  | 50 mm on the axis          | axial | 0.03824     | 0.03798        | 0.03822 ± 0.8 %   |
+  | 50 mm across               | axial | 0.01928     | 0.01914        | 0.01927 ± 0.9 %   |
+  | 1 mm above, inside the rim | cross | 11.078      | 11.043         | declined          |
+  | 1 mm beside the mantle     | cross | 9.933       | 9.958          | declined          |
+  | 50 mm on the axis          | cross | 0.01603     | 0.01598        | 0.01604 (\*)      |
+  | 50 mm across               | cross | 0.03133     | 0.03124        | 0.03134 (\*)      |
+
+  The face charge sits inside every band the MoM gives, and in the far field
+  within 0.05 % of its extrapolation. The MoM's finest level differs from it by
+  0.3 to 1 %. Across the axis, `mesh_study` declines to extrapolate, by design:
+  near the rim Bz goes 9.61, 10.41, 10.38 mT, and the points that turn carry 23
+  % of the last change, above its 10 % limit. (\*) Where the far points' steps
+  shrink steadily (ratio 2.8 to 2.9), extrapolated here point by point.
+
+- **Cost.** 64 sides at m = 3 (4,248 unknowns, 5 s) are within 0.27 % of the
+  finest face charge everywhere, closer than the MoM's 3,168 cells. The MoM's
+  cells are cylinder segments, slow to evaluate; its finest level takes most of
+  the 13 minutes.
+
+![Step 3a: faceting error against the number of sides; the field 1 mm from the rim and beside the mantle, face charge against the MoM on the exact cylinder](results/step3_cylinder.png)
+
 ## How to resume
 
 From this folder, with material-response's environment: `python step1.py` (about
-a minute). Each step writes `results/step<k>.*`.
+a minute). Each step writes `results/step<k>.*`. `python step3_cylinder.py` runs
+only the cases missing from `results/step3_cylinder.json` (all of them: about 30
+minutes, 26 of which are the MoM) and redraws the figure.
