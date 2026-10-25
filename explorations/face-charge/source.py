@@ -201,22 +201,27 @@ class ChargeSheet(magpy.misc.CustomSource):
         is singular and the graded panels tiny; weighted, it points where the
         panels are too coarse for the field around the body, and falls as the
         mesh is refined."""
+        return float(self.panel_indicator().max(initial=0.0))
+
+    def panel_indicator(self):
+        """`jump_indicator` per panel, in the order of the panel ids (per face
+        when the sheet has no panels)."""
         inv, area = self._corner_groups()
         q = self._q.ravel()
+        panel = np.arange(len(self._faces)) if self._panels is None else np.unique(self._panels, return_inverse=True)[1]
         peak = np.abs(q).max(initial=0.0)
         if not peak:
-            return 0.0
+            return np.zeros(panel.max(initial=-1) + 1)
         hi = np.full(inv.max() + 1, -np.inf)
         lo = np.full(inv.max() + 1, np.inf)
         np.maximum.at(hi, inv, q)
         np.minimum.at(lo, inv, q)
         per_face = (hi - lo)[inv].reshape(-1, 3).max(1)
-        panel = np.arange(len(self._faces)) if self._panels is None else np.unique(self._panels, return_inverse=True)[1]
         jump = np.zeros(panel.max() + 1)
         size = np.zeros(panel.max() + 1)
         np.maximum.at(jump, panel, per_face)
         np.add.at(size, panel, area[::3])
-        return float((jump * np.sqrt(size / size.sum())).max() / peak)
+        return jump * np.sqrt(size / size.sum()) / peak
 
     def _smoothed(self):
         """Corner charges (3m,) averaged, by face area, over the corners that

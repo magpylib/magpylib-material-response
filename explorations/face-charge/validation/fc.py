@@ -45,27 +45,33 @@ def split(coll):
     return bodies, fixed, applied
 
 
-def solve(coll, m, observers, g=2.5):
+def solve(coll, m, observers, g=2.5, refine=0):
     """B (T) at observers (n, 3), and timings, sizes and the largest size-weighted
-    panel jump over the bodies (ChargeSheet.jump_indicator)."""
+    panel jump over the bodies (ChargeSheet.jump_indicator), after each round of
+    refinement (see `apply_face_charge`)."""
     observers = np.asarray(observers, float).reshape(-1, 3)
-    objs, fixed, bodies, coefs, (t0, t1, t2) = _solve_bodies(coll, m, g)
+    objs, fixed, bodies, coefs, (t0, t1, t2), rounds = _solve_bodies(coll, m, g, refine)
     B = field_B(bodies, coefs, observers)
     if fixed:
         B = B + magpy.getB(fixed, observers, sumup=True)
     t3 = time.perf_counter()
-    jump = max((ChargeSheet.from_cuboid(b, c).jump_indicator for b, c in zip(bodies, coefs, strict=True)), default=0.0)
-    info = {"m": m, "bodies": len(bodies), "unknowns": int(sum(b.Nd for b in bodies)),
-            "build_s": t1 - t0, "solve_s": t2 - t1, "eval_s": t3 - t2, "jump_indicator": jump}
+    info = {"m": m, "refine": refine, "bodies": len(bodies), "unknowns": rounds[-1]["unknowns"],
+            "build_s": t1 - t0, "solve_s": t2 - t1, "eval_s": t3 - t2,
+            "jump_indicator": rounds[-1]["jump_indicator"], "rounds": rounds}
     return B, info
 
 
-def apply_face_charge(coll, m, g=2.5):
+def apply_face_charge(coll, m, g=2.5, refine=0):
     """A copy of the collection in which every solved body is replaced by its
     surface charge, a ChargeSheet (source.py) at the same place in the
     hierarchy; the other sources are copied as they are. Like a collection solved
-    by material-response, getB of the copy excludes the applied field H_ext."""
-    objs, _, bodies, coefs, _ = _solve_bodies(coll, m, g)
+    by material-response, getB of the copy excludes the applied field H_ext.
+
+    `refine` rounds each split the panels whose size-weighted jump is above
+    half the largest over all bodies, and solve again: the panels go where the
+    mesh level `m` is too coarse for the field around the bodies, e.g. under a
+    magnet close to a soft face. A round roughly doubles the unknowns."""
+    objs, _, bodies, coefs, _, _ = _solve_bodies(coll, m, g, refine)
     out = coll.copy()
     twin = dict(zip((id(s) for s in coll.sources_all), out.sources_all, strict=True))
     for (obj, _), body, c in zip(objs, bodies, coefs, strict=True):
@@ -78,9 +84,10 @@ def apply_face_charge(coll, m, g=2.5):
     return out
 
 
-def _solve_bodies(coll, m, g):
-    """Split, mesh and solve: (bodies' objects, fixed sources, bodies,
-    coefficients, (start, built, solved) times)."""
+def _solve_bodies(coll, m, g, refine=0, mark=0.5):
+    """Split, mesh and solve, then refine: (bodies' objects, fixed sources,
+    bodies, coefficients, (start, built, solved) times, and per solve the
+    unknowns and the largest jump indicator)."""
     t0 = time.perf_counter()
     objs, fixed, applied = split(coll)
     bodies = []
@@ -99,6 +106,18 @@ def _solve_bodies(coll, m, g):
             H = H + magpy.getH(fixed, p, sumup=True)
         return H
 
-    coefs = solve_system(bodies, H_ext)
+    rounds = []
+    for r in range(refine + 1):
+        coefs = solve_system(bodies, H_ext)
+        eta = [ChargeSheet.from_cuboid(b, c).panel_indicator() for b, c in zip(bodies, coefs, strict=True)]
+        top = max((e.max(initial=0.0) for e in eta), default=0.0)
+        rounds.append({"unknowns": int(sum(b.Nd for b in bodies)), "jump_indicator": float(top)})
+        if r == refine or not top:
+            break
+        for b, e in zip(bodies, eta, strict=True):
+            marked = np.flatnonzero(e > mark * top)
+            if marked.size:
+                b.bisect(marked)
+                b.build()
     t2 = time.perf_counter()
-    return objs, fixed, bodies, coefs, (t0, t1, t2)
+    return objs, fixed, bodies, coefs, (t0, t1, t2), rounds

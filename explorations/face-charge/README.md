@@ -54,6 +54,16 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
   0.25 mm above the plate is 1.1 to 2.8 times it, against level 11. Far fields
   are 0.01 to 0.8 % off at level 3. The study is in `adaptive/` on
   `explore/face-charge`.
+- **Refinement.** `apply_face_charge(coll, m, refine=2)` (and `fc.solve`) runs
+  rounds that each split the panels whose size-weighted jump is above half the
+  largest over all bodies, and solve again; a round roughly doubles the
+  unknowns. For the plate under a magnet, two rounds from level 3 (2,688
+  unknowns, 1.7 s) put B 0.25 mm above the plate under the magnet within 0.04 %
+  of the finest refined solve, where uniform level 11 (10,350 unknowns, 20 s) is
+  within 0.13 %. Over the rim and far away the error stays the starting level's
+  (0.2 % and 0.03 %), and just outside the magnet's footprint, where B is weak,
+  every mesh differs by about 0.3 %. The panels split in whole strips (the mesh
+  is a tensor product per body), which costs more on large bodies.
 
 ## Files
 
@@ -72,8 +82,8 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
 - uniform charge against magpylib's own `misc.Triangle`: 5e-15;
 - linear charge against uniform pieces: 1.9e-3, 4.7e-4, 1.2e-4 at 64, 256 and
   1,024 pieces, the second-order convergence of the pieces to it;
-- a collection through `apply_face_charge` against `fc.solve`: 1e-11; the
-  sheet's `jump_indicator` equals what `fc.solve` reports;
+- a collection through `apply_face_charge` against `fc.solve`: 1e-11, also with
+  `refine=2`; the sheet's `jump_indicator` equals what `fc.solve` reports;
 - a path of two positions turned 30°, against the same by hand: 5e-16; a copy
   with doubled charge, and two sources in one `getB`: exact;
 - `show()` in plotly, matplotlib and pyvista, plotly's colours exactly the

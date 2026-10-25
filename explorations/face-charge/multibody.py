@@ -57,17 +57,27 @@ class Body:
         self.J0 = None if J0 is None else np.asarray(J0, float)
         self.mesh_args = (m, g, kappa)
         self.lines = [[] for _ in range(3)] if lines is None else lines
+        self.extra = [[] for _ in range(3)]  # edges added as they are, per axis: bisections
         self.nq = nq
         self.G = None
 
     def build(self):
         m, g, kappa = self.mesh_args
         c = np.min(self.half)
-        edges = [multi_layer_edges(h, self.lines[k], kappa * c, m, g) for k, h in enumerate(self.half)]
+        edges = [np.unique(np.round(np.concatenate([multi_layer_edges(h, self.lines[k], kappa * c, m, g),
+                                                    self.extra[k]]) / h, 12)) * h for k, h in enumerate(self.half)]
         self.pan = Panels(self.half, 0, axis_edges=edges)
         self.s = P1(self.pan, nq=self.nq)
         self.G = self.s.assemble()
         return self
+
+    def bisect(self, panels):
+        """Split these panels in two along both of their in-plane axes: in the
+        tensor mesh, the whole strips through them. Rebuild to apply."""
+        p = self.pan
+        for n in panels:
+            self.extra[p.i[n]].append(0.5 * (p.p1[n] + p.p2[n]))
+            self.extra[p.j[n]].append(0.5 * (p.q1[n] + p.q2[n]))
 
     @property
     def Nd(self):
