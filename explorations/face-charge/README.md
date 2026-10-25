@@ -1,8 +1,19 @@
 # Face charge: a cuboid's full linear response in milliseconds, no user mesh
 
-A study from 2026-10-23/24. This folder is a study, not package code: ruff and
-codespell skip it, nothing here is tested in CI, and nothing here is imported by
-`magpylib_material_response`.
+A study from 2026-10-23 to 25. This folder is a study, not package code: ruff
+and codespell skip it, nothing here is tested in CI, and nothing here is
+imported by `magpylib_material_response`. The solver itself, with `ChargeSheet`,
+refinement and the accuracy hints, is on the branch
+[`face-charge`](https://github.com/magpylib/magpylib-material-response/tree/face-charge/explorations/face-charge),
+draft PR [#89](https://github.com/magpylib/magpylib-material-response/pull/89).
+
+| Part                                                                | Where                    |
+| ------------------------------------------------------------------- | ------------------------ |
+| the cuboid engine, coupling, rotations, findings 1 to 8             | this README              |
+| the six documented examples, against their references and the MoM   | `validation/PROGRESS.md` |
+| triangle meshes, CAD exports, shared panels, hierarchical assembly  | `triangles/PROGRESS.md`  |
+| refinement where the charge jumps, the size-weighted jump as a hint | `adaptive/PROGRESS.md`   |
+| saturation: the U-core on slabs of uniform χ, against the MoM       | `saturation/PROGRESS.md` |
 
 **Question:** compute a cuboid with susceptibility χ (and remanence) in the
 field of other magpylib sources, without asking the user for a mesh, in
@@ -321,7 +332,9 @@ material-response requires it.
 ## Not done, and limits
 
 - **Anisotropic χ and saturation** bring back volume charge (div M ≠ 0). The
-  faces-only shortcut does not cover them.
+  faces-only shortcut does not cover them. A χ uniform piece by piece does:
+  `saturation/` cuts the U-core into slabs, each with its own χ from the B–H
+  curve, and tracks it into deep saturation in 2–3 s per current.
 - **Coupled bodies:** the contact footprint sets the mesh, so moving a part
   means a rebuild of seconds. The NumPy closed-form assembly dominates that
   rebuild; compiled kernels would cut it. A footprint turned against the other
