@@ -2,9 +2,10 @@
 
 A study from 2026-10-23 to 25. This folder is a study, not package code: ruff
 and codespell skip it, nothing here is tested in CI, and nothing here is
-imported by `magpylib_material_response`. The solver itself, with `ChargeSheet`,
-refinement and the accuracy hints, is on the branch
-[`face-charge`](https://github.com/magpylib/magpylib-material-response/tree/face-charge/explorations/face-charge),
+imported by `magpylib_material_response`. The solver itself, now the package
+module `magpylib_material_response.face_charge`, with `ChargeSheet`, refinement
+and the accuracy hints, is on the branch
+[`face-charge`](https://github.com/magpylib/magpylib-material-response/tree/face-charge/src/magpylib_material_response/face_charge),
 draft PR [#89](https://github.com/magpylib/magpylib-material-response/pull/89).
 
 | Part                                                                | Where                    |
@@ -289,7 +290,7 @@ which the surface charge does not carry. Its `get_trace`, the hook every
 magpylib class draws itself with, colours the faces by the charge in magpylib's
 magnet colours, positive charge being a north pole, in plotly and pyvista;
 matplotlib draws them in the object's colour. The merge branch
-[`face-charge`](https://github.com/magpylib/magpylib-material-response/tree/face-charge/explorations/face-charge)
+[`face-charge`](https://github.com/magpylib/magpylib-material-response/tree/face-charge/src/magpylib_material_response/face_charge)
 has moved the drawing on: the charge smoothed per flat face, on a square-root
 scale, and the panel edges with `style.mesh.grid.show`;
 `figures/pr/sheet_levels.png` is drawn with it.
