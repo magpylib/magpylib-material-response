@@ -46,17 +46,17 @@ def split(coll):
 
 
 def solve(coll, m, observers, g=2.5):
-    """B (T) at observers (n, 3), and timings, sizes and the largest panel jump
-    over the bodies (ChargeSheet.jump), a local error estimate."""
+    """B (T) at observers (n, 3), and timings, sizes and the largest size-weighted
+    panel jump over the bodies (ChargeSheet.jump_indicator)."""
     observers = np.asarray(observers, float).reshape(-1, 3)
     objs, fixed, bodies, coefs, (t0, t1, t2) = _solve_bodies(coll, m, g)
     B = field_B(bodies, coefs, observers)
     if fixed:
         B = B + magpy.getB(fixed, observers, sumup=True)
     t3 = time.perf_counter()
-    jump = max((ChargeSheet.from_cuboid(b, c).jump for b, c in zip(bodies, coefs, strict=True)), default=0.0)
+    jump = max((ChargeSheet.from_cuboid(b, c).jump_indicator for b, c in zip(bodies, coefs, strict=True)), default=0.0)
     info = {"m": m, "bodies": len(bodies), "unknowns": int(sum(b.Nd for b in bodies)),
-            "build_s": t1 - t0, "solve_s": t2 - t1, "eval_s": t3 - t2, "jump": jump}
+            "build_s": t1 - t0, "solve_s": t2 - t1, "eval_s": t3 - t2, "jump_indicator": jump}
     return B, info
 
 

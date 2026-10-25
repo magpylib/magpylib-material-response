@@ -190,15 +190,18 @@ class ChargeSheet(magpy.misc.CustomSource):
         return edges[(lo != hi) | (np.bincount(inv) == 1)]
 
     @property
-    def jump(self):
-        """The largest jump of the charge between panels that meet at a corner
-        on a flat face, as a share of the sheet's peak charge.
+    def jump_indicator(self):
+        """The largest jump of the charge between panels meeting at a corner on
+        a flat face, as a share of the peak charge, weighted by the panel's
+        size: times sqrt(panel area / sheet area).
 
         On a flat face of a uniform body the charge is continuous, so the jump
-        is discretization error, free to read off a solved sheet: it falls as
-        the mesh is refined, and where it is large, fields close to the surface
-        are less accurate than far ones."""
-        inv, _ = self._corner_groups()
+        is discretization error, free to read off a solved sheet. Unweighted it
+        stays large in the first panels at a soft body's edges, where the charge
+        is singular and the graded panels tiny; weighted, it points where the
+        panels are too coarse for the field around the body, and falls as the
+        mesh is refined."""
+        inv, area = self._corner_groups()
         q = self._q.ravel()
         peak = np.abs(q).max(initial=0.0)
         if not peak:
@@ -207,7 +210,13 @@ class ChargeSheet(magpy.misc.CustomSource):
         lo = np.full(inv.max() + 1, np.inf)
         np.maximum.at(hi, inv, q)
         np.minimum.at(lo, inv, q)
-        return float((hi - lo).max() / peak)
+        per_face = (hi - lo)[inv].reshape(-1, 3).max(1)
+        panel = np.arange(len(self._faces)) if self._panels is None else np.unique(self._panels, return_inverse=True)[1]
+        jump = np.zeros(panel.max() + 1)
+        size = np.zeros(panel.max() + 1)
+        np.maximum.at(jump, panel, per_face)
+        np.add.at(size, panel, area[::3])
+        return float((jump * np.sqrt(size / size.sum())).max() / peak)
 
     def _smoothed(self):
         """Corner charges (3m,) averaged, by face area, over the corners that

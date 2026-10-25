@@ -68,7 +68,7 @@ kinds = sorted(type(s).__name__ for s in solved.sources_all)
 sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
 print(f"apply_face_charge: {kinds}; getB vs fc.solve {rel(solved.getB(sensors), B_fc):.1e}; input untouched: {coll.sources_all[0] is soft}")
 print(f"the soft cuboid's sheet: {len(sheet.faces)} faces on {len(sheet.vertices)} vertices (corners shared, {3 * len(sheet.faces)} unshared); "
-      f"largest panel jump {sheet.jump:.1%} of its peak charge, fc.solve reports {info['jump']:.1%}")
+      f"jump indicator {sheet.jump_indicator:.2%}, fc.solve reports {info['jump_indicator']:.2%}")
 
 # 4. paths and orientation behave as for any magpylib source
 p = one(V, q, position=[(0, 0, 0), (0.01, 0.0, 0.002)], orientation=R.from_euler("z", [[0], [30]], degrees=True))
