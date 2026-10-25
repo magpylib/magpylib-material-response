@@ -13,8 +13,8 @@ def test_isotropic_susceptibility():
 
     magnet = magpy.magnet.Cuboid(dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, 1.1))
     grid = np.loadtxt("tests/testdata/grid_points.pts")
-    field_ansys = np.loadtxt("tests/testdata/isotropic_results_ansys.txt", skiprows=1)
-    field_ansys = field_ansys[:, 3:]
+    field_fem = np.loadtxt("tests/testdata/isotropic_results_fem.txt", skiprows=1)
+    field_fem = field_fem[:, 3:]
 
     # isotropic
     magnet.susceptibility = 0.1
@@ -24,7 +24,7 @@ def test_isotropic_susceptibility():
 
     field_magpylib = magnet_meshed.getB(grid)
 
-    np.testing.assert_allclose(field_ansys, field_magpylib, rtol=0, atol=0.0012)
+    np.testing.assert_allclose(field_fem, field_magpylib, rtol=0, atol=0.0012)
 
 
 @pytest.mark.parametrize("solver", ["direct", "iterative"])
@@ -42,8 +42,8 @@ def test_anisotropic_susceptibility(rotation, solver):
     magnet = magpy.magnet.Cuboid(dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, 1.1))
     magnet.rotate(rotation)
     grid = np.loadtxt("tests/testdata/grid_points.pts")
-    field_ansys = np.loadtxt("tests/testdata/anisotropic_results_ansys.txt", skiprows=1)
-    field_ansys = field_ansys[:, 3:]
+    field_fem = np.loadtxt("tests/testdata/anisotropic_results_fem.txt", skiprows=1)
+    field_fem = field_fem[:, 3:]
 
     # anisotropic
     magnet.susceptibility = (0.3, 0.2, 0.1)
@@ -53,7 +53,7 @@ def test_anisotropic_susceptibility(rotation, solver):
 
     field_magpylib = rotation.inv().apply(magnet_meshed.getB(rotation.apply(grid)))
 
-    np.testing.assert_allclose(field_ansys, field_magpylib, rtol=0, atol=0.0012)
+    np.testing.assert_allclose(field_fem, field_magpylib, rtol=0, atol=0.0012)
 
 
 def test_negative_susceptibility():
@@ -63,10 +63,8 @@ def test_negative_susceptibility():
         dimension=(1e-3, 1e-3, 1e-3), polarization=(0, 0, -0.1)
     )
     grid = np.loadtxt("tests/testdata/grid_points.pts")
-    field_ansys = np.loadtxt(
-        "tests/testdata/negative_susceptibility_ansys.txt", skiprows=1
-    )
-    field_ansys = field_ansys[:, 3:]
+    field_fem = np.loadtxt("tests/testdata/negative_susceptibility_fem.txt", skiprows=1)
+    field_fem = field_fem[:, 3:]
 
     # isotropic
     magnet.susceptibility = -1.1
@@ -76,4 +74,4 @@ def test_negative_susceptibility():
 
     field_magpylib = magnet_meshed.getB(grid)
 
-    np.testing.assert_allclose(field_ansys, field_magpylib, rtol=0, atol=0.0065)
+    np.testing.assert_allclose(field_fem, field_magpylib, rtol=0, atol=0.0065)

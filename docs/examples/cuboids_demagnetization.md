@@ -97,6 +97,10 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
 
 ## Compare with FEM analysis
 
+The reference is this package's finite-element solution (the `fem` extra) at
+element order 5, converged to under 0.001 mT; `scripts/fem_references.py`
+recomputes it.
+
 ```{code-cell} ipython3
 # template dataframe with the right index/path structure; the FEM values
 # from the reference dataset are filled into a copy of it below
@@ -120,11 +124,11 @@ def get_magpylib_dataframe(collection, sensors):
     return df
 
 
-sim_ANSYS = get_dataset("FEMdata_test_cuboids")
+reference = get_dataset("FEMdata_test_cuboids")
 
 df = pd.concat(
     [
-        get_FEM_dataframe(sim_ANSYS),
+        get_FEM_dataframe(reference),
         *[get_magpylib_dataframe(c, sensor) for c in colls],
     ]
 ).sort_values(["computation", "path"])
@@ -134,12 +138,24 @@ df["Distance [m]"] -= df["Distance [m]"].min()
 ```
 
 ```{code-cell} ipython3
+# the mesh sweep in one hue, darker when finer; the reference in black
+ref = reference["results"][0]["computation"]
+sweep = [c.style.label for c in colls[1:]]
+shades = px.colors.sample_colorscale("Blues", np.linspace(0.3, 1, len(sweep)))
 px_kwargs = dict(
     x="Distance [m]",
     y=B_cols,
     facet_col="variable",
     color="computation",
+    color_discrete_map={
+        colls[0].style.label: "gray",
+        **dict(zip(sweep, shades, strict=True)),
+        ref: "black",
+    },
     line_dash="computation",
+    line_dash_map={colls[0].style.label: "dash", ref: "dot"},
+    line_dash_sequence=["solid"],
+    category_orders={"computation": [colls[0].style.label, *sweep, ref]},
     height=400,
     facet_col_spacing=0.05,
     labels={**{Bk: f"{Bk} [T]" for Bk in B_cols}, "value": "value [T]"},
@@ -152,7 +168,6 @@ fig1 = px.line(
 fig1.update_yaxes(matches=None, showticklabels=True)
 
 df_diff = df.copy()
-ref = sim_ANSYS["results"][0]["computation"]
 
 for st in df_diff["computation"].unique():
     df_diff.loc[df_diff["computation"] == st, B_cols] -= df.loc[
@@ -169,8 +184,8 @@ display(fig1, fig2)
 ```
 
 Without the material response the field is off by up to 20 mT. With it, the RMS
-deviation from FEM falls from 0.9 mT with 3 cells to 0.13 mT with 682, and the
-largest deviation levels off at 0.8 mT from 182 cells on.
+deviation from FEM falls from 0.9 mT with 3 cells to 0.085 mT with 682, and the
+largest from 3.3 mT to 0.28 mT.
 
 On larger meshes made mostly of cuboid grids, the default `solver="auto"` takes
 the [iterative solver](solver_performance.md), which does not store the dense
