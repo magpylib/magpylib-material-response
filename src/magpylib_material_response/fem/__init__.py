@@ -23,14 +23,16 @@ References
 
 from __future__ import annotations
 
-try:
-    import ngsolve  # noqa: F401
-except ImportError as err:  # pragma: no cover
+import importlib.util
+
+# only a missing NGSolve gets the install hint; one that fails to load (a
+# missing library, say) raises its own error below
+if importlib.util.find_spec("ngsolve") is None:  # pragma: no cover
     msg = (
         "magpylib_material_response.fem needs NGSolve: "
         'pip install "magpylib-material-response[fem]"'
     )
-    raise ImportError(msg) from err
+    raise ImportError(msg)
 
 from magpylib_material_response.fem._solve import FemSolution, fem_solve
 from magpylib_material_response.fem._study import FemStudy, fem_study
