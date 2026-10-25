@@ -16,8 +16,11 @@ and this project adheres to
   independent check of the method of moments: with an exact open boundary and
   layers refined toward the edges, it puts a cube's polarizability within 2e-5
   of Helsing and Perfekt's in seconds. Magnets and a uniform applied field for
-  now, current sources later
-  ([#90](https://github.com/magpylib/magpylib-material-response/pull/90)).
+  now, current sources later. The reference data of the docs and the tests are
+  now its results, which `scripts/fem_references.py` recomputes, in place of
+  exports from a commercial code that no one could rerun
+  ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
+  [#93](https://github.com/magpylib/magpylib-material-response/pull/93)).
 
 ### Removed
 

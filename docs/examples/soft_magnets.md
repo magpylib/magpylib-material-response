@@ -104,6 +104,10 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
 
 ## Compare with FEM analysis
 
+The reference is this package's finite-element solution (the `fem` extra) at
+element order 5, converged to under 0.001 mT; `scripts/fem_references.py`
+recomputes it.
+
 ```{code-cell} ipython3
 # template dataframe with the right index/path structure; the FEM values
 # from the reference dataset are filled into a copy of it below
@@ -127,11 +131,11 @@ def get_magpylib_dataframe(collection, sensors):
     return df
 
 
-sim_ANSYS = get_dataset("FEMdata_test_softmag")  # FEM dataset has only Bx and Bz
+reference = get_dataset("FEMdata_test_softmag")  # By is zero on these lines
 
 df = pd.concat(
     [
-        get_FEM_dataframe(sim_ANSYS),
+        get_FEM_dataframe(reference),
         *[get_magpylib_dataframe(c, sensors) for c in colls],
     ]
 ).sort_values(["computation", "path"])
@@ -161,7 +165,7 @@ fig1 = px.line(
 fig1.update_yaxes(matches=None, showticklabels=True)
 
 df_diff = df.copy()
-ref = sim_ANSYS["results"][0]["computation"]
+ref = reference["results"][0]["computation"]
 
 for st in df_diff["computation"].unique():
     df_diff.loc[df_diff["computation"] == st, B_cols] -= df.loc[
@@ -180,8 +184,8 @@ display(fig1, fig2)
 +++ {"user_expressions": []}
 
 Without the material response the field is off by up to 24 mT. With it, the RMS
-deviation from FEM falls from 1.8 mT with 2 cells to 0.11 mT with 466, and the
-largest from 14 mT to 1.0 mT.
+deviation from FEM falls from 1.8 mT with 2 cells to 0.10 mT with 466, and the
+largest from 14 mT to 0.76 mT.
 
 On larger meshes made mostly of cuboid grids, the default `solver="auto"` takes
 the [iterative solver](solver_performance.md), which does not store the dense
