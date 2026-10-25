@@ -146,13 +146,25 @@ df["Distance [m]"] -= df["Distance [m]"].min()
 ```
 
 ```{code-cell} ipython3
+# the mesh sweep in one hue, darker when finer; the reference in black
+ref = reference["results"][0]["computation"]
+sweep = [c.style.label for c in colls[1:]]
+shades = px.colors.sample_colorscale("Blues", np.linspace(0.3, 1, len(sweep)))
 px_kwargs = dict(
     x="Distance [m]",
     y=B_cols,
     facet_row="variable",
     facet_col="sensor",
     color="computation",
+    color_discrete_map={
+        colls[0].style.label: "gray",
+        **dict(zip(sweep, shades, strict=True)),
+        ref: "black",
+    },
     line_dash="computation",
+    line_dash_map={colls[0].style.label: "dash", ref: "dot"},
+    line_dash_sequence=["solid"],
+    category_orders={"computation": [colls[0].style.label, *sweep, ref]},
     height=600,
     facet_col_spacing=0.05,
     labels={**{Bk: f"{Bk} [T]" for Bk in B_cols}, "value": "value [T]"},
@@ -165,7 +177,6 @@ fig1 = px.line(
 fig1.update_yaxes(matches=None, showticklabels=True)
 
 df_diff = df.copy()
-ref = reference["results"][0]["computation"]
 
 for st in df_diff["computation"].unique():
     df_diff.loc[df_diff["computation"] == st, B_cols] -= df.loc[
