@@ -64,6 +64,14 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
   (0.2 % and 0.03 %), and just outside the magnet's footprint, where B is weak,
   every mesh differs by about 0.3 %. The panels split in whole strips (the mesh
   is a tensor product per body), which costs more on large bodies.
+- **First pass for saturation.** `ChargeSheet.mean_polarization`, and
+  `polarization` in `fc.solve`'s info, is each body's average polarization (μ0 ×
+  the moment of its charge / its volume), free after the solve. While it stays
+  below the knee of the material's B–H curve the linear solve holds; above it,
+  saturation takes over: the MoM with the B–H iteration of issue #81, or face
+  charge on slabs of uniform χ, which on the U-core tracks saturation in 2–3 s
+  per current where the MoM takes 74 s (study: `saturation/` on
+  `explore/face-charge`).
 
 ## Files
 
@@ -86,6 +94,7 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
   `refine=2`; the sheet's `jump_indicator` equals what `fc.solve` reports;
 - a path of two positions turned 30°, against the same by hand: 5e-16; a copy
   with doubled charge, and two sources in one `getB`: exact;
+- `mean_polarization` of a uniformly magnetized cube: 4e-16;
 - `show()` in plotly, matplotlib and pyvista, plotly's colours exactly the
   square root of the smoothed charge. Smoothing moves the charge by 0.2 % or
   less of its peak at half the corners, and by 27 % at most, at the corners of
@@ -100,7 +109,9 @@ and the source stays in memory after `getB`; magpylib main fixes both
 ## Limits
 
 - Anisotropic χ, saturation and a χ varying inside a body bring back volume
-  charge; they stay with the MoM.
+  charge; they stay with the MoM. A χ uniform piece by piece (touching
+  sub-bodies, each with its own χ) does not, and is how the saturation study
+  works.
 - Sensors closer than about 0.25 mm to a soft body's edge or corner see about
   1e-2 error.
 - Moving a coupled part means a rebuild of about 3 s; a new polarization, χ or

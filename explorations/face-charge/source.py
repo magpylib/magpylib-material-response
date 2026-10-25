@@ -106,6 +106,21 @@ class ChargeSheet(magpy.misc.CustomSource):
         """Corners of each face (m, 3, 3) in m, in the source's own frame."""
         return self._V
 
+    @property
+    def mean_polarization(self):
+        """The average polarization (3,) in T of the body a closed sheet
+        encloses, in the source's own frame as magpylib gives a magnet's:
+        mu0 x the moment of its charge (the integral of sigma r) / its volume.
+
+        A first pass for saturation: the linear solve holds while this stays
+        below the knee of the material's B-H curve."""
+        T, q = self._V, self._q
+        area = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1) / 2
+        # a linear charge times the linear r, integrated exactly over each face
+        moment = np.einsum("f,fk,fkd->d", area / 12, q, T) + np.einsum("f,f,fd->d", area / 12, q.sum(1), T.sum(1))
+        volume = np.einsum("fd,fd->f", T[:, 0], np.cross(T[:, 1], T[:, 2])).sum() / 6
+        return magpy.mu_0 * moment / volume
+
     def _set(self, vertices, faces, charge_densities, panels=None):
         P = np.asarray(vertices, float).reshape(-1, 3)
         F = np.asarray(faces, int).reshape(-1, 3)

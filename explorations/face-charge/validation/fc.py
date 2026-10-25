@@ -46,9 +46,11 @@ def split(coll):
 
 
 def solve(coll, m, observers, g=2.5, refine=0):
-    """B (T) at observers (n, 3), and timings, sizes and the largest size-weighted
-    panel jump over the bodies (ChargeSheet.jump_indicator), after each round of
-    refinement (see `apply_face_charge`)."""
+    """B (T) at observers (n, 3), and timings, sizes, the largest size-weighted
+    panel jump over the bodies (ChargeSheet.jump_indicator) after each round of
+    refinement (see `apply_face_charge`), and each body's average polarization
+    |J| in T (ChargeSheet.mean_polarization): while that stays below the knee of
+    the material's B-H curve, the linear solve holds."""
     observers = np.asarray(observers, float).reshape(-1, 3)
     objs, fixed, bodies, coefs, (t0, t1, t2), rounds = _solve_bodies(coll, m, g, refine)
     B = field_B(bodies, coefs, observers)
@@ -57,7 +59,8 @@ def solve(coll, m, observers, g=2.5, refine=0):
     t3 = time.perf_counter()
     info = {"m": m, "refine": refine, "bodies": len(bodies), "unknowns": rounds[-1]["unknowns"],
             "build_s": t1 - t0, "solve_s": t2 - t1, "eval_s": t3 - t2,
-            "jump_indicator": rounds[-1]["jump_indicator"], "rounds": rounds}
+            "jump_indicator": rounds[-1]["jump_indicator"], "rounds": rounds,
+            "polarization": [float(np.linalg.norm(MU0 * b.s.moment(c) / np.prod(b.dimension))) for b, c in zip(bodies, coefs, strict=True)]}
     return B, info
 
 

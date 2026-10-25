@@ -74,6 +74,13 @@ sizes = " -> ".join(str(r["unknowns"]) for r in info_r["rounds"])
 jumps = " -> ".join(f"{r['jump_indicator']:.2%}" for r in info_r["rounds"])
 print(f"refine=2: unknowns {sizes}, jump indicator {jumps}; apply_face_charge's getB vs fc.solve "
       f"{rel(fc.apply_face_charge(coll, 3, refine=2).getB(sensors), B_r):.1e}")
+cube = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float) * 0.002
+cube_faces = [[0, 4, 6], [0, 6, 2], [1, 3, 7], [1, 7, 5], [0, 1, 5], [0, 5, 4], [2, 6, 7], [2, 7, 3], [0, 2, 3], [0, 3, 1], [4, 5, 7], [4, 7, 6]]
+Jc = np.array([0.2, -0.5, 1.1])
+nrm = np.cross(cube[cube_faces][:, 1] - cube[cube_faces][:, 0], cube[cube_faces][:, 2] - cube[cube_faces][:, 0])
+uniform = ChargeSheet(cube, cube_faces, np.repeat((nrm / np.linalg.norm(nrm, axis=1)[:, None] @ Jc / magpy.mu_0)[:, None], 3, axis=1))
+print(f"mean_polarization: a uniformly magnetized cube's {rel(uniform.mean_polarization, Jc):.0e}; the soft cuboid's "
+      f"{np.linalg.norm(sheet.mean_polarization) * 1e3:.1f} mT, as fc.solve reports {info['polarization'][0] * 1e3:.1f} mT")
 
 # 4. paths and orientation behave as for any magpylib source
 p = one(V, q, position=[(0, 0, 0), (0.01, 0.0, 0.002)], orientation=R.from_euler("z", [[0], [30]], degrees=True))
