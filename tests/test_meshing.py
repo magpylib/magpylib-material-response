@@ -453,7 +453,8 @@ def test_mesh_Cylinder_thin_ring_centroids_inside():
         out = apply_demag(magpy.Collection(src.copy(), cells)).children[1]
         return sum(c.polarization[0] * c.volume for c in out.children)
 
-    reference = moment_x(800)
+    # moment_x(800), 812 cells: 82 s on a CI runner if solved here
+    reference = 1.1564691720886743e-07
     for target in (12, 48):
         np.testing.assert_allclose(moment_x(target), reference, rtol=0.05)
 
