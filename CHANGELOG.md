@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `face_charge.apply_face_charge` solves cuboids with a uniform, isotropic
+  susceptibility on their surfaces, without a volume mesh, coupled to each other
+  and to every other source; each solved part becomes a `ChargeSheet`, an
+  ordinary magpylib source. On the six documented examples it lands within each
+  reference's uncertainty, 0.64 % at worst. `refine` splits the panels where the
+  charge jumps most, and each sheet reports `jump_indicator` and
+  `mean_polarization`, hints for accuracy and saturation
+  ([#89](https://github.com/magpylib/magpylib-material-response/pull/89)).
+
 ### Removed
 
 - **Breaking:** the `pairs_matching`, `max_dist` and `split` options of
