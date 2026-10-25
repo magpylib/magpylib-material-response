@@ -62,12 +62,13 @@ magnet = magpy.magnet.Cuboid(dimension=(0.004, 0.004, 0.003), position=(0, 0, 0.
 magnet.susceptibility = 0.0  # exactly 0: stays a magpylib Cuboid, drawn as one
 coll = magpy.Collection(soft, magnet)
 sensors = np.array([[0.0, 0.0, 0.009], [0.008, 0.0, 0.0], [0.0, 0.0, -0.005], [0.02, 0.01, 0.01]])
-B_fc, _ = fc.solve(coll, 3, sensors)
+B_fc, info = fc.solve(coll, 3, sensors)
 solved = fc.apply_face_charge(coll, 3)
 kinds = sorted(type(s).__name__ for s in solved.sources_all)
 sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
 print(f"apply_face_charge: {kinds}; getB vs fc.solve {rel(solved.getB(sensors), B_fc):.1e}; input untouched: {coll.sources_all[0] is soft}")
-print(f"the soft cuboid's sheet: {len(sheet.faces)} faces on {len(sheet.vertices)} vertices (corners shared, {3 * len(sheet.faces)} unshared)")
+print(f"the soft cuboid's sheet: {len(sheet.faces)} faces on {len(sheet.vertices)} vertices (corners shared, {3 * len(sheet.faces)} unshared); "
+      f"largest panel jump {sheet.jump:.1%} of its peak charge, fc.solve reports {info['jump']:.1%}")
 
 # 4. paths and orientation behave as for any magpylib source
 p = one(V, q, position=[(0, 0, 0), (0.01, 0.0, 0.002)], orientation=R.from_euler("z", [[0], [30]], degrees=True))

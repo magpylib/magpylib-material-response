@@ -189,16 +189,40 @@ class ChargeSheet(magpy.misc.CustomSource):
         np.maximum.at(hi, inv, owner)
         return edges[(lo != hi) | (np.bincount(inv) == 1)]
 
+    @property
+    def jump(self):
+        """The largest jump of the charge between panels that meet at a corner
+        on a flat face, as a share of the sheet's peak charge.
+
+        On a flat face of a uniform body the charge is continuous, so the jump
+        is discretization error, free to read off a solved sheet: it falls as
+        the mesh is refined, and where it is large, fields close to the surface
+        are less accurate than far ones."""
+        inv, _ = self._corner_groups()
+        q = self._q.ravel()
+        peak = np.abs(q).max(initial=0.0)
+        if not peak:
+            return 0.0
+        hi = np.full(inv.max() + 1, -np.inf)
+        lo = np.full(inv.max() + 1, np.inf)
+        np.maximum.at(hi, inv, q)
+        np.minimum.at(lo, inv, q)
+        return float((hi - lo).max() / peak)
+
     def _smoothed(self):
         """Corner charges (3m,) averaged, by face area, over the corners that
         share a vertex and a face plane."""
+        inv, w = self._corner_groups()
+        return (np.bincount(inv, w * self._q.ravel()) / np.bincount(inv, w))[inv]
+
+    def _corner_groups(self):
+        """The group of each face corner (3m,), corners sharing a vertex and a
+        face plane, and each corner's face area (3m,)."""
         n = np.cross(self._V[:, 1] - self._V[:, 0], self._V[:, 2] - self._V[:, 0])
         area = np.linalg.norm(n, axis=1) / 2
         n = np.round(n / (2 * area[:, None]), 6)
         key = np.concatenate([self._faces.reshape(-1, 1), np.repeat(n, 3, axis=0)], axis=1)
-        inv = np.unique(key, axis=0, return_inverse=True)[1].ravel()
-        w = np.repeat(area, 3)
-        return (np.bincount(inv, w * self._q.ravel()) / np.bincount(inv, w))[inv]
+        return np.unique(key, axis=0, return_inverse=True)[1].ravel(), np.repeat(area, 3)
 
     # ── constructors ───────────────────────────────────────────────────────
     @classmethod

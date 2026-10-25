@@ -42,6 +42,14 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
   discretization error, and the square root shows the weak charge where flux
   returns into a soft part. `style.mesh.grid.show` draws the panel edges. A body
   with χ exactly 0 is not solved and keeps magpylib's own drawing.
+- **Accuracy hint.** `ChargeSheet.jump`, and `jump` in `fc.solve`'s info, is the
+  largest jump of the charge between panels meeting at a corner, as a share of
+  the peak charge. On a flat face the true charge is continuous, so the jump is
+  discretization error. For the plate under a magnet it is 39 % at level 3, 21 %
+  at level 5 and 16 % at level 7. Against level 7, B 0.25 mm above the plate
+  under the magnet is 2–3 % off at level 3 and under 0.6 % at level 5; far
+  fields are 0.01–0.8 % off at level 3. The panels grade toward the body's
+  edges, not under a magnet close to a face, so there the jump falls slowly.
 
 ## Files
 
@@ -60,7 +68,8 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
 - uniform charge against magpylib's own `misc.Triangle`: 5e-15;
 - linear charge against uniform pieces: 1.9e-3, 4.7e-4, 1.2e-4 at 64, 256 and
   1,024 pieces, the second-order convergence of the pieces to it;
-- a collection through `apply_face_charge` against `fc.solve`: 1e-11;
+- a collection through `apply_face_charge` against `fc.solve`: 1e-11; the
+  sheet's `jump` equals what `fc.solve` reports;
 - a path of two positions turned 30°, against the same by hand: 5e-16; a copy
   with doubled charge, and two sources in one `getB`: exact;
 - `show()` in plotly, matplotlib and pyvista, plotly's colours exactly the
