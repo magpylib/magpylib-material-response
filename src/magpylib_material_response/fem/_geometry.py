@@ -19,7 +19,7 @@ from magpylib_material_response.demag import (
     get_H_ext,
     get_susceptibilities,
 )
-from magpylib_material_response.meshing import _thinnest
+from magpylib_material_response.meshing import _thinnest as _thinnest_part
 
 #: The magnets fem meshes: those with a volume.
 SOLIDS = (
@@ -32,7 +32,7 @@ SOLIDS = (
 )
 #: More sharp edges than this meeting at a corner break netgen's geometric
 #: refinement (an icosahedron, five at each corner, fails to assemble, and finer
-#: triangle meshes crash); such a shape gets no edge layers.
+#: triangle meshes crash); such corners and their edges get no edge layers.
 MAX_EDGES_AT_CORNER = 4
 
 
@@ -122,6 +122,35 @@ def parts_of(collection):
     return parts, applied[0]
 
 
+def _thinnest(src):
+    """The smallest extent of a magnet in m: its default element size."""
+    if isinstance(src, magpy.magnet.Sphere):
+        return float(src.diameter)
+    if isinstance(src, magpy.magnet.Tetrahedron):
+        v = np.asarray(src.vertices, dtype=float)
+        volume = abs(np.linalg.det(v[1:] - v[0])) / 6
+        faces = [(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]
+        area = max(
+            np.linalg.norm(np.cross(v[j] - v[i], v[k] - v[i])) / 2 for i, j, k in faces
+        )
+        return float(3 * volume / area)  # the lowest height
+    if isinstance(src, magpy.magnet.TriangularMesh):
+        # the narrower of the box along the axes and along the vertices' own
+        # principal axes, which a tilted plate's thickness follows
+        v = np.asarray(src.vertices, dtype=float)
+        _, _, axes = np.linalg.svd(v - v.mean(axis=0), full_matrices=False)
+        return float(min(np.ptp(v, axis=0).min(), np.ptp(v @ axes.T, axis=0).min()))
+    return _thinnest_part(src)  # Cuboid, Cylinder, CylinderSegment
+
+
+def _ring(src):
+    """(r1, r2, h) of a Cylinder (r1 = 0) or a CylinderSegment, in m."""
+    if isinstance(src, magpy.magnet.Cylinder):
+        return 0.0, src.dimension[0] / 2, src.dimension[1]
+    r1, r2, h = src.dimension[:3]
+    return r1, r2, h
+
+
 def distance(src, points):
     """Distance in m from global `points` (n, 3) to the solid `src`, zero inside:
     exact for cuboids, spheres and cylinders, from the full ring for cylinder
@@ -135,10 +164,7 @@ def distance(src, points):
         excess = np.abs(local) - np.asarray(src.dimension, dtype=float) / 2
         return np.linalg.norm(np.maximum(excess, 0), axis=1)
     if isinstance(src, magpy.magnet.Cylinder | magpy.magnet.CylinderSegment):
-        if isinstance(src, magpy.magnet.Cylinder):
-            r1, (r2, h) = 0.0, (src.dimension[0] / 2, src.dimension[1])
-        else:
-            r1, r2, h = src.dimension[:3]
+        r1, r2, h = _ring(src)
         rho = np.linalg.norm(local[:, :2], axis=1)
         radial = np.maximum(np.maximum(r1 - rho, rho - r2), 0)
         axial = np.maximum(np.abs(local[:, 2]) - h / 2, 0)
@@ -154,10 +180,7 @@ def _corners(src):
         local = 0.5 * np.array(np.meshgrid([-1, 1], [-1, 1], [-1, 1])).T.reshape(-1, 3)
         local = local * np.asarray(src.dimension, dtype=float)
     elif isinstance(src, magpy.magnet.Cylinder | magpy.magnet.CylinderSegment):
-        if isinstance(src, magpy.magnet.Cylinder):
-            r, h = src.dimension[0] / 2, src.dimension[1]
-        else:
-            r, h = src.dimension[1], src.dimension[2]
+        _, r, h = _ring(src)
         local = np.array(np.meshgrid([-r, r], [-r, r], [-h / 2, h / 2])).T.reshape(
             -1, 3
         )
@@ -227,6 +250,8 @@ def solid(src, center, length):
         ]
         # coplanar triangles become one face, so that only real edges are sharp
         shape = occ.Solid(occ.Sew(triangles)).UnifySameDomain()
+        if shape.mass < 0:  # faces wound inward: the solid would be the outside
+            shape = shape.Reversed()
     else:
         msg = f"fem does not mesh {type(src).__name__} objects."
         raise TypeError(msg)
@@ -246,23 +271,20 @@ def solid(src, center, length):
 def _mark_sharp(shape):
     """Mark for geometric refinement the edges where two faces meet, not the
     seams of a curved face, and the corners where two or more of them meet;
-    nothing when more than ``MAX_EDGES_AT_CORNER`` meet at a corner."""
+    not corners where more than ``MAX_EDGES_AT_CORNER`` meet, nor their edges."""
     faces_of = {}
     for face in shape.faces:
         for edge in face.edges:
-            faces_of.setdefault(hash(edge), set()).add(hash(face))
-    sharp = {}
-    for edge in shape.edges:
-        if len(faces_of.get(hash(edge), ())) >= 2:
-            sharp[hash(edge)] = edge
+            faces_of.setdefault(edge, set()).add(face)
+    sharp = {edge for edge in shape.edges if len(faces_of.get(edge, ())) >= 2}
     edges_at = {}
-    for key, edge in sharp.items():
+    for edge in sharp:
         for vertex in edge.vertices:
-            edges_at.setdefault(hash(vertex), (vertex, set()))[1].add(key)
-    if any(len(keys) > MAX_EDGES_AT_CORNER for _, keys in edges_at.values()):
-        return
-    for edge in sharp.values():
+            edges_at.setdefault(vertex, set()).add(edge)
+    crowded = {v for v, edges in edges_at.items() if len(edges) > MAX_EDGES_AT_CORNER}
+    marked = {e for e in sharp if not crowded.intersection(e.vertices)}
+    for edge in marked:
         edge.hpref = 1
-    for vertex, keys in edges_at.values():
-        if len(keys) >= 2:
+    for vertex, edges in edges_at.items():
+        if vertex not in crowded and len(edges & marked) >= 2:
             vertex.hpref = 1

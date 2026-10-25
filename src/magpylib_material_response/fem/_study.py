@@ -42,7 +42,10 @@ class FemStudy:
     last_change : float
         Change between the two highest orders, relative to the highest.
     solution : FemSolution
-        The solve at the highest order, for more fields at no further cost.
+        The solve at the highest order. Its moment is as good as the study's;
+        fields at points that were not observers come from a mesh not refined
+        there and carry no estimate, so pass every point of interest as an
+        observer.
     """
 
     orders: np.ndarray
@@ -67,6 +70,7 @@ def fem_study(
     edge_layers=4,
     observer_maxh=None,
     solver_tol=1e-10,
+    max_iter=5000,
     min_log_time=None,
 ) -> FemStudy:
     """Solve `collection` by finite elements at increasing orders on one mesh
@@ -82,7 +86,7 @@ def fem_study(
         returning the quantity of interest, such as ``lambda s: s.moment``.
     orders : sequence of int, default (2, 3, 4)
         Polynomial orders, increasing. Three or more give an error estimate.
-    maxh, edge_layers, observer_maxh, solver_tol, min_log_time
+    maxh, edge_layers, observer_maxh, solver_tol, max_iter, min_log_time
         As for :func:`fem_solve`.
 
     Returns
@@ -125,7 +129,8 @@ def fem_study(
     if callable(quantity):
         evaluate, observers = quantity, None
     else:
-        observers = np.asarray(quantity, dtype=float)
+        # one row per observer, so that errors are per observer, a lone one too
+        observers = np.asarray(quantity, dtype=float).reshape(-1, 3)
 
         def evaluate(solution):
             return solution.getB(observers)
@@ -140,7 +145,7 @@ def fem_study(
     )
     values, ndofs, seconds = [], [], []
     for order in orders:
-        solution = model.solve(order, solver_tol=solver_tol)
+        solution = model.solve(order, solver_tol=solver_tol, max_iter=max_iter)
         values.append(np.asarray(evaluate(solution), dtype=float))
         ndofs.append(solution.ndof)
         seconds.append(solution.seconds["assemble"] + solution.seconds["solve"])

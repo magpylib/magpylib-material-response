@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation
 
 pytest.importorskip("ngsolve")
 
-from magpylib_material_response.fem import fem_study
+from magpylib_material_response.fem import fem_solve, fem_study
 
 B_EXT = 0.01
 
@@ -122,13 +122,18 @@ def _icosahedron(radius):
             vertices=[(0, 0, 0), (0.01, 0, 0), (0, 0.01, 0), (0, 0, 0.01)],
             polarization=(0, 0, 0),
         ),
+        lambda: magpy.magnet.Tetrahedron(
+            vertices=[(0, 0, 0), (0, 0.01, 0), (0.01, 0, 0), (0, 0, 0.01)],
+            polarization=(0, 0, 0),
+        ),
         lambda: _icosahedron(0.005),
     ],
-    ids=["cylinder", "segment", "tetrahedron", "icosahedron"],
+    ids=["cylinder", "segment", "tetrahedron", "tetrahedron-reversed", "icosahedron"],
 )
 def test_every_shape_solves(make):
-    """Each shape takes its own path into a solid; an icosahedron, with five
-    edges at each corner, broke netgen's edge layers."""
+    """Each shape takes its own path into a solid. A reversed tetrahedron came
+    out inside-out and vanished from the mesh; an icosahedron, with five edges
+    at each corner, broke netgen's edge layers."""
     soft = make()
     soft.susceptibility = 1000
     model = magpy.Collection(soft)
@@ -141,7 +146,7 @@ def test_every_shape_solves(make):
 
 def test_kept_solutions_stay_valid():
     """Every order curves the shared mesh; a solution kept from a study reads its
-    field on its own geometry afterwards."""
+    field on its own geometry afterwards. A lone observer gets one error."""
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
     sphere.susceptibility = 1000
     model = magpy.Collection(sphere)
@@ -157,6 +162,18 @@ def test_kept_solutions_stay_valid():
 
     for solution, at_solve in kept:
         np.testing.assert_allclose(solution.getB(observers), at_solve, rtol=1e-12)
+    assert fem_study(model, observers[0], (1, 2, 3)).errors.shape == (1,)
+
+
+def test_no_source_gives_no_field():
+    """No remanence and no applied field: a zero field, as from apply_demag."""
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
+    sphere.susceptibility = 1000
+
+    solution = fem_solve(magpy.Collection(sphere), 2)
+
+    np.testing.assert_array_equal(solution.moment, 0)
+    np.testing.assert_array_equal(solution.getB((0, 0, 0.008)), 0)
 
 
 def _two_fields():
@@ -181,30 +198,51 @@ def _overlapping():
     return magpy.Collection(cubes)
 
 
+def _magnet():
+    magnet = magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
+    magnet.susceptibility = 0
+    return magpy.Collection(magnet)
+
+
 @pytest.mark.parametrize(
-    ("model", "error"),
+    ("model", "kwargs", "error"),
     [
         (
             lambda: magpy.Collection(
                 magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1)),
                 magpy.current.Circle(diameter=3, current=1),
             ),
+            {},
             NotImplementedError,
         ),
-        (_two_fields, ValueError),
-        (lambda: magpy.Collection(magpy.misc.Dipole(moment=(0, 0, 1))), TypeError),
+        (_two_fields, {}, ValueError),
+        (lambda: magpy.Collection(magpy.misc.Dipole(moment=(0, 0, 1))), {}, TypeError),
         (
             lambda: magpy.Collection(
                 magpy.misc.Triangle(
                     vertices=[(0, 0, 0), (1, 0, 0), (0, 1, 0)], polarization=(0, 0, 1)
                 )
             ),
+            {},
             TypeError,
         ),
-        (_overlapping, ValueError),
+        (_overlapping, {}, ValueError),
+        (_magnet, {"edge_layers": -1}, ValueError),
+        (_magnet, {"maxh": float("nan")}, ValueError),
+        (_magnet, {"observer_maxh": 0.1, "observers": None}, ValueError),
     ],
-    ids=["current", "two-applied-fields", "dipole", "triangle", "overlap"],
+    ids=[
+        "current",
+        "two-applied-fields",
+        "dipole",
+        "triangle",
+        "overlap",
+        "negative-edge-layers",
+        "nan-maxh",
+        "observer-maxh-without-observers",
+    ],
 )
-def test_refuses_what_it_cannot_model(model, error):
+def test_refuses_what_it_cannot_model(model, kwargs, error):
+    kwargs = {"observers": [(0, 0, 5)], **kwargs}
     with pytest.raises(error):
-        fem_study(model(), [(0, 0, 5)])
+        fem_solve(model(), 2, **kwargs)

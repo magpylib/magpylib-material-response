@@ -27,6 +27,7 @@ References
 from __future__ import annotations
 
 import time
+import warnings
 from contextlib import contextmanager
 from itertools import combinations
 
@@ -65,6 +66,15 @@ OBSERVER_FLOOR = 0.1
 #: cap the field 0.85-0.97 R out fell from 38 % to 1.2 % off, 1.03-1.2 R out
 #: from 2 % to 0.24 %.
 SHELL_MAXH = 0.125
+
+
+def _positions(observers):
+    """Observers as an (n, 3) array in m, and the shape they came in."""
+    obs = np.asarray(observers, dtype=float)
+    if obs.shape[-1:] != (3,):
+        msg = f"observers must have shape (..., 3); got {obs.shape}."
+        raise ValueError(msg)
+    return obs.reshape(-1, 3), obs.shape
 
 
 @contextmanager
@@ -129,12 +139,9 @@ class FemSolution:
         return self._field(observers, "H")
 
     def _field(self, observers, kind):
-        obs = np.asarray(observers, dtype=float)
-        if obs.shape[-1:] != (3,):
-            msg = f"observers must have shape (..., 3); got {obs.shape}."
-            raise ValueError(msg)
+        obs, shape = _positions(observers)
         model = self._model
-        s = (obs.reshape(-1, 3) - model.center) / model.length
+        s = (obs - model.center) / model.length
         out = np.empty_like(s)
         rho = np.linalg.norm(s, axis=1)
         inside = rho < model.radius
@@ -148,7 +155,7 @@ class FemSolution:
             out[~inside] = -self._kelvin_gradient(s[~inside])
         if kind == "H":
             out /= MU0
-        return out.reshape(obs.shape)
+        return out.reshape(shape)
 
     def _kelvin_gradient(self, s):
         """grad u at points outside the ball, from its image in the Kelvin ball:
@@ -190,16 +197,19 @@ class Model:
 
         self.curved = None
         sizes = self._sizes(maxh)
-        if observer_maxh is not None and observer_maxh <= 0:
-            msg = f"observer_maxh must be positive; got {observer_maxh}."
+        if int(edge_layers) != edge_layers or edge_layers < 0:
+            msg = f"edge_layers must be an integer, 0 or more; got {edge_layers}."
             raise ValueError(msg)
+        if observer_maxh is not None:
+            if observers is None:
+                msg = "observer_maxh needs observers: the positions to refine."
+                raise ValueError(msg)
+            if not observer_maxh > 0 or not np.isfinite(observer_maxh):
+                msg = f"observer_maxh must be positive; got {observer_maxh}."
+                raise ValueError(msg)
         obs = None
         if observers is not None:
-            obs = np.asarray(observers, dtype=float)
-            if obs.shape[-1:] != (3,):
-                msg = f"observers must have shape (..., 3); got {obs.shape}."
-                raise ValueError(msg)
-            obs = (obs.reshape(-1, 3) - self.center) / self.length
+            obs = (_positions(observers)[0] - self.center) / self.length
         with (
             timelog(f"FEM mesh of {len(self.parts)} parts", min_log_time=min_log_time),
             _quiet(),
@@ -214,22 +224,24 @@ class Model:
             sizes = np.array([p.thinnest for p in self.parts])
         else:
             sizes = np.broadcast_to(np.asarray(maxh, dtype=float), (len(self.parts),))
-        if np.any(sizes <= 0):
-            msg = f"maxh must be positive; got {maxh}."
+        if not np.all(sizes > 0) or not np.all(np.isfinite(sizes)):
+            msg = f"maxh must be positive and finite; got {maxh}."
             raise ValueError(msg)
         return sizes / self.length
 
     def _observer_sizes(self, s, observer_maxh, sizes):
         """Element size at scaled observers `s`: `observer_maxh` in m, or by
         default ``OBSERVER_SHARE`` of the distance to the nearest magnet,
-        between ``OBSERVER_FLOOR`` and one times the magnets' element size, and
+        between ``OBSERVER_FLOOR`` and one times that magnet's element size, and
         at most ``SHELL_MAXH`` close to the sphere."""
-        top = min(float(sizes.min()), FAR_MAXH * self.radius)
         if observer_maxh is not None:
             return np.full(len(s), observer_maxh / self.length)
         points = s * self.length + self.center
-        gap = np.min([distance(p.source, points) for p in self.parts], axis=0)
-        h = np.clip(OBSERVER_SHARE * gap / self.length, OBSERVER_FLOOR * top, top)
+        gaps = np.array([distance(p.source, points) for p in self.parts])
+        nearest = gaps.argmin(axis=0)
+        top = np.minimum(sizes[nearest], FAR_MAXH * self.radius)
+        gap = gaps[nearest, np.arange(len(s))] / self.length
+        h = np.clip(OBSERVER_SHARE * gap, OBSERVER_FLOOR * top, top)
         rho = np.linalg.norm(s, axis=1) / self.radius
         shell = (rho > 0.75) & (rho < 1 / 0.75)
         h[shell] = np.minimum(h[shell], SHELL_MAXH * self.radius)
@@ -283,13 +295,14 @@ class Model:
     def _check_overlap(self, solids):
         """Refuse magnets that overlap: the mesh would hold their union, where
         magpylib and apply_demag add up their fields."""
+        volumes = [shape.mass for shape in solids]
         for (i, a), (j, b) in combinations(enumerate(solids), 2):
             lo_a, hi_a = self.parts[i].bounds
             lo_b, hi_b = self.parts[j].bounds
             if np.any(hi_a <= lo_b) or np.any(hi_b <= lo_a):
                 continue
             shared = (a * b).mass
-            if shared > 1e-9 * min(a.mass, b.mass):
+            if shared > 1e-9 * min(volumes[i], volumes[j]):
                 msg = (
                     f"Magnets {i} and {j} overlap ({shared * self.length**3:.3g} "
                     "m³): the finite elements would model their union, where "
@@ -306,17 +319,28 @@ class Model:
 
     def locate(self, points, center):
         """Mesh points of scaled `points` in the ball around `center`; a point
-        the mesh cannot find is moved toward the centre by ``NUDGES`` in turn."""
+        the mesh cannot find is moved toward the centre by ``NUDGES`` in turn,
+        with a warning from a thousandth of the ball's radius on."""
         mp = self.mesh(points[:, 0], points[:, 1], points[:, 2])
+        moved_far = 0
         for nudge in NUDGES:
             lost = mp["nr"] < 0
             if not lost.any():
-                return mp
+                break
             moved = center + (points[lost] - center) * (1 - nudge)
             mp[lost] = self.mesh(moved[:, 0], moved[:, 1], moved[:, 2])
+            if nudge >= 1e-3:
+                moved_far = max(moved_far, nudge)
         if (mp["nr"] < 0).any():
             msg = "Some observers fall outside the finite-element mesh."
             raise RuntimeError(msg)
+        if moved_far:
+            msg = (
+                "Some observers lie on the meshed sphere, between it and its "
+                f"elements, and are read up to {moved_far:.0%} of its radius "
+                "closer to its centre; a higher order fits the elements to it."
+            )
+            warnings.warn(msg, stacklevel=4)
         return mp
 
     def coefficients(self):
@@ -359,7 +383,11 @@ class Model:
             a += (mu_cf * ng.grad(u)) * ng.grad(v) * ng.dx
             # the surface term of the energy outside, see the module docstring
             a += (1 / self.radius) * u * v * ng.ds("gammak")
-            f = ng.LinearForm(src_cf * ng.grad(v) * ng.dx)
+            f = ng.LinearForm(fes)
+            # with no remanence and no applied field the field is zero, and a
+            # zero source would leave NGSolve a form without a test function
+            if any(np.any(p.chi @ self.B_ext + p.polarization) for p in self.parts):
+                f += src_cf * ng.grad(v) * ng.dx
             pre = ng.Preconditioner(a, "bddc")
             gf = ng.GridFunction(fes)
             with ng.TaskManager():
@@ -398,6 +426,7 @@ def fem_solve(
     observers=None,
     observer_maxh=None,
     solver_tol=1e-10,
+    max_iter=5000,
     min_log_time=None,
 ):
     """Solve a magpylib model by finite elements.
@@ -437,6 +466,8 @@ def fem_solve(
         singular, need elements smaller than their distance to it.
     solver_tol : float, default 1e-10
         Relative residual of the conjugate gradients.
+    max_iter : int, default 5000
+        Iterations of the conjugate gradients before the solve fails.
     min_log_time : float, optional
         Steps shorter than this many seconds are not logged.
 
@@ -454,4 +485,4 @@ def fem_solve(
         observer_maxh=observer_maxh,
         min_log_time=min_log_time,
     )
-    return model.solve(order, solver_tol=solver_tol)
+    return model.solve(order, solver_tol=solver_tol, max_iter=max_iter)

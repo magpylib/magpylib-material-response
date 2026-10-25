@@ -650,14 +650,12 @@ def _responds(src):
 
 
 def _thinnest(obj):
-    """The smallest extent of a part."""
+    """The smallest extent of a part that mesh_uniform meshes."""
     if isinstance(obj, magpy.magnet.CylinderSegment):
         r1, r2, h, *_ = obj.dimension
         return float(min(r2 - r1, h))
-    if isinstance(obj, magpy.magnet.TriangularMesh | magpy.magnet.Tetrahedron):
+    if isinstance(obj, magpy.magnet.TriangularMesh):
         return float(np.ptp(obj.vertices, axis=0).min())
-    if isinstance(obj, magpy.magnet.Sphere):
-        return float(obj.diameter)
     return float(min(obj.dimension))  # Cuboid, Cylinder (diameter, height)
 
 
