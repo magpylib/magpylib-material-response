@@ -27,13 +27,15 @@ References
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
+from itertools import combinations
 
 import magpylib as magpy
 import ngsolve as ng
 import numpy as np
 from netgen import meshing, occ
 
-from magpylib_material_response.fem._geometry import parts_of, solid
+from magpylib_material_response.fem._geometry import distance, parts_of, solid
 from magpylib_material_response.utils import timelog
 
 MU0 = magpy.mu_0
@@ -48,10 +50,32 @@ FAR_MAXH = 0.25
 #: is as accurate on the cube at order 5 (2e-5).
 LAYER_RATIO = 0.3
 #: How far, in ball radii, a point the mesh cannot find is moved toward the
-#: ball's centre: points on the sphere fall between it and its curved elements.
-NUDGE = 1e-7
+#: ball's centre, one step after the other: points on the sphere fall between
+#: it and its elements, about 1e-4 at order 2 and 1e-2 at order 1.
+NUDGES = (1e-7, 1e-4, 1e-3, 1e-2, 3e-2)
+#: The default element size at an observer, as a share of its distance to the
+#: nearest magnet: 0.03 mm at 0.1 mm from a 1 mm cube's edge converged the field
+#: there to 0.006 mT, where the magnets' element size left it 1 mT off.
+OBSERVER_SHARE = 0.3
+#: Observers inside or on a magnet get this share of the magnets' element size.
+OBSERVER_FLOOR = 0.1
+#: Element size, in ball radii, at most at observers within a quarter radius of
+#: the sphere. There the elements curved onto it go wrong at the far size: two
+#: of twenty points 0.95 R out read 30 mT as 36 and 71, at order 3. With this
+#: cap the field 0.85-0.97 R out fell from 38 % to 1.2 % off, 1.03-1.2 R out
+#: from 2 % to 0.24 %.
+SHELL_MAXH = 0.125
 
-ng.ngsglobals.msg_level = 0
+
+@contextmanager
+def _quiet():
+    """NGSolve and netgen without their progress messages, only while we work."""
+    level = ng.ngsglobals.msg_level
+    ng.ngsglobals.msg_level = 0
+    try:
+        yield
+    finally:
+        ng.ngsglobals.msg_level = level
 
 
 class FemSolution:
@@ -114,6 +138,8 @@ class FemSolution:
         out = np.empty_like(s)
         rho = np.linalg.norm(s, axis=1)
         inside = rho < model.radius
+        # a later solve of the same model curves its mesh for another order
+        model.curve(self.order)
         if inside.any():
             cf = model.flux_density(self._gf) if kind == "B" else -ng.grad(self._gf)
             mp = model.locate(s[inside], np.zeros(3))
@@ -162,15 +188,23 @@ class Model:
         self.kelvin_center = np.array([3 * BALL, 0.0, 0.0])
         self.min_log_time = min_log_time
 
+        self.curved = None
         sizes = self._sizes(maxh)
         if observer_maxh is not None and observer_maxh <= 0:
             msg = f"observer_maxh must be positive; got {observer_maxh}."
             raise ValueError(msg)
-        h_obs = (
-            float(sizes.min()) if observer_maxh is None else observer_maxh / self.length
-        )
-        with timelog(f"FEM mesh of {len(self.parts)} parts", min_log_time=min_log_time):
-            self.mesh = self._mesh(sizes, observers, h_obs, edge_layers)
+        obs = None
+        if observers is not None:
+            obs = np.asarray(observers, dtype=float)
+            if obs.shape[-1:] != (3,):
+                msg = f"observers must have shape (..., 3); got {obs.shape}."
+                raise ValueError(msg)
+            obs = (obs.reshape(-1, 3) - self.center) / self.length
+        with (
+            timelog(f"FEM mesh of {len(self.parts)} parts", min_log_time=min_log_time),
+            _quiet(),
+        ):
+            self.mesh = self._mesh(sizes, obs, observer_maxh, edge_layers)
         self.mesh_seconds = time.perf_counter() - start
 
     def _sizes(self, maxh):
@@ -185,7 +219,23 @@ class Model:
             raise ValueError(msg)
         return sizes / self.length
 
-    def _mesh(self, sizes, observers, h_obs, edge_layers):
+    def _observer_sizes(self, s, observer_maxh, sizes):
+        """Element size at scaled observers `s`: `observer_maxh` in m, or by
+        default ``OBSERVER_SHARE`` of the distance to the nearest magnet,
+        between ``OBSERVER_FLOOR`` and one times the magnets' element size, and
+        at most ``SHELL_MAXH`` close to the sphere."""
+        top = min(float(sizes.min()), FAR_MAXH * self.radius)
+        if observer_maxh is not None:
+            return np.full(len(s), observer_maxh / self.length)
+        points = s * self.length + self.center
+        gap = np.min([distance(p.source, points) for p in self.parts], axis=0)
+        h = np.clip(OBSERVER_SHARE * gap / self.length, OBSERVER_FLOOR * top, top)
+        rho = np.linalg.norm(s, axis=1) / self.radius
+        shell = (rho > 0.75) & (rho < 1 / 0.75)
+        h[shell] = np.minimum(h[shell], SHELL_MAXH * self.radius)
+        return h
+
+    def _mesh(self, sizes, observers, observer_maxh, edge_layers):
         R, far = self.radius, FAR_MAXH * self.radius
         solids = []
         for i, (part, h) in enumerate(zip(self.parts, sizes, strict=True)):
@@ -193,6 +243,7 @@ class Model:
             shape.mat(f"part{i}")
             shape.maxh = min(h, far)
             solids.append(shape)
+        self._check_overlap(solids)
         ball = occ.Sphere(occ.Pnt(0, 0, 0), R)
         ball.faces.name = "gamma"
         ball.faces.maxh = far
@@ -207,28 +258,65 @@ class Model:
         air = (ball - occ.Glue(solids)).mat("air")
         params = meshing.MeshingParameters(maxh=far, grading=0.3)
         if observers is not None:
-            s = (
-                np.asarray(observers, dtype=float).reshape(-1, 3) - self.center
-            ) / self.length
-            for x, y, z in s[np.linalg.norm(s, axis=1) < R]:
-                params.RestrictH(x, y, z, h_obs)
+            h = self._observer_sizes(observers, observer_maxh, sizes)
+            rho = np.linalg.norm(observers, axis=1)
+            for (x, y, z), hi in zip(observers[rho < R], h[rho < R], strict=True):
+                params.RestrictH(x, y, z, hi)
+            # just outside, where the field still varies on the magnets' scale:
+            # at their images in the Kelvin ball, where lengths scale by
+            # (R / rho)², and inside the sphere in their direction, which the
+            # field at them depends on as much
+            near = (rho >= R) & (rho < 2 * R)
+            direction = observers[near] / rho[near, None]
+            images = R**2 * direction / rho[near, None] + self.kelvin_center
+            scale = (R / rho[near]) ** 2
+            for (x, y, z), hi in zip(images, h[near] * scale, strict=True):
+                params.RestrictH(x, y, z, hi)
+            for (x, y, z), hi in zip(0.98 * R * direction, h[near], strict=True):
+                params.RestrictH(x, y, z, hi)
         ngmesh = occ.OCCGeometry(occ.Glue([air, *solids, kelvin])).GenerateMesh(params)
         mesh = ng.Mesh(ngmesh)
         if edge_layers:
             mesh.RefineHP(edge_layers, LAYER_RATIO)
         return mesh
 
+    def _check_overlap(self, solids):
+        """Refuse magnets that overlap: the mesh would hold their union, where
+        magpylib and apply_demag add up their fields."""
+        for (i, a), (j, b) in combinations(enumerate(solids), 2):
+            lo_a, hi_a = self.parts[i].bounds
+            lo_b, hi_b = self.parts[j].bounds
+            if np.any(hi_a <= lo_b) or np.any(hi_b <= lo_a):
+                continue
+            shared = (a * b).mass
+            if shared > 1e-9 * min(a.mass, b.mass):
+                msg = (
+                    f"Magnets {i} and {j} overlap ({shared * self.length**3:.3g} "
+                    "m³): the finite elements would model their union, where "
+                    "magpylib and apply_demag add up their fields."
+                )
+                raise ValueError(msg)
+
+    def curve(self, order):
+        """Curve the mesh's elements for `order`, unless they are already."""
+        if self.curved != order:
+            with _quiet():
+                self.mesh.Curve(order)
+            self.curved = order
+
     def locate(self, points, center):
         """Mesh points of scaled `points` in the ball around `center`; a point
-        the mesh cannot find is moved toward the centre by ``NUDGE``."""
+        the mesh cannot find is moved toward the centre by ``NUDGES`` in turn."""
         mp = self.mesh(points[:, 0], points[:, 1], points[:, 2])
-        lost = mp["nr"] < 0
-        if lost.any():
-            moved = center + (points[lost] - center) * (1 - NUDGE)
+        for nudge in NUDGES:
+            lost = mp["nr"] < 0
+            if not lost.any():
+                return mp
+            moved = center + (points[lost] - center) * (1 - nudge)
             mp[lost] = self.mesh(moved[:, 0], moved[:, 1], moved[:, 2])
-            if (mp["nr"] < 0).any():
-                msg = "Some observers fall outside the finite-element mesh."
-                raise RuntimeError(msg)
+        if (mp["nr"] < 0).any():
+            msg = "Some observers fall outside the finite-element mesh."
+            raise RuntimeError(msg)
         return mp
 
     def coefficients(self):
@@ -254,9 +342,12 @@ class Model:
             raise ValueError(msg)
         order = int(order)
         mesh = self.mesh
-        with timelog(f"FEM solve at order {order}", min_log_time=self.min_log_time):
+        with (
+            timelog(f"FEM solve at order {order}", min_log_time=self.min_log_time),
+            _quiet(),
+        ):
             start = time.perf_counter()
-            mesh.Curve(order)
+            self.curve(order)
             fes = ng.Periodic(ng.H1(mesh, order=order))
             u, v = fes.TnT()
             mu, source = self.coefficients()
@@ -281,10 +372,12 @@ class Model:
                 gf.vec.data = solver * rhs
                 gf.vec.data += a.harmonic_extension * gf.vec
                 gf.vec.data += a.inner_solve * rhs
-            if solver.iterations >= max_iter:
+            first, last = solver.residuals[0], solver.residuals[-1]
+            if last > solver_tol * first:
                 msg = (
-                    f"Conjugate gradients did not reach solver_tol={solver_tol:g} in "
-                    f"{max_iter} iterations at order {order}."
+                    f"Conjugate gradients stopped at a relative residual of "
+                    f"{last / first:.1e}, above solver_tol={solver_tol:g}, after "
+                    f"{solver.iterations} iterations at order {order}."
                 )
                 raise RuntimeError(msg)
             done = time.perf_counter()
@@ -337,9 +430,11 @@ def fem_solve(
         Positions in m where the field will be read: the mesh is refined
         there.
     observer_maxh : float, optional
-        Element size at the observers in m; by default the smallest element
-        size in the magnets. Observers close to a magnet's edge, where the
-        field is singular, need elements smaller than their distance to it.
+        Element size at the observers in m. By default 0.3 times each
+        observer's distance to the nearest magnet, at most the magnets'
+        element size, and at most an eighth of the meshed ball's radius close
+        to its surface: observers close to an edge, where the field is
+        singular, need elements smaller than their distance to it.
     solver_tol : float, default 1e-10
         Relative residual of the conjugate gradients.
     min_log_time : float, optional
