@@ -103,7 +103,11 @@ def fem_study(
     the rate slows as the layers start to limit: on a cube at orders 3, 4, 5
     the last ratio of changes, 0.09, would put the remaining error of the
     moment at 5e-6, where it is 2e-5. Fields at single observers do not
-    converge monotonically, so the per-observer errors are indicative.
+    converge monotonically, so the per-observer errors are indicative. Close
+    to an edge the error falls slowly with the order, so a small change can
+    hide a mesh too coarse there: 0.1 mm from a cube's edge, orders 4 and 5
+    agreed to well under 1 mT on elements of 0.25 mm, which were 1 mT off.
+    Check a reference once more with half the ``observer_maxh``.
 
     References
     ----------
@@ -111,10 +115,13 @@ def fem_study(
       version of the finite element method. Comput. Methods Appl. Mech. Eng.
       133(3-4), 319-346.
     """
-    orders = [int(p) for p in orders]
-    if len(orders) < 2 or np.any(np.diff(orders) <= 0):
-        msg = f"orders must hold at least two increasing values; got {orders}."
+    if len(orders) < 2 or any(int(p) != p or p < 1 for p in orders):
+        msg = f"orders must be at least two positive integers; got {orders}."
         raise ValueError(msg)
+    if np.any(np.diff(orders) <= 0):
+        msg = f"orders must increase; got {orders}."
+        raise ValueError(msg)
+    orders = [int(p) for p in orders]
     if callable(quantity):
         evaluate, observers = quantity, None
     else:
@@ -139,8 +146,7 @@ def fem_study(
         seconds.append(solution.seconds["assemble"] + solution.seconds["solve"])
     values = np.asarray(values)
     last = values[-1]
-    change = float(_relative(np.linalg.norm(last - values[-2]), np.linalg.norm(last)))
-    ratio, error, errors = _estimate(values)
+    ratio, change, error, errors = _estimate(values)
     return FemStudy(
         orders=np.asarray(orders),
         ndofs=np.asarray(ndofs),
@@ -157,18 +163,20 @@ def fem_study(
 
 
 def _estimate(values):
-    """(ratio, error, errors) from the two last changes: the last change as the
-    error when it is smaller than the one before; NaN errors otherwise, and with
-    two values a ratio of None."""
-    last, change = values[-1], values[-1] - values[-2]
-    errors = SAFETY_FACTOR * _relative(_sizes(change), _sizes(last))
-    error = SAFETY_FACTOR * float(
-        _relative(np.linalg.norm(change), np.linalg.norm(last))
-    )
+    """(ratio, last change, error, errors) from the two last changes: the last
+    change, relative to the last value, as the error when it is smaller than the
+    one before; NaN errors otherwise, and with two values a ratio of None."""
+    last, step = values[-1], values[-1] - values[-2]
+    change = float(_relative(np.linalg.norm(step), np.linalg.norm(last)))
+    errors = SAFETY_FACTOR * _relative(_sizes(step), _sizes(last))
+    nan = np.full(np.shape(errors), np.nan)
     if len(values) < 3:
-        return None, np.nan, np.full(np.shape(errors), np.nan)
+        return None, change, np.nan, nan
     before = np.linalg.norm(values[-2] - values[-3])
-    ratio = float(np.linalg.norm(change) / before) if before > 0 else np.inf
+    if before == 0:  # no change at all: exact, or exactly converged
+        ratio = 0.0 if np.linalg.norm(step) == 0 else np.inf
+    else:
+        ratio = float(np.linalg.norm(step) / before)
     if ratio >= 1:
-        return ratio, np.nan, np.full(np.shape(errors), np.nan)
-    return ratio, error, errors
+        return ratio, change, np.nan, nan
+    return ratio, change, SAFETY_FACTOR * change, errors

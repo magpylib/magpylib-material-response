@@ -19,6 +19,21 @@ from magpylib_material_response.demag import (
     get_H_ext,
     get_susceptibilities,
 )
+from magpylib_material_response.meshing import _thinnest
+
+#: The magnets fem meshes: those with a volume.
+SOLIDS = (
+    magpy.magnet.Cuboid,
+    magpy.magnet.Cylinder,
+    magpy.magnet.CylinderSegment,
+    magpy.magnet.Sphere,
+    magpy.magnet.Tetrahedron,
+    magpy.magnet.TriangularMesh,
+)
+#: More sharp edges than this meeting at a corner break netgen's geometric
+#: refinement (an icosahedron, five at each corner, fails to assemble, and finer
+#: triangle meshes crash); such a shape gets no edge layers.
+MAX_EDGES_AT_CORNER = 4
 
 
 @dataclass(frozen=True)
@@ -73,6 +88,10 @@ def parts_of(collection):
     if not magnets:
         msg = "The model holds no magnets."
         raise ValueError(msg)
+    flat = sorted({type(m).__name__ for m in magnets if not isinstance(m, SOLIDS)})
+    if flat:
+        msg = f"fem meshes magnets with a volume; got {flat}."
+        raise TypeError(msg)
 
     sus = get_susceptibilities(magnets)
     chis = _cell_susceptibilities(sus, [m.orientation for m in magnets])
@@ -103,18 +122,30 @@ def parts_of(collection):
     return parts, applied[0]
 
 
-def _thinnest(src):
-    dim = np.asarray(getattr(src, "dimension", ()), dtype=float)
-    if isinstance(src, magpy.magnet.Cuboid):
-        return float(dim.min())
-    if isinstance(src, magpy.magnet.Cylinder):
-        return float(dim.min())  # diameter, height
-    if isinstance(src, magpy.magnet.CylinderSegment):
-        r1, r2, h, *_ = dim
-        return float(min(r2 - r1, h))
+def distance(src, points):
+    """Distance in m from global `points` (n, 3) to the solid `src`, zero inside:
+    exact for cuboids, spheres and cylinders, from the full ring for cylinder
+    segments and from the box around the vertices, in the magnet's own frame,
+    for tetrahedra and triangle meshes; never more than the true distance."""
+    local = src.orientation.inv().apply(np.asarray(points) - np.ravel(src.position))
+    local = local.reshape(-1, 3)
     if isinstance(src, magpy.magnet.Sphere):
-        return float(src.diameter)
-    return float(np.ptp(src.vertices, axis=0).min())  # Tetrahedron, TriangularMesh
+        return np.maximum(np.linalg.norm(local, axis=1) - src.diameter / 2, 0)
+    if isinstance(src, magpy.magnet.Cuboid):
+        excess = np.abs(local) - np.asarray(src.dimension, dtype=float) / 2
+        return np.linalg.norm(np.maximum(excess, 0), axis=1)
+    if isinstance(src, magpy.magnet.Cylinder | magpy.magnet.CylinderSegment):
+        if isinstance(src, magpy.magnet.Cylinder):
+            r1, (r2, h) = 0.0, (src.dimension[0] / 2, src.dimension[1])
+        else:
+            r1, r2, h = src.dimension[:3]
+        rho = np.linalg.norm(local[:, :2], axis=1)
+        radial = np.maximum(np.maximum(r1 - rho, rho - r2), 0)
+        axial = np.maximum(np.abs(local[:, 2]) - h / 2, 0)
+        return np.hypot(radial, axial)
+    vertices = np.asarray(src.vertices, dtype=float)
+    lo, hi = vertices.min(axis=0), vertices.max(axis=0)
+    return np.linalg.norm(np.maximum(np.maximum(lo - local, local - hi), 0), axis=1)
 
 
 def _corners(src):
@@ -214,7 +245,8 @@ def solid(src, center, length):
 
 def _mark_sharp(shape):
     """Mark for geometric refinement the edges where two faces meet, not the
-    seams of a curved face, and the corners where two or more of them meet."""
+    seams of a curved face, and the corners where two or more of them meet;
+    nothing when more than ``MAX_EDGES_AT_CORNER`` meet at a corner."""
     faces_of = {}
     for face in shape.faces:
         for edge in face.edges:
@@ -225,9 +257,12 @@ def _mark_sharp(shape):
             sharp[hash(edge)] = edge
     edges_at = {}
     for key, edge in sharp.items():
-        edge.hpref = 1
         for vertex in edge.vertices:
             edges_at.setdefault(hash(vertex), (vertex, set()))[1].add(key)
+    if any(len(keys) > MAX_EDGES_AT_CORNER for _, keys in edges_at.values()):
+        return
+    for edge in sharp.values():
+        edge.hpref = 1
     for vertex, keys in edges_at.values():
         if len(keys) >= 2:
             vertex.hpref = 1
