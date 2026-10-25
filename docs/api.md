@@ -19,6 +19,10 @@
 
 .. autoclass:: magpylib_material_response.convergence.MeshStudy
    :members: from_values
+
+.. autofunction:: magpylib_material_response.convergence.compare
+
+.. autoclass:: magpylib_material_response.convergence.Comparison
 ```
 
 ## Finite elements — `fem`

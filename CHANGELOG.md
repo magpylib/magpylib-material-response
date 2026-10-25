@@ -18,9 +18,12 @@ and this project adheres to
   of Helsing and Perfekt's in seconds. Magnets and a uniform applied field for
   now, current sources later. The reference data of the docs and the tests are
   now its results, which `scripts/fem_references.py` recomputes, in place of
-  exports from a commercial code that no one could rerun
+  exports from a commercial code that no one could rerun. `compare` puts a
+  `mesh_study` and a `fem_study` side by side, per observer: both values, both
+  error bars, and whether they agree
   ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
-  [#93](https://github.com/magpylib/magpylib-material-response/pull/93)).
+  [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
+  [#95](https://github.com/magpylib/magpylib-material-response/pull/95)).
 
 ### Removed
 
