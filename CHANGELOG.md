@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `magpylib_material_response.fem` in a new `fem` extra (NGSolve): `fem_solve`
+  and `fem_study` solve the model `apply_demag` takes by finite elements, on the
+  magnets' own shapes, and estimate the error by raising the element order. An
+  independent check of the method of moments: with an exact open boundary and
+  layers refined toward the edges, it puts a cube's polarizability within 2e-5
+  of Helsing and Perfekt's in seconds. Magnets and a uniform applied field for
+  now, current sources later
+  ([#90](https://github.com/magpylib/magpylib-material-response/pull/90)).
+
 ### Removed
 
 - **Breaking:** the `pairs_matching`, `max_dist` and `split` options of

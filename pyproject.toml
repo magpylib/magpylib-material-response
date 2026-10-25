@@ -37,6 +37,8 @@ dependencies = [
 
 [project.optional-dependencies]
 tetgen = ["tetgen>=0.8.3"]
+# finite elements, to check the method of moments (magpylib_material_response.fem)
+fem = ["ngsolve>=6.2.2608"]
 
 [project.urls]
 Homepage = "https://github.com/magpylib/magpylib-material-response"
@@ -49,7 +51,7 @@ Changelog = "https://github.com/magpylib/magpylib-material-response/releases"
 test = [
   "pytest >=9",
   "pytest-cov >=7",
-  "magpylib-material-response[tetgen]",
+  "magpylib-material-response[tetgen,fem]",
 ]
 dev = [
   { include-group = "test" },
@@ -62,7 +64,7 @@ docs = [
   "sphinx_autodoc_typehints",
   "pandas",
   "plotly>=6.7",
-  "magpylib-material-response[tetgen]",
+  "magpylib-material-response[tetgen,fem]",
   # 3D views with field lines, saved into the pages; 0.7.1 draws unsolved soft
   # parts in the neutral colour.
   "magpylib-studio[widget]>=0.7.1",
@@ -169,6 +171,8 @@ py-version = "3.11"
 ignore-paths = [".*/_version.py"]
 reports.output-format = "colorized"
 similarities.ignore-imports = "yes"
+# compiled modules that pylint cannot inspect; the fem extra, not installed here
+ignored-modules = ["netgen", "ngsolve"]
 messages_control.disable = [
   "design",
   "fixme",

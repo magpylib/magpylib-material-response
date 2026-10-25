@@ -21,6 +21,21 @@
    :members: from_values
 ```
 
+## Finite elements — `fem`
+
+Needs the `fem` extra: `pip install "magpylib-material-response[fem]"`.
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.fem.fem_solve
+
+.. autofunction:: magpylib_material_response.fem.fem_study
+
+.. autoclass:: magpylib_material_response.fem.FemSolution
+   :members: getB, getH
+
+.. autoclass:: magpylib_material_response.fem.FemStudy
+```
+
 ## Meshing — `meshing`
 
 ```{eval-rst}
