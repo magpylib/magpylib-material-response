@@ -65,6 +65,7 @@ def fem_study(
     *,
     maxh=None,
     edge_layers=4,
+    observer_maxh=None,
     solver_tol=1e-10,
     min_log_time=None,
 ) -> FemStudy:
@@ -81,7 +82,7 @@ def fem_study(
         returning the quantity of interest, such as ``lambda s: s.moment``.
     orders : sequence of int, default (2, 3, 4)
         Polynomial orders, increasing. Three or more give an error estimate.
-    maxh, edge_layers, solver_tol, min_log_time
+    maxh, edge_layers, observer_maxh, solver_tol, min_log_time
         As for :func:`fem_solve`.
 
     Returns
@@ -125,6 +126,7 @@ def fem_study(
     model = Model(
         collection,
         observers=observers,
+        observer_maxh=observer_maxh,
         maxh=maxh,
         edge_layers=edge_layers,
         min_log_time=min_log_time,

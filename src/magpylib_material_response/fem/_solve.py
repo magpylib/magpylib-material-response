@@ -143,7 +143,14 @@ class Model:
     """The geometry and mesh of a magpylib model, solved at any order."""
 
     def __init__(
-        self, collection, *, maxh=None, edge_layers=4, observers=None, min_log_time=None
+        self,
+        collection,
+        *,
+        maxh=None,
+        edge_layers=4,
+        observers=None,
+        observer_maxh=None,
+        min_log_time=None,
     ):
         start = time.perf_counter()
         self.parts, self.B_ext = parts_of(collection)
@@ -156,8 +163,14 @@ class Model:
         self.min_log_time = min_log_time
 
         sizes = self._sizes(maxh)
+        if observer_maxh is not None and observer_maxh <= 0:
+            msg = f"observer_maxh must be positive; got {observer_maxh}."
+            raise ValueError(msg)
+        h_obs = (
+            float(sizes.min()) if observer_maxh is None else observer_maxh / self.length
+        )
         with timelog(f"FEM mesh of {len(self.parts)} parts", min_log_time=min_log_time):
-            self.mesh = self._mesh(sizes, observers, edge_layers)
+            self.mesh = self._mesh(sizes, observers, h_obs, edge_layers)
         self.mesh_seconds = time.perf_counter() - start
 
     def _sizes(self, maxh):
@@ -172,7 +185,7 @@ class Model:
             raise ValueError(msg)
         return sizes / self.length
 
-    def _mesh(self, sizes, observers, edge_layers):
+    def _mesh(self, sizes, observers, h_obs, edge_layers):
         R, far = self.radius, FAR_MAXH * self.radius
         solids = []
         for i, (part, h) in enumerate(zip(self.parts, sizes, strict=True)):
@@ -197,7 +210,6 @@ class Model:
             s = (
                 np.asarray(observers, dtype=float).reshape(-1, 3) - self.center
             ) / self.length
-            h_obs = float(sizes.min())
             for x, y, z in s[np.linalg.norm(s, axis=1) < R]:
                 params.RestrictH(x, y, z, h_obs)
         ngmesh = occ.OCCGeometry(occ.Glue([air, *solids, kelvin])).GenerateMesh(params)
@@ -291,6 +303,7 @@ def fem_solve(
     maxh=None,
     edge_layers=4,
     observers=None,
+    observer_maxh=None,
     solver_tol=1e-10,
     min_log_time=None,
 ):
@@ -321,8 +334,12 @@ def fem_solve(
         where the field is singular. Each layer is 0.3 times as thick as the
         last.
     observers : array_like, shape (..., 3), optional
-        Positions in m where the field will be read: the mesh is refined to
-        the magnets' element size there.
+        Positions in m where the field will be read: the mesh is refined
+        there.
+    observer_maxh : float, optional
+        Element size at the observers in m; by default the smallest element
+        size in the magnets. Observers close to a magnet's edge, where the
+        field is singular, need elements smaller than their distance to it.
     solver_tol : float, default 1e-10
         Relative residual of the conjugate gradients.
     min_log_time : float, optional
@@ -339,6 +356,7 @@ def fem_solve(
         maxh=maxh,
         edge_layers=edge_layers,
         observers=observers,
+        observer_maxh=observer_maxh,
         min_log_time=min_log_time,
     )
     return model.solve(order, solver_tol=solver_tol)
