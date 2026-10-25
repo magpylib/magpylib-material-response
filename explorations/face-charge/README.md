@@ -277,7 +277,11 @@ outside the bodies: inside a magnetized body B also holds the magnetization,
 which the surface charge does not carry. Its `get_trace`, the hook every
 magpylib class draws itself with, colours the faces by the charge in magpylib's
 magnet colours, positive charge being a north pole, in plotly and pyvista;
-matplotlib draws them in the object's colour.
+matplotlib draws them in the object's colour. The merge branch
+[`face-charge`](https://github.com/magpylib/magpylib-material-response/tree/face-charge/explorations/face-charge)
+has moved the drawing on: the charge smoothed per flat face, on a square-root
+scale, and the panel edges with `style.mesh.grid.show`;
+`figures/pr/sheet_levels.png` is drawn with it.
 
 ```python
 import fc  # validation/fc.py
