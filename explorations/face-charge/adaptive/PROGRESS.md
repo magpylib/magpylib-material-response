@@ -51,14 +51,50 @@ outside the magnet's footprint, where B is weak.
   outline meshes the error-to-indicator ratio reads 5 to 7, which may be the
   reference's own error. Steps 2 and 3 need a better one.
 
-## Step 2 (next): outline lines graded over the gap, and a better reference
+## Step 2: outline lines graded over the gap only (dropped)
 
-Layers toward the magnet's outline only as deep as the gap (1 mm), not 4 mm;
-levels 3 to 9. Its finest level, if it agrees with uniform level 11 within the
-latter's indicator, becomes the reference.
+Graded over 1 mm (the gap) instead of 4 mm, lines toward the magnet's outline
+still multiply the unknowns by 4.4 at level 3 (3,534 against 798) and 4.5 at
+level 9. The mesh is a tensor product: every line runs across the whole face and
+down the side faces, and its layers grade toward the line as toward a singular
+contact, while a source 1 mm away leaves the plate's charge smooth. Not run;
+step 3 refines only where the indicator points.
 
-## Step 3: bisection where the size-weighted jump is large
+## Step 3: bisection where the size-weighted jump is large (done)
 
-From level 3: bisect the strips of the panels whose size-weighted jump is above
-half the largest, solve again, repeat. Error against unknowns, next to uniform
-levels and step 2.
+`step3_bisect.py`, under a minute, 3.5 GB peak. From a uniform level, mark the
+panels whose size-weighted jump is above half the largest (or a quarter), bisect
+each along both in-plane axes (the whole strips through it, in the tensor mesh),
+solve again; stop before 11,000 unknowns.
+
+Under the magnet, the two finest bisections (from levels 3 and 5) agree with
+each other to 0.04 %, closer than uniform level 11 comes to either. So the
+errors below are against the finest bisection (from level 5, 8,064 unknowns):
+
+| Mesh                        | Unknowns |  Time | 0.25 mm above, under the magnet | Just outside it | Over the rim |    Far |
+| --------------------------- | -------: | ----: | ------------------------------: | --------------: | -----------: | -----: |
+| uniform 9                   |    6,720 | 8.5 s |                     0.19–0.30 % |          0.07 % |       0.08 % | 0.01 % |
+| uniform 11                  |   10,350 |  20 s |                     0.03–0.13 % |          0.38 % |       0.03 % | 0.01 % |
+| bisection, from 3, 2 rounds |    2,688 | 1.2 s |                    0.002–0.04 % |          0.25 % |       0.19 % | 0.03 % |
+| bisection, from 3, 4 rounds |    7,728 |  10 s |                    0.002–0.02 % |          0.26 % |       0.05 % | 0.01 % |
+
+- **Bisection where the indicator points reaches under the magnet in 2,688
+  unknowns what uniform levels do not reach in 10,350**, in 1.2 s against 20 s.
+  Each round cuts the largest indicator 3 to 4 times: 5.2, 1.4, 0.47, 0.26, 0.09
+  %.
+- **Just outside the magnet's footprint**, where B is weak (47 mT, against 550
+  mT under the magnet's centre), every mesh family differs by about 0.3 %,
+  bisections included. The indicator is relative to the peak charge, so it does
+  not single out a region of weak field.
+- **The plate's edges stay at the starting level**, which caps the error over
+  the rim and far away (0.05 to 0.2 % and 0.01 to 0.03 % after two to four
+  rounds from level 3). Starting from level 5 lowers both.
+- Marking above a quarter of the largest instead of half adds unknowns for the
+  same error.
+
+## Next
+
+Bisection on the indicator as an option of the solve, e.g.
+`apply_face_charge(coll, m=3, refine=2)`: a few rounds from a coarse level. It
+needs the panel split outside the tensor mesh to stay cheap on large bodies,
+where whole strips cost more than here.

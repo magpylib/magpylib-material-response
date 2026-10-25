@@ -4,7 +4,8 @@ A soft plate (10 x 10 x 4 mm, chi 1000) with a magnet (4 x 4 x 3 mm, 1.2 T,
 chi 0) 1 mm above it. B is read in the gap 0.25 mm above the plate, above the
 rim, and far away. The plate's mesh is a tensor product: one list of edges per
 axis. It can carry extra lines, each graded toward like a touching body's
-footprint, and extra edges, plain bisections.
+footprint; near lines, graded toward over a given depth only; and extra
+edges, plain bisections.
 """
 
 import os
@@ -24,6 +25,7 @@ DIM = (0.01, 0.01, 0.004)
 CHI = 1000.0
 MAGNET = magpy.magnet.Cuboid(dimension=(0.004, 0.004, 0.003), position=(0, 0, 0.0045), polarization=(0, 0, 1.2))
 FOOTPRINT = [[-0.002, 0.002], [-0.002, 0.002], []]  # the magnet's outline over the plate, per axis
+GAP = 0.001  # between the plate and the magnet
 POINTS = np.array([[0, 0, 2.25], [1, 1, 2.25], [2, 0, 2.25], [3, 0, 2.25], [4.5, 0, 2.25], [0, 0, 8.0], [8, 0, 0]]) * 1e-3
 NAMES = ["gap centre", "gap (1, 1)", "gap, magnet edge", "gap, outside", "above rim", "far above", "far side"]
 NEAR = slice(0, 5)  # within 0.25 mm of the plate
@@ -33,17 +35,20 @@ class PlateBody(Body):
     """The plate, with `lines` graded toward (like a footprint) and `extra`
     edges added as they are, per axis."""
 
-    def __init__(self, m, lines=None, extra=None, g=2.5):
+    def __init__(self, m, lines=None, extra=None, near=None, depth=GAP, g=2.5):
         super().__init__(DIM, chi=CHI, m=m, g=g, lines=[list(x) for x in (lines or [[], [], []])])
         self.extra = [np.asarray(e, float) for e in (extra or [[], [], []])]
+        self.near, self.depth = near or [[], [], []], depth
 
     def edges(self):
         m, g, kappa = self.mesh_args
         c = np.min(self.half)
+        t = np.linspace(0, 1, m + 1) ** g * self.depth
         out = []
         for k, h in enumerate(self.half):
-            e = np.concatenate([multi_layer_edges(h, self.lines[k], kappa * c, m, g), self.extra[k]])
-            out.append(np.unique(np.round(e / h, 12)) * h)
+            near = [x0 + s * t for x0 in self.near[k] for s in (-1, 1)]
+            e = np.concatenate([multi_layer_edges(h, self.lines[k], kappa * c, m, g), self.extra[k], *near])
+            out.append(np.unique(np.round(np.clip(e, -h, h) / h, 12)) * h)
         return out
 
     def build(self):
