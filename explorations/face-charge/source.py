@@ -21,7 +21,9 @@ import sys
 
 import magpylib as magpy
 import numpy as np
+from magpylib._src.display.traces_utility import line_dash  # not exported publicly
 from magpylib._src.exceptions import MagpylibBadUserInput  # not exported publicly
+from magpylib._src.style import TriangularMeshStyle  # not exported publicly
 from matplotlib.colors import to_hex, to_rgb
 from scipy.spatial.transform import Rotation
 
@@ -42,14 +44,23 @@ class ChargeSheet(magpy.misc.CustomSource):
     charge_densities : array-like, shape (m, 3)
         Surface charge density M.n in A/m at each face's three corners, in the
         order of its vertex indices.
+    panels : array-like, shape (m,), optional
+        The surface element each face belongs to, for drawing only:
+        ``style.mesh.grid`` draws the edges between elements. A solved cuboid's
+        rectangular panels are two faces each. By default each face is one.
     position, orientation, style, **kwargs
-        As for any magpylib source.
+        As for any magpylib source; ``style`` is a TriangularMesh's:
+        ``style.magnetization.color`` colours the charge and ``style.mesh.grid``
+        draws the edges.
     """
 
-    def __init__(self, vertices, faces, charge_densities, position=(0, 0, 0), orientation=None,
+    _style_class = TriangularMeshStyle
+    _style_family = ("magnet", "triangularmesh")
+
+    def __init__(self, vertices, faces, charge_densities, panels=None, position=(0, 0, 0), orientation=None,
                  style=None, chunk=2_000_000, **kwargs):
         self._chunk = chunk
-        self._set(vertices, faces, charge_densities)
+        self._set(vertices, faces, charge_densities, panels)
         super().__init__(position=position, orientation=orientation, style=style, **kwargs)
         # A bound method, unlike a closure, follows copy() to the copy, and getB
         # groups sources by it, so each source keeps its own charge. magpylib after
@@ -70,7 +81,7 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @vertices.setter
     def vertices(self, value):
-        self._set(value, self._faces, self._q)
+        self._set(value, self._faces, self._q, self._panels)
 
     @property
     def faces(self):
@@ -79,7 +90,7 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @faces.setter
     def faces(self, value):
-        self._set(self._vertices, value, self._q)
+        self._set(self._vertices, value, self._q)  # new faces, so no panels
 
     @property
     def charge_densities(self):
@@ -88,14 +99,14 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @charge_densities.setter
     def charge_densities(self, value):
-        self._set(self._vertices, self._faces, value)
+        self._set(self._vertices, self._faces, value, self._panels)
 
     @property
     def triangles(self):
         """Corners of each face (m, 3, 3) in m, in the source's own frame."""
         return self._V
 
-    def _set(self, vertices, faces, charge_densities):
+    def _set(self, vertices, faces, charge_densities, panels=None):
         P = np.asarray(vertices, float).reshape(-1, 3)
         F = np.asarray(faces, int).reshape(-1, 3)
         q = np.asarray(charge_densities, float).reshape(-1, 3)
@@ -105,7 +116,12 @@ class ChargeSheet(magpy.misc.CustomSource):
         if F.size and (F.min() < 0 or F.max() >= len(P)):
             msg = f"faces index vertices 0 to {len(P) - 1}; got {F.min()} to {F.max()}"
             raise ValueError(msg)
-        self._vertices, self._faces, self._q = P, F, q
+        if panels is not None:
+            panels = np.asarray(panels, int).reshape(-1)
+            if len(panels) != len(F):
+                msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}"
+                raise ValueError(msg)
+        self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._V = P[F]  # (m, 3, 3)
         self._fr = frames(self._V)
         cen, _, e1, e2, s, _ = self._fr
@@ -128,17 +144,61 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     # ── display ───────────────────────────────────────────────────────────
     def get_trace(self, **kwargs):
-        """The faces coloured by the charge, linear across each one, in
-        magpylib's magnet colours: positive charge is a north pole (plotly and
-        pyvista; matplotlib draws the faces in the object's colour). Corners are
-        drawn per face, as the charge jumps from one face to the next."""
+        """The faces coloured by the charge in magpylib's magnet colours:
+        positive charge is a north pole (plotly and pyvista; matplotlib draws the
+        faces in the object's colour).
+
+        The charge is drawn smoothed and on a square-root scale. On a flat face
+        of a uniform body the charge is continuous; its jumps between panels
+        are discretization error, which shrinks as the mesh level rises, so each
+        corner shows the area-weighted mean over the corners that share its
+        vertex and its face's plane. It still jumps across the body's edges,
+        where it truly does. The square root shows the weak charge where flux
+        returns into a soft part next to the strong charge where it leaves.
+        getB uses the charge as solved."""
         P = self._V.reshape(-1, 3)
         i, j, k = np.arange(len(P)).reshape(-1, 3).T
-        q = self._q.ravel()
-        trace = {"type": "mesh3d", "x": P[:, 0], "y": P[:, 1], "z": P[:, 2], "i": i, "j": j, "k": k,
-                 "color": self.style.color, "intensity": q,
-                 "colorscale": _colorscale(q.min(initial=0.0), q.max(initial=0.0)), "showscale": False}
-        return {**trace, **kwargs}
+        q = self._smoothed()
+        v = np.sign(q) * np.sqrt(np.abs(q))
+        style = self.style
+        colorscale = _colorscale(v.min(initial=0.0), v.max(initial=0.0), style.magnetization.color)
+        traces = [{"type": "mesh3d", "x": P[:, 0], "y": P[:, 1], "z": P[:, 2], "i": i, "j": j, "k": k,
+                   "color": style.color, "intensity": v, "colorscale": colorscale, "showscale": False, **kwargs}]
+        grid = style.mesh.grid
+        if grid.show:
+            x, y, z = np.insert(self._vertices[self._edges()], 2, np.nan, axis=1).reshape(-1, 3).T
+            kw = {key: val for key, val in kwargs.items() if key != "color"}
+            traces.append({**kw, "type": "scatter3d", "x": x, "y": y, "z": z, "mode": "markers+lines",
+                           "marker_color": grid.marker.color, "marker_size": grid.marker.size,
+                           "marker_symbol": grid.marker.symbol, "line_color": grid.line.color,
+                           "line_width": grid.line.width, "line_dash": line_dash(grid.line.style), "showlegend": False})
+        return traces
+
+    def _edges(self):
+        """Vertex pairs (k, 2) of the edges between surface elements: an edge
+        all of whose faces belong to one panel is inside it, and not drawn."""
+        F = self._faces
+        e = np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1)
+        edges, inv = np.unique(e, axis=0, return_inverse=True)
+        if self._panels is None:
+            return edges
+        inv, owner = inv.ravel(), np.tile(self._panels, 3)
+        lo = np.full(len(edges), np.iinfo(np.int64).max)
+        hi = np.full(len(edges), np.iinfo(np.int64).min)
+        np.minimum.at(lo, inv, owner)
+        np.maximum.at(hi, inv, owner)
+        return edges[(lo != hi) | (np.bincount(inv) == 1)]
+
+    def _smoothed(self):
+        """Corner charges (3m,) averaged, by face area, over the corners that
+        share a vertex and a face plane."""
+        n = np.cross(self._V[:, 1] - self._V[:, 0], self._V[:, 2] - self._V[:, 0])
+        area = np.linalg.norm(n, axis=1) / 2
+        n = np.round(n / (2 * area[:, None]), 6)
+        key = np.concatenate([self._faces.reshape(-1, 1), np.repeat(n, 3, axis=0)], axis=1)
+        inv = np.unique(key, axis=0, return_inverse=True)[1].ravel()
+        w = np.repeat(area, 3)
+        return (np.bincount(inv, w * self._q.ravel()) / np.bincount(inv, w))[inv]
 
     # ── constructors ───────────────────────────────────────────────────────
     @classmethod
@@ -172,15 +232,15 @@ class ChargeSheet(magpy.misc.CustomSource):
         n = np.cross(V[:, 1] - V[:, 0], V[:, 2] - V[:, 0])
         flip = np.einsum("fd,fd->f", n, np.concatenate([p.normal, p.normal])) < 0  # outward, for display
         V[flip], q[flip] = V[flip][:, [0, 2, 1]], q[flip][:, [0, 2, 1]]
-        return cls.from_triangles(V, q, position=body.position, orientation=Rotation.from_matrix(body.R), **kwargs)
+        return cls.from_triangles(V, q, panels=np.concatenate([idx, idx]), position=body.position,
+                                  orientation=Rotation.from_matrix(body.R), **kwargs)
 
 
-def _colorscale(lo, hi):
-    """magpylib's magnet colours over the charge range [lo, hi]: the middle
-    colour at zero, the north (south) colour at the largest charge of either
-    sign. Built for the range, as pyvista takes no colour limits; a tuple, as
-    pyvista caches it."""
-    c = magpy.defaults.display.style.magnet.magnetization.color
+def _colorscale(lo, hi, c):
+    """The magnet colours `c` (north, middle, south) over the range [lo, hi]:
+    the middle colour at zero, the north (south) colour at the largest value of
+    either sign. Built for the range, as pyvista takes no colour limits; a
+    tuple, as pyvista caches it."""
     middle = np.array(to_rgb(c.middle))
     a = max(-lo, hi)
     if a <= 0:

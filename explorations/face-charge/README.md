@@ -34,9 +34,14 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
   faces (m, 3) and `charge_densities` (m, 3), per face corner as the charge
   jumps from one face to the next, like magpylib's `current.TriangleSheet`. It
   is a `magpylib.misc.CustomSource`, so `getB`, paths, collections and `show()`
-  work as for any source. It gives H everywhere and B outside the bodies. Its
-  `get_trace` colours the faces by the charge in magpylib's magnet colours,
-  positive charge being a north pole (plotly and pyvista).
+  work as for any source. It gives H everywhere and B outside the bodies.
+- **Drawing.** `ChargeSheet` takes a `TriangularMesh`'s style. Its `get_trace`
+  colours the charge in `style.magnetization.color`, positive charge being a
+  north pole (plotly and pyvista; matplotlib draws one colour), smoothed per
+  flat face and on a square-root scale: the jumps between panels are
+  discretization error, and the square root shows the weak charge where flux
+  returns into a soft part. `style.mesh.grid.show` draws the panel edges. A body
+  with χ exactly 0 is not solved and keeps magpylib's own drawing.
 
 ## Files
 
@@ -58,7 +63,11 @@ field, excluded from `getB` as in material-response. `m` is the mesh level.
 - a collection through `apply_face_charge` against `fc.solve`: 1e-11;
 - a path of two positions turned 30°, against the same by hand: 5e-16; a copy
   with doubled charge, and two sources in one `getB`: exact;
-- `show()` in plotly, matplotlib and pyvista.
+- `show()` in plotly, matplotlib and pyvista, plotly's colours exactly the
+  square root of the smoothed charge. Smoothing moves the charge by 0.2 % or
+  less of its peak at half the corners, and by 27 % at most, at the corners of
+  the four 2 mm panels under the magnet (14 % at level 5). The grid draws the
+  532 panel edges, the 798 triangle edges less one diagonal per panel.
 
 On magpylib 6.0.0 the field function, a bound method, is set past the setter,
 and the source stays in memory after `getB`; magpylib main fixes both

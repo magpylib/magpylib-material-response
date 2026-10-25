@@ -59,6 +59,7 @@ soft = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.004), position=(0, 0, 0), po
 soft.susceptibility = 1000.0
 soft.H_ext = (0.0, 0.0, 0.005)
 magnet = magpy.magnet.Cuboid(dimension=(0.004, 0.004, 0.003), position=(0, 0, 0.0045), polarization=(0, 0, 1.2))
+magnet.susceptibility = 0.0  # exactly 0: stays a magpylib Cuboid, drawn as one
 coll = magpy.Collection(soft, magnet)
 sensors = np.array([[0.0, 0.0, 0.009], [0.008, 0.0, 0.0], [0.0, 0.0, -0.005], [0.02, 0.01, 0.01]])
 B_fc, _ = fc.solve(coll, 3, sensors)
@@ -88,7 +89,14 @@ pv.OFF_SCREEN = True
 for backend in ("plotly", "matplotlib", "pyvista"):
     fig = magpy.show(solved, backend=backend, return_fig=True)
 mesh = next(t for t in magpy.show(sheet, backend="plotly", return_fig=True).data if t.type == "mesh3d")
-print(f"show(): plotly, matplotlib and pyvista draw it; plotly colours by the charge: {rel(mesh.intensity, sheet.charge_densities.ravel()):.0e}")
+q = sheet._smoothed()
+moved = np.abs(q - sheet.charge_densities.ravel()).max() / np.abs(sheet.charge_densities).max()
+print(f"show(): plotly, matplotlib and pyvista draw it; plotly colours by the square root of the smoothed charge: "
+      f"{rel(mesh.intensity, np.sign(q) * np.sqrt(np.abs(q))):.0e}; smoothing moves the charge by up to {moved:.1%} of its peak")
+grid = [t for t in magpy.show(sheet, backend="plotly", style_mesh_grid_show=True, return_fig=True).data if t.type == "scatter3d"]
+F = sheet.faces
+tri_edges = len(np.unique(np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1), axis=0))
+print(f"style.mesh.grid: {len(grid[0].x) // 3} edges drawn, the {tri_edges} triangle edges less one diagonal per panel ({len(F) // 2})")
 X = rng.normal(size=(1000, 3)) * 0.02 + 0.03
 t = time.perf_counter()
 sheet.getB(X)
