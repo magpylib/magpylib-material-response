@@ -10,8 +10,9 @@ conditions.
 :func:`analyze_structure` partitions an arbitrary set of cells into
 *clusters* covering **every** cell exactly once:
 
-- ``"grid"``  : identical cuboids, common orientation, on a uniform grid
-                (FFT-eligible self-interactions),
+- ``"grid"``  : identical cuboids, common orientation, on a uniform grid,
+                possibly with holes (FFT-eligible self-interactions; the
+                holes hold zero polarization),
 - ``"loose"`` : identical cuboids, common orientation, no grid structure
                 (dense blocks, computed once per distinct displacement),
 - ``"generic"``: everything else (one ``magpy.getH`` per cell pair).
@@ -62,6 +63,12 @@ MIN_CLUSTER_CELLS = 8
 #: bodies are handled by the dense analytical path.
 MIN_GRID_CELLS = 16
 
+#: A body on one lattice that does not fill a box, such as a voxelized sphere,
+#: runs as one grid with zero polarization in the holes when its cells fill at
+#: least this share of their bounding box: its FFTs then cost at most eight
+#: times those of a full box of as many cells.
+MIN_LATTICE_FILL = 0.125
+
 
 def canonical_quats(quats):
     """Return quaternions with a deterministic global sign.
@@ -100,9 +107,10 @@ def _detect_grid(positions, dim, rtol=1e-6):
     Grid spacing per axis is inferred from the data and may differ from the
     cell side lengths ``dim`` (non-touching cells). Returns ``None`` if the
     points do not fill a complete ``Nx x Ny x Nz`` box exactly once, else a
-    dict with keys ``shape``, ``spacing``, ``origin``, ``order`` where
-    ``order`` is the permutation such that grid-flat index
-    ``ix*Ny*Nz + iy*Nz + iz`` corresponds to ``positions[order]``.
+    dict with keys ``shape``, ``spacing``, ``origin``, ``order``, ``flat``
+    where ``order`` is the permutation such that grid-flat index
+    ``ix*Ny*Nz + iy*Nz + iz`` corresponds to ``positions[order]``, and
+    ``flat`` its inverse, the grid-flat index of each point.
     """
     positions = np.asarray(positions, dtype=float)
     n = positions.shape[0]
@@ -147,6 +155,50 @@ def _detect_grid(positions, dim, rtol=1e-6):
         "spacing": tuple(spacing),
         "origin": tuple(float(c[0]) for c in centers),
         "order": order,
+        "flat": flat,
+    }
+
+
+def _detect_lattice(positions, dim, min_fill, rtol=1e-6):
+    """Detect axis-aligned ``positions`` on one uniform lattice, holes allowed.
+
+    The spacing per axis is the smallest step between distinct coordinates.
+    Returns ``None`` when a point is off that lattice or the points fill less
+    than ``min_fill`` of their bounding box, else a dict with keys ``shape``
+    (the box), ``spacing``, ``origin`` and ``flat``, the grid-flat index
+    ``ix*Ny*Nz + iy*Nz + iz`` of each point.
+    """
+    positions = np.asarray(positions, dtype=float)
+    n = positions.shape[0]
+    if n == 0:
+        return None
+    tol = rtol * float(np.min(dim))
+    origin, spacing, idx3 = [], [], []
+    for ax in range(3):
+        c = _cluster_1d(positions[:, ax], tol)
+        if c.size > 1:
+            # the span over its step count: one step's rounding grows along the axis
+            steps = round((c[-1] - c[0]) / float(np.min(np.diff(c))))
+            step = float(c[-1] - c[0]) / steps
+        else:
+            step = float(dim[ax])
+        ix = np.round((positions[:, ax] - c[0]) / step).astype(np.int64)
+        if not np.allclose(positions[:, ax], c[0] + ix * step, atol=tol):
+            return None
+        origin.append(float(c[0]))
+        spacing.append(step)
+        idx3.append(ix)
+    shape = tuple(int(ix.max()) + 1 for ix in idx3)
+    if n < min_fill * shape[0] * shape[1] * shape[2]:
+        return None
+    flat = (idx3[0] * shape[1] + idx3[1]) * shape[2] + idx3[2]
+    if np.unique(flat).size != n:
+        return None
+    return {
+        "shape": shape,
+        "spacing": tuple(spacing),
+        "origin": tuple(origin),
+        "flat": flat,
     }
 
 
@@ -332,8 +384,9 @@ def analyze_structure(
         - ``dim``       : tuple(3) cell side lengths (cuboid kinds only)
         - ``r_common``  : scipy Rotation — common orientation (cuboid kinds)
         - ``is_identity``: bool (cuboid kinds)
-        - grid kind adds ``shape``, ``spacing``, ``origin``, ``order``
-          (``order`` indexes *within* the cluster).
+        - grid kind adds ``shape``, ``spacing``, ``origin`` and ``flat``, each
+          member's index in the grid's flattened box; a box with holes has
+          more entries than the cluster has members.
     """
     positions = np.asarray(positions, dtype=float)
     dimensions = np.asarray(dimensions, dtype=float)
@@ -435,9 +488,21 @@ def analyze_structure(
                         {"kind": "grid", "indices": members[comp], **base, **info}
                     )
                     continue
-                # ...and a connected component that is not a box but sits on
-                # one lattice (touching bodies whose cells were flattened into
-                # one Collection) as full boxes.
+                # ...then a connected component that is not a box but sits on
+                # one lattice and fills enough of its box (a voxelized round
+                # body, touching bodies whose cells were flattened into one
+                # Collection) as one grid with holes...
+                info = (
+                    _detect_lattice(pos_local[comp], dim0, MIN_LATTICE_FILL)
+                    if comp.size >= MIN_GRID_CELLS
+                    else None
+                )
+                if info is not None:
+                    clusters.append(
+                        {"kind": "grid", "indices": members[comp], **base, **info}
+                    )
+                    continue
+                # ...and else as full boxes.
                 boxes = (
                     _split_boxes(pos_local[comp], dim0)
                     if comp.size >= MIN_GRID_CELLS

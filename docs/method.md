@@ -264,7 +264,7 @@ Measured on soft iron at $\chi = 1000$, out of 39 models:
 | three cubes, three cell sizes | 3,240 | 40 %  | 9.2 s, 1.9 GB  | 8.3 s, 1.0 GB  | iterative |
 | a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
 | 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
-| voxelized sphere              | 1,304 | 3 %   | 0.80 s, 0.3 GB | 1.35 s, 0.3 GB | direct    |
+| voxelized sphere              | 1,304 | 100 % | 0.31 s, 0.6 GB | 0.20 s, 0.1 GB | iterative |
 | tetrahedra                    | 1,931 | 0     | 9.3 s, 1.1 GB  | 9.1 s, 1.1 GB  | direct    |
 | cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
 
@@ -287,18 +287,23 @@ product $\mathbf{T}\,\mathbf{J}$ is a 3-D discrete convolution: an FFT on the
 grid zero-padded to twice its size computes it in $O(N \log N)$. The kernel, the
 six independent components of the chosen rule's tensor, is built once by
 `build_fft_kernel` and reused at every GMRES iteration (`demag_fft_matvec`). The
-grid spacing may exceed the cell size.
+grid spacing may exceed the cell size. A body on one lattice that does not fill
+its box, such as a voxelized sphere, runs the same way when its cells fill at
+least an eighth of the box (`MIN_LATTICE_FILL`): the empty places hold zero
+polarization, and the FFTs cost at most eight times those of a full box of as
+many cells.
 
 ### 5.2 Clusters
 
 `analyze_structure` sorts the cells into **clusters**, and every cell lands in
 exactly one:
 
-- **grid**: identical cuboids with one orientation whose centres fill a complete
-  uniform grid, one cluster per meshed body. Bodies are told apart by the
-  Collection their mesher put the cells in, or, when the cells were flattened
-  into one Collection, by the full boxes they fill on their lattice, so a yoke
-  with its legs is three grids and not one connected, non-box component;
+- **grid**: identical cuboids with one orientation on a uniform grid, one
+  cluster per meshed body. Bodies are told apart by the Collection their mesher
+  put the cells in, so a yoke with its legs is three grids. Cells on one lattice
+  that do not fill a box, such as a voxelized sphere or touching bodies whose
+  cells were flattened into one Collection, are one grid with holes when they
+  fill at least an eighth of their box, and else the full boxes they fill;
 - **loose**: identical parallel cuboids without that grid;
 - **generic**: everything else — other cell types, rotated singletons and, under
   point matching, groups smaller than `MIN_CLUSTER_CELLS` (8).

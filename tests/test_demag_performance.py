@@ -37,7 +37,7 @@ from magpylib_material_response.demag_fft import (
     demag_fft_matvec,
     detect_uniform_grid,
 )
-from magpylib_material_response.meshing import mesh_Cuboid
+from magpylib_material_response.meshing import mesh_Cuboid, voxelize
 from magpylib_material_response.newell import demag_block_general, demag_tensor_newell
 
 
@@ -763,16 +763,29 @@ def test_grid_pair_block_matches_plain_dedup():
             np.testing.assert_allclose(fast, ref, rtol=0, atol=1e-9 * np.abs(ref).max())
 
 
-def test_flattened_touching_bodies_still_get_a_grid_each():
-    """Cells flattened into one Collection lose their parents; the lattice
-    box split still finds the three bodies."""
-    flat = magpy.Collection(*_u_core_cells().sources_all, override_parent=True)
-    _, clusters = analyze_collection(flat.sources_all)
-    assert sorted(len(c["indices"]) for c in clusters if c["kind"] == "grid") == [
-        24,
-        24,
-        40,
-    ]
+def _flattened_u_core():
+    return magpy.Collection(*_u_core_cells().sources_all, override_parent=True)
+
+
+def _voxel_sphere():
+    return voxelize(magpy.magnet.Sphere(diameter=1.0, polarization=(0, 0, 0)), 400)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [_flattened_u_core, _voxel_sphere],
+    ids=["flattened touching bodies", "voxelized sphere"],
+)
+def test_lattice_with_holes_is_one_grid(make):
+    """Cells on one lattice that do not fill a box run as one grid, zero in the
+    holes: touching bodies whose cells lost their parents (three boxes before),
+    a voxelized sphere (small boxes and a rim of loose cells before)."""
+    coll = make()
+    coll.susceptibility, coll.H_ext = 1000.0, (0.002, 0, 0.01)
+    _, clusters = analyze_collection(coll.sources_all)
+    assert [c["kind"] for c in clusters] == ["grid"]
+    assert demag._auto_solver(clusters)[0] == "iterative"
+    _assert_solvers_agree(coll)
 
 
 def test_cross_grid_blocks_use_fft(monkeypatch):

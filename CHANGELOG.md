@@ -25,6 +25,16 @@ and this project adheres to
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
   [#95](https://github.com/magpylib/magpylib-material-response/pull/95)).
 
+### Changed
+
+- `apply_demag` runs cells on one lattice that do not fill a box, such as a
+  voxelized sphere, as one grid by FFT, with zero polarization in the holes,
+  when they fill at least an eighth of their box. Such bodies ran as many small
+  boxes and a rim of loose cells, which FFT products barely covered. A voxelized
+  sphere of 4,529 cells at χ = 1000 took 8.7 s and 1.5 GB, and now takes 0.9 s
+  and 84 MB; one of 1,304 cells took 0.72 s, and now 0.24 s
+  ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
+
 ### Removed
 
 - **Breaking:** the `pairs_matching`, `max_dist` and `split` options of

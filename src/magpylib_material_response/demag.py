@@ -577,9 +577,7 @@ def _grid_pair_table(cl_a, cl_b, interaction, rtol=1e-6):
     spacing = np.array(cl_a["spacing"])
 
     def _index3(cl, shape):
-        n = cl["indices"].size
-        flat = np.empty(n, dtype=np.int64)
-        flat[cl["order"]] = np.arange(n)  # cluster member -> grid-flat index
+        flat = cl["flat"]  # cluster member -> grid-flat index
         return np.stack(
             [
                 flat // (shape[1] * shape[2]),
@@ -798,18 +796,24 @@ def _assemble_T_dense(
 # ══════════════════════════════════════════════════════════════════════════
 
 
+def _to_box(M, flat, shape):
+    """Cell values ``(n, 3)`` placed in their grid box ``(*shape, 3)``, zero in
+    the holes."""
+    box = np.zeros((shape[0] * shape[1] * shape[2], 3))
+    box[flat] = M
+    return box.reshape((*shape, 3))
+
+
 def _fft_apply(op, v_flat):
     """Apply the grid self-block T to component-major ``(3n_g,)`` global-frame
     polarizations; returns the same layout. Rotation handled internally."""
-    Nx, Ny, Nz = op["shape"]
+    shape = op["shape"]
     rot_mat = op["rot_mat"]
     M = v_flat.reshape(3, -1).T  # (n_g, 3) global
     if rot_mat is not None:
         M = M @ rot_mat  # to local frame
-    M_grid = M[op["order"]].reshape((Nx, Ny, Nz, 3))
-    H_grid = demag_fft_matvec(M_grid, op["kernel_fft"], (Nx, Ny, Nz))
-    H = np.empty_like(M)
-    H[op["order"]] = H_grid.reshape((Nx * Ny * Nz, 3))
+    H_grid = demag_fft_matvec(_to_box(M, op["flat"], shape), op["kernel_fft"], shape)
+    H = H_grid.reshape(-1, 3)[op["flat"]]
     if rot_mat is not None:
         H = H @ rot_mat.T  # back to global frame
     return H.T.ravel()
@@ -841,8 +845,8 @@ def _fft_cross_op(cl_a, cl_b, interaction):
         "ib": cl_b["indices"],
         "shape_a": tuple(int(v) for v in sa),
         "shape_b": tuple(int(v) for v in sb),
-        "order_a": cl_a["order"],
-        "order_b": cl_b["order"],
+        "flat_a": cl_a["flat"],
+        "flat_b": cl_b["flat"],
         "rot_mat": None if cl_b["is_identity"] else cl_b["r_common"].as_matrix(),
         "L": tuple(int(v) for v in L),
         "kernel_fft": np.fft.rfftn(kernel, axes=(0, 1, 2)),
@@ -858,13 +862,12 @@ def _fft_cross_apply(op, v_flat):
         M = M @ rot_mat  # to local frame
     Mp = np.zeros((*L, 3))
     sb = op["shape_b"]
-    Mp[: sb[0], : sb[1], : sb[2]] = M[op["order_b"]].reshape((*sb, 3))
+    Mp[: sb[0], : sb[1], : sb[2]] = _to_box(M, op["flat_b"], sb)
     M_fft = np.fft.rfftn(Mp, axes=(0, 1, 2))  # (Lx, Ly, Lz//2+1, 3)
     H_fft = np.einsum("...mk,...k->...m", op["kernel_fft"], M_fft)
     H_grid = np.fft.irfftn(H_fft, s=L, axes=(0, 1, 2))
     sa = op["shape_a"]
-    H = np.empty((np.prod(sa), 3))
-    H[op["order_a"]] = H_grid[: sa[0], : sa[1], : sa[2]].reshape(-1, 3)
+    H = H_grid[: sa[0], : sa[1], : sa[2]].reshape(-1, 3)[op["flat_a"]]
     if rot_mat is not None:
         H = H @ rot_mat.T  # back to global frame
     return H.T.ravel()
@@ -906,7 +909,7 @@ def _build_operator(
                         "ia": cl_a["indices"],
                         "ib": cl_a["indices"],
                         "shape": cl_a["shape"],
-                        "order": cl_a["order"],
+                        "flat": cl_a["flat"],
                         "rot_mat": rot_mat,
                         "kernel_fft": build_fft_kernel(
                             cl_a["shape"], cl_a["spacing"], cl_a["dim"], interaction
