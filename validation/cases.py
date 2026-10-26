@@ -12,11 +12,11 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import magpylib as magpy
 import numpy as np
-from scipy.spatial import Delaunay
 from scipy.spatial.transform import Rotation
 
 from magpylib_material_response.polyline import (
@@ -328,38 +328,24 @@ def _cad_plate(n_fillet=6, n_hole=24):
     """Vertices and faces of a 20 x 12 x 4 mm plate with 3 mm fillets on its
     vertical edges and a 3 mm hole 3 mm off centre, exported as a CAD tool does:
     one facet per 15 degrees, each cap triangulated from its boundary vertices
-    only, in long thin triangles."""
+    only, in long thin triangles. The faces come from a file, made once by a
+    Delaunay triangulation of the cap: where many points lie on one circle,
+    Delaunay may choose differently on another platform."""
     a, b, t, r = 10 * MM, 6 * MM, 2 * MM, 3 * MM
     corners = ((a - r, b - r), (-a + r, b - r), (-a + r, -b + r), (a - r, -b + r))
     outline = []
     for k, (cx, cy) in enumerate(corners):
         phi = np.pi / 2 * (k + np.arange(n_fillet + 1) / n_fillet)
         outline += list(np.column_stack([cx + r * np.cos(phi), cy + r * np.sin(phi)]))
-    outline = np.array(outline)
     phi = 2 * np.pi * np.arange(n_hole) / n_hole
     hole = np.column_stack([3 * MM + r * np.cos(phi), r * np.sin(phi)])
     points = np.concatenate([outline, hole])
-    cap = Delaunay(points).simplices
-    centre = points[cap].mean(axis=1)
-    inside = np.hypot(centre[:, 0] - 3 * MM, centre[:, 1]) < r * np.cos(np.pi / n_hole)
-    cap = cap[~inside]
-    e1, e2 = (points[cap[:, k]] - points[cap[:, 0]] for k in (1, 2))
-    clockwise = e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0] < 0
-    cap[clockwise] = cap[clockwise][:, ::-1]
     n = len(points)
     vertices = np.concatenate(
         [np.column_stack([points, np.full(n, z)]) for z in (t, -t)]
     )
-    faces = [*cap, *(tri[::-1] + n for tri in cap)]
-    for first, count, outward in (
-        (0, len(outline), True),
-        (len(outline), len(hole), False),
-    ):
-        for k in range(count):
-            i, j = first + k, first + (k + 1) % count
-            quad = [(i + n, j + n, j), (i + n, j, i)]
-            faces += quad if outward else [tri[::-1] for tri in quad]
-    return vertices, np.array([list(face) for face in faces])
+    faces = json.loads((Path(__file__).parent / "cad_plate_faces.json").read_text())
+    return vertices, np.array(faces)
 
 
 def _cad_part():

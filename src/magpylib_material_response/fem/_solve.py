@@ -104,7 +104,7 @@ def _conforming(mesh):
     mass += u * v * ng.dx
     try:
         mass.Assemble()
-    except Exception as error:  # NGSolve's own NgException
+    except meshing.NgException as error:
         if "Inconsistent number of degrees of freedom" not in str(error):
             raise
         return False
