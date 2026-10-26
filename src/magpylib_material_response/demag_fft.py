@@ -69,6 +69,18 @@ MIN_GRID_CELLS = 16
 #: times those of a full box of as many cells.
 MIN_LATTICE_FILL = 0.125
 
+#: A grid with holes also needs this many cells along every axis of its box. A
+#: thinner one, such as a voxelized washer one to three cells thick, pads a
+#: flat, mostly empty box, and its FFTs take longer than the boxes and loose
+#: cells it replaces: a one-layer ring of 1,993 cells solved in 6.3 s instead
+#: of 1.6 s, while a four-layer ring of 2,944 took 3.3 s instead of 3.4 s.
+MIN_LATTICE_LAYERS = 4
+
+#: `_split_boxes` gives up on a lattice box this many times larger than its
+#: cells: noise just above the lattice tolerance, or a long diagonal, makes a
+#: box that is mostly empty, slow to split and possibly too large to allocate.
+SPLIT_MAX_SITES_PER_CELL = 64
+
 
 def canonical_quats(quats):
     """Return quaternions with a deterministic global sign.
@@ -148,8 +160,9 @@ def _lattice_index(positions, dim, rtol=1e-6):
 def _detect_lattice(positions, dim, min_fill, rtol=1e-6):
     """Detect axis-aligned ``positions`` on one uniform lattice, holes allowed.
 
-    Returns ``None`` when a point is off the lattice (:func:`_lattice_index`)
-    or the points fill less than ``min_fill`` of their bounding box, else a
+    Returns ``None`` when a point is off the lattice (:func:`_lattice_index`),
+    the points fill less than ``min_fill`` of their bounding box, or the box
+    has holes and is thinner than ``MIN_LATTICE_LAYERS`` along an axis, else a
     dict with keys ``shape`` (the box), ``spacing``, ``origin`` and ``flat``,
     the grid-flat index ``ix*Ny*Nz + iy*Nz + iz`` of each point. A full box
     adds ``order``, the inverse of ``flat``: grid-flat index ``f`` holds
@@ -161,7 +174,8 @@ def _detect_lattice(positions, dim, min_fill, rtol=1e-6):
     origin, spacing, index = placed
     n = len(index)
     shape = tuple(int(v) for v in index.max(axis=0) + 1)
-    if n < min_fill * shape[0] * shape[1] * shape[2]:
+    sites = shape[0] * shape[1] * shape[2]
+    if n < min_fill * sites or (n < sites and min(shape) < MIN_LATTICE_LAYERS):
         return None
     flat = (index[:, 0] * shape[1] + index[:, 1]) * shape[2] + index[:, 2]
     if np.unique(flat).size != n:
@@ -245,7 +259,12 @@ def _split_boxes(positions, dim, rtol=1e-6):
         return None
     index = placed[2]
     n = len(index)
-    shape = tuple(index.max(0) + 1)
+    shape = tuple(int(v) for v in index.max(0) + 1)
+    if shape[0] * shape[1] * shape[2] > SPLIT_MAX_SITES_PER_CELL * n:
+        return None
+    flat = (index[:, 0] * shape[1] + index[:, 1]) * shape[2] + index[:, 2]
+    if np.unique(flat).size != n:
+        return None  # two cells on one site
     occupied = np.zeros(shape, dtype=bool)
     occupied[tuple(index.T)] = True
     cell_at = np.full(shape, -1, dtype=np.int64)
@@ -429,20 +448,31 @@ def analyze_structure(
             # ...then per meshed body (cells sharing a label), with holes when
             # it fills enough of its box, which touching bodies need: their
             # cells form one connected component that is not a box, or not on
-            # one lattice at all (two voxelized balls)...
+            # one lattice at all (two voxelized balls). A body's parts far
+            # apart are tried apart: one box around them would be mostly
+            # empty...
             assigned = np.zeros(members.size, dtype=bool)
             if groups is not None:
                 g = np.asarray(groups)[members]
                 for label_g in np.unique(g):
-                    comp = np.nonzero(g == label_g)[0]
-                    if comp.size < MIN_GRID_CELLS:
+                    body = np.nonzero(g == label_g)[0]
+                    if body.size < MIN_GRID_CELLS:
                         continue
-                    info = _detect_lattice(pos_local[comp], dim0, MIN_LATTICE_FILL)
-                    if info is not None:
-                        clusters.append(
-                            {"kind": "grid", "indices": members[comp], **base, **info}
-                        )
-                        assigned[comp] = True
+                    for part in _split_components(pos_local[body]):
+                        comp = body[part]
+                        if comp.size < MIN_GRID_CELLS:
+                            continue
+                        info = _detect_lattice(pos_local[comp], dim0, MIN_LATTICE_FILL)
+                        if info is not None:
+                            clusters.append(
+                                {
+                                    "kind": "grid",
+                                    "indices": members[comp],
+                                    **base,
+                                    **info,
+                                }
+                            )
+                            assigned[comp] = True
             # ...then per spatially-connected component of what is left
             # (separate meshed bodies with identical cell geometry), as a grid,
             # with holes when it fills enough of its box (touching bodies whose

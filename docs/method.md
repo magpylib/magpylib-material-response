@@ -261,12 +261,17 @@ Measured on soft iron at $\chi = 1000$, out of 39 models:
 | Model                         | Cells | FFT   | Direct         | Iterative      | `"auto"`  |
 | ----------------------------- | ----- | ----- | -------------- | -------------- | --------- |
 | one cube, identical cells     | 4,096 | 100 % | 3.1 s, 1.4 GB  | 0.41 s, 0.2 GB | iterative |
-| three cubes, three cell sizes | 3,240 | 40 %  | 9.2 s, 1.9 GB  | 8.3 s, 1.0 GB  | iterative |
+| three cubes, three cell sizes | 3,240 | 40 %  | 9.0 s, 1.4 GB  | 8.3 s, 1.0 GB  | iterative |
 | a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
 | 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
 | voxelized sphere              | 1,304 | 100 % | 0.30 s, 0.3 GB | 0.20 s, 0.1 GB | iterative |
 | tetrahedra                    | 1,931 | 0     | 9.3 s, 1.1 GB  | 9.1 s, 1.1 GB  | direct    |
 | cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
+
+The rows with one cube, three cubes and the voxelized sphere are measured with
+the direct solver's current table chunks of 200,000 pairs; the others were
+measured with chunks of 2,000,000, and those holding grids now peak somewhat
+lower.
 
 Under `"auto"` GMRES runs to `solver_tol / 100`, so the polarization stays
 within about `solver_tol` of the direct solve on a few thousand cells and within
@@ -289,9 +294,12 @@ six independent components of the chosen rule's tensor, is built once by
 `build_fft_kernel` and reused at every GMRES iteration (`demag_fft_matvec`). The
 grid spacing may exceed the cell size. A body on one lattice that does not fill
 its box, such as a voxelized sphere, runs the same way when its cells fill at
-least an eighth of the box (`MIN_LATTICE_FILL`): the empty places hold zero
-polarization, and the FFTs cost at most eight times those of a full box of as
-many cells.
+least an eighth of the box (`MIN_LATTICE_FILL`) and it is at least four cells
+deep along every axis (`MIN_LATTICE_LAYERS`): the empty places hold zero
+polarization, and the box holds at most eight times as many sites as cells. A
+thinner body with holes, such as a voxelized washer one to three cells thick,
+keeps full boxes and loose cells: FFTs over its flat, mostly empty box are
+slower.
 
 ### 5.2 Clusters
 
@@ -303,7 +311,8 @@ exactly one:
   put the cells in, so a yoke with its legs is three grids. Cells on one lattice
   that do not fill a box, such as a voxelized sphere or touching bodies whose
   cells were flattened into one Collection, are one grid with holes when they
-  fill at least an eighth of their box, and else the full boxes they fill;
+  fill at least an eighth of their box and are four cells deep, and else the
+  full boxes they fill. Parts of one body far apart are tried apart;
 - **loose**: identical parallel cuboids without that grid;
 - **generic**: everything else — other cell types, rotated singletons and, under
   point matching, groups smaller than `MIN_CLUSTER_CELLS` (8).

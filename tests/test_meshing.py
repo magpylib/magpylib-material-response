@@ -439,27 +439,80 @@ def test_voxelize_keeps_the_volume(obj):
     assert volume(voxelize(obj, 1000, strict_inside=True)) < 0.9 * exact
 
 
-@pytest.mark.parametrize(
-    ("target", "warns"),
-    [(1000, False), (200, True)],
-    ids=["exact volume", "few cells: the closest volume, with a warning"],
-)
-def test_voxelize_rings_and_tubes(target, warns):
-    """Tubes gain or lose cells by whole rings, so the spacing updates jump
-    past the exact one: a scan finds it, or the closest volume within 5 %."""
-    tube = magpy.magnet.CylinderSegment(
-        polarization=(0, 0, 1), dimension=(0.009, 0.01, 0.02, 0, 360)
+def _cube_mesh(centre):
+    corners = [(x, y, z) for x in (-0.5, 0.5) for y in (-0.5, 0.5) for z in (-0.5, 0.5)]
+    return magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 1), points=np.array(corners) + centre
     )
+
+
+_SEG = magpy.magnet.CylinderSegment
+_CYL = magpy.magnet.Cylinder
+
+
+@pytest.mark.parametrize(
+    ("obj", "target", "outcome", "cells"),
+    [
+        (magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=1), 1000, "exact", 1021),
+        (magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=1), 5000, "exact", 4945),
+        (
+            _SEG(polarization=(0, 0, 1), dimension=(9, 10, 20, 0, 360)),
+            1000,
+            "exact",
+            None,
+        ),
+        (_SEG(polarization=(0, 0, 1), dimension=(0, 1, 1, 0, 45)), 10, "exact", None),
+        (_CYL(polarization=(0, 0, 1), dimension=(1, 0.05)), 500, "exact", 325),
+        (_CYL(polarization=(0, 0, 1), dimension=(1, 0.03)), 200, "within 1 %", None),
+        (
+            _SEG(polarization=(0, 0, 1), dimension=(9, 10, 20, 0, 360)),
+            10,
+            "warns",
+            None,
+        ),
+        (_CYL(polarization=(0, 0, 1), dimension=(1, 0.05)), 10, "refuses", None),
+        (_cube_mesh(0.4), 300, "exact", 343),
+    ],
+    ids=[
+        "sphere: the spacing updates, 1,021 cells",
+        "sphere: the spacing updates, 4,945 cells",
+        "tube: the scan finds the exact spacing",
+        "pie with a face through the origin: offset lattice",
+        "disc: exact at another count before a near miss",
+        "thin disc: within 1 %",
+        "tube in 10 cells: closest within 5 %, a warning",
+        "disc thinner than the cells: refused",
+        "mesh off its own origin: lattice at its middle",
+    ],
+)
+def test_voxelize_hard_shapes(obj, target, outcome, cells):
+    """The spacing search across its fallbacks: exact near the target, exact at
+    another count, within 1 %, the closest within 5 % with a warning, refused."""
+    if outcome == "refuses":
+        with pytest.raises(ValueError, match="within 5%"):
+            voxelize(obj, target)
+        return
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        cells = voxelize(tube, target)
-    assert any("closest holds" in str(w.message) for w in caught) is warns
-    held = sum(np.prod(c.dimension) for c in cells.sources_all) / get_volume(tube)
-    if warns:
-        assert abs(held - 1) <= 0.05
-    else:
-        np.testing.assert_allclose(held, 1, rtol=1e-12)
-        assert target / 1.5 <= len(cells.sources_all) <= 1.5 * target
+        coll = voxelize(obj, target)
+    assert any("closest holds" in str(w.message) for w in caught) is (
+        outcome == "warns"
+    )
+    held = sum(np.prod(c.dimension) for c in coll.sources_all) / get_volume(obj)
+    miss = {"exact": 1e-12, "within 1 %": 0.01, "warns": 0.05}[outcome]
+    assert abs(held - 1) <= miss
+    if cells is not None:
+        assert len(coll.sources_all) == cells
+    observer = (
+        np.array([0.4, 0.4, 3.4])
+        if isinstance(obj, magpy.magnet.TriangularMesh)
+        else None
+    )
+    if observer is not None:  # the cells sit where the mesh is
+        expected = obj.getB(observer)
+        np.testing.assert_allclose(
+            coll.getB(observer), expected, rtol=0, atol=1e-9 * np.linalg.norm(expected)
+        )
 
 
 def test_cells_are_force_targets():
