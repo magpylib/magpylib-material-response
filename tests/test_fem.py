@@ -144,6 +144,23 @@ def test_every_shape_solves(make):
     assert np.all(study.values[:, 2] > 0)
 
 
+def test_edge_layers_match_across_faces():
+    """On this cuboid, an observer above it made NGSolve's edge layers leave a
+    prism's square face against two triangles, which no assembly accepts
+    (#98); the mesh is made again at the next grading."""
+    box = magpy.magnet.Cuboid(
+        dimension=(1.0935e-3, 1.4e-3, 0.8991e-3), polarization=(0, 0, 0)
+    )
+    box.susceptibility = 100
+    model = magpy.Collection(box)
+    model.H_ext = (B_EXT, 0, 0)
+    observer = np.array([(0, 0, 2e-3)])
+
+    solution = fem_solve(model, order=2, observers=observer)
+
+    assert np.all(np.isfinite(solution.getB(observer)))
+
+
 def test_kept_solutions_stay_valid():
     """Every order curves the shared mesh; a solution kept from a study reads its
     field on its own geometry afterwards. A lone observer gets one error."""

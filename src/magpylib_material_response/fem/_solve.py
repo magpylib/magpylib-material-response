@@ -50,6 +50,11 @@ FAR_MAXH = 0.25
 #: thinner layers whose conjugate gradients take five times the iterations; 0.3
 #: is as accurate on the cube at order 5 (2e-5).
 LAYER_RATIO = 0.3
+#: Grading of the volume mesh, then the gradings tried in turn when NGSolve's
+#: refinement toward the edges leaves elements that do not match across a face
+#: (#98): a few meshes only, such as a 1.09 x 1.4 x 0.9 mm cuboid with an
+#: observer 2 mm above it, at two layers or more.
+GRADINGS = (0.3, 0.35, 0.25, 0.4)
 #: How far, in ball radii, a point the mesh cannot find is moved toward the
 #: ball's centre, one step after the other: points on the sphere fall between
 #: it and its elements, about 1e-4 at order 2 and 1e-2 at order 1.
@@ -86,6 +91,24 @@ def _quiet():
         yield
     finally:
         ng.ngsglobals.msg_level = level
+
+
+def _conforming(mesh):
+    """Whether the elements of `mesh` match across every face. Assembling with
+    unknowns on the faces, from order 2, finds a square face of a prism
+    against two triangles (#98); a mass matrix takes about 0.2 s on 50,000
+    elements."""
+    space = ng.H1(mesh, order=2)
+    u, v = space.TnT()
+    mass = ng.BilinearForm(space)
+    mass += u * v * ng.dx
+    try:
+        mass.Assemble()
+    except Exception as error:  # NGSolve's own NgException
+        if "Inconsistent number of degrees of freedom" not in str(error):
+            raise
+        return False
+    return True
 
 
 class FemSolution:
@@ -268,7 +291,27 @@ class Model:
             occ.Translation(occ.Vec(*self.kelvin_center)),
         )
         air = (ball - occ.Glue(solids)).mat("air")
-        params = meshing.MeshingParameters(maxh=far, grading=0.3)
+        geometry = occ.OCCGeometry(occ.Glue([air, *solids, kelvin]))
+        for grading in GRADINGS:
+            params = self._parameters(grading, sizes, observers, observer_maxh)
+            mesh = ng.Mesh(geometry.GenerateMesh(params))
+            if not edge_layers:
+                return mesh
+            mesh.RefineHP(edge_layers, LAYER_RATIO)
+            if _conforming(mesh):
+                return mesh
+        msg = (
+            f"NGSolve's refinement toward the edges left elements that do not "
+            f"match across a face at every grading of {GRADINGS} (issue #98); "
+            "edge_layers=0 avoids it, at the cost of accuracy near the edges."
+        )
+        raise RuntimeError(msg)
+
+    def _parameters(self, grading, sizes, observers, observer_maxh):
+        """Netgen's meshing parameters: the far size, the grading, and the
+        element sizes at and around the observers."""
+        R = self.radius
+        params = meshing.MeshingParameters(maxh=FAR_MAXH * R, grading=grading)
         if observers is not None:
             h = self._observer_sizes(observers, observer_maxh, sizes)
             rho = np.linalg.norm(observers, axis=1)
@@ -286,11 +329,7 @@ class Model:
                 params.RestrictH(x, y, z, hi)
             for (x, y, z), hi in zip(0.98 * R * direction, h[near], strict=True):
                 params.RestrictH(x, y, z, hi)
-        ngmesh = occ.OCCGeometry(occ.Glue([air, *solids, kelvin])).GenerateMesh(params)
-        mesh = ng.Mesh(ngmesh)
-        if edge_layers:
-            mesh.RefineHP(edge_layers, LAYER_RATIO)
-        return mesh
+        return params
 
     def _check_overlap(self, solids):
         """Refuse magnets that overlap: the mesh would hold their union, where

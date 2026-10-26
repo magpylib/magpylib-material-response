@@ -129,5 +129,15 @@
    },
    "unknowns": 2400
   }
+ },
+ "many_sizes": {
+  "MoM": {
+   "setting": 1,
+   "errors": {
+    "1 mm above the layer": 0.2029,
+    "30 mm away": 0.1681
+   },
+   "unknowns": 402
+  }
  }
 }

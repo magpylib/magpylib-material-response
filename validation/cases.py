@@ -538,12 +538,15 @@ CASES = {
             _small_bodies,
             options={"FEM": {"edge_layers": 0}},
         ),
+        # 432 edges: four layers toward them take 6.8 GB at order 3, two fit
+        # orders 2 to 4 in 6.3 GB
         Case(
             "many_sizes",
             "Cuboids of many sizes",
             "edge",
             _many_sizes,
-            known_failures={"FEM": ISSUES + "98"},
+            options={"FEM": {"edge_layers": 2}},
+            reference_orders=(2, 3, 4),
         ),
         Case("anisotropic", "Anisotropic susceptibility, turned", "edge", _anisotropic),
         Case(
