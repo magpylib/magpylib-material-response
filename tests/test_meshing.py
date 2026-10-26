@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -435,6 +437,29 @@ def test_voxelize_keeps_the_volume(obj):
     exact = get_volume(obj)
     np.testing.assert_allclose(volume(voxelize(obj, 1000)), exact, rtol=1e-12)
     assert volume(voxelize(obj, 1000, strict_inside=True)) < 0.9 * exact
+
+
+@pytest.mark.parametrize(
+    ("target", "warns"),
+    [(1000, False), (200, True)],
+    ids=["exact volume", "few cells: the closest volume, with a warning"],
+)
+def test_voxelize_rings_and_tubes(target, warns):
+    """Tubes gain or lose cells by whole rings, so the spacing updates jump
+    past the exact one: a scan finds it, or the closest volume within 5 %."""
+    tube = magpy.magnet.CylinderSegment(
+        polarization=(0, 0, 1), dimension=(0.009, 0.01, 0.02, 0, 360)
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        cells = voxelize(tube, target)
+    assert any("closest holds" in str(w.message) for w in caught) is warns
+    held = sum(np.prod(c.dimension) for c in cells.sources_all) / get_volume(tube)
+    if warns:
+        assert abs(held - 1) <= 0.05
+    else:
+        np.testing.assert_allclose(held, 1, rtol=1e-12)
+        assert target / 1.5 <= len(cells.sources_all) <= 1.5 * target
 
 
 def test_cells_are_force_targets():

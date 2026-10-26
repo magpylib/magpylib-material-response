@@ -32,8 +32,11 @@ and this project adheres to
   the object's exact volume, and a magnet its moment, close to `target_elems`.
   It kept only the cells lying wholly inside by default, which left a sphere a
   quarter short of its volume at 1,000 cells, and its moment with it;
-  `strict_inside=True` still does that
-  ([#96](https://github.com/magpylib/magpylib-material-response/pull/96)).
+  `strict_inside=True` still does that. Where no spacing near the target holds
+  the volume exactly, as on some rings at some targets, the closest within 5 %
+  is taken, with a warning above 1 %
+  ([#96](https://github.com/magpylib/magpylib-material-response/pull/96),
+  [#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
 - `apply_demag` runs cells on one lattice that do not fill a box, such as a
   voxelized sphere, as one grid by FFT, with zero polarization in the holes,
   when they fill at least an eighth of their box. Such bodies ran as many small

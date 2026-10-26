@@ -371,8 +371,19 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
 
 #: Spacing updates `voxelize` tries for touching cells that hold the volume.
 VOXELIZE_MAX_TUNING = 10
-#: Share of the volume `voxelize` cells may miss when no spacing holds it.
-VOXELIZE_MAX_VOLUME_MISS = 0.01
+#: Cell counts `voxelize` takes around `target_elems`, as a factor either way.
+VOXELIZE_COUNT_RANGE = 1.5
+#: Spacings `voxelize` scans when the updates find none, 1 % apart from 0.8 to
+#: 1.25 times the target's.
+VOXELIZE_SCAN = np.geomspace(0.8, 1.25, 46)
+#: Share of the volume `voxelize` cells may miss without a warning.
+VOXELIZE_WARN_MISS = 0.01
+#: Share of the volume `voxelize` cells may miss to keep a count near the
+#: target; beyond it, an exact volume at any count met is taken instead.
+VOXELIZE_NEAR_MISS = 0.05
+#: Share of the volume beyond which `voxelize` refuses: the body is thinner
+#: than the cells.
+VOXELIZE_MAX_VOLUME_MISS = 0.5
 
 
 def _lattice_inside(obj, spacing, extent):
@@ -384,15 +395,83 @@ def _lattice_inside(obj, spacing, extent):
     return grid[mask_inside(obj, grid, tolerance=1e-14)]
 
 
+def _voxel_edge(obj, vol, extent, target):
+    """The edge of touching cubic cells, kept where their centre lies inside
+    `obj`, that hold its volume `vol` at a count near `target`, and the share
+    of the volume they miss; ``None`` when no spacing keeps any cell.
+
+    N touching cells of edge h hold the volume when h = (V / N)^(1/3). From the
+    target's spacing, moving h there reaches that point within a few lattices
+    on compact bodies. Rings and tubes gain or lose cells by whole rings, and
+    the moves can jump past it. A scan of spacings then takes, in this order:
+    the exact spacing of a count near the target, nearest it; the spacing near
+    the target whose cells come closest to the volume, within
+    ``VOXELIZE_NEAR_MISS``; the exact spacing of any count met, as a flat body
+    may hold its volume only with whole layers; the closest volume met.
+    """
+    start = (vol / target) ** (1 / 3)
+
+    def count(h):
+        return len(_lattice_inside(obj, h, extent))
+
+    def near(n):
+        return target / VOXELIZE_COUNT_RANGE <= n <= target * VOXELIZE_COUNT_RANGE
+
+    def nearest(counts):
+        n = min(counts, key=lambda n: abs(n - target))
+        return (vol / n) ** (1 / 3), 0.0
+
+    exact, edge = set(), start
+    for _ in range(VOXELIZE_MAX_TUNING):
+        n = count(edge)
+        if n == 0:
+            break
+        if abs(n * edge**3 / vol - 1) < 1e-12:
+            if near(n):
+                return edge, 0.0
+            exact.add(n)
+            break
+        edge = (vol / n) ** (1 / 3)
+        if not start / 2 <= edge <= 2 * start:
+            break
+    closest = {}  # count -> (volume miss, spacing)
+    for h in start * VOXELIZE_SCAN:
+        n = count(h)
+        miss = abs(n * h**3 / vol - 1)
+        if n and miss < closest.get(n, (np.inf,))[0]:
+            closest[n] = (miss, h)
+    # within the updates' bounds: on a body thinner than the cells, the exact
+    # spacing of a count met is tiny, and its lattice would hold billions
+    exact |= {
+        n
+        for n in closest
+        if start / 2 <= (vol / n) ** (1 / 3) <= 2 * start
+        and count((vol / n) ** (1 / 3)) == n
+    }
+    if any(near(n) for n in exact):
+        return nearest([n for n in exact if near(n)])
+    near_miss = min((v for n, v in closest.items() if near(n)), default=None)
+    if near_miss is not None and near_miss[0] <= VOXELIZE_NEAR_MISS:
+        return near_miss[1], near_miss[0]
+    if exact:
+        return nearest(exact)
+    if not closest:
+        return None
+    miss, edge = min(closest.values())
+    return edge, miss
+
+
 def voxelize(obj, target_elems, strict_inside=False, **kwargs):
     """
     Split-up a Magpylib magnet into a regular grid of identical, touching cube
     cells. The cells whose centre lies inside the object are kept, and the grid
     spacing is tuned so that together they hold the object's volume, and a
     uniformly polarized magnet its moment. Untuned, they hold 96 to 109 % of a
-    sphere's volume, depending on the cell count. The count lands near
-    `target_elems`, but a flat body needs cells no thicker than itself and may
-    get more.
+    sphere's volume, depending on the cell count. The count lands within a
+    factor of 1.5 of `target_elems` where a spacing there holds the volume.
+    Where none does, as on some rings at some targets, the closest within 5 %
+    is taken, with a warning above 1 %; a flat body may hold its volume only
+    with whole layers of cells, and then gets the count that does.
 
     From a susceptibility of about 10 on, the staircase outline sets the moment
     instead: a sphere at χ = 1000 comes out 5 % high at 3,000 cells, and the
@@ -417,8 +496,8 @@ def voxelize(obj, target_elems, strict_inside=False, **kwargs):
     Raises
     ------
     ValueError
-        If no cell centre lies inside the object, or no spacing near the
-        target's holds its volume, as on a body thinner than the cells.
+        If no cell centre lies inside the object, or the cells would miss more
+        than half its volume, as on a body thinner than the cells.
     """
     pol0 = obj.polarization
     vol, containing_cube_edge = get_volume(obj, return_containing_cube_edge=True)
@@ -452,35 +531,27 @@ def voxelize(obj, target_elems, strict_inside=False, **kwargs):
             msg = "No cuboids left with strict-inside method"
             raise ValueError(msg)
     else:
-        # N touching cells of edge h hold the volume when h = (V / N)^(1/3):
-        # start from the target's spacing and iterate to that fixed point,
-        # keeping the closest volume met. A body thinner than the cells has
-        # none nearby, and the iteration would refine without end.
-        start = (vol / target_elems) ** (1 / 3)
-        edge, best = start, (np.inf, None, None)
-        for _ in range(VOXELIZE_MAX_TUNING):
-            grid = _lattice_inside(obj, edge, containing_cube_edge)
-            if grid.size == 0:
-                break
-            miss = abs(len(grid) * edge**3 / vol - 1)
-            if miss < best[0]:
-                best = (miss, grid, edge)
-            if miss < 1e-12:
-                break
-            edge = (vol / len(grid)) ** (1 / 3)
-            if not start / 2 <= edge <= 2 * start:
-                break
-        miss, grid, edge = best
-        if grid is None:
+        tuned = _voxel_edge(obj, vol, containing_cube_edge, target_elems)
+        if tuned is None:
             raise ValueError(no_centres)
+        edge, miss = tuned
+        grid = _lattice_inside(obj, edge, containing_cube_edge)
+        held = len(grid) * edge**3 / vol
         if miss > VOXELIZE_MAX_VOLUME_MISS:
             msg = (
                 f"voxelize finds no spacing near target_elems={target_elems} at "
-                "which touching cells hold the object's volume (the closest holds "
-                f"{len(grid) * edge**3 / vol:.0%}); the object is likely thinner "
-                "than the cells: increase target_elems"
+                f"which touching cells hold the object's volume (the closest holds "
+                f"{held:.0%}): the object is thinner than the cells; increase "
+                "target_elems"
             )
             raise ValueError(msg)
+        if miss > VOXELIZE_WARN_MISS:
+            warnings.warn(
+                f"voxelize finds no spacing near target_elems={target_elems} at "
+                f"which touching cells hold the object's volume exactly; the "
+                f"closest holds {held:.1%}. Another target_elems may hit it.",
+                stacklevel=2,
+            )
         cube_cell_dim = np.full(3, edge)
 
     cells = []
