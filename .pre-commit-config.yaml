@@ -35,8 +35,9 @@ repos:
       - id: prettier
         types_or: [yaml, markdown, html, css, scss, javascript, json]
         args: [--prose-wrap=always]
-        # copied verbatim from magpylib, kept identical for comparison
-        exclude: ^docs/_static/webcode/
+        # copied verbatim from magpylib, kept identical for comparison; the
+        # validation's JSON files are written by its scripts
+        exclude: ^(docs/_static/webcode/|validation/.*\.json$)
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.16.10"

@@ -94,6 +94,8 @@ log_level = "INFO"
 testpaths = [
   "tests",
 ]
+# validation/, the cases and methods that tests/test_validation.py checks
+pythonpath = ["."]
 
 
 [tool.coverage]
@@ -164,6 +166,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20"]
 "scripts/**" = ["T20"]
+"validation/**" = ["T20"]
 "noxfile.py" = ["T20", "EXE001"]
 
 
