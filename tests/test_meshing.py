@@ -17,7 +17,7 @@ from magpylib_material_response.meshing import (
     slice_Cuboid,
     voxelize,
 )
-from magpylib_material_response.meshing_utils import trimesh_from_model3d
+from magpylib_material_response.meshing_utils import get_volume, trimesh_from_model3d
 
 
 def test_mesh_Cuboid():
@@ -401,14 +401,40 @@ def test_trimesh_from_model3d_tiny_scale():
 
 def test_voxelize_small_target_finite_cells():
     """Regression: grid_elems=1 caused division by zero, and an empty grid
-    crashed with an opaque reshape error; both now behave cleanly."""
+    crashed with an opaque reshape error; both now behave cleanly. A body
+    thinner than the cells is refused instead of refined without end."""
     sphere = magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=0.001)
     with pytest.raises(ValueError, match="no cell centres"):
-        voxelize(sphere, 3)  # grid too coarse: clean error, no crash
+        voxelize(sphere, 3, strict_inside=True)  # grid too coarse: clean error
+    disc = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(0.01, 1e-6))
+    with pytest.raises(ValueError, match="no spacing"):
+        voxelize(disc, 50)
     coll = voxelize(sphere, 100)
     dims = np.array([c.dimension for c in coll.sources_all])
     assert np.isfinite(dims).all()
     assert (dims > 0).all()
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=0.01),
+        magpy.magnet.CylinderSegment(
+            polarization=(0, 0, 1), dimension=(0.002, 0.005, 0.004, 0, 270)
+        ),
+    ],
+    ids=["sphere", "cylinder-segment"],
+)
+def test_voxelize_keeps_the_volume(obj):
+    """The cells hold the object's exact volume, and a magnet's moment with it;
+    the cells wholly inside, at the grid's edge, hold less."""
+
+    def volume(coll):
+        return sum(np.prod(c.dimension) for c in coll.sources_all)
+
+    exact = get_volume(obj)
+    np.testing.assert_allclose(volume(voxelize(obj, 1000)), exact, rtol=1e-12)
+    assert volume(voxelize(obj, 1000, strict_inside=True)) < 0.9 * exact
 
 
 def test_cells_are_force_targets():
