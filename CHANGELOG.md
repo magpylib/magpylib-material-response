@@ -32,8 +32,28 @@ and this project adheres to
   the object's exact volume, and a magnet its moment, close to `target_elems`.
   It kept only the cells lying wholly inside by default, which left a sphere a
   quarter short of its volume at 1,000 cells, and its moment with it;
-  `strict_inside=True` still does that
-  ([#96](https://github.com/magpylib/magpylib-material-response/pull/96)).
+  `strict_inside=True` still does that. Where no spacing near the target holds
+  the volume, it takes the count that does, as a flat body holds it only with
+  whole layers; failing that, the closest within 5 %, with a warning; beyond, it
+  refuses. It tries a lattice with a cell centred at the object's origin and one
+  with a cell corner there, which splits no cell along faces through the origin,
+  such as a cylinder segment's sides. A triangle mesh's lattice is anchored at
+  the middle of its box: off its own origin, the mesh lost cells, in both modes
+  ([#96](https://github.com/magpylib/magpylib-material-response/pull/96),
+  [#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
+- `apply_demag` runs cells on one lattice that do not fill a box, such as a
+  voxelized sphere, as one grid by FFT, with zero polarization in the holes,
+  when they fill at least an eighth of their box and are four cells deep. Such
+  bodies ran as many small boxes and a rim of loose cells, which FFT products
+  barely covered. A voxelized sphere of 4,529 cells at χ = 1000 took 8.7 s and
+  1.5 GB, and now takes 0.8 s and 84 MB; one of 1,304 cells took 0.76 s, and now
+  0.24 s. Grid clusters from `analyze_structure` give each cell's place in the
+  grid's box as `flat`, and only grids that fill their box keep `order`. The
+  direct solver gathers the blocks of grids in smaller chunks: a cube of 4,096
+  cells peaks at 1.4 GB instead of 2.1 GB, in the same time. A cell on another's
+  site, or positions noisy just above the lattice tolerance, made the structure
+  analysis fail or ask for terabytes; such cells now run loose
+  ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
 
 ### Removed
 

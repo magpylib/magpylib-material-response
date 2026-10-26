@@ -358,9 +358,8 @@ convolution, so FFTs compute it in N log N time and little memory.
 
 The default, `solver="auto"`, looks at how the cells are arranged and picks.
 Here three parts are meshed three ways, and coloured by how the solver sees
-them: a cuboid mesh is one grid (blue); a voxelized sphere is many small full
-boxes of grid (blue) and an irregular rim (orange); tetrahedra lie on no grid
-(grey).
+them: a cuboid mesh is one grid (blue), and so is a voxelized sphere, a grid
+with holes; tetrahedra lie on no grid (grey).
 
 ```{code-cell} ipython3
 block = soft_cube()

@@ -37,7 +37,7 @@ from magpylib_material_response.demag_fft import (
     demag_fft_matvec,
     detect_uniform_grid,
 )
-from magpylib_material_response.meshing import mesh_Cuboid
+from magpylib_material_response.meshing import mesh_Cuboid, voxelize
 from magpylib_material_response.newell import demag_block_general, demag_tensor_newell
 
 
@@ -763,16 +763,176 @@ def test_grid_pair_block_matches_plain_dedup():
             np.testing.assert_allclose(fast, ref, rtol=0, atol=1e-9 * np.abs(ref).max())
 
 
-def test_flattened_touching_bodies_still_get_a_grid_each():
-    """Cells flattened into one Collection lose their parents; the lattice
-    box split still finds the three bodies."""
-    flat = magpy.Collection(*_u_core_cells().sources_all, override_parent=True)
-    _, clusters = analyze_collection(flat.sources_all)
-    assert sorted(len(c["indices"]) for c in clusters if c["kind"] == "grid") == [
-        24,
-        24,
-        40,
-    ]
+def _flattened(*colls):
+    cells = [c for coll in colls for c in coll.sources_all]
+    return magpy.Collection(*cells, override_parent=True)
+
+
+def _voxel_ball(position=(0, 0, 0), target=400):
+    ball = voxelize(magpy.magnet.Sphere(diameter=1.0, polarization=(0, 0, 0)), target)
+    ball.position = position
+    return ball
+
+
+def _touching_voxel_balls():
+    """Two balls whose cells sit 0.37 cell apart: two lattices, one component."""
+    a = _voxel_ball(target=200)
+    h = a.sources_all[0].dimension[0]
+    reach = max(c.position[0] for c in a.sources_all) + h / 2
+    return magpy.Collection(a, _voxel_ball((2 * reach + 0.37 * h, 0, 0), 200))
+
+
+def _l_shape():
+    """Two one-cell arms of 20 and 19 cells: one lattice, 10 % of its box."""
+    arm_x = magpy.magnet.Cuboid(dimension=(20, 1, 1), polarization=(0, 0, 0))
+    arm_y = magpy.magnet.Cuboid(
+        dimension=(1, 19, 1), position=(-9.5, 10, 0), polarization=(0, 0, 0)
+    )
+    return _flattened(mesh_Cuboid(arm_x, (20, 1, 1)), mesh_Cuboid(arm_y, (1, 19, 1)))
+
+
+def _far_apart_in_one_collection():
+    """Two meshes 20 cells apart sharing a parent: 29 % of their joint box."""
+    a, b = (
+        magpy.magnet.Cuboid(
+            dimension=(4, 4, 4), position=(x, 0, 0), polarization=(0, 0, 0)
+        )
+        for x in (0, 24)
+    )
+    return _flattened(mesh_Cuboid(a, (4, 4, 4)), mesh_Cuboid(b, (4, 4, 4)))
+
+
+def _thick_tube():
+    """Four or more cells thick, 28 % of its box."""
+    tube = magpy.magnet.CylinderSegment(
+        dimension=(4, 5, 4, 0, 360), polarization=(0, 0, 0)
+    )
+    return voxelize(tube, 400)
+
+
+def _one_layer_frame():
+    """A square frame one cell thick: 56 % of its box, but flat."""
+    bars = [((12, 2, 1), (0, -5, 0)), ((12, 2, 1), (0, 5, 0))]
+    bars += [((2, 8, 1), (-5, 0, 0)), ((2, 8, 1), (5, 0, 0))]
+    return _flattened(
+        *(
+            mesh_Cuboid(
+                magpy.magnet.Cuboid(dimension=d, position=pos, polarization=(0, 0, 0)),
+                tuple(int(v) for v in d),
+            )
+            for d, pos in bars
+        )
+    )
+
+
+def _gapped_far_away():
+    """Two meshes 0.3 cell apart, 2e4 cells from the origin: off any lattice."""
+    a, b = (
+        magpy.magnet.Cuboid(
+            dimension=(10, 4, 4), position=(2e4 + x, 0, 0), polarization=(0, 0, 0)
+        )
+        for x in (0, 10.3)
+    )
+    return _flattened(mesh_Cuboid(a, (10, 4, 4)), mesh_Cuboid(b, (10, 4, 4)))
+
+
+def _T_from_magpylib(cells):
+    """T from magpylib's fields of unit polarizations, component-major like
+    _assemble_T_dense, without the structure analysis."""
+    n = len(cells)
+    pos = np.array([c.position for c in cells])
+    T = np.empty((3 * n, 3 * n))
+    for b in range(3):
+        units = [
+            magpy.magnet.Cuboid(
+                dimension=c.dimension, position=c.position, polarization=np.eye(3)[b]
+            )
+            for c in cells
+        ]
+        H = magpy.getH(units, pos) * magpy.mu_0  # (source j, observer i, a)
+        T[:, b * n : (b + 1) * n] = H.transpose(2, 1, 0).reshape(3 * n, n)
+    return T
+
+
+@pytest.mark.parametrize(
+    ("make", "kinds", "labels"),
+    [
+        (_voxel_ball, ["grid"], True),
+        (_voxel_ball, ["grid"], False),
+        (_thick_tube, ["grid"], True),
+        (_touching_voxel_balls, ["grid", "grid"], True),
+        (_far_apart_in_one_collection, ["grid", "grid"], True),
+        (lambda: _flattened(_u_core_cells()), ["grid"] * 3, True),
+        (_one_layer_frame, ["grid"] * 4, True),
+        (_l_shape, ["grid", "grid"], True),
+        (_gapped_far_away, ["loose"], True),
+    ],
+    ids=[
+        "voxelized ball: one grid",
+        "voxelized ball, cells without bodies: one grid",
+        "thick tube, 28 % of its box: one grid",
+        "touching voxelized balls: a grid each",
+        "far apart in one collection: a grid each",
+        "flattened touching bodies two cells thick: full boxes",
+        "frame one cell thick: full boxes",
+        "L-shape below an eighth of its box: full boxes",
+        "off the lattice far from the origin: loose",
+    ],
+)
+def test_lattice_with_holes_is_one_grid(monkeypatch, make, kinds, labels):
+    """Cells on one lattice that fill at least an eighth of their box, at least
+    four cells deep, run as one grid, zero in the holes; the dense T matches
+    magpylib's own fields, and both solvers agree, cross-grid FFT included."""
+    monkeypatch.setattr(demag, "FFT_CROSS_MIN_ENTRIES", 0)  # the test bodies are small
+    coll = make()
+    coll.susceptibility, coll.H_ext = 1000.0, (0.002, 0, 0.01)
+    cells = coll.sources_all
+    positions, clusters = analyze_collection(cells)
+    if not labels:
+        clusters = analyze_structure(
+            positions,
+            np.array([c.dimension for c in cells]),
+            R.from_quat([c.orientation.as_quat() for c in cells]),
+            np.ones(len(cells), dtype=bool),
+        )
+    assert sorted(c["kind"] for c in clusters) == kinds
+    T = _assemble_T_dense(cells, positions, clusters, "point")
+    ref = _T_from_magpylib(cells)
+    np.testing.assert_allclose(T, ref, rtol=0, atol=1e-9 * np.abs(ref).max())
+    _assert_solvers_agree(coll)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: (
+            magpy.Collection(
+                *mesh_Cuboid(
+                    magpy.magnet.Cuboid(dimension=(6, 6, 6)), (6, 6, 6)
+                ).sources_all,
+                magpy.magnet.Cuboid(dimension=(1, 1, 1), position=(0.5, 0.5, 0.5)),
+                override_parent=True,
+            ).sources_all
+        ),
+        lambda: [
+            magpy.magnet.Cuboid(dimension=(1, 1, 1), position=p)
+            for p in np.random.default_rng(0).normal(0, 1e-4, (512, 3))
+            + np.stack(np.meshgrid(*[np.arange(8.0)] * 3, indexing="ij"), -1).reshape(
+                -1, 3
+            )
+        ],
+    ],
+    ids=["a cell on another's site", "positions noisy at 1e-4 of a cell"],
+)
+def test_structure_falls_back_to_loose_cells(make):
+    """Cells that no lattice fits run as loose cells; on main a duplicate
+    failed the coverage check and noise asked for terabytes."""
+    cells = make()
+    _, clusters = analyze_collection(cells)
+    assert sorted(np.concatenate([c["indices"] for c in clusters])) == list(
+        range(len(cells))
+    )
+    assert "grid" not in [c["kind"] for c in clusters]
 
 
 def test_cross_grid_blocks_use_fft(monkeypatch):

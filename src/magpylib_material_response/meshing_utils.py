@@ -151,9 +151,8 @@ def get_volume(obj, return_containing_cube_edge=False):
         containing_cube_edge = obj.diameter
     elif obj.__class__.__name__ == "TriangularMesh":
         vol = obj.volume
-        containing_cube_edge = float(
-            np.max(obj.vertices.max(axis=0) - obj.vertices.min(axis=0))
-        )
+        # the vertices need not be centred on the mesh's own origin
+        containing_cube_edge = 2 * float(np.max(np.abs(obj.vertices)))
     else:
         msg = "Unsupported object type for volume calculation"
         raise TypeError(msg)
