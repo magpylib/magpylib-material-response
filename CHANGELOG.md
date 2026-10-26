@@ -38,8 +38,12 @@ and this project adheres to
   voxelized sphere, as one grid by FFT, with zero polarization in the holes,
   when they fill at least an eighth of their box. Such bodies ran as many small
   boxes and a rim of loose cells, which FFT products barely covered. A voxelized
-  sphere of 4,529 cells at χ = 1000 took 8.7 s and 1.5 GB, and now takes 0.9 s
-  and 84 MB; one of 1,304 cells took 0.72 s, and now 0.24 s
+  sphere of 4,529 cells at χ = 1000 took 8.7 s and 1.5 GB, and now takes 0.8 s
+  and 84 MB; one of 1,304 cells took 0.76 s, and now 0.24 s. Grid clusters from
+  `analyze_structure` give each cell's place in the grid's box as `flat`, and
+  only grids that fill their box keep `order`. The direct solver gathers the
+  blocks of grids in smaller chunks: a cube of 4,096 cells peaks at 1.4 GB
+  instead of 2.1 GB, in the same time
   ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
 
 ### Removed

@@ -763,28 +763,93 @@ def test_grid_pair_block_matches_plain_dedup():
             np.testing.assert_allclose(fast, ref, rtol=0, atol=1e-9 * np.abs(ref).max())
 
 
-def _flattened_u_core():
-    return magpy.Collection(*_u_core_cells().sources_all, override_parent=True)
+def _flattened(*colls):
+    cells = [c for coll in colls for c in coll.sources_all]
+    return magpy.Collection(*cells, override_parent=True)
 
 
-def _voxel_sphere():
-    return voxelize(magpy.magnet.Sphere(diameter=1.0, polarization=(0, 0, 0)), 400)
+def _voxel_ball(position=(0, 0, 0), target=400):
+    ball = voxelize(magpy.magnet.Sphere(diameter=1.0, polarization=(0, 0, 0)), target)
+    ball.position = position
+    return ball
+
+
+def _touching_voxel_balls():
+    """Two balls whose cells sit 0.37 cell apart: two lattices, one component."""
+    a = _voxel_ball(target=200)
+    h = a.sources_all[0].dimension[0]
+    reach = max(c.position[0] for c in a.sources_all) + h / 2
+    return magpy.Collection(a, _voxel_ball((2 * reach + 0.37 * h, 0, 0), 200))
+
+
+def _l_shape():
+    """Two one-cell arms of 20 and 19 cells: one lattice, 10 % of its box."""
+    arm_x = magpy.magnet.Cuboid(dimension=(20, 1, 1), polarization=(0, 0, 0))
+    arm_y = magpy.magnet.Cuboid(
+        dimension=(1, 19, 1), position=(-9.5, 10, 0), polarization=(0, 0, 0)
+    )
+    return _flattened(mesh_Cuboid(arm_x, (20, 1, 1)), mesh_Cuboid(arm_y, (1, 19, 1)))
+
+
+def _gapped_far_away():
+    """Two meshes 0.3 cell apart, 2e4 cells from the origin: off any lattice."""
+    a, b = (
+        magpy.magnet.Cuboid(
+            dimension=(10, 4, 4), position=(2e4 + x, 0, 0), polarization=(0, 0, 0)
+        )
+        for x in (0, 10.3)
+    )
+    return _flattened(mesh_Cuboid(a, (10, 4, 4)), mesh_Cuboid(b, (10, 4, 4)))
+
+
+def _T_from_magpylib(cells):
+    """T from magpylib's fields of unit polarizations, component-major like
+    _assemble_T_dense, without the structure analysis."""
+    n = len(cells)
+    pos = np.array([c.position for c in cells])
+    T = np.empty((3 * n, 3 * n))
+    for b in range(3):
+        units = [
+            magpy.magnet.Cuboid(
+                dimension=c.dimension, position=c.position, polarization=np.eye(3)[b]
+            )
+            for c in cells
+        ]
+        H = magpy.getH(units, pos) * magpy.mu_0  # (source j, observer i, a)
+        T[:, b * n : (b + 1) * n] = H.transpose(2, 1, 0).reshape(3 * n, n)
+    return T
 
 
 @pytest.mark.parametrize(
-    "make",
-    [_flattened_u_core, _voxel_sphere],
-    ids=["flattened touching bodies", "voxelized sphere"],
+    ("make", "kinds"),
+    [
+        (lambda: _flattened(_u_core_cells()), ["grid"]),
+        (_voxel_ball, ["grid"]),
+        (_touching_voxel_balls, ["grid", "grid"]),
+        (_l_shape, ["grid", "grid"]),
+        (_gapped_far_away, ["loose"]),
+    ],
+    ids=[
+        "flattened touching bodies: one grid",
+        "voxelized ball: one grid",
+        "touching voxelized balls: a grid each",
+        "L-shape below an eighth of its box: full boxes",
+        "off the lattice far from the origin: loose",
+    ],
 )
-def test_lattice_with_holes_is_one_grid(make):
-    """Cells on one lattice that do not fill a box run as one grid, zero in the
-    holes: touching bodies whose cells lost their parents (three boxes before),
-    a voxelized sphere (small boxes and a rim of loose cells before)."""
+def test_lattice_with_holes_is_one_grid(monkeypatch, make, kinds):
+    """Cells on one lattice that fill at least an eighth of their box run as
+    one grid, zero in the holes; the dense T matches magpylib's own fields, and
+    both solvers agree, cross-grid FFT included."""
+    monkeypatch.setattr(demag, "FFT_CROSS_MIN_ENTRIES", 0)  # the test bodies are small
     coll = make()
     coll.susceptibility, coll.H_ext = 1000.0, (0.002, 0, 0.01)
-    _, clusters = analyze_collection(coll.sources_all)
-    assert [c["kind"] for c in clusters] == ["grid"]
-    assert demag._auto_solver(clusters)[0] == "iterative"
+    cells = coll.sources_all
+    positions, clusters = analyze_collection(cells)
+    assert sorted(c["kind"] for c in clusters) == kinds
+    T = _assemble_T_dense(cells, positions, clusters, "point")
+    ref = _T_from_magpylib(cells)
+    np.testing.assert_allclose(T, ref, rtol=0, atol=1e-9 * np.abs(ref).max())
     _assert_solvers_agree(coll)
 
 

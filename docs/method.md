@@ -260,11 +260,11 @@ Measured on soft iron at $\chi = 1000$, out of 39 models:
 
 | Model                         | Cells | FFT   | Direct         | Iterative      | `"auto"`  |
 | ----------------------------- | ----- | ----- | -------------- | -------------- | --------- |
-| one cube, identical cells     | 4,096 | 100 % | 3.4 s, 2.1 GB  | 0.41 s, 0.2 GB | iterative |
+| one cube, identical cells     | 4,096 | 100 % | 3.1 s, 1.4 GB  | 0.41 s, 0.2 GB | iterative |
 | three cubes, three cell sizes | 3,240 | 40 %  | 9.2 s, 1.9 GB  | 8.3 s, 1.0 GB  | iterative |
 | a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
 | 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
-| voxelized sphere              | 1,304 | 100 % | 0.31 s, 0.6 GB | 0.20 s, 0.1 GB | iterative |
+| voxelized sphere              | 1,304 | 100 % | 0.30 s, 0.3 GB | 0.20 s, 0.1 GB | iterative |
 | tetrahedra                    | 1,931 | 0     | 9.3 s, 1.1 GB  | 9.1 s, 1.1 GB  | direct    |
 | cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
 

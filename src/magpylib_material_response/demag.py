@@ -108,8 +108,11 @@ DENSE_BLOCK_MAX_BYTES = 2_000_000_000
 #: with output entries: about 0.8 kB per pair for cuboids and about 3 kB for
 #: tetrahedra in magpylib's kernels, so one chunk stays below about 0.6 GB.
 KERNEL_PAIRS_PER_CALL = 200_000
-# A gather from a grid-pair table costs 72 B per pair, no kernel temporaries.
-TABLE_PAIRS_PER_CHUNK = 2_000_000
+# A gather from a grid-pair table needs no kernel temporaries, but with its keys
+# and transposed copy about 250 B per pair; larger chunks only add memory: a
+# 4,096-cell cube's direct solve peaked at 2.0 GB with 2,000,000 pairs and 1.3 GB
+# with 200,000, in the same time.
+TABLE_PAIRS_PER_CHUNK = 200_000
 # Between two grids of one spacing the block is an FFT convolution; below this
 # many entries a dense block from the same table is cheaper to apply.
 FFT_CROSS_MIN_ENTRIES = 1_000_000
