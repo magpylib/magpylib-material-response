@@ -52,7 +52,9 @@ and this project adheres to
   direct solver gathers the blocks of grids in smaller chunks: a cube of 4,096
   cells peaks at 1.4 GB instead of 2.1 GB, in the same time. A cell on another's
   site, or positions noisy just above the lattice tolerance, made the structure
-  analysis fail or ask for terabytes; such cells now run loose
+  analysis fail or ask for terabytes; such cells now run loose. The inside test
+  of a triangle mesh runs on chunks of points: a 792-face tube voxelized into
+  3,000 cells needed over 3 GB and now takes 1.6 GB
   ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
 
 ### Removed

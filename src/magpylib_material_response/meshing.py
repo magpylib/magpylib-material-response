@@ -379,8 +379,10 @@ VOXELIZE_OFFSETS = (0.0, 0.5)
 #: Cell counts `voxelize` prefers around `target_elems`, as a factor either way.
 VOXELIZE_COUNT_RANGE = 1.5
 #: Spacings `voxelize` scans when the updates find none, 1 % apart from 0.8 to
-#: 1.25 times the target's.
-VOXELIZE_SCAN = np.geomspace(0.8, 1.25, 46)
+#: 1.25 times the target's, outward from it.
+VOXELIZE_SCAN = np.array(
+    sorted(np.geomspace(0.8, 1.25, 46), key=lambda f: abs(np.log(f)))
+)
 #: Share of the volume `voxelize` cells may miss without a warning.
 VOXELIZE_WARN_MISS = 0.01
 #: Share of the volume `voxelize` cells may miss at all; beyond it, it refuses.
@@ -433,11 +435,13 @@ def _voxel_edge(obj, vol, box, target):
     target's spacing, moving h there reaches that point within a few lattices
     on compact bodies. Rings and tubes gain or lose cells by whole rings and the
     moves can jump past it, and flat bodies hold their volume only with whole
-    layers. Then every lattice met, along the moves, on a scan of spacings and
-    at the exact spacing of each count met, is a candidate, taken in this order:
-    exact near the target; within ``VOXELIZE_WARN_MISS`` near the target; exact
-    at any count; within ``VOXELIZE_WARN_MISS`` at any count; the closest near
-    the target. Spacings stay within a factor of 2 of the target's: on a body
+    layers. Then every lattice met, along the moves and on a scan of spacings
+    outward from the target's, with each count's exact spacing, is a candidate,
+    taken in this order: exact near the target, where the scan stops; within
+    ``VOXELIZE_WARN_MISS`` near the target; exact at any count; within
+    ``VOXELIZE_WARN_MISS`` at any count; within ``VOXELIZE_MAX_MISS`` near the
+    target, then at any count. Spacings stay within a factor of 2 of the
+    target's: on a body
     thinner than the cells, the exact spacing of a count met is tiny, and its
     lattice would hold billions of points.
     """
@@ -467,13 +471,25 @@ def _voxel_edge(obj, vol, box, target):
             h = (vol / n) ** (1 / 3)
             if not start / 2 <= h <= 2 * start:
                 break
+    # outward from the target's spacing, trying each count's exact spacing as
+    # it is met, until one near the target holds: on a triangle mesh every
+    # lattice is a costly inside test
+    tried = set()
+
+    def exact_near():
+        return any(m < 1e-12 and near(n) for (n, _), (m, _) in seen.items())
+
     for offset in VOXELIZE_OFFSETS:
         for h in start * VOXELIZE_SCAN:
-            visit(h, offset)
-    for n, offset in list(seen):
-        h = (vol / n) ** (1 / 3)
-        if start / 2 <= h <= 2 * start:
-            visit(h, offset)
+            n, _ = visit(h, offset)
+            if n and (n, offset) not in tried:
+                tried.add((n, offset))
+                if start / 2 <= (vol / n) ** (1 / 3) <= 2 * start:
+                    visit((vol / n) ** (1 / 3), offset)
+            if exact_near():
+                break
+        if exact_near():
+            break
     if not seen:
         return None
 
@@ -492,7 +508,8 @@ def _voxel_edge(obj, vol, box, target):
         (VOXELIZE_WARN_MISS, True, by_miss),
         (exact, False, by_count),
         (VOXELIZE_WARN_MISS, False, by_count),
-        (np.inf, True, by_miss),
+        (VOXELIZE_MAX_MISS, True, by_miss),
+        (VOXELIZE_MAX_MISS, False, by_count),
         (np.inf, False, by_miss),
     ):
         pool = [
@@ -557,9 +574,12 @@ def voxelize(obj, target_elems, strict_inside=False, **kwargs):
         # clamp to >=2: the cell size below divides by (grid_elems - 1)
         grid_elems = [max(2, int((vol_ratio * target_elems) ** (1 / 3)))] * 3
         grid_dim = [containing_cube_edge] * 3
+        # centred where the lattice of the other mode is anchored: a triangle
+        # mesh's vertices need not be centred on its origin
+        centre = _local_box(obj)[2]
         slices = [
-            slice(-d / 2, d / 2, N * 1j)
-            for d, N in zip(grid_dim, grid_elems, strict=False)
+            slice(c - d / 2, c + d / 2, N * 1j)
+            for c, d, N in zip(centre, grid_dim, grid_elems, strict=False)
         ]
         grid = np.mgrid[slices].reshape(len(slices), -1).T
         grid = grid[mask_inside(obj, grid, tolerance=1e-14)]

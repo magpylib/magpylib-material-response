@@ -76,10 +76,12 @@ MIN_LATTICE_FILL = 0.125
 #: of 1.6 s, while a four-layer ring of 2,944 took 3.3 s instead of 3.4 s.
 MIN_LATTICE_LAYERS = 4
 
-#: `_split_boxes` gives up on a lattice box this many times larger than its
-#: cells: noise just above the lattice tolerance, or a long diagonal, makes a
-#: box that is mostly empty, slow to split and possibly too large to allocate.
+#: `_split_boxes` gives up on a lattice box with more sites than this many per
+#: cell and than `SPLIT_MAX_SITES`: a long diagonal makes a box that is mostly
+#: empty and slow to split (600 cells, 8 million sites); a corner of three
+#: touching bars (344 cells, 27,000 sites) is split.
 SPLIT_MAX_SITES_PER_CELL = 64
+SPLIT_MAX_SITES = 2_000_000
 
 
 def canonical_quats(quats):
@@ -133,9 +135,13 @@ def _lattice_index(positions, dim, rtol=1e-6):
     measured from the first site: a tolerance relative to the coordinates
     themselves would grow away from the origin and snap cells off the lattice
     onto it. Returns ``(origin, spacing, index)``, ``index`` of shape (n, 3),
-    or ``None`` when a point is off the lattice.
+    or ``None`` when a point is off the lattice, or the lattice is finer than
+    the cells: identical cells closer than their size overlap, and a step that
+    small comes from noise just above the tolerance.
     """
     positions = np.asarray(positions, dtype=float)
+    if positions.shape[0] == 0:
+        return None
     tol = rtol * float(np.min(dim))
     origin, spacing, index = [], [], []
     for ax in range(3):
@@ -143,6 +149,8 @@ def _lattice_index(positions, dim, rtol=1e-6):
         if c.size > 1:
             steps = round((c[-1] - c[0]) / float(np.min(np.diff(c))))
             step = float(c[-1] - c[0]) / steps
+            if step < dim[ax] * (1 - rtol):
+                return None
         else:
             # Singleton axis: spacing is arbitrary (never enters a nonzero
             # displacement); use the cell size.
@@ -260,7 +268,9 @@ def _split_boxes(positions, dim, rtol=1e-6):
     index = placed[2]
     n = len(index)
     shape = tuple(int(v) for v in index.max(0) + 1)
-    if shape[0] * shape[1] * shape[2] > SPLIT_MAX_SITES_PER_CELL * n:
+    if shape[0] * shape[1] * shape[2] > max(
+        SPLIT_MAX_SITES_PER_CELL * n, SPLIT_MAX_SITES
+    ):
         return None
     flat = (index[:, 0] * shape[1] + index[:, 1]) * shape[2] + index[:, 2]
     if np.unique(flat).size != n:
@@ -445,12 +455,13 @@ def analyze_structure(
                 clusters.append({"kind": "grid", "indices": members, **base, **info})
                 continue
 
-            # ...then per meshed body (cells sharing a label), with holes when
-            # it fills enough of its box, which touching bodies need: their
-            # cells form one connected component that is not a box, or not on
-            # one lattice at all (two voxelized balls). A body's parts far
-            # apart are tried apart: one box around them would be mostly
-            # empty...
+            # ...then per meshed body (cells sharing a label), which touching
+            # bodies need: their cells form one connected component that is
+            # not a box, or not on one lattice at all (two voxelized balls). A
+            # body that is not a full box is split into its connected parts,
+            # measured in cell sizes so thin cells stay connected, and each
+            # part tried with holes: one box around parts far apart would be
+            # mostly empty...
             assigned = np.zeros(members.size, dtype=bool)
             if groups is not None:
                 g = np.asarray(groups)[members]
@@ -458,7 +469,14 @@ def analyze_structure(
                     body = np.nonzero(g == label_g)[0]
                     if body.size < MIN_GRID_CELLS:
                         continue
-                    for part in _split_components(pos_local[body]):
+                    info = _detect_grid(pos_local[body], dim0)
+                    if info is not None:
+                        clusters.append(
+                            {"kind": "grid", "indices": members[body], **base, **info}
+                        )
+                        assigned[body] = True
+                        continue
+                    for part in _split_components(pos_local[body] / dim0):
                         comp = body[part]
                         if comp.size < MIN_GRID_CELLS:
                             continue
@@ -479,7 +497,9 @@ def analyze_structure(
             # cells were flattened into one Collection)...
             loose: list[np.ndarray] = []
             rest = np.nonzero(~assigned)[0]
-            for comp_r in _split_components(pos_local[rest]) if rest.size else []:
+            for comp_r in (
+                _split_components(pos_local[rest] / dim0) if rest.size else []
+            ):
                 comp = rest[comp_r]
                 info = (
                     _detect_lattice(pos_local[comp], dim0, MIN_LATTICE_FILL)

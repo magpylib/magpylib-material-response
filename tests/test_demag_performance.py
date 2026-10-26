@@ -825,6 +825,40 @@ def _one_layer_frame():
     )
 
 
+def _laminations():
+    """Three plates of flat cells, 0.1 apart, a body each."""
+    return magpy.Collection(
+        *(
+            mesh_Cuboid(
+                magpy.magnet.Cuboid(
+                    dimension=(4, 4, 0.5),
+                    position=(0, 0, 0.6 * k),
+                    polarization=(0, 0, 0),
+                ),
+                (8, 8, 2),
+            )
+            for k in range(3)
+        )
+    )
+
+
+def _corner_of_bars():
+    """Three touching bars along x, y and z, flattened: 1 % of their box."""
+
+    def bar(dim, lo):
+        dim, lo = np.array(dim, float), np.array(lo, float)
+        cuboid = magpy.magnet.Cuboid(
+            dimension=dim, position=lo + dim / 2, polarization=(0, 0, 0)
+        )
+        return mesh_Cuboid(cuboid, tuple(int(v) for v in dim))
+
+    return _flattened(
+        bar((30, 2, 2), (0, 0, 0)),
+        bar((2, 28, 2), (0, 2, 0)),
+        bar((2, 2, 28), (0, 0, 2)),
+    )
+
+
 def _gapped_far_away():
     """Two meshes 0.3 cell apart, 2e4 cells from the origin: off any lattice."""
     a, b = (
@@ -862,7 +896,13 @@ def _T_from_magpylib(cells):
         (_thick_tube, ["grid"], True),
         (_touching_voxel_balls, ["grid", "grid"], True),
         (_far_apart_in_one_collection, ["grid", "grid"], True),
-        (lambda: _flattened(_u_core_cells()), ["grid"] * 3, True),
+        (
+            lambda: _flattened(_u_core_cells()),
+            [("grid", 24), ("grid", 24), ("grid", 40)],
+            True,
+        ),
+        (_laminations, [("grid", 128)] * 3, True),
+        (_corner_of_bars, [("grid", 112), ("grid", 112), ("grid", 120)], True),
         (_one_layer_frame, ["grid"] * 4, True),
         (_l_shape, ["grid", "grid"], True),
         (_gapped_far_away, ["loose"], True),
@@ -874,6 +914,8 @@ def _T_from_magpylib(cells):
         "touching voxelized balls: a grid each",
         "far apart in one collection: a grid each",
         "flattened touching bodies two cells thick: full boxes",
+        "laminations of flat cells: a grid each",
+        "corner of three bars, flattened: full boxes",
         "frame one cell thick: full boxes",
         "L-shape below an eighth of its box: full boxes",
         "off the lattice far from the origin: loose",
@@ -895,7 +937,10 @@ def test_lattice_with_holes_is_one_grid(monkeypatch, make, kinds, labels):
             R.from_quat([c.orientation.as_quat() for c in cells]),
             np.ones(len(cells), dtype=bool),
         )
-    assert sorted(c["kind"] for c in clusters) == kinds
+    if isinstance(kinds[0], tuple):
+        assert sorted((c["kind"], len(c["indices"])) for c in clusters) == sorted(kinds)
+    else:
+        assert sorted(c["kind"] for c in clusters) == kinds
     T = _assemble_T_dense(cells, positions, clusters, "point")
     ref = _T_from_magpylib(cells)
     np.testing.assert_allclose(T, ref, rtol=0, atol=1e-9 * np.abs(ref).max())

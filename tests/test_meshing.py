@@ -472,6 +472,7 @@ _CYL = magpy.magnet.Cylinder
         ),
         (_CYL(polarization=(0, 0, 1), dimension=(1, 0.05)), 10, "refuses", None),
         (_cube_mesh(0.4), 300, "exact", 343),
+        (_cube_mesh(5), 300, "strict", None),
     ],
     ids=[
         "sphere: the spacing updates, 1,021 cells",
@@ -483,6 +484,7 @@ _CYL = magpy.magnet.Cylinder
         "tube in 10 cells: closest within 5 %, a warning",
         "disc thinner than the cells: refused",
         "mesh off its own origin: lattice at its middle",
+        "mesh far off its own origin, cells wholly inside: grid at its middle",
     ],
 )
 def test_voxelize_hard_shapes(obj, target, outcome, cells):
@@ -491,6 +493,12 @@ def test_voxelize_hard_shapes(obj, target, outcome, cells):
     if outcome == "refuses":
         with pytest.raises(ValueError, match="within 5%"):
             voxelize(obj, target)
+        return
+    if outcome == "strict":  # the grid sits on the mesh, at its size wherever it is
+        cells = voxelize(obj, target, strict_inside=True).sources_all
+        pos = np.array([c.position for c in cells])
+        assert len(cells) > 0
+        assert np.all(np.abs(pos - 5) < 0.5)
         return
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
