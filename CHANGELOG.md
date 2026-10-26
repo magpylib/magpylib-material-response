@@ -20,10 +20,14 @@ and this project adheres to
   now its results, which `scripts/fem_references.py` recomputes, in place of
   exports from a commercial code that no one could rerun. `compare` puts a
   `mesh_study` and a `fem_study` side by side, per observer: both values, both
-  error bars, and whether they agree
+  error bars, and whether they agree. In the repository, `validation/` checks
+  the method of moments against stored finite-element references on 18 models,
+  every PR, and times both methods to a given accuracy; it found a mesh NGSolve
+  could not assemble, which `fem_solve` now makes again at another grading
   ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
-  [#95](https://github.com/magpylib/magpylib-material-response/pull/95)).
+  [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
+  [#99](https://github.com/magpylib/magpylib-material-response/pull/99)).
 
 ### Changed
 
