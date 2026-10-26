@@ -369,11 +369,35 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
     return _collection_from_obj_and_cells(cuboid, cells[::-1], **kwargs)
 
 
-def voxelize(obj, target_elems, strict_inside=True, **kwargs):
+#: Spacing updates `voxelize` tries for touching cells that hold the volume.
+VOXELIZE_MAX_TUNING = 10
+#: Share of the volume `voxelize` cells may miss when no spacing holds it.
+VOXELIZE_MAX_VOLUME_MISS = 0.01
+
+
+def _lattice_inside(obj, spacing, extent):
+    """The points inside `obj` of a cubic lattice of `spacing` with a point at
+    the origin, over a cube of edge `extent` centred there."""
+    m = int(np.ceil(extent / 2 / spacing))
+    axis = np.arange(-m, m + 1) * spacing
+    grid = np.stack(np.meshgrid(axis, axis, axis, indexing="ij"), -1).reshape(-1, 3)
+    return grid[mask_inside(obj, grid, tolerance=1e-14)]
+
+
+def voxelize(obj, target_elems, strict_inside=False, **kwargs):
     """
-    Split-up a Magpylib magnet into a regular grid of identical cells. A grid of
-    identical cube cells and containing the object is created. Only the cells with their
-    barycenter inside the original object are kept.
+    Split-up a Magpylib magnet into a regular grid of identical, touching cube
+    cells. The cells whose centre lies inside the object are kept, and the grid
+    spacing is tuned so that together they hold the object's volume, and a
+    uniformly polarized magnet its moment. Untuned, they hold 96 to 109 % of a
+    sphere's volume, depending on the cell count. The count lands near
+    `target_elems`, but a flat body needs cells no thicker than itself and may
+    get more.
+
+    From a susceptibility of about 10 on, the staircase outline sets the moment
+    instead: a sphere at χ = 1000 comes out 5 % high at 3,000 cells, and the
+    error shrinks slowly. Meshes that follow the surface, such as `mesh_Cylinder`
+    or `mesh_TriangularMesh`, converge faster.
 
     Parameters
     ----------
@@ -381,34 +405,40 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
         Input object to be discretized
     target_elems: int
         Target number of cells
-    strict_inside: bool
-        If True, also filters out the cells with vertices outside the object boundaries
+    strict_inside: bool, default=False
+        If True, keep only the cells lying wholly inside the object, untuned.
+        They hold less than its volume: a sphere at 1,000 cells loses a quarter.
 
     Returns
     -------
     discretization: magpylib.Collection
         Collection of Cuboid cells
+
+    Raises
+    ------
+    ValueError
+        If no cell centre lies inside the object, or no spacing near the
+        target's holds its volume, as on a body thinner than the cells.
     """
     pol0 = obj.polarization
     vol, containing_cube_edge = get_volume(obj, return_containing_cube_edge=True)
-    vol_ratio = (containing_cube_edge**3) / vol
-
-    # clamp to >=2: the cell size below divides by (grid_elems - 1)
-    grid_elems = [max(2, int((vol_ratio * target_elems) ** (1 / 3)))] * 3
-    grid_dim = [containing_cube_edge] * 3
-
-    slices = [
-        slice(-d / 2, d / 2, N * 1j) for d, N in zip(grid_dim, grid_elems, strict=False)
-    ]
-    grid = np.mgrid[slices].reshape(len(slices), -1).T
-    grid = grid[mask_inside(obj, grid, tolerance=1e-14)]
-    if grid.size == 0:
-        msg = (
-            "voxelize produced no cell centres inside the object; increase target_elems"
-        )
-        raise ValueError(msg)
-    cube_cell_dim = np.array([containing_cube_edge / (grid_elems[0] - 1)] * 3)
+    no_centres = (
+        "voxelize produced no cell centres inside the object; increase target_elems"
+    )
     if strict_inside:
+        vol_ratio = (containing_cube_edge**3) / vol
+        # clamp to >=2: the cell size below divides by (grid_elems - 1)
+        grid_elems = [max(2, int((vol_ratio * target_elems) ** (1 / 3)))] * 3
+        grid_dim = [containing_cube_edge] * 3
+        slices = [
+            slice(-d / 2, d / 2, N * 1j)
+            for d, N in zip(grid_dim, grid_elems, strict=False)
+        ]
+        grid = np.mgrid[slices].reshape(len(slices), -1).T
+        grid = grid[mask_inside(obj, grid, tolerance=1e-14)]
+        if grid.size == 0:
+            raise ValueError(no_centres)
+        cube_cell_dim = np.array([containing_cube_edge / (grid_elems[0] - 1)] * 3)
         elemgrid = np.array(
             list(product(*[[-cube_cell_dim[0] / 2, cube_cell_dim[0] / 2]] * 3))
         )
@@ -421,6 +451,37 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
         if grid.size == 0:
             msg = "No cuboids left with strict-inside method"
             raise ValueError(msg)
+    else:
+        # N touching cells of edge h hold the volume when h = (V / N)^(1/3):
+        # start from the target's spacing and iterate to that fixed point,
+        # keeping the closest volume met. A body thinner than the cells has
+        # none nearby, and the iteration would refine without end.
+        start = (vol / target_elems) ** (1 / 3)
+        edge, best = start, (np.inf, None, None)
+        for _ in range(VOXELIZE_MAX_TUNING):
+            grid = _lattice_inside(obj, edge, containing_cube_edge)
+            if grid.size == 0:
+                break
+            miss = abs(len(grid) * edge**3 / vol - 1)
+            if miss < best[0]:
+                best = (miss, grid, edge)
+            if miss < 1e-12:
+                break
+            edge = (vol / len(grid)) ** (1 / 3)
+            if not start / 2 <= edge <= 2 * start:
+                break
+        miss, grid, edge = best
+        if grid is None:
+            raise ValueError(no_centres)
+        if miss > VOXELIZE_MAX_VOLUME_MISS:
+            msg = (
+                f"voxelize finds no spacing near target_elems={target_elems} at "
+                "which touching cells hold the object's volume (the closest holds "
+                f"{len(grid) * edge**3 / vol:.0%}); the object is likely thinner "
+                "than the cells: increase target_elems"
+            )
+            raise ValueError(msg)
+        cube_cell_dim = np.full(3, edge)
 
     cells = []
     for pos in grid:

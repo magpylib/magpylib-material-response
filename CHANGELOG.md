@@ -25,6 +25,16 @@ and this project adheres to
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
   [#95](https://github.com/magpylib/magpylib-material-response/pull/95)).
 
+### Changed
+
+- `voxelize` keeps the cells whose centre lies inside the object, as its
+  docstring said, and tunes the grid spacing so that these touching cells hold
+  the object's exact volume, and a magnet its moment, close to `target_elems`.
+  It kept only the cells lying wholly inside by default, which left a sphere a
+  quarter short of its volume at 1,000 cells, and its moment with it;
+  `strict_inside=True` still does that
+  ([#96](https://github.com/magpylib/magpylib-material-response/pull/96)).
+
 ### Removed
 
 - **Breaking:** the `pairs_matching`, `max_dist` and `split` options of
