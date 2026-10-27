@@ -16,8 +16,6 @@ import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
 from magpylib_material_response.demag import apply_demag
-from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
-from magpylib_material_response.face_charge._apply import _split
 from magpylib_material_response.meshing import mesh_uniform
 
 from .cases import CASES
@@ -177,8 +175,16 @@ class FaceCharge:
     def can_solve(case):
         if case.waits is not None or _same_solve(case, "FaceCharge"):
             return False
+        # imported here: the PR timing runs these adapters on a base branch
+        # that may not have face charge yet
+        if importlib.util.find_spec("magpylib_material_response.face_charge") is None:
+            return False
         if case.refused:
             return True  # its refusal is checked
+        from magpylib_material_response.face_charge._apply import (  # noqa: PLC0415
+            _split,
+        )
+
         try:
             _split(case.model()[0])
         except NotImplementedError:
@@ -188,6 +194,11 @@ class FaceCharge:
     @staticmethod
     def solve(collection, sensors, setting, **options):
         """`options` go to ``apply_face_charge``."""
+        from magpylib_material_response.face_charge import (  # noqa: PLC0415
+            ChargeSheet,
+            apply_face_charge,
+        )
+
         start = time.perf_counter()
         try:
             solved = apply_face_charge(collection, level=setting, **options)
