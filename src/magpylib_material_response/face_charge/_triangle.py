@@ -75,10 +75,12 @@ def field(X, V, fr):
     cen, n, e1, e2, s, _ = fr
     x = X[:, None, :]
     w = np.sum((x - V[None, :, 0]) * n[None], axis=-1)  # (M, N)
-    # An observer exactly in the plane, on an edge's extension, makes two edge
-    # logarithms infinite where they cancel: lift it 1e-12 of the triangle off.
+    rho = x - w[..., None] * n[None]  # the projection onto the plane
+    # An observer exactly in the plane, on an edge's extension or at a vertex,
+    # makes edge logarithms infinite: lift it 1e-12 of the triangle off, and
+    # take every distance below from there.
     w = np.where(w == 0, 1e-12 * s[None], w)
-    rho = x - w[..., None] * n[None]
+    x = rho + w[..., None] * n[None]
     sign_w = np.sign(w)
     abs_w = np.abs(w)
     E0 = np.zeros((*w.shape, 3))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 import warnings
 
 import magpylib as magpy
@@ -9,11 +10,17 @@ import numpy as np
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
-from magpylib_material_response.demag import _has_path, get_H_ext
+from magpylib_material_response.demag import (
+    _get_susceptibility_from_hierarchy,
+    _has_path,
+    get_H_ext,
+)
 from magpylib_material_response.face_charge._bodies import (
+    CONTACT,
     Body,
     Outline,
     add_contact_lines,
+    near_panels,
     solve_system,
 )
 from magpylib_material_response.face_charge._sheet import ChargeSheet
@@ -88,6 +95,11 @@ def apply_face_charge(
     if not isinstance(collection, magpy.Collection):
         msg = f"apply_face_charge takes a magpylib Collection; got {type(collection).__name__}."
         raise TypeError(msg)
+    try:
+        level, refine = operator.index(level), operator.index(refine)
+    except TypeError:
+        msg = f"level and refine must be integers; got level={level!r}, refine={refine!r}."
+        raise TypeError(msg) from None
     if level < 1 or refine < 0:
         msg = f"level must be 1 or more and refine 0 or more; got level={level}, refine={refine}."
         raise ValueError(msg)
@@ -124,8 +136,15 @@ def apply_face_charge(
             if isinstance(src, magpy.magnet.Cuboid)
         ]
         add_contact_lines(bodies, outlines)
+        boxes = [_box(src) for src in fixed if isinstance(src, BaseMagnet)]
+        _warn_unaligned(bodies, solved, boxes, fixed)
         for body in bodies:
             body.mesh()
+            body.fine = near_panels(body, boxes)
+
+    # oblique steps of 1e-9 to 1e-5 of the parts' size, off any edge line
+    size = max(np.max(b.half) for b in bodies)
+    nudges = [k * size * np.array([0.36, 0.48, 0.8]) for k in (1e-9, 1e-7, 1e-5)]
 
     def external(points):
         # B / mu0, not H: only the normal part enters the load, and B's is
@@ -135,10 +154,18 @@ def apply_face_charge(
         H = np.zeros((len(points), 3))
         if fixed:
             for a in range(0, len(points), POINTS_PER_CALL):
-                H[a : a + POINTS_PER_CALL] = (
-                    magpy.getB(fixed, points[a : a + POINTS_PER_CALL], sumup=True)
-                    / magpy.mu_0
-                )
+                chunk = points[a : a + POINTS_PER_CALL]
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    B = magpy.getB(fixed, chunk, sumup=True)
+                    # close to a magnet's edge magpylib can give NaN; the field is
+                    # singular there but integrable: take it a little off, a step
+                    # 100 times longer each time it is still NaN
+                    for step in nudges:
+                        bad = ~np.isfinite(B).all(axis=1)
+                        if not bad.any():
+                            break
+                        B[bad] = magpy.getB(fixed, chunk[bad] + step, sumup=True)
+                H[a : a + POINTS_PER_CALL] = B / magpy.mu_0
         return H
 
     for rnd in range(refine + 1):
@@ -164,8 +191,11 @@ def apply_face_charge(
         sheets = [
             ChargeSheet._from_body(b, c) for b, c in zip(bodies, coefs, strict=True)
         ]
-        indicators = [s.panel_indicator() for s in sheets]
-        top = max(e.max(initial=0.0) for e in indicators)
+        jumps = [s._panel_jumps() for s in sheets]
+        top = max(
+            w.max(initial=0.0) / (peak * np.sqrt(total)) if peak else 0.0
+            for w, peak, total in jumps
+        )
         logger.info(
             "Face charge: {n} bodies, {unknowns} unknowns, largest jump indicator {jump:.2%}{round}",
             n=len(bodies),
@@ -177,13 +207,13 @@ def apply_face_charge(
             break
         # marked by the jump itself, not its share of each sheet's peak, so that
         # a weakly driven part is not split as much as the one that matters
-        jumps = [s._panel_jumps()[0] for s in sheets]
-        largest = max(j.max(initial=0.0) for j in jumps)
-        for body, j in zip(bodies, jumps, strict=True):
-            marked = np.flatnonzero(j > MARK * largest)
+        largest = max(w.max(initial=0.0) for w, _, _ in jumps)
+        for body, (w, _, _) in zip(bodies, jumps, strict=True):
+            marked = np.flatnonzero(w > MARK * largest)
             if marked.size:
                 body.bisect(marked)
                 body.mesh()
+                body.fine = near_panels(body, boxes)
     logger.info(
         "Face charge: average polarization up to {J:.3g} T; above the material's knee, saturation matters",
         J=max(np.linalg.norm(s.mean_polarization) for s in sheets),
@@ -196,12 +226,16 @@ def apply_face_charge(
     )
     replace, parents = {}, {}
     for (obj, _), sheet in zip(solved, sheets, strict=True):
-        # the sheet looks like the part it replaces
-        style = obj.style
-        sheet.style.label = style.label or f"{type(obj).__name__}, face charge"
-        sheet.style.color, sheet.style.opacity = style.color, style.opacity
-        sheet.style.magnetization.show = style.magnetization.show
-        sheet.style.magnetization.color = style.magnetization.color.as_dict()
+        # the sheet looks like the part it replaces; ``obj.style`` creates a
+        # style on the caller's object, so it is read only if the user gave one
+        styled = getattr(obj, "_style", None) is not None or obj._style_kwargs
+        style = obj.style if styled else None
+        label = style.label if style is not None else None
+        sheet.style.label = label or f"{type(obj).__name__}, face charge"
+        if style is not None:
+            sheet.style.color, sheet.style.opacity = style.color, style.opacity
+            sheet.style.magnetization.show = style.magnetization.show
+            sheet.style.magnetization.color = style.magnetization.color.as_dict()
         old = twin[id(obj)]
         replace[id(old)] = sheet
         parents[id(old.parent)] = old.parent
@@ -210,16 +244,6 @@ def apply_face_charge(
         parent.remove(*parent.children)
         parent.add(*children)
     return out
-
-
-def _inherited(obj, name):
-    """An object's attribute, else its nearest parent's, else None."""
-    while obj is not None:
-        value = getattr(obj, name, None)
-        if value is not None:
-            return value
-        obj = obj.parent
-    return None
 
 
 def _split(collection):
@@ -233,7 +257,10 @@ def _split(collection):
             # currents take no susceptibility, even one set on a parent
             fixed.append(src)
             continue
-        chi = _inherited(src, "susceptibility")
+        try:
+            chi = _get_susceptibility_from_hierarchy(src)
+        except ValueError:  # none on the source or any parent
+            chi = None
         if chi is None or not np.any(chi):
             fixed.append(src)
             continue
@@ -252,3 +279,49 @@ def _split(collection):
             raise NotImplementedError(msg)
         solved.append((src, float(chi.flat[0])))
     return solved, fixed
+
+
+def _box(src):
+    """A magnet's bounding box in its own frame, its rotation and its place:
+    ``(centre, half, R, position)``."""
+    if isinstance(src, magpy.magnet.Cuboid):
+        centre, half = np.zeros(3), np.asarray(src.dimension, float) / 2
+    elif isinstance(src, magpy.magnet.Cylinder):
+        d, h = src.dimension
+        centre, half = np.zeros(3), np.array([d / 2, d / 2, h / 2])
+    elif isinstance(src, magpy.magnet.CylinderSegment):
+        r2, h = src.dimension[1], src.dimension[2]
+        centre, half = np.zeros(3), np.array([r2, r2, h / 2])
+    elif isinstance(src, magpy.magnet.Sphere):
+        centre, half = np.zeros(3), np.full(3, src.diameter / 2)
+    else:  # vertices: tetrahedra and triangular meshes
+        v = np.asarray(src.vertices, float).reshape(-1, 3)
+        centre, half = (v.min(0) + v.max(0)) / 2, (v.max(0) - v.min(0)) / 2
+    return centre, half, src.orientation.as_matrix(), np.asarray(src.position, float)
+
+
+def _warn_unaligned(bodies, solved, boxes, fixed):
+    """Warn when a magnet that is not solved touches a solved part and is not
+    a cuboid turned by multiples of 90 degrees against it: the panels cannot
+    follow its footprint, where its field jumps."""
+    magnets = [src for src in fixed if isinstance(src, BaseMagnet)]
+    for body, (obj, _) in zip(bodies, solved, strict=True):
+        for src, (centre, half, R, position) in zip(magnets, boxes, strict=True):
+            local = (position + centre @ R.T - body.position) @ body.R
+            Rab = body.R.T @ R
+            extent = np.abs(Rab) @ half
+            gap = np.maximum(
+                0, np.maximum(local - extent - body.half, -body.half - local - extent)
+            )
+            if np.linalg.norm(gap) > CONTACT * np.max(body.half):
+                continue
+            aligned = np.allclose(np.abs(Rab), np.round(np.abs(Rab)), atol=1e-9)
+            if isinstance(src, magpy.magnet.Cuboid) and aligned:
+                continue
+            warnings.warn(
+                f"{src} touches {obj}, which face charge solves, and is not a "
+                "cuboid aligned with it: the panels cannot follow its footprint, "
+                "where its field jumps. Expect errors of a few percent near it, "
+                "falling slowly with level; refine= helps, and fem_solve checks it.",
+                stacklevel=3,
+            )

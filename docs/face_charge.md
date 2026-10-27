@@ -28,10 +28,11 @@ B = solved.getB((0, 0, 0.0035))
 ```
 
 The result is a copy of the collection in which the plate is a `ChargeSheet`, an
-ordinary magpylib source: `getB`, observer paths, `show()` and studio work as
-for any other. A cuboid whose susceptibility is exactly 0 is not solved and
-stays as it was. `show()` colours the solved charge in the magnet colours,
-positive charge being a north pole; `style.mesh.grid.show` draws the panels.
+ordinary magpylib source: `getB`, observer paths, `show()` and `to_json` work as
+for any other; magpylib-studio does not draw it yet. A cuboid whose
+susceptibility is exactly 0 is not solved and stays as it was. `show()` colours
+the solved charge in the magnet colours, positive charge being a north pole;
+`style.mesh.grid.show` draws the panels.
 
 ![The plate under the magnet: the plate turns north (red) under the magnet's south face and south (green) where the flux returns, on its rim and sides; level 3 with its panels drawn, and level 5.](_static/images/face_charge_plate.png)
 
@@ -48,11 +49,16 @@ positive charge being a north pole; `style.mesh.grid.show` draws the panels.
 - **Where it is slower:** a few weak magnets alone (`apply_demag` reaches the
   same accuracy faster), many bodies (one dense coupled system: 100 small cubes
   take 7,200 unknowns at level 1 and four times as many at level 2), thin sheets
-  (panels sized to the thickness across the whole sheet), and parts a small gap
-  apart: the mesh is graded toward the outline of a touching part, magnets
-  included, but not toward one a gap away. A solve that would need more than
-  `max_unknowns`, 20,000 by default, a 3.2 GB system, is refused before it is
-  assembled.
+  (panels sized to the thickness across the whole sheet), and two solved parts a
+  small gap apart, as the mesh is graded toward touching parts only. A solve
+  that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB system,
+  is refused before it is assembled.
+- **Magnets on a part:** a magnet without susceptibility resting on a solved
+  part, or close above it, converges like the rest when it is a cuboid aligned
+  with the part: the mesh follows its footprint and the field near it is
+  integrated finely. A disc magnet, or a cuboid turned against the part, has a
+  footprint the panels cannot follow; `apply_face_charge` warns, and a disc on a
+  soft cube stays 3 to 4 % off near it from level 4 on.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, and `getJ` gives 0. For B inside a part, such as
   the flux in a yoke, mesh it and use `apply_demag`.

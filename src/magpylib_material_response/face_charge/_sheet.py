@@ -94,8 +94,11 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @property
     def charge_densities(self):
-        """Surface charge density at each face's corners (m, 3), in A/m."""
-        return self._q
+        """Surface charge density at each face's corners (m, 3), in A/m.
+        Read-only: set the whole array to change it."""
+        q = self._q.view()
+        q.flags.writeable = False
+        return q
 
     @charge_densities.setter
     def charge_densities(self, value):
@@ -150,14 +153,15 @@ class ChargeSheet(magpy.misc.CustomSource):
         below the knee of the material's B-H curve.
         """
         T, q = self._V, self._q
-        area = (
-            np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1) / 2
-        )
+        area = self._frames[5]
         # a linear charge times the linear r, integrated exactly over each face
         moment = np.einsum("f,fk,fkd->d", area / 12, q, T) + np.einsum(
             "f,f,fd->d", area / 12, q.sum(1), T.sum(1)
         )
-        volume = np.einsum("fd,fd->f", T[:, 0], np.cross(T[:, 1], T[:, 2])).sum() / 6
+        # the moment does not depend on the winding, the signed volume does
+        volume = (
+            abs(np.einsum("fd,fd->f", T[:, 0], np.cross(T[:, 1], T[:, 2])).sum()) / 6
+        )
         return magpy.mu_0 * moment / volume
 
     @property
@@ -211,9 +215,8 @@ class ChargeSheet(magpy.misc.CustomSource):
     def _corner_groups(self):
         """The group of each face corner (3m,), corners sharing a vertex and a
         face plane, and each corner's face area (3m,)."""
-        n = np.cross(self._V[:, 1] - self._V[:, 0], self._V[:, 2] - self._V[:, 0])
-        area = np.linalg.norm(n, axis=1) / 2
-        n = np.round(n / (2 * area[:, None]), 6)
+        _, n, _, _, _, area = self._frames
+        n = np.round(n, 6)
         key = np.concatenate(
             [self._faces.reshape(-1, 1), np.repeat(n, 3, axis=0)], axis=1
         )

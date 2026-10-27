@@ -58,6 +58,7 @@ class Body:
         self.lines = [[], [], []]  # interior lines to grade toward, per axis
         self.extra = [[], [], []]  # edges added as they are, per axis: bisections
         self.panels = self.galerkin = self.G = None
+        self.fine = None  # panels whose load takes a finer rule
 
     def mesh(self):
         """Mesh the faces; the self block waits for ``assemble``, so that the
@@ -97,12 +98,29 @@ class Body:
 def _merge(x, h):
     """The coordinates `x` on ``[-h, h]``, sorted, those closer than
     ``CONTACT h`` to the one before dropped: two lines a hair apart would make
-    panels of no area."""
+    panels of no area. The ends stay: a point a hair inside one gives way."""
     kept = []
     for value in np.sort(x):
         if not kept or value - kept[-1] > CONTACT * h:
             kept.append(value)
+        elif value >= h * (1 - 1e-12):
+            kept[-1] = value
     return np.array(kept)
+
+
+def near_panels(body, boxes, reach=1.0):
+    """The panels of `body` within ``reach`` of their own size of any box
+    ``(centre, half, R, position)``: a magnet's box in its frame, its rotation
+    and its place. Their load needs a finer rule."""
+    p, g = body.panels, body.galerkin
+    centres = body.to_global(p.center)
+    size = 2 * np.hypot(g.hp, g.hq)
+    near = np.zeros(p.N, bool)
+    for centre, half, R, position in boxes:
+        local = (centres - position) @ R - centre
+        gap = np.linalg.norm(np.maximum(np.abs(local) - half, 0), axis=1)
+        near |= gap < reach * size
+    return near
 
 
 def _relative(a, b):
@@ -297,7 +315,7 @@ def solve_system(bodies, external):
         def field(x, a=a):
             return (external(a.to_global(x)) + a.applied) @ a.R
 
-        rhs[rows] += a.galerkin.load(field)
+        rhs[rows] += a.galerkin.load(field, fine=a.fine)
         if a.J0 is not None:
             remanence = a.panels.normal @ (a.J0 / magpy.mu_0)
             rhs[rows] += a.galerkin.load_constant(remanence) / a.chi

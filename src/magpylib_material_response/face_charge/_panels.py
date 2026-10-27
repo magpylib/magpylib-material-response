@@ -176,15 +176,26 @@ class Galerkin:
                 )
         return G.reshape(3 * p.N, 3 * p.N)
 
-    def load(self, field, nq=4):
+    def load(self, field, nq=4, fine=None, nq_fine=16):
         """The load of an applied field: each test function times ``H.n``,
         integrated over its panel. ``field`` maps points ``(n, 3)`` in the
-        body's frame to H ``(n, 3)`` in A/m, in that frame."""
+        body's frame to H ``(n, 3)`` in A/m, in that frame. Panels marked in
+        ``fine``, near a magnet that is not solved, take ``nq_fine`` points a
+        side: its field turns there faster than ``nq`` points resolve."""
+        F = self._load(field, nq, np.arange(self.panels.N))
+        if fine is not None and np.any(fine):
+            idx = np.flatnonzero(fine)
+            F[idx] = self._load(field, nq_fine, idx)
+        return F.ravel()
+
+    def _load(self, field, nq, idx):
+        """The load on the panels ``idx`` (len, 3), by ``nq`` points a side."""
         p = self.panels
         pts, wts, S, T = self.gauss_points(nq)
-        H = field(pts.reshape(-1, 3)).reshape(len(S), p.N, 3)
-        Hn = np.einsum("gnd,nd->gn", H, p.normal)
-        F = np.stack(
+        pts, wts = pts[:, idx], wts[:, idx]
+        H = field(pts.reshape(-1, 3)).reshape(len(S), len(idx), 3)
+        Hn = np.einsum("gnd,nd->gn", H, p.normal[idx])
+        return np.stack(
             [
                 (wts * Hn).sum(0),
                 (wts * Hn * S[:, None]).sum(0),
@@ -192,7 +203,6 @@ class Galerkin:
             ],
             1,
         )
-        return F.ravel()
 
     def load_constant(self, values):
         """The load of a value constant on each panel, such as the remanence's

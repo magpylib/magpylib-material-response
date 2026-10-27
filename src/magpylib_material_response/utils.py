@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import json
 import threading
 import time
@@ -308,6 +309,7 @@ _MAGPYLIB_CLASSES = {
 }
 
 
+@functools.cache
 def _registry():
     """The type tags by class and the classes by tag. ChargeSheet joins on
     first use: face_charge imports this module, so it cannot be imported

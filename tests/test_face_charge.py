@@ -92,21 +92,31 @@ def test_copies_keep_their_own_charge():
     assert _relative(magpy.getH([a, b], obs, sumup=True), 3 * Ha) < 1e-14
 
 
-def test_mean_polarization_of_a_uniformly_magnetized_cube():
+@pytest.mark.parametrize("winding", ["inward", "outward"])
+def test_mean_polarization_of_a_uniformly_magnetized_cube(winding):
+    """The charge of a cube magnetized J, sigma = J.n on its outward normals,
+    gives J whichever way the faces are wound: the field depends on the charge
+    only."""
     corners = (
         np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
         * 0.002
     )
     faces = np.array([[0, 4, 6], [0, 6, 2], [1, 3, 7], [1, 7, 5], [0, 1, 5], [0, 5, 4],
                       [2, 6, 7], [2, 7, 3], [0, 2, 3], [0, 3, 1], [4, 5, 7], [4, 7, 6]])  # fmt: skip
+    if winding == "outward":
+        faces = faces[:, ::-1]
     J = np.array([0.2, -0.5, 1.1])
-    n = np.cross(
-        corners[faces][:, 1] - corners[faces][:, 0],
-        corners[faces][:, 2] - corners[faces][:, 0],
-    )
-    sigma = (n / np.linalg.norm(n, axis=1)[:, None]) @ J / magpy.mu_0
+    T = corners[faces]
+    n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    n /= np.linalg.norm(n, axis=1)[:, None]
+    n *= np.sign(np.einsum("fd,fd->f", n, T.mean(1)))[:, None]  # outward
+    sigma = n @ J / magpy.mu_0
     sheet = ChargeSheet(corners, faces, np.repeat(sigma[:, None], 3, axis=1))
     np.testing.assert_allclose(sheet.mean_polarization, J, atol=1e-14)
+    cube = magpy.magnet.Cuboid(dimension=(0.004,) * 3, polarization=J)
+    np.testing.assert_allclose(
+        sheet.getB((0.01, 0.007, 0.012)), cube.getB((0.01, 0.007, 0.012)), rtol=1e-9
+    )
 
 
 def test_cube_polarizability_converges_from_below():
@@ -263,11 +273,19 @@ def test_too_many_unknowns_raise_before_assembly():
     assert np.isfinite(solved.getB((0, 0, 0.01))).all()
 
 
-@pytest.mark.parametrize("gap", [0.0, 1e-9])
-def test_magnet_touching_a_soft_part_matches_fem(gap):
-    """A magnet without susceptibility resting on soft iron: its field jumps at
-    the edges of its footprint, which the mesh must follow. The reference is
-    fem_study at orders 3 to 5, good to 5e-5 at each sensor."""
+@pytest.mark.parametrize(
+    ("gap", "fem", "rtol"),
+    [
+        (0.0, (296.762, 7.806, 3.882), 0.01),
+        (1e-9, (296.762, 7.806, 3.882), 0.01),
+        (1e-4, (308.073, 7.721, 3.858), 0.02),
+    ],
+)
+def test_magnet_on_a_soft_part_matches_fem(gap, fem, rtol):
+    """A magnet without susceptibility on soft iron, touching or 0.1 mm above:
+    its field jumps at the edges of its footprint, which the mesh and the load
+    must follow. The references are fem_study at orders 3 to 5, good to 5e-5
+    at each sensor."""
     soft = _cuboid()
     soft.susceptibility = 1000
     magnet = magpy.magnet.Cuboid(
@@ -278,8 +296,27 @@ def test_magnet_touching_a_soft_part_matches_fem(gap):
     magnet.susceptibility = 0
     sensors = np.array([(0, 0, 8), (6, 0, 2), (0, 0, -7)]) * 1e-3
     B = apply_face_charge(magpy.Collection(soft, magnet)).getB(sensors)
-    fem = np.array([296.762, 7.806, 3.882]) * 1e-3
-    np.testing.assert_allclose(np.linalg.norm(B, axis=1), fem, rtol=0.01)
+    np.testing.assert_allclose(
+        np.linalg.norm(B, axis=1), np.array(fem) * 1e-3, rtol=rtol
+    )
+
+
+@pytest.mark.parametrize(
+    "magnet",
+    [
+        lambda: magpy.magnet.Cylinder(dimension=(0.004, 0.002), polarization=(0, 0, 1)),
+        lambda: magpy.magnet.Cuboid(
+            dimension=(0.004, 0.004, 0.002), polarization=(0, 0, 1)
+        ).rotate_from_angax(45, "z"),
+    ],
+    ids=["cylinder", "turned cuboid"],
+)
+def test_unaligned_magnet_touching_warns(magnet):
+    soft = _cuboid()
+    soft.susceptibility = 1000
+    magnet = magnet().move((0, 0, 0.006))
+    with pytest.warns(UserWarning, match="cannot follow its footprint"):
+        apply_face_charge(magpy.Collection(soft, magnet), level=1)
 
 
 @pytest.mark.parametrize("offset", [1e-13, 1e-10])
@@ -317,3 +354,33 @@ def test_currents_take_no_susceptibility():
     solved = apply_face_charge(coll, level=1)
     assert isinstance(solved.sources_all[0], ChargeSheet)
     assert np.isfinite(solved.getB((0, 0, 0.02))).all()
+
+
+@pytest.mark.parametrize(
+    ("level", "refine", "error"),
+    [(0, 0, ValueError), (2, -1, ValueError), (2.5, 0, TypeError), (2, 1.0, TypeError)],
+)
+def test_bad_level_or_refine_raises(level, refine, error):
+    cube = _cuboid()
+    cube.susceptibility = 10
+    with pytest.raises(error):
+        apply_face_charge(magpy.Collection(cube), level=level, refine=refine)
+
+
+def test_sheet_is_closed_finite_at_its_corners_and_read_only():
+    """A block flush with the plate's side up to CAD rounding: the plate's
+    panels still reach its edges, its field is finite at every panel corner,
+    and its charge cannot be edited behind the field's back."""
+    plate = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.001), polarization=(0, 0, 0))
+    block = magpy.magnet.Cuboid(
+        dimension=(0.004, 0.004, 0.002),
+        polarization=(0, 0, 0),
+        position=(0.003 - 3e-9, 0, 0.0015),
+    )
+    coll = magpy.Collection(plate, block)
+    coll.susceptibility, coll.H_ext = 1000, (0, 0, 0.01)
+    sheet = apply_face_charge(coll, level=2).sources_all[0]
+    np.testing.assert_allclose(np.ptp(sheet.vertices, axis=0), plate.dimension)
+    assert np.isfinite(sheet.getB(sheet.vertices + sheet.position)).all()
+    with pytest.raises(ValueError, match="read-only"):
+        sheet.charge_densities[:] *= 2
