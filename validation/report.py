@@ -12,9 +12,10 @@ problem got larger at a setting the baseline holds. The baseline keeps, per
 case, method and setting, the least error and size any passing night reached,
 so a slow drift adds up against it instead of moving it along; ``--write``
 stores it with tonight's records merged in. Settings the baseline holds and
-tonight did not run are listed: how far a ladder climbs depends on the time
-budget, so on the runner's speed. Times are reported, never failed on: a
-shared runner's noise is larger than most changes.
+tonight did not run are listed, unless ``--partial`` says the run covered only
+some cases: how far a ladder climbs depends on the time budget, so on the
+runner's speed. Times are reported, never failed on: a shared runner's noise
+is larger than most changes.
 
 An error is that of the worst sensor group the reference resolves: a group
 below its reference's own error says nothing. A NaN counts as an infinite
@@ -227,6 +228,7 @@ def main(argv=None):
     parser.add_argument("records", type=Path)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--write", type=Path)
+    parser.add_argument("--partial", action="store_true")
     args = parser.parse_args(argv)
 
     records = read(args.records)
@@ -250,7 +252,7 @@ def main(argv=None):
     changed = [f"{k} {then.get(k)} → {v}" for k, v in now.items() if then.get(k) != v]
     if changed:
         print("\nVersions changed: " + ", ".join(changed) + ".")
-    if missing:
+    if missing and not args.partial:
         print("\nIn the baseline, not run tonight:\n")
         print("\n".join(missing))
     if slower:

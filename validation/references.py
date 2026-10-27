@@ -1,8 +1,10 @@
 """Finite-element references, one file per case, made once and stored.
 
-    python -m validation.references             # the cases without a file
-    python -m validation.references plate       # these, even if they exist
-    python -m validation.references --check     # make them all again, compare
+    python -m validation.references                  # the cases without a file
+    python -m validation.references plate            # these, even if they exist
+    python -m validation.references --check          # make them all again, compare
+    python -m validation.references --check plate    # these only
+    python -m validation.references --check --having CylinderSegment
 
 Needs the fem extra. Each case is solved by ``fem_study`` at its reference
 orders (3, 4 and 5 unless the case says otherwise) on one mesh whose elements at
@@ -26,6 +28,7 @@ change in fem or in NGSolve, which the nightly run catches.
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import importlib.util
 import json
@@ -38,7 +41,7 @@ import numpy as np
 
 from magpylib_material_response.convergence import SAFETY_FACTOR
 
-from .cases import CASES
+from .cases import CASES, select
 
 FOLDER = Path(__file__).parent / "references"
 #: element size at the sensors against the default, for the reference mesh
@@ -169,19 +172,24 @@ def load(case):
     return data
 
 
-def _check_all():
-    """Make every reference of this module again; 1 if one moved too far or
-    could not be made. A case that fails does not stop the others."""
+def _own(case):
+    """Whether this module makes the reference of `case`: one of its own, not
+    shared, refused, waiting or made elsewhere."""
+    if case.reference or case.refused or case.waits:
+        return False
+    return not (path(case).exists() and "made_by" in json.loads(path(case).read_text()))
+
+
+def _check_all(cases):
+    """Make the references of `cases` again, those this module made; 1 if one
+    moved too far or could not be made. A case that fails does not stop the
+    others."""
     failed = 0
-    for case in CASES.values():
-        if (
-            case.reference
-            or case.refused
-            or case.waits
-            or not path(case).exists()
-            or "made_by" in json.loads(path(case).read_text())
-        ):
-            continue
+    mine = [case for case in cases if _own(case) and path(case).exists()]
+    if not mine:
+        names = ", ".join(case.name for case in cases)
+        print(f"None of {names} has a reference of this module's to check.")
+    for case in mine:
         try:
             moved = check(case)
         except Exception as error:  # noqa: BLE001  # report it, check the rest
@@ -201,22 +209,29 @@ def _check_all():
     return 1 if failed else 0
 
 
-def main(names):
-    from .methods import FEM  # noqa: PLC0415
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("cases", nargs="*")
+    parser.add_argument("--having", nargs="+", default=[])
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args(argv)
 
-    if names == ["--check"]:
-        return _check_all()
-    cases = [CASES[n] for n in names] or [
-        c
-        for c in CASES.values()
-        if not (c.reference or c.refused or c.waits or "FEM" in c.known_failures)
-        and FEM.can_solve(c)
-        and not path(c).exists()
-    ]
+    if importlib.util.find_spec("ngsolve") is None:
+        msg = "Finite elements need the fem extra: pip install -e '.[fem]'."
+        raise ValueError(msg)
+    if args.check:
+        return _check_all(select(args.cases, args.having))
+    if args.cases:
+        cases = select(args.cases, args.having)
+    elif args.having:
+        cases = [c for c in select(features=args.having) if _own(c)]
+    else:
+        cases = [
+            c
+            for c in CASES.values()
+            if _own(c) and "FEM" not in c.known_failures and not path(c).exists()
+        ]
     for case in cases:
-        if importlib.util.find_spec("ngsolve") is None:
-            msg = f"FEM cannot solve {case.name!r} here: the fem extra is needed."
-            raise ValueError(msg)
         data = make(case)
         errors = ", ".join(f"{g} {v['error']:.1e}" for g, v in data["groups"].items())
         print(f"{case.name}: {data['seconds']} s; {errors}", flush=True)

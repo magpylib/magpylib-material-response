@@ -149,5 +149,9 @@ soft parts answer. The method of moments beats it on every case, by a factor of
 
 ```bash
 python -m validation.run --cases plate --methods magpylib MoM FEM  # error against time
-python -m validation.references --check                            # make the references again
+python -m validation.run --having CylinderSegment --methods MoM    # cases with curved cells
+python -m validation.references --check plate                      # make a reference again
 ```
+
+The nightly run can be started by hand on some cases only, on any branch, as in
+`gh workflow run nightly.yml --ref my-branch -f having=CylinderSegment`.

@@ -2,6 +2,7 @@
 
     python -m validation.run                        # every case and method
     python -m validation.run --cases plate --methods MoM --settings 1 2
+    python -m validation.run --having Cylinder CylinderSegment   # curved cells
     python -m validation.run --pr                   # the settings of pr_check.json
     python -m validation.run --pr --write           # store their results there
     python -m validation.run --out records.jsonl    # append one record per solve
@@ -26,7 +27,7 @@ import numpy as np
 import magpylib_material_response
 
 from . import references
-from .cases import CASES
+from .cases import CASES, select
 from .methods import METHODS, TooLarge
 
 PR_CHECK = Path(__file__).parent / "pr_check.json"
@@ -125,7 +126,8 @@ def _row(record):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--cases", nargs="+", default=list(CASES))
+    parser.add_argument("--cases", nargs="+", default=[])
+    parser.add_argument("--having", nargs="+", default=[])
     parser.add_argument("--methods", nargs="+", default=list(METHODS))
     parser.add_argument("--settings", nargs="+", type=int)
     parser.add_argument("--pr", action="store_true")
@@ -142,7 +144,8 @@ def main(argv=None):
             for m, entry in by_method.items()
         ]
     else:
-        for case in (CASES[c] for c in args.cases):
+        cases = select(args.cases, args.having)
+        for case in cases:
             if case.waits:
                 print(f"{case.name}: waits for {case.waits}")
             for method in (METHODS[m] for m in args.methods):
@@ -151,10 +154,10 @@ def main(argv=None):
                     said = "NOT REFUSED" if error is None else f"refused: {error}"
                     print(f"{case.name}, {method.name}: {said}"[:120])
         plan = [
-            (CASES[c], METHODS[m], args.settings or METHODS[m].settings_for(CASES[c]))
-            for c in args.cases
+            (case, METHODS[m], args.settings or METHODS[m].settings_for(case))
+            for case in cases
             for m in args.methods
-            if METHODS[m].can_solve(CASES[c]) and not CASES[c].refused
+            if METHODS[m].can_solve(case) and not case.refused
         ]
     print(
         f"{'case':<20} {'':<8} {'set':>3} {'error':>11}  {'worst group':<20} "

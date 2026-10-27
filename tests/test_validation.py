@@ -8,7 +8,7 @@ import json
 import pytest
 
 from validation import references, report
-from validation.cases import CASES
+from validation.cases import CASES, select
 from validation.methods import METHODS
 from validation.run import PR_CHECK, refusal, run
 
@@ -97,3 +97,13 @@ def test_report_against_the_baseline(tonight, fails):
 def test_report_floor(case, error, fails):
     records = [_record(0.5, case=case, method="magpylib"), _record(error, case=case)]
     assert bool(report.floor(records)) == fails
+
+
+def test_select_by_feature():
+    curved = {case.name for case in select(features=["CylinderSegment"])}
+    assert {"thin_ring", "shield_tube"} <= curved
+    assert [case.name for case in select(features=["newell"])] == [
+        "concentrator_newell"
+    ]
+    with pytest.raises(ValueError, match="No case has"):
+        select(features=["Tetrahedra"])

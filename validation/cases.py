@@ -587,3 +587,38 @@ CASES = {
         Case("path", "A magnet on a path", "edge", _magnet_on_path, refused="path"),
     )
 }
+
+
+def having(case, feature):
+    """Whether `case` has `feature`, ignoring case: an object of that class in
+    its model, such as ``CylinderSegment`` or ``Polyline``, or that value among
+    its options, such as ``newell``."""
+    feature = feature.lower()
+    collection, _ = case.model()
+    if any(type(obj).__name__.lower() == feature for obj in collection.sources_all):
+        return True
+    return any(
+        str(value).lower() == feature
+        for options in case.options.values()
+        for value in options.values()
+    )
+
+
+def select(names=(), features=()):
+    """The cases named, or all, keeping those with any of `features` if given.
+
+    Raises
+    ------
+    ValueError
+        If no case is left: a misspelled feature selects nothing.
+    """
+    chosen = [CASES[name] for name in names] if names else list(CASES.values())
+    if features:
+        chosen = [c for c in chosen if any(having(c, f) for f in features)]
+    if not chosen:
+        msg = (
+            f"No case has {', '.join(features)}: a feature is a class in a model, "
+            "such as CylinderSegment or Polyline, or an option value, such as newell."
+        )
+        raise ValueError(msg)
+    return chosen

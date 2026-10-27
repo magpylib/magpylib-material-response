@@ -6,7 +6,10 @@ name: Nightly validation
 # branch, one file a night. A night fails when a reference moved, when a method
 # is no better than magpylib alone, or when an error grew against the baseline
 # there: per setting, the best any passing night reached. Run it by hand with
-# "accept" to make a night the baseline after an intended change.
+# "accept" to make a night the baseline after an intended change, or on some
+# cases or methods only, on any branch, while working on them:
+#   gh workflow run nightly.yml --ref my-branch -f having=CylinderSegment -f methods=MoM
+# Such a run is reported against the baseline but never kept.
 
 on:
   # TEMPORARY: one run on its PR's branch; removed before merging
@@ -20,6 +23,19 @@ on:
         description: "Make this night the baseline, even if it is worse"
         type: boolean
         default: false
+      cases:
+        description: "Only these cases, by name, space-separated (all if empty)"
+        type: string
+        default: ""
+      having:
+        description:
+          "Only cases with any of these, such as CylinderSegment or newell"
+        type: string
+        default: ""
+      methods:
+        description: "Only these methods, such as MoM (all if empty)"
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -41,6 +57,10 @@ jobs:
       run:
         # explicit, for pipefail: the default shell is bash -e, without it
         shell: bash
+    env:
+      CASES: ${{ inputs.cases }}
+      HAVING: ${{ inputs.having }}
+      METHODS: ${{ inputs.methods }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -59,10 +79,27 @@ jobs:
       - name: The references still hold
         id: references
         continue-on-error: true
-        run: uv run python -m validation.references --check | tee references.txt
+        run: |
+          if [ -n "$METHODS" ] && [[ " $METHODS " != *" FEM "* ]]; then
+            echo "No FEM in this run: the references are not checked." | tee references.txt
+            exit 0
+          fi
+          read -ra cases <<< "$CASES"
+          read -ra having <<< "$HAVING"
+          args=(--check "${cases[@]}")
+          if [ ${#having[@]} -gt 0 ]; then args+=(--having "${having[@]}"); fi
+          uv run python -m validation.references "${args[@]}" | tee references.txt
 
       - name: Every case, every method
-        run: uv run python -m validation.run --budget 600 --out records.jsonl
+        run: |
+          read -ra cases <<< "$CASES"
+          read -ra having <<< "$HAVING"
+          read -ra methods <<< "$METHODS"
+          args=(--budget 600 --out records.jsonl)
+          if [ ${#cases[@]} -gt 0 ]; then args+=(--cases "${cases[@]}"); fi
+          if [ ${#having[@]} -gt 0 ]; then args+=(--having "${having[@]}"); fi
+          if [ ${#methods[@]} -gt 0 ]; then args+=(--methods "${methods[@]}"); fi
+          uv run python -m validation.run "${args[@]}"
 
       - name: The baseline
         run: |
@@ -75,7 +112,8 @@ jobs:
         continue-on-error: true
         run: |
           args=(records.jsonl --write new-baseline.jsonl)
-          [ -f baseline.jsonl ] && args+=(--baseline baseline.jsonl)
+          if [ -f baseline.jsonl ]; then args+=(--baseline baseline.jsonl); fi
+          if [ -n "$CASES$HAVING$METHODS" ]; then args+=(--partial); fi
           uv run python -m validation.report "${args[@]}" > report.md
 
       - name: Summary
@@ -101,9 +139,11 @@ jobs:
           retention-days: 30
 
       - name: Keep the records on the benchmarks branch
+        # only whole nights on main are kept
         if:
           always() && github.ref == 'refs/heads/main' &&
-          hashFiles('records.jsonl') != ''
+          hashFiles('records.jsonl') != '' && env.CASES == '' && env.HAVING ==
+          '' && env.METHODS == ''
         env:
           PASSED:
             ${{ steps.references.outcome == 'success' && steps.report.outcome ==
