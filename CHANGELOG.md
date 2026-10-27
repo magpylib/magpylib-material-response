@@ -45,7 +45,7 @@ and this project adheres to
   charge jumps most, and each sheet reports `jump_indicator` and
   `mean_polarization`, hints for accuracy and saturation. All bodies form one
   dense system: `max_unknowns`, 20,000 (3.2 GB) by default, refuses a larger one
-  before it is assembled
+  before it is assembled. `to_json` saves a solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89)).
 
 ### Changed
