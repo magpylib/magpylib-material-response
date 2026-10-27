@@ -8,6 +8,7 @@ import pytest
 
 from magpylib_material_response import from_json, to_json
 from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.face_charge import apply_face_charge
 from magpylib_material_response.meshing import mesh_TriangularMesh
 from magpylib_material_response.meshing_utils import trimesh_from_model3d
 from magpylib_material_response.utils import (
@@ -305,3 +306,19 @@ def test_roundtrip_keeps_material_attributes():
         [s.polarization for s in apply_demag(out).sources_all],
         [s.polarization for s in apply_demag(coll).sources_all],
     )
+
+
+def test_roundtrip_face_charge_solution():
+    plate = magpy.magnet.Cuboid(
+        dimension=(0.01, 0.01, 0.004), polarization=(0, 0, 0), style_color="grey"
+    )
+    plate.susceptibility = 1000
+    magnet = magpy.magnet.Cuboid(
+        dimension=(0.004, 0.004, 0.003),
+        position=(0, 0, 0.0045),
+        polarization=(0, 0, 1.2),
+    )
+    solved = apply_face_charge(magpy.Collection(plate, magnet), level=1)
+    back = from_json(to_json(solved))[0]
+    _assert_field_equal(back, solved, rtol=0, atol=0)
+    assert back.children[0].style.color == "grey"

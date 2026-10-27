@@ -18,6 +18,7 @@ examples/index
 :maxdepth: 2
 
 method
+face_charge
 api
 logging
 serialization

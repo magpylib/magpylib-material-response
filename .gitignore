@@ -185,6 +185,10 @@ Thumbs.db
 # Common editor files
 *~
 *.swp
+__temp*.py
+__temp*.ipynb
+# marimo's per-notebook session cache, written beside the notebook it ran.
+__marimo__/
 
 
 # Generated files from doc examples

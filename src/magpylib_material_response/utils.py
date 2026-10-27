@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import json
 import threading
 import time
@@ -118,17 +119,19 @@ def _serialize_recursive(obj, parent="warn"):
         - ``magpylib.magnet.Cuboid``, ``Cylinder``, ``CylinderSegment``,
           ``Sphere``, ``Tetrahedron``, ``TriangularMesh``
         - ``magpylib.current.Polyline``, ``Circle``
+        - ``magpylib_material_response.face_charge.ChargeSheet``
         - ``magpylib.Sensor``
         - ``magpylib.Collection`` (recursively)
 
     The output uses namespaced ``type`` discriminators (e.g. ``"magnet.Cuboid"``,
     ``"current.Polyline"``) and is composed entirely of JSON primitives.
     """
-    typ = _TYPE_BY_CLASS.get(type(obj))
+    type_by_class, class_by_type = _registry()
+    typ = type_by_class.get(type(obj))
     if typ is None:
         msg = (
             f"Unsupported object type: {obj.__class__.__name__!r}. "
-            f"Supported types: {sorted(_CLASS_BY_TYPE)}"
+            f"Supported types: {sorted(class_by_type)}"
         )
         raise TypeError(msg)
 
@@ -179,6 +182,12 @@ def _serialize_recursive(obj, parent="warn"):
         dd["faces"] = {"value": obj.faces.tolist()}
     elif isinstance(obj, magpy.current.Polyline):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+    elif typ == "face_charge.ChargeSheet":
+        dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+        dd["faces"] = {"value": obj.faces.tolist()}
+        dd["charge_densities"] = {"value": obj.charge_densities.tolist(), "unit": "A/m"}
+        if obj._panels is not None:
+            dd["panels"] = {"value": np.asarray(obj._panels).tolist()}
     elif isinstance(obj, magpy.current.Circle):
         dd["diameter"] = {"value": np.asarray(obj.diameter).tolist(), "unit": "m"}
     elif isinstance(obj, magpy.Sensor):
@@ -201,9 +210,10 @@ def _check_unit(field_name, inp, expected):
 def _deserialize_recursive(inp):
     """Deserialize a dict produced by :func:`_serialize_recursive`."""
     typ = inp.get("type")
-    constr = _CLASS_BY_TYPE.get(typ)
+    class_by_type = _registry()[1]
+    constr = class_by_type.get(typ)
     if constr is None:
-        msg = f"Unknown type tag {typ!r}. Supported tags: {sorted(_CLASS_BY_TYPE)}"
+        msg = f"Unknown type tag {typ!r}. Supported tags: {sorted(class_by_type)}"
         raise TypeError(msg)
 
     kw = {}
@@ -253,6 +263,14 @@ def _deserialize_recursive(inp):
     elif constr is magpy.current.Polyline:
         _check_unit("Vertices", inp["vertices"], "m")
         kw["vertices"] = inp["vertices"]["value"]
+    elif typ == "face_charge.ChargeSheet":
+        _check_unit("Vertices", inp["vertices"], "m")
+        _check_unit("Charge densities", inp["charge_densities"], "A/m")
+        kw["vertices"] = inp["vertices"]["value"]
+        kw["faces"] = inp["faces"]["value"]
+        kw["charge_densities"] = inp["charge_densities"]["value"]
+        if "panels" in inp:
+            kw["panels"] = inp["panels"]["value"]
     elif constr is magpy.current.Circle:
         _check_unit("Diameter", inp["diameter"], "m")
         kw["diameter"] = inp["diameter"]["value"]
@@ -277,7 +295,7 @@ def _deserialize_recursive(inp):
 
 # Type-tag <-> class mapping. Namespaced tags avoid ambiguity if magpylib ever
 # adds same-named classes in different submodules.
-_CLASS_BY_TYPE = {
+_MAGPYLIB_CLASSES = {
     "magnet.Cuboid": magpy.magnet.Cuboid,
     "magnet.Cylinder": magpy.magnet.Cylinder,
     "magnet.CylinderSegment": magpy.magnet.CylinderSegment,
@@ -289,7 +307,19 @@ _CLASS_BY_TYPE = {
     "Sensor": magpy.Sensor,
     "Collection": magpy.Collection,
 }
-_TYPE_BY_CLASS = {cls: tag for tag, cls in _CLASS_BY_TYPE.items()}
+
+
+@functools.cache
+def _registry():
+    """The type tags by class and the classes by tag. ChargeSheet joins on
+    first use: face_charge imports this module, so it cannot be imported
+    here at load time."""
+    from magpylib_material_response.face_charge import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        ChargeSheet,
+    )
+
+    by_type = {**_MAGPYLIB_CLASSES, "face_charge.ChargeSheet": ChargeSheet}
+    return {cls: tag for tag, cls in by_type.items()}, by_type
 
 
 def to_json(*objs, **json_kwargs):
