@@ -14,6 +14,7 @@ method's ``growth``.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import platform
 import sys
@@ -66,10 +67,20 @@ def run(case, method, setting):
             "magpylib_material_response": magpylib_material_response.__version__,
             "magpylib": magpy.__version__,
             "numpy": np.__version__,
+            "scipy": _version("scipy"),
+            "ngsolve": _version("ngsolve"),
             "python": platform.python_version(),
             "machine": f"{platform.system()} {platform.machine()}",
         },
     }
+
+
+def _version(package):
+    """The installed version of `package`, or None."""
+    try:
+        return importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def refusal(case, method):

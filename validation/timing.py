@@ -23,7 +23,7 @@ from .cases import CASES
 from .methods import METHODS
 from .run import PR_CHECK, run
 
-#: the comment's first line, to find it again
+#: the comment's first line, by which .github/workflows/timing.yml finds it again
 MARKER = "<!-- validation timing -->"
 #: slower than this, a case is flagged
 SLOWER = 1.2

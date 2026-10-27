@@ -25,7 +25,7 @@ and this project adheres to
   both error bars, and whether they agree. In the repository, `validation/`
   holds 19 cases, 16 with a stored reference; every PR checks the method of
   moments against them and is timed against its base branch in a comment, and
-  every night all methods run at every setting against references made again,
+  every night all methods climb their settings against references made again,
   their records kept on a `benchmarks` branch, and must beat magpylib alone, the
   model without its material response. It found a mesh NGSolve could not
   assemble, which `fem_solve` now makes again at another grading. Two docs

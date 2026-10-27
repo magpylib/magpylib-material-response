@@ -13,7 +13,8 @@ the problem grows.
 
 In CI, ``timing.py`` times that check against the PR's base branch for a
 comment (``.github/workflows/timing.yml``), and every night the references are
-made again and every method runs at every setting; ``report.py`` turns the
-records into a table of time to accuracy and lists what got worse since the
-last night that passed (``.github/workflows/nightly.yml``).
+made again and every method climbs its settings; ``report.py`` turns the
+records into a table of time to accuracy and lists what got worse against the
+baseline, the best of every night that passed
+(``.github/workflows/nightly.yml``).
 """

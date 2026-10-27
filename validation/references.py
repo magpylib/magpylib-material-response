@@ -27,6 +27,7 @@ change in fem or in NGSolve, which the nightly run catches.
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import json
 import sys
 import time
@@ -169,7 +170,8 @@ def load(case):
 
 
 def _check_all():
-    """Make every reference of this module again; 1 if one moved too far."""
+    """Make every reference of this module again; 1 if one moved too far or
+    could not be made. A case that fails does not stop the others."""
     failed = 0
     for case in CASES.values():
         if (
@@ -180,9 +182,17 @@ def _check_all():
             or "made_by" in json.loads(path(case).read_text())
         ):
             continue
-        for group, (offset, allowed) in check(case).items():
+        try:
+            moved = check(case)
+        except Exception as error:  # noqa: BLE001  # report it, check the rest
+            failed += 1
+            print(
+                f"{case.name:<14} FAILED: {type(error).__name__}: {error}", flush=True
+            )
+            continue
+        for group, (offset, allowed) in moved.items():
             verdict = "ok" if offset <= allowed else "MOVED"
-            failed += offset > allowed
+            failed += not offset <= allowed
             print(
                 f"{case.name:<14} {group:<26} moved {offset:.1e}, "
                 f"may move {allowed:.1e}  {verdict}",
@@ -204,7 +214,7 @@ def main(names):
         and not path(c).exists()
     ]
     for case in cases:
-        if not FEM.can_solve(case):
+        if importlib.util.find_spec("ngsolve") is None:
             msg = f"FEM cannot solve {case.name!r} here: the fem extra is needed."
             raise ValueError(msg)
         data = make(case)

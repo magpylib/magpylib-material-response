@@ -140,8 +140,8 @@ material model.
 The repository's `validation/` folder holds 19 cases: the models of these pages
 and others that are hard for the method of moments, nearly all with a stored
 finite-element reference at their sensors. A test holds the method of moments to
-its stored accuracy on every pull request, and every night all methods run at
-every setting against references made again, so that a change in either method
+its stored accuracy on every pull request, and every night all methods climb
+their settings against references made again, so that a change in either method
 shows. Magpylib alone, the model without its material response, is the floor: 18
 % off on the three cuboids, 721 % under the soft plate, and 100 % wherever only
 soft parts answer. The method of moments beats it on every case, by a factor of

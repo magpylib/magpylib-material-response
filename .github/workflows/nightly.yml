@@ -1,11 +1,12 @@
 name: Nightly validation
 
-# Every validation case with every method at every setting, against the stored
-# finite-element references, which are made again first. The records go to the
-# benchmarks branch, one file a night; a night is compared with the baseline
-# there, the last night that passed, and fails when an error grew or a
-# reference moved. Run it by hand with "accept" to make a night the baseline
-# after an intended change.
+# Every validation case with every method, setting by setting until the next
+# would take more than 10 minutes, against the stored finite-element
+# references, which are made again first. The records go to the benchmarks
+# branch, one file a night. A night fails when a reference moved, when a method
+# is no better than magpylib alone, or when an error grew against the baseline
+# there: per setting, the best any passing night reached. Run it by hand with
+# "accept" to make a night the baseline after an intended change.
 
 on:
   # TEMPORARY: one run on its PR's branch; removed before merging
@@ -33,9 +34,13 @@ jobs:
   validation:
     name: Every case, every method
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 360
     permissions:
       contents: write # the records, on the benchmarks branch
+    defaults:
+      run:
+        # explicit, for pipefail: the default shell is bash -e, without it
+        shell: bash
     steps:
       - uses: actions/checkout@v7
         with:
@@ -57,7 +62,7 @@ jobs:
         run: uv run python -m validation.references --check | tee references.txt
 
       - name: Every case, every method
-        run: uv run python -m validation.run --out records.jsonl
+        run: uv run python -m validation.run --budget 600 --out records.jsonl
 
       - name: The baseline
         run: |
@@ -69,11 +74,9 @@ jobs:
         id: report
         continue-on-error: true
         run: |
-          if [ -f baseline.jsonl ]; then
-            uv run python -m validation.report records.jsonl --previous baseline.jsonl > report.md
-          else
-            uv run python -m validation.report records.jsonl > report.md
-          fi
+          args=(records.jsonl --write new-baseline.jsonl)
+          [ -f baseline.jsonl ] && args+=(--baseline baseline.jsonl)
+          uv run python -m validation.report "${args[@]}" > report.md
 
       - name: Summary
         if: always()
@@ -119,8 +122,12 @@ jobs:
           mkdir -p kept/history
           cp records.jsonl "kept/history/$day.jsonl"
           [ -f report.md ] && cp report.md "kept/history/$day.md"
-          if [ "$PASSED" = "true" ] || [ "$ACCEPT" = "true" ]; then
+          # a passing night lowers the baseline where it did better; "accept"
+          # replaces it with this night
+          if [ "$ACCEPT" = "true" ]; then
             cp records.jsonl kept/baseline.jsonl
+          elif [ "$PASSED" = "true" ] && [ -f new-baseline.jsonl ]; then
+            cp new-baseline.jsonl kept/baseline.jsonl
           fi
           git -C kept add history baseline.jsonl 2>/dev/null || git -C kept add history
           git -C kept commit -m "Nightly validation, $day"

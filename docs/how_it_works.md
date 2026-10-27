@@ -279,8 +279,8 @@ takes eight times the cells, cuts the error to about a third. Soft iron is the
 hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
 Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
-elements give it at orders 3 to 5
-([Checking a result with finite elements](examples/fem_check.md)). The
+elements give it, `fem_study(cube, lambda s: s.moment[2], orders=(3, 4, 5))`, in
+seconds ([Checking a result with finite elements](examples/fem_check.md)). The
 polarizability of a cube of infinite susceptibility, 3.6443 times its volume
 (Helsing and Perfekt 2013), gives 0.028895 A m² through
 $m=VH/(1/3.6443+1/\chi)$, 0.05 % high: that formula is exact for ellipsoids

@@ -94,6 +94,28 @@ for (around, along), collection in solved.items():
     print(f"{around} x 1 x {along:<4}" + "".join(f"{e:25.1%} " for e in errors))
 ```
 
+```{code-cell} ipython3
+:tags: [remove-cell]
+
+# the build fails if this page's model or lines drift from the validation case
+# whose reference it reads, or if the case changed since that reference
+import sys
+
+sys.path.insert(0, str(Path("../..").resolve()))
+from validation import references
+from validation.cases import CASES
+
+case = CASES["shield_tube"]
+references.load(case)
+built, groups = case.model()
+for mine, theirs in zip((magnet, tube), built.children, strict=True):
+    for attribute in ("dimension", "polarization", "position", "susceptibility"):
+        np.testing.assert_allclose(getattr(mine, attribute), getattr(theirs, attribute))
+assert list(lines) == list(groups)
+for name, points in lines.items():
+    np.testing.assert_allclose(points, groups[name])
+```
+
 +++ {"user_expressions": []}
 
 Inside the tube the method of moments converges: the error between the magnet

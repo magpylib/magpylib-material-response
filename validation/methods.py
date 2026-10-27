@@ -18,6 +18,8 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_uniform
 
+from .cases import CASES
+
 if TYPE_CHECKING:
     import numpy as np
 
@@ -120,11 +122,21 @@ class FEM:
     def settings_for(self, case):
         """Orders up to the reference's highest: past it, FEM would be checked
         against a coarser solution of its own, and may not fit in memory."""
-        return tuple(s for s in self.settings if s <= max(case.reference_orders))
+        owner = CASES[case.reference] if case.reference else case
+        return tuple(s for s in self.settings if s <= max(owner.reference_orders))
 
     @staticmethod
     def can_solve(case):
-        return case.waits is None and importlib.util.find_spec("ngsolve") is not None
+        # a case that shares another's reference and FEM options is the same
+        # FEM solve as that case
+        shared = case.reference is not None and case.options.get("FEM") == CASES[
+            case.reference
+        ].options.get("FEM")
+        return (
+            case.waits is None
+            and not shared
+            and importlib.util.find_spec("ngsolve") is not None
+        )
 
     @staticmethod
     def solve(collection, sensors, setting, **options):
