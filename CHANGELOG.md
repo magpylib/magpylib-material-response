@@ -90,6 +90,16 @@ and this project adheres to
   memory while built, and a reverse block given by reciprocity is no longer
   copied
   ([#86](https://github.com/magpylib/magpylib-material-response/pull/86)).
+- `apply_demag`: a thin ring in cylinder-segment cells at high susceptibility no
+  longer swings with the cells across its wall. On curved cells point matching
+  gave the system positive eigenvalues: a tube with a 1 mm wall at χ = 1000 came
+  out −10 %, −68 % and +2 % from its moment with 1, 2 and 3 cells across.
+  Segment cells close together now take each other's field averaged over the
+  cell, which keeps every eigenvalue negative: −12 %, −11 % and −11 %, and
+  closer as cells are added around the ring. Solves with segment cells take 2 to
+  3 times longer
+  ([#92](https://github.com/magpylib/magpylib-material-response/issues/92),
+  [#100](https://github.com/magpylib/magpylib-material-response/pull/100)).
 
 ## [0.6.0] - 2026-10-23
 
