@@ -269,7 +269,8 @@ cuboids sharing a shape and orientation → blocks computed once per distinct
 displacement; every other cell → one `magpy.getH` per pair. So the model
 topology decides which paths do the work — and how much the solver choice
 matters. Here the same comparison runs on characteristic topologies of similar
-total cell count (single-run timings — indicative, not statistics).
+total cell count, the cylinder aside (single-run timings — indicative, not
+statistics).
 
 ```{code-cell} ipython3
 from collections import Counter
@@ -332,7 +333,7 @@ for i, p in enumerate(grid_positions(24, pitch=2.2e-3)):
 topologies["24 bodies, individually rotated"] = magpy.Collection(*meshes)
 
 cyl = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(1e-3, 1e-3))
-topologies["meshed cylinder"] = magpy.Collection(mesh_Cylinder(cyl, 300))
+topologies["meshed cylinder"] = magpy.Collection(mesh_Cylinder(cyl, 100))
 
 for label, coll in topologies.items():
     coll.style.label = label
@@ -379,11 +380,12 @@ What the rows show:
   body still use their own rotated FFT grid.
 - **Meshed cylinder** — non-cuboid cells (here Cylinder and CylinderSegment,
   likewise tetrahedra from `mesh_TriangularMesh` — see the
-  [tetrahedral mesh example](tetrahedral_meshes.md)) take the point-matched
-  generic path. Both solvers spend nearly all time evaluating the cells'
-  analytical fields, so the solver choice barely matters — the cell _type_ is
-  the cost driver. Cuboid cells are the cheapest per cell, but at high
-  permeability tetrahedra reach the same accuracy with far fewer cells (see the
+  [tetrahedral mesh example](tetrahedral_meshes.md)) take the generic path, one
+  field evaluation per pair, so this row has about a hundred cells, not a
+  thousand. Both solvers spend nearly all time evaluating the cells' analytical
+  fields, so the solver choice barely matters — the cell _type_ is the cost
+  driver. Cuboid cells are the cheapest per cell, but at high permeability
+  tetrahedra reach the same accuracy with far fewer cells (see the
   [U-core example](ucore_electromagnet.md)).
 
 ## Choosing a solver

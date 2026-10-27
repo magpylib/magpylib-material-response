@@ -10,9 +10,6 @@ kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
-mystnb:
-  # the two solves take about 40 s on a laptop
-  execution_timeout: 300
 ---
 
 +++ {"user_expressions": []}
@@ -63,7 +60,7 @@ def solve(around, along):
 
 
 magnet, tube = model()
-magpy.show(magnet, mesh_Cylinder(tube, (16, 1, 12)), backend="widget")
+magpy.show(magnet, mesh_Cylinder(tube, (12, 1, 8)), backend="widget")
 ```
 
 +++ {"user_expressions": []}
@@ -83,7 +80,7 @@ lines = {
     "outside the tube": np.linspace((30, 0, 0), (60, 0, 0), 7) * MM,
 }
 magnet_alone = magpy.Collection(model()[0])
-solved = {(16, 12): solve(16, 12), (16, 36): solve(16, 36)}
+solved = {(12, 8): solve(12, 8), (12, 24): solve(12, 24)}
 
 print(f"{'cells':>14}" + "".join(f"{name:>26}" for name in lines))
 for (around, along), collection in solved.items():
@@ -119,22 +116,22 @@ for name, points in lines.items():
 +++ {"user_expressions": []}
 
 Inside the tube the method of moments converges: the error between the magnet
-and the wall falls from 6 % to 2 % as the cells along the tube triple, and on
-the axis it is under 1 % from the start. Outside, the field is what the tube
-lets through, 3 mT beside the magnet where the magnet alone gives 21 mT, and the
-cells are 88 % and 48 % off. Cells along the tube decide it, more than cells
-around or across: the flux turns into the wall near the magnet, within a few
-cells. Cells of one size fine enough there would number in the thousands, and
-curved cells cost more than cuboids. For the field a shield lets through, take
-the finite-element value.
+and the wall falls from 12 % to 3 % as the cells along the tube triple, and on
+the axis from 1.1 % to 0.2 %. Outside, the field is what the tube lets through,
+3 mT beside the magnet where the magnet alone gives 21 mT, and the cells are 293
+% and 64 % off. Cells along the tube decide it, more than cells around or
+across: the flux turns into the wall near the magnet, within a few cells. Cells
+of one size fine enough there would number in the thousands, and curved cells
+cost more than cuboids. For the field a shield lets through, take the
+finite-element value.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
 fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.12,
                     subplot_titles=("between magnet and wall: Bz", "outside the tube: |B|"))
-curves = [("magnet alone", magnet_alone, "#8a8984", "dot"), ("192 cells", solved[(16, 12)], "#86b6ef", "solid"),
-          ("576 cells", solved[(16, 36)], "#2a78d6", "solid")]
+curves = [("magnet alone", magnet_alone, "#8a8984", "dot"), ("96 cells", solved[(12, 8)], "#86b6ef", "solid"),
+          ("288 cells", solved[(12, 24)], "#2a78d6", "solid")]
 for col, name, coordinate in ((1, "between magnet and wall", 2), (2, "outside the tube", 0)):
     points = lines[name]
     x = points[:, coordinate] / MM
