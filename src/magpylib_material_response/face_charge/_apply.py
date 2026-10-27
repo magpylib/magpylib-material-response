@@ -23,7 +23,7 @@ from magpylib_material_response.face_charge._bodies import (
     near_panels,
     solve_system,
 )
-from magpylib_material_response.face_charge._sheet import ChargeSheet
+from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.utils import timelog
 
 MARK = 0.5  # a refinement round splits panels above this share of the largest jump
@@ -218,6 +218,13 @@ def apply_face_charge(
         "Face charge: average polarization up to {J:.3g} T; above the material's knee, saturation matters",
         J=max(np.linalg.norm(s.mean_polarization) for s in sheets),
     )
+    # one colour scale for all, so that colours compare between parts
+    full = saturation(
+        sheets,
+        [_hidden(s, b, bodies, outlines) for s, b in zip(sheets, bodies, strict=True)],
+    )
+    for sheet in sheets:
+        sheet._saturation = full
 
     # each solved cuboid's copy gives way to its sheet, in the same place among
     # its parent's children
@@ -298,6 +305,19 @@ def _box(src):
         v = np.asarray(src.vertices, float).reshape(-1, 3)
         centre, half = (v.min(0) + v.max(0)) / 2, (v.max(0) - v.min(0)) / 2
     return centre, half, src.orientation.as_matrix(), np.asarray(src.position, float)
+
+
+def _hidden(sheet, body, bodies, outlines):
+    """Per face of the body's sheet: True where it lies against another solved
+    body or a fixed cuboid, out of sight. Its charge, large and nearly
+    cancelled by the other side's, would set the colour scale."""
+    C = sheet.triangles.mean(axis=1) @ body.R.T + body.position
+    hidden = np.zeros(len(C), bool)
+    for other in (*bodies, *outlines):
+        if other is not body:
+            local = np.abs((C - other.position) @ other.R)
+            hidden |= np.all(local <= other.half + CONTACT * np.max(other.half), axis=1)
+    return hidden
 
 
 def _warn_unaligned(bodies, solved, boxes, fixed):

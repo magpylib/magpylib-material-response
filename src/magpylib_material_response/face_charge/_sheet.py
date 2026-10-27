@@ -14,6 +14,7 @@ from magpylib_material_response.face_charge._triangle import field as triangle_f
 from magpylib_material_response.face_charge._triangle import frames
 
 CHUNK = 2_000_000  # kernel evaluations per call, about 0.5 GB
+SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 
 
 class ChargeSheet(magpy.misc.CustomSource):
@@ -128,6 +129,7 @@ class ChargeSheet(magpy.misc.CustomSource):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
+        self._saturation = None  # set by apply_face_charge, for all it solves
         self._V = P[F]
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
@@ -242,13 +244,15 @@ class ChargeSheet(magpy.misc.CustomSource):
         positive charge is a north pole (plotly and pyvista; matplotlib draws
         the faces in the object's colour).
 
-        The charge is drawn smoothed and on a square-root scale. On a flat face
-        of a uniform body the charge is continuous; its jumps between panels are
+        The charge is drawn smoothed and on a linear scale. On a flat face of a
+        uniform body the charge is continuous; its jumps between panels are
         discretization error, so each corner shows the area-weighted mean over
         the corners that share its vertex and its face's plane. It still jumps
-        across the body's edges, where it truly does. The square root shows the
-        weak charge where flux returns into a soft part next to the strong
-        charge where it leaves. Fields use the charge as solved.
+        across the body's edges, where it truly does. The colour is full at the
+        charge that 95 % of the area stays below, not at the peak, which sits
+        in a singular corner; the sheets of one :func:`apply_face_charge` share
+        that level, taken from the faces not pressed against another part, so
+        their colours compare. Fields use the charge as solved.
         """
         from magpylib._src.display.traces_utility import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
             line_dash,
@@ -257,7 +261,10 @@ class ChargeSheet(magpy.misc.CustomSource):
         P = self._V.reshape(-1, 3)
         i, j, k = np.arange(len(P)).reshape(-1, 3).T
         q = self._smoothed()
-        v = np.sign(q) * np.sqrt(np.abs(q))
+        full = self._saturation
+        if full is None:
+            full = saturation([self])
+        v = np.clip(q, -full, full)
         style = self.style
         mesh = {
             "type": "mesh3d",
@@ -274,7 +281,7 @@ class ChargeSheet(magpy.misc.CustomSource):
             lo, hi = v.min(initial=0.0), v.max(initial=0.0)
             mesh |= {
                 "intensity": v,
-                "colorscale": _colorscale(lo, hi, style.magnetization.color),
+                "colorscale": _colorscale(lo, hi, style.magnetization.color, full),
                 "cmin": lo,
                 "cmax": hi,
                 "showscale": False,
@@ -364,18 +371,56 @@ class ChargeSheet(magpy.misc.CustomSource):
         )
 
 
-def _colorscale(lo, hi, colors):
+def _samples(n=4):
+    """Barycentric centroids of the n x n equal triangles a triangle splits
+    into: points that sample a linear charge by area."""
+    out = []
+    for i in range(n):
+        for j in range(n - i):
+            out.append((i + 1 / 3, j + 1 / 3))
+            if i + j < n - 1:
+                out.append((i + 2 / 3, j + 2 / 3))
+    a, b = np.array(out).T / n
+    return np.column_stack([a, b, 1 - a - b])
+
+
+SAMPLES = _samples()
+
+
+def saturation(sheets, hidden=None):
+    """The charge in A/m that ``SATURATE`` of the sheets' area stays below, by
+    its smoothed value: where their colour is full. ``hidden``, per sheet, the
+    faces left out. Where that share carries no charge, the peak.
+
+    Sampled inside each face rather than at its corners: a corner weighted by
+    its face's area lets a coarse panel's strong corner count over the whole
+    panel, and the level moved threefold from one mesh level to the next."""
+    q, w = [], []
+    for k, sheet in enumerate(sheets):
+        keep = np.ones(len(sheet.faces), bool) if hidden is None else ~hidden[k]
+        q.append(np.abs(sheet._smoothed().reshape(-1, 3)[keep] @ SAMPLES.T).ravel())
+        w.append(np.repeat(sheet._frames[5][keep], len(SAMPLES)))
+    q, w = np.concatenate(q), np.concatenate(w)
+    if not q.size:
+        return 0.0
+    order = np.argsort(q)
+    cum = np.cumsum(w[order])
+    level = q[order][np.searchsorted(cum, SATURATE * cum[-1])]
+    return float(level or q.max())
+
+
+def _colorscale(lo, hi, colors, full=None):
     """The magnet ``colors`` (north, middle, south) over the range ``[lo, hi]``:
-    the middle colour at zero, the north (south) colour at the largest value of
-    either sign. Built for the range, as pyvista takes no colour limits; a
-    tuple, as pyvista caches it."""
+    the middle colour at zero, the north (south) colour at ``full``, by default
+    the largest value of either sign. Built for the range, as pyvista takes no
+    colour limits; a tuple, as pyvista caches it."""
     from matplotlib.colors import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
         to_hex,
         to_rgb,
     )
 
     middle = np.array(to_rgb(colors.middle))
-    a = max(-lo, hi)
+    a = max(-lo, hi) if full is None else full
     if a <= 0:
         return ((0.0, to_hex(middle)), (1.0, to_hex(middle)))
 

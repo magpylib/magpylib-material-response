@@ -8,6 +8,7 @@ import pytest
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge._sheet import saturation
 
 TRIANGLE = np.array([[0.0, 0.0, 0.0], [0.004, 0.001, 0.0], [0.001, 0.003, 0.0005]])
 NORMAL = np.cross(TRIANGLE[1] - TRIANGLE[0], TRIANGLE[2] - TRIANGLE[0])
@@ -191,7 +192,9 @@ def test_show_colours_the_charge_and_draws_panel_edges():
     mesh = next(t for t in fig.data if t.type == "mesh3d")
     edges = next(t for t in fig.data if t.type == "scatter3d")
     q = sheet._smoothed()
-    np.testing.assert_allclose(mesh.intensity, np.sign(q) * np.sqrt(np.abs(q)))
+    full = sheet._saturation
+    assert full < np.abs(q).max()  # not the singular corner's
+    np.testing.assert_allclose(mesh.intensity, np.clip(q, -full, full))
     F = sheet.faces
     triangle_edges = len(
         np.unique(
@@ -200,6 +203,27 @@ def test_show_colours_the_charge_and_draws_panel_edges():
         )
     )
     assert len(edges.x) // 3 == triangle_edges - len(F) // 2  # no panel's diagonal
+
+
+def test_parts_solved_together_share_one_colour_scale():
+    # a magnet with a susceptibility, solved too, glued on an iron plate
+    plate = magpy.magnet.Cuboid(dimension=(0.02, 0.02, 0.005), polarization=(0, 0, 0))
+    plate.susceptibility = 1000.0
+    magnet = magpy.magnet.Cuboid(
+        dimension=(0.006, 0.006, 0.004),
+        position=(0, 0, 0.0045),
+        polarization=(0, 0, 1.2),
+    )
+    magnet.susceptibility = 0.05
+    solved = apply_face_charge(magpy.Collection(plate, magnet), level=2)
+    near, far = solved.sources_all
+    assert near._saturation == far._saturation
+    # where parts touch, the faces carry large charges, out of sight and
+    # nearly cancelled by the other side's: they do not set the scale
+    assert near._saturation < saturation([near, far]) / 2
+    fig = magpy.show(solved, backend="plotly", return_fig=True)
+    for mesh in (t for t in fig.data if t.type == "mesh3d"):
+        assert np.abs(mesh.intensity).max() <= near._saturation
 
 
 def _cuboid(**kwargs):
