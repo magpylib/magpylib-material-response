@@ -102,7 +102,7 @@ solved = apply_face_charge(magpy.Collection(part, coil), level=2)
   rectangle panels reach 1 % 1.1 to 6 times faster, and the rest the triangles
   cannot take, as their parts touch or a thin sheet needs too many triangles.
 
-![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 70 ms to 2.2 s on nine cases, triangles 107 to 629 ms on the four they can take, refused where parts touch or a thin sheet needs too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
+![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 70 ms to 2.2 s on nine cases, triangles 107 to 629 ms on the five they can take (the U-core as one mesh), refused where parts of different susceptibility touch or a thin sheet needs too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
 
 - **Limits:** the mesh must be closed. A triangle mesh couples to other solved
   parts at a distance; a solved part touching it is refused (join the two into
