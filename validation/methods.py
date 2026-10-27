@@ -16,6 +16,8 @@ import magpylib as magpy
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
 from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge._apply import _split
 from magpylib_material_response.meshing import mesh_uniform
 
 from .cases import CASES
@@ -26,6 +28,14 @@ if TYPE_CHECKING:
 
 class TooLarge(Exception):
     """A setting asks for more than the method allows."""
+
+
+def _same_solve(case, method):
+    """Whether `case` shares another case's reference and `method`'s options,
+    so that `method` would solve the same model as that case."""
+    return case.reference is not None and case.options.get(method) == CASES[
+        case.reference
+    ].options.get(method)
 
 
 @dataclass
@@ -127,14 +137,9 @@ class FEM:
 
     @staticmethod
     def can_solve(case):
-        # a case that shares another's reference and FEM options is the same
-        # FEM solve as that case
-        shared = case.reference is not None and case.options.get("FEM") == CASES[
-            case.reference
-        ].options.get("FEM")
         return (
             case.waits is None
-            and not shared
+            and not _same_solve(case, "FEM")
             and importlib.util.find_spec("ngsolve") is not None
         )
 
@@ -157,4 +162,49 @@ class FEM:
         )
 
 
-METHODS = {method.name: method for method in (Magpylib(), MoM(), FEM())}
+class FaceCharge:
+    """Face charge, ``apply_face_charge``: the charge on the cuboids' faces, no
+    volume mesh. A setting is the panel level, the panels in each graded layer
+    toward a face's edges. It solves cuboids with a uniform, isotropic
+    susceptibility, beside any other source, coils included."""
+
+    name = "FaceCharge"
+    settings = (1, 2, 3, 4, 5)
+    # time per level, measured on the three cuboids: 3 to 6
+    growth = 5
+
+    def settings_for(self, case):  # noqa: ARG002
+        return self.settings
+
+    @staticmethod
+    def can_solve(case):
+        if case.waits is not None or _same_solve(case, "FaceCharge"):
+            return False
+        if case.refused:
+            return True  # its refusal is checked
+        try:
+            _split(case.model()[0])
+        except NotImplementedError:
+            return False
+        return True
+
+    @staticmethod
+    def solve(collection, sensors, setting, **options):
+        """`options` go to ``apply_face_charge``."""
+        start = time.perf_counter()
+        solved = apply_face_charge(collection, level=setting, **options)
+        solved_at = time.perf_counter()
+        B = magpy.getB(solved, sensors)
+        sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+        return Solved(
+            B,
+            {
+                "prepare": 0.0,
+                "solve": solved_at - start,
+                "getB": time.perf_counter() - solved_at,
+            },
+            {"unknowns": int(sum(s.charge_densities.size for s in sheets))},
+        )
+
+
+METHODS = {method.name: method for method in (Magpylib(), MoM(), FaceCharge(), FEM())}
