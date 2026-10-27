@@ -178,18 +178,43 @@ def _offset(P, normal, shift, tol):
     return out
 
 
-def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0):
+def _cut_along(polys, lines, span, tol):
+    """The convex polygons cut along the contact ``lines``, each ``(point,
+    direction, normal)``: a line in the plane of that normal, through the
+    polygons lying in it."""
+    for point, t, normal in lines:
+        w = np.cross(normal, t)
+        polys = [
+            (piece, n)
+            for poly, n in polys
+            for piece in (
+                _cut_poly(poly, point, w, 0.0, tol)
+                if abs(n @ normal) > 1 - 1e-9
+                and abs((poly.mean(0) - point) @ normal) < 1e-6 * span
+                else [poly]
+            )
+        ]
+    return polys
+
+
+def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=()):
     """The closed mesh ``V``, ``F`` cut into triangles (T, 3, 3) graded toward
-    its sharp edges: ``m`` layers of power ``g`` over ``ell`` on each side of a
-    sharp edge, the rest in cells of the last layer's size."""
+    its sharp edges, and toward the ``contacts``, lines ``(point, direction,
+    normal)`` where a touching part's faces end: ``m`` layers of power ``g``
+    over ``ell`` on each side of such an edge or line, the rest in cells of the
+    last layer's size."""
     V = np.asarray(V, float)
     F = np.asarray(F, int)
     span = np.max(np.ptp(V, axis=0))
     tol = 1e-9 * span
     segs = sharp_edges(V, F, angle)
+    if contacts:
+        # a contact line is graded toward like a sharp edge, across its face
+        long = np.array([(p - 2 * span * t, p + 2 * span * t) for p, t, _ in contacts])
+        segs = np.concatenate([segs, long])
     levels = ell * (np.arange(1, m + 1) / m) ** g
     cells = []
-    for P, normal in _merge_coplanar(V, F, tol):
+    for P, normal in _cut_along(_merge_coplanar(V, F, tol), contacts, span, tol):
         k = len(P)
         sharp = np.array(
             [_on_sharp(P[i], P[(i + 1) % k], segs, 1e-6 * span) for i in range(k)]

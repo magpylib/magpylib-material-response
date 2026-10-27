@@ -148,14 +148,6 @@ def test_cube_as_triangles_converges_as_the_cuboid():
     assert abs(errors[1]) < 1.1e-3
 
 
-def _mesh_cube(position=(0, 0, 0), **kwargs):
-    """A 10 mm cube as a TriangularMesh of 12 triangles."""
-    V, F = _cube_as_triangles()
-    return magpy.magnet.TriangularMesh(
-        vertices=V, faces=F, position=position, polarization=(0, 0, 0), **kwargs
-    )
-
-
 def test_triangle_mesh_part_couples_as_a_cuboid():
     """A cube given as a triangle mesh beside a turned soft cuboid, in an
     applied field: the field around them as with two cuboids."""
@@ -174,18 +166,30 @@ def test_triangle_mesh_part_couples_as_a_cuboid():
     assert _relative(*fields) < 5e-4
 
 
-def test_touching_a_triangle_mesh_raises_or_warns():
-    soft = magpy.Collection(_mesh_cube(), _cuboid(position=(0.01, 0, 0)))
-    soft.susceptibility = 100.0
-    with pytest.raises(NotImplementedError, match="triangle mesh"):
-        apply_face_charge(soft)
+def test_triangle_mesh_touching_a_cuboid_solves_as_two_cuboids():
+    """A smaller soft cuboid against a face of a cube given as a triangle
+    mesh, offset on it: their faces in contact couple exactly, and the mesh
+    is graded toward the cuboid's footprint."""
+    sensors = np.array([[0, 0.02, 0], [0.005, 0, 0.012], [0.0125, 0.0061, 0]])
+    fields = []
+    for first in (_mesh_cube(), _cuboid()):
+        side = magpy.magnet.Cuboid(
+            dimension=(0.006, 0.004, 0.004),
+            position=(0.008, 0.001, 0),
+            polarization=(0, 0, 0),
+        )
+        coll = magpy.Collection(first, side)
+        coll.susceptibility = 100.0
+        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
+        fields.append(apply_face_charge(coll, level=3).getB(sensors))
+    assert _relative(*fields) < 2e-4
     part = _mesh_cube()
     part.susceptibility = 100.0
-    magnet = magpy.magnet.Cuboid(
-        dimension=(0.004,) * 3, position=(0, 0, 0.007), polarization=(0, 0, 1)
+    disc = magpy.magnet.Cylinder(
+        dimension=(0.004, 0.002), position=(0, 0, 0.006), polarization=(0, 0, 1)
     )
-    with pytest.warns(UserWarning, match="not graded toward the magnet"):
-        apply_face_charge(magpy.Collection(part, magnet), level=1)
+    with pytest.warns(UserWarning, match="is not a cuboid"):
+        apply_face_charge(magpy.Collection(part, disc), level=1)
 
 
 def test_copies_keep_their_own_charge():
@@ -335,6 +339,14 @@ def _cuboid(**kwargs):
     return magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0), **kwargs)
 
 
+def _mesh_cube(position=(0, 0, 0), **kwargs):
+    """A 10 mm cube as a TriangularMesh of 12 triangles."""
+    V, F = _cube_as_triangles()
+    return magpy.magnet.TriangularMesh(
+        vertices=V, faces=F, position=position, polarization=(0, 0, 0), **kwargs
+    )
+
+
 @pytest.mark.parametrize(
     ("model", "chi", "error"),
     [
@@ -410,12 +422,13 @@ def test_too_many_unknowns_raise_before_assembly():
         (1e-4, (308.073, 7.721, 3.858), 0.02),
     ],
 )
-def test_magnet_on_a_soft_part_matches_fem(gap, fem, rtol):
-    """A magnet without susceptibility on soft iron, touching or 0.1 mm above:
-    its field jumps at the edges of its footprint, which the mesh and the load
-    must follow. The references are fem_study at orders 3 to 5, good to 5e-5
-    at each sensor."""
-    soft = _cuboid()
+@pytest.mark.parametrize("soft", [_cuboid, _mesh_cube], ids=["cuboid", "mesh"])
+def test_magnet_on_a_soft_part_matches_fem(gap, fem, rtol, soft):
+    """A magnet without susceptibility on soft iron, given as a cuboid or as a
+    triangle mesh, touching or 0.1 mm above: its field jumps at the edges of
+    its footprint, which the mesh and the load must follow. The references are
+    fem_study at orders 3 to 5, good to 5e-5 at each sensor."""
+    soft = soft()
     soft.susceptibility = 1000
     magnet = magpy.magnet.Cuboid(
         dimension=(0.004, 0.004, 0.002),

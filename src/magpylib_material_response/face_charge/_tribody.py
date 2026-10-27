@@ -20,7 +20,7 @@ import numpy as np
 import scipy.sparse
 from scipy.spatial import cKDTree
 
-from magpylib_material_response.face_charge._bodies import Part
+from magpylib_material_response.face_charge._bodies import CONTACT, Body, Part
 from magpylib_material_response.face_charge._mesh import graded_triangles
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
@@ -81,12 +81,15 @@ class TriBody(Part):
         self.centre, self.half = (lo + hi) / 2, (hi - lo) / 2  # the bounding box
         self.T = self.fr = self.mass = self.G = None
         self.fine = None  # triangles whose load takes a finer rule
+        self.contacts = []  # lines (point, direction, normal) to grade toward
 
     def mesh(self):
         """The triangles graded toward the sharp edges; the self block waits
         for ``assemble``, so that the unknowns can be counted first."""
         ell = LAYER * np.min(2 * self.half)
-        self.T = graded_triangles(self.vertices, self.faces, ell, self.m, GRADING)
+        self.T = graded_triangles(
+            self.vertices, self.faces, ell, self.m, GRADING, contacts=self.contacts
+        )
         self.fr = frames(self.T)
         # mass blocks, exact with the degree-2 rule
         P = np.einsum("qk,fkd->fqd", BARY3, self.T)
@@ -195,12 +198,13 @@ class TriBody(Part):
     def load(self, field):
         """``int psi H.n`` over each triangle; ``field`` maps points in the
         body's frame to H there, in that frame. Triangles marked in ``fine``,
-        near a magnet that is not solved, take 16 x 7 points: its field turns
-        there faster than 7 points resolve."""
+        near a magnet that is not solved, take 64 x 7 points: its field turns
+        there faster than 7 points resolve, and 16 x 7 still left a magnet 0.1
+        mm above a soft cube 1.9 % off at levels 3 and 4."""
         F = self._load(field, 0, np.arange(len(self.T)))
         if self.fine is not None and np.any(self.fine):
             idx = np.flatnonzero(self.fine)
-            F[idx] = self._load(field, 2, idx)
+            F[idx] = self._load(field, 3, idx)
         return F.ravel()
 
     def _load(self, field, k, idx):
@@ -227,10 +231,27 @@ class TriBody(Part):
         )
         return self.to_global(P.reshape(-1, 3)), S
 
-    def test_flux(self, y):
+    def panel_polygons(self):
+        """Each triangle's corners (F, 3, 3) and outward normal (F, 3), global."""
+        return (
+            self.to_global(self.T.reshape(-1, 3)).reshape(self.T.shape),
+            self.fr[1] @ self.R.T,
+        )
+
+    def basis_global(self, idx, X):
+        """``(1, u, v)`` of triangle ``idx`` at global points ``X`` (k, 3)."""
+        cen, _, e1, e2, s, _ = (a[idx] for a in self.fr)
+        d = (np.asarray(X) - self.position) @ self.R - cen
+        return np.stack([np.ones(len(d)), d @ e1 / s, d @ e2 / s], 1)
+
+    def test_flux(self, y, tol=0.0):
         """(3F, P): the flux of a unit charge at each point ``y`` (its frame)
-        through each test function."""
+        through each test function; none from points within ``tol`` of a
+        triangle's plane, where a contact takes over."""
         flux = -normal_field_far(y, self.T, self.fr) / FOUR_PI  # (3, P, F)
+        n = self.fr[1]
+        w = y @ n.T - np.sum(self.T[:, 0] * n, axis=1)[None]
+        flux[:, np.abs(w) < tol] = 0.0
         return flux.transpose(2, 0, 1).reshape(self.n_dofs, len(y))
 
     def coefficients_at_corners(self, c):
@@ -241,3 +262,124 @@ class TriBody(Part):
         v = np.einsum("fkd,fd->fk", d, e2) / s[:, None]
         c = np.asarray(c, float).reshape(-1, 3)
         return c[:, :1] + c[:, 1:2] * u + c[:, 2:3] * v
+
+
+_SIGNS = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
+# a box's faces as triangles, by corner index (corners as in _SIGNS)
+_BOX = np.array(
+    [
+        [0, 1, 3],
+        [0, 3, 2],
+        [4, 6, 7],
+        [4, 7, 5],
+        [0, 4, 5],
+        [0, 5, 1],
+        [2, 3, 7],
+        [2, 7, 6],
+        [0, 2, 6],
+        [0, 6, 4],
+        [1, 5, 7],
+        [1, 7, 3],
+    ]
+)
+
+
+def _triangles(part):
+    """A part's surface triangles (n, 3, 3), global: a triangle mesh's own, a
+    cuboid's or a fixed cuboid's (an Outline) twelve."""
+    if isinstance(part, TriBody):
+        return part.to_global(part.vertices[part.faces].reshape(-1, 3)).reshape(
+            -1, 3, 3
+        )
+    corners = (_SIGNS * part.half) @ part.R.T + part.position
+    return corners[_BOX]
+
+
+def _in_plane(T, point, normal, tol):
+    """The triangles of ``T`` lying in the plane through ``point``."""
+    n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    n /= np.linalg.norm(n, axis=1)[:, None]
+    return (np.abs(n @ normal) > 1 - 1e-9) & (
+        np.abs((T.mean(1) - point) @ normal) < tol
+    )
+
+
+def add_triangle_contact_lines(bodies, outlines=()):
+    """Grade where a part touches a triangle mesh, or a triangle mesh touches
+    a cuboid, as add_contact_lines does between cuboids: a triangle mesh
+    toward the outline of every touching part's faces in its own face planes,
+    a cuboid toward the extent of a touching mesh's triangles in its face."""
+    surfaces = [_triangles(b) for b in bodies]
+    others = [(_triangles(o), o) for o in outlines]
+    for ia, a in enumerate(bodies):
+        for ib, (Tb, b) in enumerate(
+            [(surfaces[k], bodies[k]) for k in range(len(bodies))] + others
+        ):
+            if ib == ia or not (isinstance(a, TriBody) or isinstance(b, TriBody)):
+                continue
+            tol = CONTACT * max(np.max(a.half), np.max(b.half))
+            if isinstance(a, TriBody):
+                _grade_mesh(a, surfaces[ia], Tb, tol)
+            elif isinstance(a, Body):
+                _grade_cuboid(a, Tb, tol)
+
+
+def _grade_mesh(a, Ta, Tb, tol):
+    """Lines in a's face planes where b's coplanar faces end: the edges of
+    b's triangles in that plane that only one of them has."""
+    normals = np.cross(Ta[:, 1] - Ta[:, 0], Ta[:, 2] - Ta[:, 0])
+    normals /= np.linalg.norm(normals, axis=1)[:, None]
+    seen = set()
+    for point, normal in zip(Ta[:, 0], normals, strict=True):
+        key = (tuple(np.round(normal, 6) + 0.0), round(float(point @ normal) / tol))
+        if key in seen:
+            continue
+        seen.add(key)
+        flat = Tb[_in_plane(Tb, point, normal, tol)]
+        mine = Ta[_in_plane(Ta, point, normal, tol)].reshape(-1, 3)
+        if len(flat):  # only where b's faces overlap a's in that plane
+            lo, hi = mine.min(0) - tol, mine.max(0) + tol
+            flat = flat[(flat.min(1) <= hi).all(1) & (flat.max(1) >= lo).all(1)]
+        if not flat.size:
+            continue
+        edges = {}
+        for tri in np.round(flat / tol).astype(np.int64):
+            for u, v in ((0, 1), (1, 2), (2, 0)):
+                k = tuple(sorted((tuple(tri[u]), tuple(tri[v]))))
+                edges[k] = edges.get(k, 0) + 1
+        for (p, q), count in edges.items():
+            if count != 1:
+                continue
+            p, q = np.array(p) * tol, np.array(q) * tol
+            t = q - p
+            if np.linalg.norm(t) == 0:
+                continue
+            # into a's frame
+            a.contacts.append(
+                ((p - a.position) @ a.R, (t / np.linalg.norm(t)) @ a.R, normal @ a.R)
+            )
+
+
+def _grade_cuboid(a, Tb, tol):
+    """Lines on the cuboid a's faces at the extent of b's triangles lying in
+    them, along each in-plane axis."""
+    T = ((Tb.reshape(-1, 3) - a.position) @ a.R).reshape(Tb.shape)  # a's frame
+    for k in range(3):
+        for f, side in ((2 * k, 1.0), (2 * k + 1, -1.0)):
+            normal = np.zeros(3)
+            normal[k] = side
+            flat = T[_in_plane(T, a.half[k] * normal, normal, tol)]
+            inside = np.delete(np.arange(3), k)  # the face's own axes
+            if len(flat):  # only where they overlap the face
+                flat = flat[
+                    (flat[..., inside].min(1) <= a.half[inside] + tol).all(1)
+                    & (flat[..., inside].max(1) >= -a.half[inside] - tol).all(1)
+                ]
+            if not flat.size:
+                continue
+            lo, hi = flat.reshape(-1, 3).min(0), flat.reshape(-1, 3).max(0)
+            for axis in range(3):
+                if axis != k:
+                    a.lines[f][axis] = sorted(
+                        set(a.lines[f][axis]) | {lo[axis], hi[axis]}
+                    )

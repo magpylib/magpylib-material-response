@@ -27,7 +27,10 @@ from magpylib_material_response.face_charge._bodies import (
 )
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.face_charge._triangle import frames
-from magpylib_material_response.face_charge._tribody import TriBody
+from magpylib_material_response.face_charge._tribody import (
+    TriBody,
+    add_triangle_contact_lines,
+)
 from magpylib_material_response.utils import timelog
 
 MARK = 0.5  # a refinement round splits panels above this share of the largest jump
@@ -54,8 +57,7 @@ def apply_face_charge(
     collection : magpylib.Collection
         The model. Cuboids, triangle meshes (``TriangularMesh``, a CAD
         export) and tetrahedra with a nonzero susceptibility are solved; every
-        other source acts on them as it is. A triangle mesh must be closed; it
-        couples to other solved parts at a distance, not touching.
+        other source acts on them as it is. A triangle mesh must be closed.
     level : int, default 3
         Mesh level: the panels in each graded layer toward a face's edges. A
         triangle mesh is graded toward its sharp edges, over half its
@@ -100,8 +102,7 @@ def apply_face_charge(
     NotImplementedError
         For another shape, such as a cylinder (export it as a triangle mesh),
         an anisotropic susceptibility (it brings back charge inside the body:
-        mesh it and use ``apply_demag``), objects moving along paths, and a
-        solved part touching a triangle mesh.
+        mesh it and use ``apply_demag``), and objects moving along paths.
     """
     if not isinstance(collection, magpy.Collection):
         msg = f"apply_face_charge takes a magpylib Collection; got {type(collection).__name__}."
@@ -127,7 +128,6 @@ def apply_face_charge(
                 solved, get_H_ext(*(obj for obj, _ in solved)), strict=True
             )
         ]
-        _refuse_triangle_contacts(bodies, solved)
         outlines = [
             Outline(
                 np.asarray(src.dimension, float) / 2,
@@ -138,6 +138,7 @@ def apply_face_charge(
             if isinstance(src, magpy.magnet.Cuboid)
         ]
         add_contact_lines(bodies, outlines)
+        add_triangle_contact_lines(bodies, outlines)
         boxes = [_box(src) for src in fixed if isinstance(src, BaseMagnet)]
         _warn_unaligned(bodies, solved, boxes, fixed)
         for body in bodies:
@@ -387,26 +388,6 @@ def _touch(first, second, scale):
     return _vertices_on(first, second, tol) or _vertices_on(second, first, tol)
 
 
-def _refuse_triangle_contacts(bodies, solved):
-    """Face charge couples a triangle-mesh part to the other solved parts by
-    quadrature, which holds at a distance; touching, their shared faces would
-    need the exact coplanar coupling the cuboids have."""
-    surfaces = [_global_triangles(b) for b in bodies]
-    for i, a in enumerate(bodies):
-        for j in range(i + 1, len(bodies)):
-            if not (isinstance(a, TriBody) or isinstance(bodies[j], TriBody)):
-                continue
-            scale = max(np.max(a.half), np.max(bodies[j].half))
-            if _touch(surfaces[i], surfaces[j], scale):
-                msg = (
-                    f"{solved[i][0]} and {solved[j][0]} touch, and one is a triangle "
-                    "mesh: face charge couples triangle meshes to other solved parts "
-                    "only at a distance. Join them into one mesh, or mesh them for "
-                    "apply_demag."
-                )
-                raise NotImplementedError(msg)
-
-
 def _sheet_of(body, c):
     """The ChargeSheet of a solved body."""
     if isinstance(body, Body):
@@ -459,14 +440,18 @@ def _warn_unaligned(bodies, solved, boxes, fixed):
     magnets = [src for src in fixed if isinstance(src, BaseMagnet)]
     for body, (obj, _) in zip(bodies, solved, strict=True):
         if isinstance(body, TriBody):
+            # a cuboid's footprint is graded toward; another shape's is not
             surface = _global_triangles(body)
             for src in magnets:
-                if _touch(surface, _global_triangles(src), np.max(body.half)):
+                if not isinstance(src, magpy.magnet.Cuboid) and _touch(
+                    surface, _global_triangles(src), np.max(body.half)
+                ):
                     warnings.warn(
-                        f"{src} touches {obj}, a triangle mesh face charge solves: "
-                        "its triangles are not graded toward the magnet's footprint, "
-                        "where its field jumps. Expect errors of a few percent near "
-                        "it, falling slowly with level; fem_solve checks it.",
+                        f"{src} touches {obj}, a triangle mesh face charge solves, "
+                        "and is not a cuboid: its triangles are not graded toward "
+                        "the magnet's footprint, where its field jumps. Expect "
+                        "errors of a few percent near it, falling slowly with "
+                        "level; fem_solve checks it.",
                         stacklevel=3,
                     )
             continue

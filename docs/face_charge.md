@@ -98,18 +98,23 @@ solved = apply_face_charge(magpy.Collection(part, coil), level=2)
 - **Cuboids stay cuboids:** a box given as triangles needs twice the unknowns of
   its rectangle panels for the same accuracy, and the U-core as three cuboids
   reaches its accuracy 3 to 4 times faster than as one mesh. Give a part as
-  cuboids where it is made of them: on the validation cases both can solve,
-  rectangle panels reach 1 % 1.1 to 6 times faster, and the rest the triangles
-  cannot take, as their parts touch or a thin sheet needs too many triangles.
+  cuboids where it is made of them: on the eight validation cases both solve,
+  rectangle panels reach 1 % 1.1 to 14 times faster, and a thin sheet needs too
+  many triangles to solve at all.
 
-![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 70 ms to 2.2 s on nine cases, triangles 107 to 629 ms on the five they can take (the U-core as one mesh), refused where parts of different susceptibility touch or a thin sheet needs too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
+![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 70 ms to 2.2 s on nine cases, triangles 107 ms to 4.4 s on eight, the thin sheet refused as too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
 
-- **Limits:** the mesh must be closed. A triangle mesh couples to other solved
-  parts at a distance; a solved part touching it is refused (join the two into
-  one mesh), and a magnet touching it warns, as its triangles are not graded
-  toward the magnet's footprint. `refine` splits cuboid panels only. A curved
-  face exported as many narrow facets keeps a charge per facet, so a fine export
-  costs unknowns.
+- **Touching parts:** faces of two parts in one plane couple exactly, whatever
+  their panels, and a triangle mesh is graded toward the outline of whatever
+  touches it, a turned footprint included. A cube given as triangles with a soft
+  cuboid against one of its faces matches two cuboids to 4e-5 at level 4. Turned
+  against each other, two cuboids converge erratically, as rectangle panels can
+  only follow their own axes; with one of them as a triangle mesh the solve
+  converges steadily. A magnet that is not a cuboid touching a triangle mesh
+  warns, as its footprint is not graded toward.
+- **Limits:** the mesh must be closed. `refine` splits cuboid panels only. A
+  curved face exported as many narrow facets keeps a charge per facet, so a fine
+  export costs unknowns.
 
 ## Against finite elements
 

@@ -25,6 +25,10 @@ import numpy as np
 import scipy.linalg
 import scipy.sparse
 
+from magpylib_material_response.face_charge._contact import contact_block
+from magpylib_material_response.face_charge._contact import (
+    polygon_rule as _polygon_rule,
+)
 from magpylib_material_response.face_charge._panels import (
     Galerkin,
     Panels,
@@ -149,9 +153,30 @@ class Body(Part):
         )
         return self.to_global(pts.reshape(-1, 3)), weights
 
-    def test_flux(self, y):
+    def panel_polygons(self):
+        """Each panel's corners (N, 4, 3) and outward normal (N, 3), global."""
+        corners = self.panels.corners()
+        return (
+            self.to_global(corners.reshape(-1, 3)).reshape(corners.shape),
+            self.panels.normal @ self.R.T,
+        )
+
+    def basis_global(self, idx, X):
+        """``(1, s, t)`` of panel ``idx`` at global points ``X`` (k, 3)."""
+        p = self.panels
+        x = (np.asarray(X) - self.position) @ self.R
+        s = (x[:, p.i[idx]] - 0.5 * (p.p1[idx] + p.p2[idx])) / (
+            0.5 * (p.p2[idx] - p.p1[idx])
+        )
+        t = (x[:, p.j[idx]] - 0.5 * (p.q1[idx] + p.q2[idx])) / (
+            0.5 * (p.q2[idx] - p.q1[idx])
+        )
+        return np.stack([np.ones(len(x)), s, t], 1)
+
+    def test_flux(self, y, tol=0.0):
         """(n_dofs, P): the flux of a unit charge at each point ``y`` (this
-        body's frame) through each test function."""
+        body's frame) through each test function; none from points within
+        ``tol`` of a panel's plane, where a contact takes over."""
         p = self.panels
         out = np.zeros((p.N, 3, len(y)))
         step = max(1, CHUNK // max(len(y), 1))
@@ -169,6 +194,7 @@ class Body(Part):
                     p.q1[tc][:, None],
                     p.q2[tc][:, None],
                 )  # (3 test densities, tc, P)
+                w3[:, :, np.abs(y[:, k] - p.w0[ta[0]]) < tol] = 0.0
                 out[tc] = -sign * w3.transpose(1, 0, 2)
         return out.reshape(self.n_dofs, len(y))
 
@@ -278,21 +304,6 @@ def _clip(poly, x0, x1, y0, y1):
     return poly
 
 
-def _polygon_rule(poly):
-    """Points and weights exact for quadratics over a convex polygon: the edge
-    midpoints of a triangle fan, a third of each triangle's area each."""
-    pts, wts = [], []
-    p0 = np.array(poly[0])
-    for p1, p2 in itertools.pairwise(np.array(poly[1:])):
-        area = 0.5 * abs(
-            (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1])
-        )
-        if area:
-            pts += [(p0 + p1) / 2, (p1 + p2) / 2, (p2 + p0) / 2]
-            wts += [area / 3] * 3
-    return np.array(pts).reshape(-1, 2), np.array(wts)
-
-
 def cross_block(a, b, tol=CONTACT):
     """``G_ab`` (a.n_dofs x b.n_dofs): the flux of b's charge through a's test
     functions."""
@@ -380,17 +391,19 @@ def _add_contact(G, pa, pb, ta, j, corners, plane, Rab, cb):
 
 
 def coupling_block(a, b):
-    """``G_ab``: the flux of b's charge through a's test functions. Exact
-    between two cuboids, contacts included; by b's quadrature otherwise, which
-    holds for bodies apart by about their panels' size or more."""
+    """``G_ab``: the flux of b's charge through a's test functions. Between
+    two cuboids by their own exact scheme; otherwise by b's quadrature, which
+    holds for bodies apart by about their panels' size or more, and where
+    faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):
         return cross_block(a, b)
+    tol = CONTACT * max(np.max(a.half), np.max(b.half))
     points, weights = b.sources()
     y = (points - a.position) @ a.R  # b's points in a's frame
-    G = np.zeros((a.n_dofs, b.n_dofs))
+    G = contact_block(a, b, tol)
     step = max(1, CHUNK // max(a.n_dofs, 1) // 8)
     for p0 in range(0, len(y), step):
-        flux = a.test_flux(y[p0 : p0 + step])  # (a.n_dofs, chunk)
+        flux = a.test_flux(y[p0 : p0 + step], tol)  # (a.n_dofs, chunk)
         G += (weights[p0 : p0 + step].T @ flux.T).T
     return G
 
