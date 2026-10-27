@@ -9,6 +9,7 @@ from scipy.spatial import ConvexHull
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge._bodies import solve_system
 from magpylib_material_response.face_charge._mesh import graded_triangles
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import field as triangle_field
@@ -17,6 +18,7 @@ from magpylib_material_response.face_charge._triangle import (
     normal_field,
     normal_field_far,
 )
+from magpylib_material_response.face_charge._tribody import TriBody
 
 TRIANGLE = np.array([[0.0, 0.0, 0.0], [0.004, 0.001, 0.0], [0.001, 0.003, 0.0005]])
 NORMAL = np.cross(TRIANGLE[1] - TRIANGLE[0], TRIANGLE[2] - TRIANGLE[0])
@@ -128,6 +130,22 @@ def test_graded_triangles_cover_the_mesh_toward_its_edges():
     )
     with pytest.raises(ValueError, match="closed mesh"):
         graded_triangles(V, F[:-1], ell=0.005, m=2, g=2.5)
+
+
+def test_cube_as_triangles_converges_as_the_cuboid():
+    """A cube given as 12 triangles, chi -> inf: the polarizability converges
+    onto Helsing & Perfekt's 3.644305 as the cuboid solver's does."""
+    V, F = _cube_as_triangles(half=1.0)
+    errors = []
+    for m in (2, 3):
+        body = TriBody(V, F, (0, 0, 0), np.eye(3), chi=1e12, applied=(0, 0, 1.0), m=m)
+        body.mesh()
+        (c,) = solve_system([body], np.zeros_like)
+        P, W, B = body.quad()
+        q = np.einsum("fqa,fa->fq", B, c.reshape(-1, 3))
+        errors.append(np.einsum("fq,fq,fq->", W, q, P[..., 2]) / 8 / 3.644305 - 1)
+    assert -3.5e-3 < errors[0] < errors[1] < 0
+    assert abs(errors[1]) < 1.1e-3
 
 
 def test_copies_keep_their_own_charge():

@@ -23,6 +23,7 @@ from typing import NamedTuple
 import magpylib as magpy
 import numpy as np
 import scipy.linalg
+import scipy.sparse
 
 from magpylib_material_response.face_charge._panels import (
     Galerkin,
@@ -40,21 +41,31 @@ CHUNK = 2_000_000  # kernel evaluations per call, about 0.5 GB
 CONTACT = 1e-6
 
 
-class Body:
-    """A cuboid with susceptibility ``chi`` and remanence ``J0`` (T, in its own
-    frame like magpylib's polarization), at ``position``, turned by the rotation
-    matrix ``R`` (body frame to global), in a uniform applied field ``applied``
-    (A/m, global), at mesh level ``m``."""
+class Part:
+    """What every solved part has: susceptibility ``chi`` and remanence ``J0``
+    (T, in its own frame like magpylib's polarization), at ``position``, turned
+    by the rotation matrix ``R`` (its frame to global), in a uniform applied
+    field ``applied`` (A/m, global), meshed at level ``m``."""
 
-    def __init__(self, dimension, position, R, chi, J0=None, applied=None, m=3):
-        self.dimension = np.asarray(dimension, float)
-        self.half = self.dimension / 2
+    def __init__(self, position, R, chi, J0=None, applied=None, m=3):
         self.position = np.asarray(position, float)
         self.R = np.asarray(R, float)
         self.chi = float(chi)
         self.J0 = None if J0 is None else np.asarray(J0, float)
         self.applied = np.zeros(3) if applied is None else np.asarray(applied, float)
         self.m = m
+
+    def to_global(self, x):
+        return np.asarray(x) @ self.R.T + self.position
+
+
+class Body(Part):
+    """A cuboid of ``dimension``; the rest as for :class:`Part`."""
+
+    def __init__(self, dimension, position, R, chi, J0=None, applied=None, m=3):
+        super().__init__(position, R, chi, J0, applied, m)
+        self.dimension = np.asarray(dimension, float)
+        self.half = self.dimension / 2
         # interior lines to grade toward, per face and axis: a footprint
         self.lines = [[[], [], []] for _ in range(6)]
         self.extra = [[], [], []]  # edges added as they are, per axis: bisections
@@ -100,8 +111,66 @@ class Body:
     def n_dofs(self):
         return self.galerkin.n_dofs
 
-    def to_global(self, x):
-        return np.asarray(x) @ self.R.T + self.position
+    # what solve_system asks of a body, which a TriBody answers too
+    def add_mass(self, block, factor):
+        """``factor`` times the mass, diagonal on rectangles, into ``block``."""
+        idx = np.arange(self.n_dofs)
+        block[idx, idx] += factor * self.galerkin.mass
+
+    def border(self):
+        """The net charge of each unknown: the area under its constant density."""
+        e = np.zeros(self.n_dofs)
+        e[0::3] = self.panels.area
+        return e
+
+    def load(self, field):
+        return self.galerkin.load(field, fine=self.fine)
+
+    def load_remanence(self):
+        """The load of the remanence's ``M0.n``, constant on each panel."""
+        return self.galerkin.load_constant(self.panels.normal @ (self.J0 / magpy.mu_0))
+
+    def centres_and_sizes(self):
+        """Each panel's centre, global, and its diagonal."""
+        g = self.galerkin
+        return self.to_global(self.panels.center), 2 * np.hypot(g.hp, g.hq)
+
+    def sources(self):
+        """Global Gauss points (P, 3), and the sparse map (P x n_dofs) from the
+        unknowns to the charge each point carries."""
+        pts, wts, S, T = self.galerkin.gauss_points(self.galerkin.nq)
+        n_gauss, N = wts.shape
+        phi = np.stack([np.ones(n_gauss), S, T], 1)
+        values = wts[..., None] * phi[:, None, :]  # (gauss, panel, density)
+        rows = np.repeat(np.arange(n_gauss * N), 3)
+        cols = (3 * np.tile(np.arange(N), n_gauss)[:, None] + np.arange(3)).ravel()
+        weights = scipy.sparse.csr_matrix(
+            (values.ravel(), (rows, cols)), shape=(n_gauss * N, self.n_dofs)
+        )
+        return self.to_global(pts.reshape(-1, 3)), weights
+
+    def test_flux(self, y):
+        """(n_dofs, P): the flux of a unit charge at each point ``y`` (this
+        body's frame) through each test function."""
+        p = self.panels
+        out = np.zeros((p.N, 3, len(y)))
+        step = max(1, CHUNK // max(len(y), 1))
+        for fa in range(6):
+            ta = np.flatnonzero(p.face == fa)
+            k, i, j, sign = p.k[ta[0]], p.i[ta[0]], p.j[ta[0]], p.sign[ta[0]]
+            for c0 in range(0, len(ta), step):
+                tc = ta[c0 : c0 + step]
+                w3 = rectangle_field(
+                    y[None, :, i],
+                    y[None, :, j],
+                    y[None, :, k] - p.w0[ta[0]],
+                    p.p1[tc][:, None],
+                    p.p2[tc][:, None],
+                    p.q1[tc][:, None],
+                    p.q2[tc][:, None],
+                )  # (3 test densities, tc, P)
+                out[tc] = -sign * w3.transpose(1, 0, 2)
+        return out.reshape(self.n_dofs, len(y))
 
 
 def _merge(x, h):
@@ -121,10 +190,8 @@ def near_panels(body, boxes, reach=1.0):
     """The panels of `body` within ``reach`` of their own size of any box
     ``(centre, half, R, position)``: a magnet's box in its frame, its rotation
     and its place. Their load needs a finer rule."""
-    p, g = body.panels, body.galerkin
-    centres = body.to_global(p.center)
-    size = 2 * np.hypot(g.hp, g.hq)
-    near = np.zeros(p.N, bool)
+    centres, size = body.centres_and_sizes()
+    near = np.zeros(len(size), bool)
     for centre, half, R, position in boxes:
         local = (centres - position) @ R - centre
         gap = np.linalg.norm(np.maximum(np.abs(local) - half, 0), axis=1)
@@ -309,6 +376,22 @@ def _add_contact(G, pa, pb, ta, j, corners, plane, Rab, cb):
         G[i, :, j, :] += -0.5 * np.einsum("ap,bp,p->ab", psi, phi, w)
 
 
+def coupling_block(a, b):
+    """``G_ab``: the flux of b's charge through a's test functions. Exact
+    between two cuboids, contacts included; by b's quadrature otherwise, which
+    holds for bodies apart by about their panels' size or more."""
+    if isinstance(a, Body) and isinstance(b, Body):
+        return cross_block(a, b)
+    points, weights = b.sources()
+    y = (points - a.position) @ a.R  # b's points in a's frame
+    G = np.zeros((a.n_dofs, b.n_dofs))
+    step = max(1, CHUNK // max(a.n_dofs, 1) // 8)
+    for p0 in range(0, len(y), step):
+        flux = a.test_flux(y[p0 : p0 + step])  # (a.n_dofs, chunk)
+        G += (weights[p0 : p0 + step].T @ flux.T).T
+    return G
+
+
 def solve_system(bodies, external):
     """Solve the coupled bodies.
 
@@ -329,24 +412,21 @@ def solve_system(bodies, external):
         a.assemble()
         np.negative(a.G, out=A[rows, rows])
         a.G = None
-        idx = np.arange(offsets[ia], offsets[ia + 1])
-        A[idx, idx] += (1 / a.chi + 0.5) * a.galerkin.mass
-        border = np.zeros(a.n_dofs)
-        border[0::3] = a.panels.area
+        a.add_mass(A[rows, rows], 1 / a.chi + 0.5)
+        border = a.border()
         A[rows, n + ia] = border
-        A[n + ia, rows] = border / a.panels.area.sum()
+        A[n + ia, rows] = border / border.sum()
 
         def field(x, a=a):
             return (external(a.to_global(x)) + a.applied) @ a.R
 
-        rhs[rows] += a.galerkin.load(field, fine=a.fine)
+        rhs[rows] += a.load(field)
         if a.J0 is not None:
-            remanence = a.panels.normal @ (a.J0 / magpy.mu_0)
-            rhs[rows] += a.galerkin.load_constant(remanence) / a.chi
+            rhs[rows] += a.load_remanence() / a.chi
         for ib, b in enumerate(bodies):
             if ib != ia:
                 np.negative(
-                    cross_block(a, b), out=A[rows, offsets[ib] : offsets[ib + 1]]
+                    coupling_block(a, b), out=A[rows, offsets[ib] : offsets[ib + 1]]
                 )
     # in place: factorizing a copy of this dense system peaked at three times
     # its size
