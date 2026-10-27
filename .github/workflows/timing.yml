@@ -1,0 +1,78 @@
+name: Timing
+
+# The PR check's cases solved by the base branch's package and by this PR's, in
+# alternating rounds on one runner, posted as a comment on the PR. For
+# information only: a time blocks nothing until the spread between rounds is
+# known.
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  timing:
+    name: Time against the base branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # the comment
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: head
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Install both, without the extras
+        run: |
+          uv venv --python 3.14 head-env
+          uv venv --python 3.14 base-env
+          uv pip install --python head-env/bin/python ./head
+          uv pip install --python base-env/bin/python ./base
+
+      - name: Three rounds each, alternating
+        working-directory: head
+        run: |
+          for round in 1 2 3; do
+            ../base-env/bin/python -m validation.timing record "../timing/base-$round.json" \
+              || echo "The base could not solve this PR's cases."
+            ../head-env/bin/python -m validation.timing record "../timing/head-$round.json"
+          done
+          ../head-env/bin/python -m validation.timing compare ../timing > ../timing.md
+          cat ../timing.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on the PR
+        # a fork's token cannot comment; the job summary has the table
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          # its own comment, by the marker validation/timing.py writes first
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]")
+              | select(.body | startswith("<!-- validation timing -->")) | .id' | tail -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@timing.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file timing.md
+          fi

@@ -15,6 +15,12 @@ Executable examples, in suggested reading order:
 - [Mesh convergence](mesh_convergence.md) — how fine a mesh must be, and the
   error of the finest, with `mesh_study` on a flux concentrator, a Halbach array
   on back iron and a steel shield.
+- [Checking a result with finite elements](fem_check.md) — `fem_study` and
+  `compare` against `mesh_study` on a magnet beside a soft cube: where the two
+  methods disagree, and whose error bar is too short.
+- [A magnet in a steel tube](shield_tube.md) — a tube meshed into cylinder
+  segments: inside it the method of moments converges, behind the shield it
+  takes finite elements.
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
   `TriangularMesh` magnet with TetGen, checked against the exact solution for a
   magnetized sphere.
@@ -28,5 +34,7 @@ soft_magnets
 ucore_electromagnet
 solver_performance
 mesh_convergence
+fem_check
+shield_tube
 tetrahedral_meshes
 ```

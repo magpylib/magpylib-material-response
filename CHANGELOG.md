@@ -23,14 +23,20 @@ and this project adheres to
   place of exports from a commercial code that no one could rerun. `compare`
   puts a `mesh_study` and a `fem_study` side by side, per observer: both values,
   both error bars, and whether they agree. In the repository, `validation/`
-  holds 18 cases, 15 with a stored reference; every PR checks the method of
-  moments against them, and both methods are timed to a given accuracy. It found
-  a mesh NGSolve could not assemble, which `fem_solve` now makes again at
-  another grading
+  holds 19 cases, 16 with a stored reference; every PR checks the method of
+  moments against them and is timed against its base branch in a comment, and
+  every night all methods climb their settings against references made again,
+  their records kept on a `benchmarks` branch, and must beat magpylib alone, the
+  model without its material response. It found a mesh NGSolve could not
+  assemble, which `fem_solve` now makes again at another grading. Two docs
+  pages: checking a result with finite elements, and a magnet in a steel tube,
+  where the method of moments converges inside but behind the shield needs far
+  more cells
   ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
   [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
-  [#99](https://github.com/magpylib/magpylib-material-response/pull/99)).
+  [#99](https://github.com/magpylib/magpylib-material-response/pull/99),
+  [#101](https://github.com/magpylib/magpylib-material-response/pull/101)).
 
 ### Changed
 

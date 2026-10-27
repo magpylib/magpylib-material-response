@@ -2,6 +2,7 @@
 
     python -m validation.run                        # every case and method
     python -m validation.run --cases plate --methods MoM --settings 1 2
+    python -m validation.run --having Cylinder CylinderSegment   # curved cells
     python -m validation.run --pr                   # the settings of pr_check.json
     python -m validation.run --pr --write           # store their results there
     python -m validation.run --out records.jsonl    # append one record per solve
@@ -14,6 +15,7 @@ method's ``growth``.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import platform
 import sys
@@ -25,7 +27,7 @@ import numpy as np
 import magpylib_material_response
 
 from . import references
-from .cases import CASES
+from .cases import CASES, select
 from .methods import METHODS, TooLarge
 
 PR_CHECK = Path(__file__).parent / "pr_check.json"
@@ -66,10 +68,20 @@ def run(case, method, setting):
             "magpylib_material_response": magpylib_material_response.__version__,
             "magpylib": magpy.__version__,
             "numpy": np.__version__,
+            "scipy": _version("scipy"),
+            "ngsolve": _version("ngsolve"),
             "python": platform.python_version(),
             "machine": f"{platform.system()} {platform.machine()}",
         },
     }
+
+
+def _version(package):
+    """The installed version of `package`, or None."""
+    try:
+        return importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def refusal(case, method):
@@ -105,7 +117,7 @@ def _row(record):
         worst = max(limits, key=limits.get)
         error = "< " + _percent(limits[worst])
     return (
-        f"{record['case']:<20} {record['method']:<4} {record['setting']!s:>3} "
+        f"{record['case']:<20} {record['method']:<8} {record['setting']!s:>3} "
         f"{error:>11}  {worst:<20} {sum(seconds.values()):>8.2f} s "
         f"({seconds['prepare']:.2f} / {seconds['solve']:.2f} / "
         f"{seconds['getB']:.3f})  {record['counts']['unknowns']:>8}{note}"
@@ -114,7 +126,8 @@ def _row(record):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--cases", nargs="+", default=list(CASES))
+    parser.add_argument("--cases", nargs="+", default=[])
+    parser.add_argument("--having", nargs="+", default=[])
     parser.add_argument("--methods", nargs="+", default=list(METHODS))
     parser.add_argument("--settings", nargs="+", type=int)
     parser.add_argument("--pr", action="store_true")
@@ -131,7 +144,8 @@ def main(argv=None):
             for m, entry in by_method.items()
         ]
     else:
-        for case in (CASES[c] for c in args.cases):
+        cases = select(args.cases, args.having)
+        for case in cases:
             if case.waits:
                 print(f"{case.name}: waits for {case.waits}")
             for method in (METHODS[m] for m in args.methods):
@@ -140,26 +154,26 @@ def main(argv=None):
                     said = "NOT REFUSED" if error is None else f"refused: {error}"
                     print(f"{case.name}, {method.name}: {said}"[:120])
         plan = [
-            (CASES[c], METHODS[m], args.settings or METHODS[m].settings)
-            for c in args.cases
+            (case, METHODS[m], args.settings or METHODS[m].settings_for(case))
+            for case in cases
             for m in args.methods
-            if METHODS[m].can_solve(CASES[c]) and not CASES[c].refused
+            if METHODS[m].can_solve(case) and not case.refused
         ]
     print(
-        f"{'case':<20} {'':<4} {'set':>3} {'error':>11}  {'worst group':<20} "
+        f"{'case':<20} {'':<8} {'set':>3} {'error':>11}  {'worst group':<20} "
         f"{'time':>10} (prepare / solve / getB)  unknowns"
     )
     records = []
     for case, method, settings in plan:
         if not references.path(case).exists():
-            print(f"{case.name:<20} {method.name:<4}     no reference yet")
+            print(f"{case.name:<20} {method.name:<8}     no reference yet")
             continue
         for setting in settings:
             try:
                 record = run(case, method, setting)
             except TooLarge as error:
                 print(
-                    f"{case.name:<20} {method.name:<4} {setting!s:>3} too large: {error}"[
+                    f"{case.name:<20} {method.name:<8} {setting!s:>3} too large: {error}"[
                         :120
                     ]
                 )

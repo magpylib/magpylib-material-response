@@ -324,6 +324,33 @@ def _thin_ring():
     return magpy.Collection(tube, magnet), groups
 
 
+def _shield_tube():
+    """A magnet (25 mm across, 10 mm tall, 1.22 T, chi = 0.05) on the axis of
+    an open steel tube (radius 22.5 to 25 mm, 130 mm long, chi = 100) that
+    reaches 15 mm past it on one side: #36's model, by @AadityaPrabhu. Sensors
+    on #36's line between the magnet and the wall, on the axis beyond the
+    magnet, and outside the tube beside it."""
+    magnet = magpy.magnet.Cylinder(
+        polarization=(0, 0, 1.22),
+        dimension=(25 * MM, 10 * MM),
+        style_label="magnet, 1.22 T",
+    )
+    magnet.susceptibility = 0.05
+    tube = magpy.magnet.CylinderSegment(
+        polarization=(0, 0, 0),
+        dimension=(22.5 * MM, 25 * MM, 130 * MM, 0, 360),
+        position=(0, 0, 50 * MM),
+        style_label="tube, χ = 100",
+    )
+    tube.susceptibility = 100
+    groups = {
+        "between magnet and wall": _line((-18.45, 0, 0), (-18.45, 0, 100), 21),
+        "on the axis": _line((0, 0, 10), (0, 0, 100), 10),
+        "outside the tube": _line((30, 0, 0), (60, 0, 0), 7),
+    }
+    return magpy.Collection(magnet, tube), groups
+
+
 def _cad_plate(n_fillet=6, n_hole=24):
     """Vertices and faces of a 20 x 12 x 4 mm plate with 3 mm fillets on its
     vertical edges and a 3 mm hole 3 mm off centre, exported as a CAD tool does:
@@ -499,6 +526,14 @@ CASES = {
             _thin_ring,
             known_failures={"MoM": ISSUES + "92"},
         ),
+        # order 4 takes 1.9 million unknowns and 8.4 GB
+        Case(
+            "shield_tube",
+            "Magnet in a steel tube (#36)",
+            "typical",
+            _shield_tube,
+            reference_orders=(2, 3, 4),
+        ),
         # order 5 on its mesh would need about 11 GB
         Case(
             "cad_part",
@@ -552,3 +587,38 @@ CASES = {
         Case("path", "A magnet on a path", "edge", _magnet_on_path, refused="path"),
     )
 }
+
+
+def having(case, feature):
+    """Whether `case` has `feature`, ignoring case: an object of that class in
+    its model, such as ``CylinderSegment`` or ``Polyline``, or that value among
+    its options, such as ``newell``."""
+    feature = feature.lower()
+    collection, _ = case.model()
+    if any(type(obj).__name__.lower() == feature for obj in collection.sources_all):
+        return True
+    return any(
+        str(value).lower() == feature
+        for options in case.options.values()
+        for value in options.values()
+    )
+
+
+def select(names=(), features=()):
+    """The cases named, or all, keeping those with any of `features` if given.
+
+    Raises
+    ------
+    ValueError
+        If no case is left: a misspelled feature selects nothing.
+    """
+    chosen = [CASES[name] for name in names] if names else list(CASES.values())
+    if features:
+        chosen = [c for c in chosen if any(having(c, f) for f in features)]
+    if not chosen:
+        msg = (
+            f"No case has {', '.join(features)}: a feature is a class in a model, "
+            "such as CylinderSegment or Polyline, or an option value, such as newell."
+        )
+        raise ValueError(msg)
+    return chosen
