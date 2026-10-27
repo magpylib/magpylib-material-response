@@ -40,9 +40,10 @@ parts solved together share it, so their colours compare.
 
 ## When it fits
 
-- **What it solves:** cuboids, alone or touching, placed and turned freely, each
-  with a uniform isotropic susceptibility and a uniform remanence, driven by any
-  other magpylib sources and by the applied field `H_ext`.
+- **What it solves:** cuboids, alone or touching, placed and turned freely, and
+  closed triangle meshes such as CAD exports (below), each with a uniform
+  isotropic susceptibility and a uniform remanence, driven by any other magpylib
+  sources and by the applied field `H_ext`.
 - **How well:** on the six documented examples it lands within each reference's
   own uncertainty, 0.64 % at worst, where `apply_demag` at the documented
   settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
@@ -64,10 +65,44 @@ parts solved together share it, so their colours compare.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, and `getJ` gives 0. For B inside a part, such as
   the flux in a yoke, mesh it and use `apply_demag`.
-- **What it leaves to `apply_demag`:** other shapes, saturation, an anisotropic
-  susceptibility and one varying inside a part, all of which bring back charge
-  inside the part, and objects moving along paths. `apply_face_charge` raises
-  for these.
+- **What it leaves to `apply_demag`:** other shapes (a cylinder or a sphere can
+  be exported as a triangle mesh), saturation, an anisotropic susceptibility and
+  one varying inside a part, all of which bring back charge inside the part, and
+  objects moving along paths. `apply_face_charge` raises for these.
+
+## Triangle meshes and CAD exports
+
+A part exported from CAD as a closed triangle mesh, a magpylib `TriangularMesh`,
+is solved on its surface triangles, with no tetrahedra, as is a `Tetrahedron`.
+Each triangle carries a charge linear across it, and the mesh is graded toward
+its sharp edges, where neighbouring triangles turn by more than 20°: layers over
+half the part's thickness, the smallest side of its bounding box, as the cuboid
+panels' layers. The flat faces are merged first, so that the export's long
+diagonals do not cross the layers.
+
+```python
+part = magpy.magnet.TriangularMesh.from_pyvista(
+    polydata=cad_surface,  # a closed pyvista surface, in metres
+    polarization=(0, 0, 0),
+)
+part.susceptibility = 1000
+solved = apply_face_charge(magpy.Collection(part, coil), level=2)
+```
+
+- **How well:** the validation's CAD part, a plate with filleted corners and a
+  round hole, reaches 0.69 % of its finite-element reference at level 1 in 2.7
+  s, 0.16 % at level 2 in 5.3 s, and the reference's own 0.07 % from level 3.
+  The U-core as one closed mesh is within its reference's 0.25 % from level 2.
+- **Cuboids stay cuboids:** a box given as triangles needs twice the unknowns of
+  its rectangle panels for the same accuracy, and the U-core as three cuboids
+  reaches its accuracy 3 to 4 times faster than as one mesh. Give a part as
+  cuboids where it is made of them.
+- **Limits:** the mesh must be closed. A triangle mesh couples to other solved
+  parts at a distance; a solved part touching it is refused (join the two into
+  one mesh), and a magnet touching it warns, as its triangles are not graded
+  toward the magnet's footprint. `refine` splits cuboid panels only. A curved
+  face exported as many narrow facets keeps a charge per facet, so a fine export
+  costs unknowns.
 
 ## Against finite elements
 

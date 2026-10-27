@@ -158,10 +158,11 @@ class FEM:
 
 
 class FaceCharge:
-    """Face charge, ``apply_face_charge``: the charge on the cuboids' faces, no
+    """Face charge, ``apply_face_charge``: the charge on the parts' faces, no
     volume mesh. A setting is the panel level, the panels in each graded layer
-    toward a face's edges. It solves cuboids with a uniform, isotropic
-    susceptibility, beside any other source, coils included."""
+    toward a face's edges. It solves cuboids and triangle meshes with a
+    uniform, isotropic susceptibility, beside any other source, coils
+    included."""
 
     name = "FaceCharge"
     settings = (1, 2, 3, 4, 5)
