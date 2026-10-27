@@ -12,9 +12,6 @@ name: Nightly validation
 # Such a run is reported against the baseline but never kept.
 
 on:
-  # TEMPORARY: one run on its PR's branch; removed before merging
-  push:
-    branches: [fem-plan]
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
