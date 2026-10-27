@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import magpylib as magpy
-from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
+from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
 from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.meshing import mesh_uniform
@@ -89,11 +89,7 @@ class FEM:
 
     @staticmethod
     def can_solve(case):
-        """No current sources yet (issue #82, milestone 2)."""
-        if case.waits is not None or importlib.util.find_spec("ngsolve") is None:
-            return False
-        collection, _ = case.model()
-        return not any(isinstance(s, BaseCurrent) for s in collection.sources_all)
+        return case.waits is None and importlib.util.find_spec("ngsolve") is not None
 
     @staticmethod
     def solve(collection, sensors, setting, **options):

@@ -13,9 +13,10 @@ near an edge, where raising the order hides it. A reference depends on the
 case, not on this package's code, so it stays valid until the case changes;
 checks compare against the file and need no NGSolve.
 
-A case FEM cannot solve yet may have a reference made elsewhere, with the
-components it gives and how it was made (``ucore.json``: Bz on the docs' line
-from the two-potential FEM of issue #76).
+A case may keep a reference made elsewhere, with the components it gives and
+how it was made, which this module never overwrites: ``ucore.json``, Bz on the
+docs' line from the two-potential FEM of issue #76 (scikit-fem), an independent
+check of fem's currents.
 """
 
 from __future__ import annotations
@@ -64,6 +65,12 @@ def make(case):
 
     if case.reference or case.refused or case.waits:
         msg = f"{case.name!r} has no reference of its own to make."
+        raise ValueError(msg)
+    if path(case).exists() and "made_by" in json.loads(path(case).read_text()):
+        msg = (
+            f"The reference of {case.name!r} was made elsewhere and is kept: "
+            "remove its file first to make one by fem."
+        )
         raise ValueError(msg)
     collection, groups = case.model()
     sensors = np.concatenate(list(groups.values()))
@@ -150,9 +157,7 @@ def main(names):
     ]
     for case in cases:
         if not FEM.can_solve(case):
-            msg = (
-                f"FEM cannot solve {case.name!r} yet; its reference is made elsewhere."
-            )
+            msg = f"FEM cannot solve {case.name!r} here: the fem extra is needed."
             raise ValueError(msg)
         data = make(case)
         errors = ", ".join(f"{g} {v['error']:.1e}" for g, v in data["groups"].items())
