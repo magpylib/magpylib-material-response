@@ -85,8 +85,8 @@ finite elements are `fem_solve` at orders 2 to 5:
 | Flux concentrator            |             0.11 s |     0.83 s |               0.36 s |        3.3 s |
 | Halbach array on back iron   |             0.27 s |      1.5 s |               0.27 s |        6.3 s |
 | Iron cube in 10 mT           |             0.11 s |     0.52 s |               0.27 s |        2.0 s |
-| Magnet on a soft plate       |             0.61 s |      3.1 s |                8.4 s |        5.0 s |
-| Magnet on a plate, sides off |             0.61 s |      2.8 s |                8.4 s |        2.8 s |
+| Magnet on a soft plate       |             0.32 s |      3.1 s |                3.4 s |        5.0 s |
+| Magnet on a plate, sides off |             0.32 s |      2.8 s |                3.4 s |        2.8 s |
 | Thin shielding sheet         |              2.2 s |      2.7 s |                7.6 s |         10 s |
 | Cuboids of many sizes        |               25 s |      8.3 s |                  – ² |          – ² |
 | 100 small cubes              |                – ³ |        – ² |                    – |            – |
@@ -97,9 +97,9 @@ are good to 0.2 % for the cuboids of many sizes and 1.5 % for the 100 cubes. ³
 28,800 unknowns.
 
 Face charge reaches 1 % faster than finite elements on nine of these cases, 5 to
-34 times faster on six. Finite elements catch up where fields close to a surface
-need fine panels (the plates at 0.1 %) and where many bodies form one large
-dense system.
+34 times faster on seven. Finite elements catch up where fields close to a
+surface need fine panels (the plate with its sides off, at 0.1 %) and where many
+bodies form one large dense system.
 
 ## How accurate a solve is
 

@@ -29,12 +29,12 @@
   "FaceCharge": {
    "setting": 2,
    "errors": {
-    "above the magnet": 6.483e-05,
-    "beside the magnet": 0.001108,
-    "under the plate": 0.005765,
-    "off the side": 0.006178
+    "above the magnet": 6.359e-05,
+    "beside the magnet": 0.001151,
+    "under the plate": 0.005484,
+    "off the side": 0.005464
    },
-   "unknowns": 1728
+   "unknowns": 1203
   }
  },
  "ucore": {
@@ -48,9 +48,9 @@
   "FaceCharge": {
    "setting": 2,
    "errors": {
-    "30 mm above the poles": 0.001945
+    "30 mm above the poles": 0.0009324
    },
-   "unknowns": 1536
+   "unknowns": 1320
   }
  },
  "soft_magnets": {
@@ -102,9 +102,9 @@
   "FaceCharge": {
    "setting": 2,
    "errors": {
-    "2 mm above the array": 9.751e-05
+    "2 mm above the array": 8.728e-05
    },
-   "unknowns": 2496
+   "unknowns": 2280
   }
  },
  "sheet": {
@@ -157,12 +157,12 @@
   "FaceCharge": {
    "setting": 2,
    "errors": {
-    "above the magnet": 4.407e-05,
-    "beside the magnet": 0.000882,
-    "under the plate": 0.004278,
-    "off the side": 0.006029
+    "above the magnet": 4.262e-05,
+    "beside the magnet": 0.0009231,
+    "under the plate": 0.004019,
+    "off the side": 0.005365
    },
-   "unknowns": 1728
+   "unknowns": 1203
   }
  },
  "anisotropic": {

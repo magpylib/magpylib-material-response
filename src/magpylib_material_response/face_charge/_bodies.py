@@ -55,7 +55,8 @@ class Body:
         self.J0 = None if J0 is None else np.asarray(J0, float)
         self.applied = np.zeros(3) if applied is None else np.asarray(applied, float)
         self.m = m
-        self.lines = [[], [], []]  # interior lines to grade toward, per axis
+        # interior lines to grade toward, per face and axis: a footprint
+        self.lines = [[[], [], []] for _ in range(6)]
         self.extra = [[], [], []]  # edges added as they are, per axis: bisections
         self.panels = self.galerkin = self.G = None
         self.fine = None  # panels whose load takes a finer rule
@@ -64,14 +65,22 @@ class Body:
         """Mesh the faces; the self block waits for ``assemble``, so that the
         unknowns can be counted first."""
         layer = LAYER * np.min(self.half)
-        edges = []
-        for k, h in enumerate(self.half):
-            lines = _merge(np.asarray(self.lines[k], float), h)
-            e = np.concatenate(
-                [graded_edges(h, lines, layer, self.m, GRADING), self.extra[k]]
-            )
-            edges.append(_merge(e, h))
-        self.panels = Panels(self.half, edges)
+        graded = {}  # faces with the same lines along an axis share its edges
+
+        def edges(f, a):
+            h = self.half[a]
+            lines = tuple(_merge(np.asarray(self.lines[f][a], float), h))
+            if (a, lines) not in graded:
+                e = np.concatenate(
+                    [graded_edges(h, lines, layer, self.m, GRADING), self.extra[a]]
+                )
+                graded[a, lines] = _merge(e, h)
+            return graded[a, lines]
+
+        self.panels = Panels(
+            self.half,
+            [tuple(edges(f, a) for a in range(3) if a != f // 2) for f in range(6)],
+        )
         self.galerkin = Galerkin(self.panels)
         self.G = None
 
@@ -139,15 +148,18 @@ class Outline(NamedTuple):
 
 
 def add_contact_lines(bodies, outlines=()):
-    """Grade each body's mesh toward the outline of every body, and of every
-    fixed cuboid (``outlines``), touching it: the charge jumps there, and so
-    does a touching magnet's field.
+    """Grade the face of each body that another body, or a fixed cuboid
+    (``outlines``), rests on toward that one's footprint: the charge jumps
+    there, and so does a touching magnet's field.
 
-    Exact when the two are turned by multiples of 90 degrees against each
-    other; otherwise the lines bound the footprint (its box in this body's
-    frame)."""
+    Only that face: through the others the lines would cut whole strips of
+    panels where nothing happens, and the assembly grows with the square of
+    the panels. Exact when the two are turned by multiples of 90 degrees
+    against each other; otherwise the lines bound the footprint (its box in
+    this body's frame)."""
     signs = np.array(list(itertools.product([-1, 1], repeat=3)))
     for a in bodies:
+        tol = CONTACT * np.max(a.half)
         for b in (*bodies, *outlines):
             if b is a:
                 continue
@@ -155,10 +167,22 @@ def add_contact_lines(bodies, outlines=()):
             corners = cb + (signs * b.half) @ Rab.T
             lo, hi = corners.min(0), corners.max(0)
             gap = np.maximum(0, np.maximum(lo - a.half, -a.half - hi))
-            if np.linalg.norm(gap) > CONTACT * np.max(a.half):
+            if np.linalg.norm(gap) > tol:
                 continue
-            for k in range(3):
-                a.lines[k] = sorted(set(a.lines[k]) | {lo[k], hi[k]})
+            # the faces b lies against: outside a across their plane
+            faces = [
+                f
+                for k in range(3)
+                for f, against in (
+                    (2 * k, lo[k] >= a.half[k] - tol),
+                    (2 * k + 1, hi[k] <= -a.half[k] + tol),
+                )
+                if against
+            ]
+            for f in faces or range(6):  # overlapping: every face, as before
+                for k in range(3):
+                    if k != f // 2:
+                        a.lines[f][k] = sorted(set(a.lines[f][k]) | {lo[k], hi[k]})
 
 
 def _clip(poly, x0, x1, y0, y1):

@@ -1,8 +1,9 @@
 """Panels on a cuboid's faces, and the Galerkin form of the face-charge equation.
 
-The faces are cut into rectangular panels by one list of edges per axis, graded
-toward the cuboid's edges (where a soft body's charge is singular) and toward
-any interior line, such as the footprint of a touching body. Each panel carries
+Each face is cut into rectangular panels by a list of edges along each of its
+two axes, graded toward the cuboid's edges (where a soft body's charge is
+singular) and toward any interior line of that face, such as the footprint of a
+body resting on it. Each panel carries
 the charge ``c0 + c1 s + c2 t``, linear in its local coordinates ``s, t`` in
 ``[-1, 1]``, discontinuous from one panel to the next (P1 discontinuous
 Galerkin).
@@ -53,26 +54,26 @@ def graded_edges(a, lines, layer, m, g, tol=1e-9):
 class Panels:
     """Rectangular panels on the six faces of a cuboid centred at the origin.
 
-    ``axis_edges`` gives the edges along x, y and z. A panel on the face normal
-    to axis ``k`` spans ``[p1, p2] x [q1, q2]`` along its in-plane axes ``i < j``
-    and sits at ``w0 = sign * half[k]``.
+    ``face_edges[f]`` gives face ``f``'s edges along its in-plane axes
+    ``i < j``; face ``f`` is normal to axis ``k = f // 2``, on the side
+    ``sign = +1`` for even ``f``. A panel spans ``[p1, p2] x [q1, q2]`` and sits
+    at ``w0 = sign * half[k]``.
     """
 
-    def __init__(self, half, axis_edges):
+    def __init__(self, half, face_edges):
         self.half = np.asarray(half, float)
         rows = []
-        for k in range(3):
+        for f, (ei, ej) in enumerate(face_edges):
+            k, sign = f // 2, -1.0 if f % 2 else 1.0
             i, j = (a for a in range(3) if a != k)
-            ei, ej = axis_edges[i], axis_edges[j]
             P1, Q1 = np.meshgrid(ei[:-1], ej[:-1], indexing="ij")
             P2, Q2 = np.meshgrid(ei[1:], ej[1:], indexing="ij")
-            for sign in (1.0, -1.0):
-                rows.extend(
-                    (k, sign, i, j, sign * self.half[k], *bounds)
-                    for bounds in zip(
-                        P1.ravel(), P2.ravel(), Q1.ravel(), Q2.ravel(), strict=True
-                    )
+            rows.extend(
+                (k, sign, i, j, sign * self.half[k], *bounds)
+                for bounds in zip(
+                    P1.ravel(), P2.ravel(), Q1.ravel(), Q2.ravel(), strict=True
                 )
+            )
         r = np.array(rows)
         self.k = r[:, 0].astype(int)
         self.sign = r[:, 1]
