@@ -79,12 +79,15 @@ where:
 
 A cell's field is known exactly; the method only has to decide _where_ in the
 observer cell to take it. `apply_demag` offers two answers, chosen per solve
-with `interaction` and applied to **every pair**, never mixed:
+with `interaction` and applied to **every pair**:
 
 | `interaction`       | The field of cell $j$ at cell $i$   | Works for                              |
 | ------------------- | ----------------------------------- | -------------------------------------- |
-| `"point"` (default) | at the centroid of cell $i$         | any cell type and orientation          |
+| `"point"` (default) | at the centroid of cell $i$ ¹       | any cell type and orientation          |
 | `"newell"`          | averaged over the whole of cell $i$ | cuboid cells, all with one orientation |
+
+¹ Averaged over cell $i$ between cylinder segments close together; see
+[point matching](#point-matching).
 
 **Volume averaging** is the Galerkin form of the problem. For a soft body with a
 positive susceptibility in a uniform applied field, the induced moment along the
@@ -104,7 +107,9 @@ between parallel cuboids, so turning one of two touching bodies by any angle,
 however small, would switch their interaction to point matching: the result
 would jump (0.28 % for a magnet and an iron block turned by a millionth of a
 degree), and the lower bound would be lost. `interaction="newell"` therefore
-raises when the cells are not all cuboids with one orientation.
+raises when the cells are not all cuboids with one orientation. Cylinder
+segments close together are the one exception, below: their cell type alone
+decides it, so turning a body never switches it.
 
 ### Point matching
 
@@ -117,6 +122,21 @@ on the displacement and the source shape, so cells sharing a shape and
 orientation get the same fast paths as volume averaging (section 5). Beyond 50
 source sides it switches to the far-field expansion below, where magpylib's
 closed form slowly loses precision.
+
+**Cylinder segments close together** take the field averaged over cell $i$
+instead, by Gauss quadrature with two points along each of radius, angle and
+height, symmetrized so that $V_i\mathsf{T}_{ij}=V_j\mathsf{T}_{ji}^\mathsf{T}$
+as for the exact average. At the centroid, curved cells give $\mathsf{T}$
+positive eigenvalues, which no demagnetizing field has; above $1/\chi$ they
+leave the system indefinite, and a tube with a 1 mm wall at $\chi = 1000$, in
+cells 16 around and 16 along, comes out −10 %, −68 % and +2 % from its moment
+with 1, 2 and 3 cells across the wall
+([#92](https://github.com/magpylib/magpylib-material-response/issues/92)).
+Averaged, every eigenvalue is negative and the moment holds at −12 %, −11 % and
+−11 %; what is left falls as cells are added around the ring. Pairs farther
+apart than twice the sum of their half-diagonals keep the centroid, which
+changes that tube's moment by 0.13 points at most; at a reach of 1 a positive
+eigenvalue comes back, and at 0.75 the system is indefinite again.
 
 ### Volume averaging (Newell)
 
