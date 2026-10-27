@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import itertools
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -284,3 +286,33 @@ def test_copy_keeps_the_parents_material_attributes():
     apply_demag(in_place, inplace=True)
     assert copied[2] > 0.01
     np.testing.assert_allclose(copied, in_place.sources_all[0].polarization)
+
+
+def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():
+    """A thin tube at high susceptibility beside a magnet, in cylinder-segment
+    cells. Point matching on curved cells gave the interaction matrix positive
+    eigenvalues, and the moment more than doubled from 1 to 2 cells across the
+    wall (#92); averaging close segment pairs keeps it within 1 %."""
+
+    def moment(across):
+        magnet = magpy.magnet.Cuboid(
+            polarization=(1, 0, 0), dimension=(0.01,) * 3, position=(0.015, 0, 0)
+        )
+        magnet.susceptibility = 0
+        tube = magpy.Collection(
+            *(
+                magpy.magnet.CylinderSegment(
+                    polarization=(0, 0, 0),
+                    dimension=(a, b, 0.01, phi, phi + 60),
+                    position=(0, 0, z),
+                )
+                for a, b in itertools.pairwise(np.linspace(0.004, 0.005, across + 1))
+                for phi in range(0, 360, 60)
+                for z in (-0.01, 0, 0.01)
+            )
+        )
+        tube.susceptibility = 1000
+        apply_demag(magpy.Collection(magnet, tube), inplace=True)
+        return sum(cell.polarization[0] * cell.volume for cell in tube)
+
+    assert moment(2) == pytest.approx(moment(1), rel=0.01)

@@ -243,6 +243,10 @@ def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
     return mask_r_in & mask_phi_in & mask_z_in
 
 
+#: (point, face) pairs the triangle-mesh inside test takes at once.
+TRIMESH_PAIRS_PER_CHUNK = 2_000_000
+
+
 def mask_inside_TriangularMesh(obj, positions, tolerance=1e-14):  # noqa: ARG001  # pylint: disable=unused-argument
     """Return mask of provided positions inside a TriangularMesh (local coordinates).
 
@@ -254,7 +258,15 @@ def mask_inside_TriangularMesh(obj, positions, tolerance=1e-14):  # noqa: ARG001
     )
 
     faces_as_vertices = obj.vertices[obj.faces]  # shape (m, 3, 3)
-    return _mask_inside_trimesh(np.asarray(positions, dtype=float), faces_as_vertices)
+    positions = np.asarray(positions, dtype=float)
+    # the ray test holds every (point, face) pair at once: 160,000 points
+    # against 792 faces took several GB, so it runs on chunks of points
+    chunk = max(1, TRIMESH_PAIRS_PER_CHUNK // len(faces_as_vertices))
+    parts = [
+        _mask_inside_trimesh(positions[i : i + chunk], faces_as_vertices)
+        for i in range(0, len(positions), chunk)
+    ]
+    return np.concatenate(parts) if parts else np.zeros(0, dtype=bool)
 
 
 def mask_inside(obj, positions, tolerance=1e-14):

@@ -3,6 +3,9 @@
 The method of moments gives no error estimate of its own: a result is as good as
 its mesh. :func:`mesh_study` solves one model on meshes of increasing resolution
 and estimates the error of the finest from how the results change between them.
+:func:`compare` puts two such studies side by side, such as one of
+:func:`mesh_study` and one of
+:func:`~magpylib_material_response.fem.fem_study`.
 """
 
 from __future__ import annotations
@@ -320,3 +323,113 @@ def mesh_study(
         values.append(np.asarray(evaluate(solved), dtype=float))
 
     return _study(cells, values, seconds, stacklevel=3)
+
+
+@dataclass(frozen=True, eq=False)
+class Comparison:
+    """Two studies of one quantity side by side, made by :func:`compare`.
+
+    Entries are as in the studies' ``errors``: per observer for fields at
+    observers (in one row, whatever the observers' grid), per element for
+    anything else.
+
+    Attributes
+    ----------
+    a, b : ndarray
+        The two studies' last values: the finest mesh's, the highest order's.
+    a_errors, b_errors : ndarray
+        Their error bars per entry, in the quantity's unit: the studies'
+        relative ``errors`` times the size of that last value. NaN where a
+        study has no estimate, or where the value is zero.
+    difference : ndarray
+        Size of ``a - b`` per entry.
+    agree : ndarray of bool
+        Whether the two values are within their error bars of each other:
+        ``difference <= a_errors + b_errors``, or equal to rounding. False where
+        they differ and either has no error bar.
+    agreement : float
+        Share of the entries that agree, among those it can be told for: with
+        both error bars, or equal; NaN if none.
+    relative_difference : float
+        ``|a - b| / |b|``, with Euclidean norms over the whole quantity: ``a``
+        measured against ``b``; NaN where ``b`` is zero.
+    """
+
+    a: np.ndarray
+    b: np.ndarray
+    a_errors: np.ndarray
+    b_errors: np.ndarray
+    difference: np.ndarray
+    agree: np.ndarray
+    agreement: float
+    relative_difference: float
+
+
+def _last(study):
+    """A study's last value and its per-entry relative errors, fields at
+    observers in one row of observers."""
+    value = np.asarray(study.values[-1], dtype=float)
+    errors = np.asarray(study.errors, dtype=float)
+    if value.ndim >= 2 and value.shape[-1] == 3:
+        value, errors = value.reshape(-1, 3), errors.reshape(-1)
+    if errors.shape != np.shape(_sizes(value)):
+        msg = (
+            f"A study's errors have shape {errors.shape}, its value "
+            f"{np.shape(_sizes(value))} entries: give one relative error per entry."
+        )
+        raise ValueError(msg)
+    return value, errors
+
+
+def compare(a, b) -> Comparison:
+    """Put two studies of the same quantity side by side, entry by entry.
+
+    Parameters
+    ----------
+    a, b : MeshStudy, FemStudy or alike
+        Studies of the same quantity, such as B at the same observers: any
+        objects with ``values``, of which the last is compared, and relative
+        ``errors`` per entry for it, as :func:`mesh_study` and
+        :func:`~magpylib_material_response.fem.fem_study` give them.
+
+    Returns
+    -------
+    Comparison
+        Both values, both error bars and their difference per entry, and
+        whether they agree within the error bars.
+
+    Notes
+    -----
+    Each study is represented by its last value, the one its error estimate is
+    for: the finest mesh, not the value extrapolated from the meshes; the
+    highest order. Two values agree when their error bars overlap: when they
+    differ by no more than the sum of the two. A disagreement means at least
+    one error estimate is too small, or one method has a fault the other has
+    not: the two methods share only the model.
+    """
+    (va, ra), (vb, rb) = _last(a), _last(b)
+    if va.shape != vb.shape:
+        msg = (
+            f"The studies' values differ in shape, {va.shape} and {vb.shape}: "
+            "compare studies of the same quantity."
+        )
+        raise ValueError(msg)
+    sa, sb = _sizes(va), _sizes(vb)
+    ea, eb = ra * sa, rb * sb
+    step = va - vb
+    difference = _sizes(step)
+    # equal to rounding: zeros, and bars of exactly zero, still agree
+    equal = difference <= 1e-12 * max(sa.max(initial=0), sb.max(initial=0))
+    bound = ea + eb
+    agree = equal | (difference <= bound)
+    known = equal | np.isfinite(bound)
+    return Comparison(
+        a=va,
+        b=vb,
+        a_errors=ea,
+        b_errors=eb,
+        difference=difference,
+        agree=agree,
+        agreement=float(agree[known].mean()) if known.any() else np.nan,
+        relative_difference=float(_relative(np.linalg.norm(step), np.linalg.norm(vb))),
+    )

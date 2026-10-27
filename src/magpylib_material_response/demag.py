@@ -7,11 +7,14 @@ susceptibility matrix (one 3x3 block per cell, its susceptibility along its own 
 ``B_ext`` in Tesla (B-field convention, consistent with polarization).
 
 Every entry of ``T`` follows one *interaction rule*, chosen per solve with
-``interaction`` and applied to every pair of cells, never mixed:
+``interaction`` and applied to every pair of cells:
 
 - ``"point"`` (default): the field of the source cell at the observer cell's
   centre (point matching, Chadebec 2006). Any cell type and orientation; the
-  rule this package has always used.
+  rule this package has always used. Cylinder-segment cells close together
+  take each other's field averaged over the observer cell instead: on curved
+  cells point matching makes the system indefinite at high susceptibility
+  (#92, ``SEGMENT_AVERAGE_REACH``).
 - ``"newell"``: the field of the source cell averaged over the observer cell,
   the volume-averaged Newell tensor (:mod:`magpylib_material_response.newell`).
   This is the Galerkin form of the problem: the induced moment of a body in a
@@ -21,8 +24,8 @@ Every entry of ``T`` follows one *interaction rule*, chosen per solve with
 
 At equal cell count neither rule is more accurate in general: they agree for
 cubes, and for flat cells each wins on different quantities. A mix of the two
-would jump when a body turns by any angle that makes its cells non-parallel,
-and would lose the lower bound, so there is none.
+on cuboids would jump when a body turns by any angle that makes its cells
+non-parallel, and would lose the lower bound, so there is none.
 
 Two evaluation strategies apply the chosen rule, so ``solver="direct"`` and
 ``solver="iterative"`` solve the same system:
@@ -62,6 +65,7 @@ from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from magpylib.magnet import Cuboid
 from scipy.sparse.linalg import LinearOperator, gmres
+from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.demag_fft import (
@@ -108,8 +112,11 @@ DENSE_BLOCK_MAX_BYTES = 2_000_000_000
 #: with output entries: about 0.8 kB per pair for cuboids and about 3 kB for
 #: tetrahedra in magpylib's kernels, so one chunk stays below about 0.6 GB.
 KERNEL_PAIRS_PER_CALL = 200_000
-# A gather from a grid-pair table costs 72 B per pair, no kernel temporaries.
-TABLE_PAIRS_PER_CHUNK = 2_000_000
+# A gather from a grid-pair table needs no kernel temporaries, but with its keys
+# and transposed copy about 250 B per pair; larger chunks only add memory: a
+# 4,096-cell cube's direct solve peaked at 2.0 GB with 2,000,000 pairs and 1.3 GB
+# with 200,000, in the same time.
+TABLE_PAIRS_PER_CHUNK = 200_000
 # Between two grids of one spacing the block is an FFT convolution; below this
 # many entries a dense block from the same table is cheaper to apply.
 FFT_CROSS_MIN_ENTRIES = 1_000_000
@@ -359,6 +366,11 @@ def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL):
         n_loose=counts.get("loose", 0),
         n_generic=counts.get("generic", 0),
     )
+    for cl in clusters:
+        if cl["kind"] == "generic":
+            averaged = _segment_averages(magnets_list, cl["indices"])
+            if averaged is not None:
+                cl["averaged"] = averaged
     return positions, clusters
 
 
@@ -519,6 +531,128 @@ def _point_block_T(srcs_b, pos_a):
     return T_raw.swapaxes(2, 3).reshape(3 * n_b, 3 * n_a).T
 
 
+#: Cylinder-segment cells closer than this many times the sum of their
+#: half-diagonals take each other's field averaged over the observer cell, not
+#: at its centroid. Point matching on curved cells gives T positive
+#: eigenvalues, which no demagnetizing field has, and at high susceptibility
+#: the system turns indefinite: a tube with a 1 mm wall at chi = 1000 swings
+#: from -10 to -68 to +2 % with 1, 2 and 3 cells across the wall (#92). The
+#: average makes T symmetric with every eigenvalue negative. Beyond the reach
+#: the centroid stands in for the average. On that tube, in cells 16 around and
+#: 16 along, a reach of 2 gives the moment of averaging every pair to 0.13
+#: points at 1, 2 and 3 cells across, 1.5 to 0.7 points; at 1 a positive
+#: eigenvalue comes back with 3 across, and at 0.75 the system is indefinite.
+SEGMENT_AVERAGE_REACH = 2.0
+#: Gauss points per direction (radius, angle, height) of a cell average: 3
+#: instead of 2 moves that tube's moment by 0.5 points, 4 % of its error.
+SEGMENT_AVERAGE_POINTS = 2
+
+
+def _segment_quadrature(segments):
+    """Gauss points ``(n, q, 3)`` in the global frame and their weights
+    ``(n, q)``, summing to 1 over each cylinder-segment cell."""
+    x, w = np.polynomial.legendre.leggauss(SEGMENT_AVERAGE_POINTS)
+    x, w = (x + 1) / 2, w / 2
+    r1, r2, h, phi1, phi2 = np.array([s.dimension for s in segments]).T
+    r = r1[:, None] + (r2 - r1)[:, None] * x  # (n, g)
+    phi = np.deg2rad(phi1[:, None] + (phi2 - phi1)[:, None] * x)
+    z = h[:, None] * (x - 0.5)
+    local = np.stack(
+        np.broadcast_arrays(
+            r[:, :, None, None] * np.cos(phi[:, None, :, None]),
+            r[:, :, None, None] * np.sin(phi[:, None, :, None]),
+            z[:, None, None, :],
+        ),
+        axis=-1,
+    ).reshape(len(segments), -1, 3)
+    weights = (r * w)[:, :, None, None] * w[:, None] * w  # dV = r dr dphi dz
+    weights = weights.reshape(len(segments), -1)
+    weights /= weights.sum(axis=1, keepdims=True)
+    mats = R.from_quat([s.orientation.as_quat() for s in segments]).as_matrix()
+    positions = np.array([s.position for s in segments], dtype=float)
+    points = np.einsum("nij,nqj->nqi", mats, local) + positions[:, None]
+    return points, weights
+
+
+def _segment_averages(magnets_list, indices):
+    """The T blocks between cylinder-segment cells within
+    ``SEGMENT_AVERAGE_REACH`` of each other, averaged over the observer cell,
+    or ``None`` when there are none.
+
+    Returns ``(rows, cols, blocks)``: observer and source positions within
+    ``indices``, and the ``(m, k)`` blocks, symmetrized by reciprocity
+    (``V_i T_ij = V_j T_ji^T`` holds exactly for the average; the quadrature
+    keeps it only approximately).
+    """
+    local = np.flatnonzero(
+        [isinstance(magnets_list[i], magpy.magnet.CylinderSegment) for i in indices]
+    )
+    if len(local) == 0:
+        return None
+    segments = [magnets_list[indices[i]] for i in local]
+    r1, r2, h, phi1, phi2 = np.array([s.dimension for s in segments]).T
+    arc = (r1 + r2) / 2 * np.deg2rad(phi2 - phi1)
+    rho = 0.5 * np.sqrt((r2 - r1) ** 2 + arc**2 + h**2)
+    centroids = np.array([s.centroid for s in segments])
+    tree = cKDTree(centroids)
+    near = tree.query_ball_point(centroids, SEGMENT_AVERAGE_REACH * (rho + rho.max()))
+    i = np.repeat(np.arange(len(segments)), [len(p) for p in near])
+    j = np.concatenate(near).astype(int)
+    keep = np.linalg.norm(centroids[i] - centroids[j], axis=1) < (
+        SEGMENT_AVERAGE_REACH * (rho[i] + rho[j])
+    )
+    i, j = i[keep], j[keep]
+
+    with timelog(f"Cell averages of {len(i):,} cylinder-segment pairs"):
+        points, weights = _segment_quadrature(segments)
+        q = points.shape[1]
+        dims = np.array([s.dimension for s in segments], dtype=float)
+        positions = np.array([s.position for s in segments], dtype=float)
+        quats = np.array([s.orientation.as_quat() for s in segments])
+        mats = R.from_quat(quats).as_matrix()
+        blocks = np.empty((len(i), 3, 3))
+        step = max(1, KERNEL_PAIRS_PER_CALL // q)
+        for start in range(0, len(i), step):
+            ii, jj = i[start : start + step], j[start : start + step]
+            src = np.repeat(jj, q)
+            for k in range(3):
+                # the unit polarization along global k, in each source's frame
+                H = magpy.func.cylinder_segment_field(
+                    "H",
+                    points[ii].reshape(-1, 3),
+                    dims[src],
+                    mats[src, k, :],
+                    positions[src],
+                    R.from_quat(quats[src]),
+                ).reshape(len(ii), q, 3)
+                blocks[start : start + step, :, k] = magpy.mu_0 * np.einsum(
+                    "pqm,pq->pm", H, weights[ii]
+                )
+
+    volumes = np.array([s.volume for s in segments])
+    order = np.lexsort((j, i))
+    i, j, blocks = i[order], j[order], blocks[order]
+    reverse = np.searchsorted(i * len(segments) + j, j * len(segments) + i)
+    moments = volumes[i, None, None] * blocks
+    blocks = (moments + moments[reverse].transpose(0, 2, 1)) / 2
+    blocks /= volumes[i, None, None]
+    return local[i], local[j], blocks
+
+
+def _average_segments(block, averaged, observers, n_b):
+    """``block`` of the generic self-block, observers ``observers`` and all its
+    ``n_b`` sources, with the averaged cylinder-segment pairs written in."""
+    rows, cols, blocks = averaged
+    at = np.full(n_b, -1)
+    at[observers] = np.arange(len(observers))
+    sel = at[rows] >= 0
+    if not sel.any():
+        return block
+    out = np.ascontiguousarray(block).reshape(3, len(observers), 3, n_b)
+    out[:, at[rows[sel]], :, cols[sel]] = blocks[sel]
+    return out.reshape(3 * len(observers), 3 * n_b)
+
+
 def _row_floor(mag, row_budget):
     """Each row's smallest kept magnitude: the entries below it can go with
     their ``|.|`` sum within ``row_budget`` (exact, entry-based bound)."""
@@ -577,9 +711,7 @@ def _grid_pair_table(cl_a, cl_b, interaction, rtol=1e-6):
     spacing = np.array(cl_a["spacing"])
 
     def _index3(cl, shape):
-        n = cl["indices"].size
-        flat = np.empty(n, dtype=np.int64)
-        flat[cl["order"]] = np.arange(n)  # cluster member -> grid-flat index
+        flat = cl["flat"]  # cluster member -> grid-flat index
         return np.stack(
             [
                 flat // (shape[1] * shape[2]),
@@ -658,7 +790,10 @@ def _pair_block(
             return _newell_block_T(pos_a[sl], pos_b, cl_a["dim"], cl_b["dim"], rot_mat)
         if cuboid_sources:
             return _point_cuboid_block_T(pos_a[sl], pos_b, cl_b["dim"], rot_mat)
-        return _point_block_T([magnets_list[i] for i in ib], pos_a[sl])
+        block = _point_block_T([magnets_list[i] for i in ib], pos_a[sl])
+        if cl_a is cl_b and "averaged" in cl_a:
+            block = _average_segments(block, cl_a["averaged"], np.arange(n_a)[sl], n_b)
+        return block
 
     # Observer chunks bounded by kernel pairs, which is what costs memory;
     # a single call over all n_a * n_b pairs of 5,000 tetrahedra needs ~97 GB.
@@ -798,18 +933,24 @@ def _assemble_T_dense(
 # ══════════════════════════════════════════════════════════════════════════
 
 
+def _to_box(M, flat, shape):
+    """Cell values ``(n, 3)`` placed in their grid box ``(*shape, 3)``, zero in
+    the holes."""
+    box = np.zeros((shape[0] * shape[1] * shape[2], 3))
+    box[flat] = M
+    return box.reshape((*shape, 3))
+
+
 def _fft_apply(op, v_flat):
     """Apply the grid self-block T to component-major ``(3n_g,)`` global-frame
     polarizations; returns the same layout. Rotation handled internally."""
-    Nx, Ny, Nz = op["shape"]
+    shape = op["shape"]
     rot_mat = op["rot_mat"]
     M = v_flat.reshape(3, -1).T  # (n_g, 3) global
     if rot_mat is not None:
         M = M @ rot_mat  # to local frame
-    M_grid = M[op["order"]].reshape((Nx, Ny, Nz, 3))
-    H_grid = demag_fft_matvec(M_grid, op["kernel_fft"], (Nx, Ny, Nz))
-    H = np.empty_like(M)
-    H[op["order"]] = H_grid.reshape((Nx * Ny * Nz, 3))
+    H_grid = demag_fft_matvec(_to_box(M, op["flat"], shape), op["kernel_fft"], shape)
+    H = H_grid.reshape(-1, 3)[op["flat"]]
     if rot_mat is not None:
         H = H @ rot_mat.T  # back to global frame
     return H.T.ravel()
@@ -841,8 +982,8 @@ def _fft_cross_op(cl_a, cl_b, interaction):
         "ib": cl_b["indices"],
         "shape_a": tuple(int(v) for v in sa),
         "shape_b": tuple(int(v) for v in sb),
-        "order_a": cl_a["order"],
-        "order_b": cl_b["order"],
+        "flat_a": cl_a["flat"],
+        "flat_b": cl_b["flat"],
         "rot_mat": None if cl_b["is_identity"] else cl_b["r_common"].as_matrix(),
         "L": tuple(int(v) for v in L),
         "kernel_fft": np.fft.rfftn(kernel, axes=(0, 1, 2)),
@@ -858,13 +999,12 @@ def _fft_cross_apply(op, v_flat):
         M = M @ rot_mat  # to local frame
     Mp = np.zeros((*L, 3))
     sb = op["shape_b"]
-    Mp[: sb[0], : sb[1], : sb[2]] = M[op["order_b"]].reshape((*sb, 3))
+    Mp[: sb[0], : sb[1], : sb[2]] = _to_box(M, op["flat_b"], sb)
     M_fft = np.fft.rfftn(Mp, axes=(0, 1, 2))  # (Lx, Ly, Lz//2+1, 3)
     H_fft = np.einsum("...mk,...k->...m", op["kernel_fft"], M_fft)
     H_grid = np.fft.irfftn(H_fft, s=L, axes=(0, 1, 2))
     sa = op["shape_a"]
-    H = np.empty((np.prod(sa), 3))
-    H[op["order_a"]] = H_grid[: sa[0], : sa[1], : sa[2]].reshape(-1, 3)
+    H = H_grid[: sa[0], : sa[1], : sa[2]].reshape(-1, 3)[op["flat_a"]]
     if rot_mat is not None:
         H = H @ rot_mat.T  # back to global frame
     return H.T.ravel()
@@ -906,7 +1046,7 @@ def _build_operator(
                         "ia": cl_a["indices"],
                         "ib": cl_a["indices"],
                         "shape": cl_a["shape"],
-                        "order": cl_a["order"],
+                        "flat": cl_a["flat"],
                         "rot_mat": rot_mat,
                         "kernel_fft": build_fft_kernel(
                             cl_a["shape"], cl_a["spacing"], cl_a["dim"], interaction

@@ -79,12 +79,15 @@ where:
 
 A cell's field is known exactly; the method only has to decide _where_ in the
 observer cell to take it. `apply_demag` offers two answers, chosen per solve
-with `interaction` and applied to **every pair**, never mixed:
+with `interaction` and applied to **every pair**:
 
 | `interaction`       | The field of cell $j$ at cell $i$   | Works for                              |
 | ------------------- | ----------------------------------- | -------------------------------------- |
-| `"point"` (default) | at the centroid of cell $i$         | any cell type and orientation          |
+| `"point"` (default) | at the centroid of cell $i$ ¹       | any cell type and orientation          |
 | `"newell"`          | averaged over the whole of cell $i$ | cuboid cells, all with one orientation |
+
+¹ Averaged over cell $i$ between cylinder segments close together; see
+[point matching](#point-matching).
 
 **Volume averaging** is the Galerkin form of the problem. For a soft body with a
 positive susceptibility in a uniform applied field, the induced moment along the
@@ -104,7 +107,9 @@ between parallel cuboids, so turning one of two touching bodies by any angle,
 however small, would switch their interaction to point matching: the result
 would jump (0.28 % for a magnet and an iron block turned by a millionth of a
 degree), and the lower bound would be lost. `interaction="newell"` therefore
-raises when the cells are not all cuboids with one orientation.
+raises when the cells are not all cuboids with one orientation. Cylinder
+segments close together are the one exception, below: their cell type alone
+decides it, so turning a body never switches it.
 
 ### Point matching
 
@@ -117,6 +122,21 @@ on the displacement and the source shape, so cells sharing a shape and
 orientation get the same fast paths as volume averaging (section 5). Beyond 50
 source sides it switches to the far-field expansion below, where magpylib's
 closed form slowly loses precision.
+
+**Cylinder segments close together** take the field averaged over cell $i$
+instead, by Gauss quadrature with two points along each of radius, angle and
+height, symmetrized so that $V_i\mathsf{T}_{ij}=V_j\mathsf{T}_{ji}^\mathsf{T}$
+as for the exact average. At the centroid, curved cells give $\mathsf{T}$
+positive eigenvalues, which no demagnetizing field has; above $1/\chi$ they
+leave the system indefinite, and a tube with a 1 mm wall at $\chi = 1000$, in
+cells 16 around and 16 along, comes out −10 %, −68 % and +2 % from its moment
+with 1, 2 and 3 cells across the wall
+([#92](https://github.com/magpylib/magpylib-material-response/issues/92)).
+Averaged, every eigenvalue is negative and the moment holds at −12 %, −11 % and
+−11 %; what is left falls as cells are added around the ring. Pairs farther
+apart than twice the sum of their half-diagonals keep the centroid, which
+changes that tube's moment by 0.13 points at most; at a reach of 1 a positive
+eigenvalue comes back, and at 0.75 the system is indefinite again.
 
 ### Volume averaging (Newell)
 
@@ -260,13 +280,18 @@ Measured on soft iron at $\chi = 1000$, out of 39 models:
 
 | Model                         | Cells | FFT   | Direct         | Iterative      | `"auto"`  |
 | ----------------------------- | ----- | ----- | -------------- | -------------- | --------- |
-| one cube, identical cells     | 4,096 | 100 % | 3.4 s, 2.1 GB  | 0.41 s, 0.2 GB | iterative |
-| three cubes, three cell sizes | 3,240 | 40 %  | 9.2 s, 1.9 GB  | 8.3 s, 1.0 GB  | iterative |
+| one cube, identical cells     | 4,096 | 100 % | 3.1 s, 1.4 GB  | 0.41 s, 0.2 GB | iterative |
+| three cubes, three cell sizes | 3,240 | 40 %  | 9.0 s, 1.4 GB  | 8.3 s, 1.0 GB  | iterative |
 | a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
 | 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
-| voxelized sphere              | 1,304 | 3 %   | 0.80 s, 0.3 GB | 1.35 s, 0.3 GB | direct    |
+| voxelized sphere              | 1,304 | 100 % | 0.30 s, 0.3 GB | 0.20 s, 0.1 GB | iterative |
 | tetrahedra                    | 1,931 | 0     | 9.3 s, 1.1 GB  | 9.1 s, 1.1 GB  | direct    |
 | cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
+
+The rows with one cube, three cubes and the voxelized sphere are measured with
+the direct solver's current table chunks of 200,000 pairs; the others were
+measured with chunks of 2,000,000, and those holding grids now peak somewhat
+lower.
 
 Under `"auto"` GMRES runs to `solver_tol / 100`, so the polarization stays
 within about `solver_tol` of the direct solve on a few thousand cells and within
@@ -287,18 +312,27 @@ product $\mathbf{T}\,\mathbf{J}$ is a 3-D discrete convolution: an FFT on the
 grid zero-padded to twice its size computes it in $O(N \log N)$. The kernel, the
 six independent components of the chosen rule's tensor, is built once by
 `build_fft_kernel` and reused at every GMRES iteration (`demag_fft_matvec`). The
-grid spacing may exceed the cell size.
+grid spacing may exceed the cell size. A body on one lattice that does not fill
+its box, such as a voxelized sphere, runs the same way when its cells fill at
+least an eighth of the box (`MIN_LATTICE_FILL`) and it is at least four cells
+deep along every axis (`MIN_LATTICE_LAYERS`): the empty places hold zero
+polarization, and the box holds at most eight times as many sites as cells. A
+thinner body with holes, such as a voxelized washer one to three cells thick,
+keeps full boxes and loose cells: FFTs over its flat, mostly empty box are
+slower.
 
 ### 5.2 Clusters
 
 `analyze_structure` sorts the cells into **clusters**, and every cell lands in
 exactly one:
 
-- **grid**: identical cuboids with one orientation whose centres fill a complete
-  uniform grid, one cluster per meshed body. Bodies are told apart by the
-  Collection their mesher put the cells in, or, when the cells were flattened
-  into one Collection, by the full boxes they fill on their lattice, so a yoke
-  with its legs is three grids and not one connected, non-box component;
+- **grid**: identical cuboids with one orientation on a uniform grid, one
+  cluster per meshed body. Bodies are told apart by the Collection their mesher
+  put the cells in, so a yoke with its legs is three grids. Cells on one lattice
+  that do not fill a box, such as a voxelized sphere or touching bodies whose
+  cells were flattened into one Collection, are one grid with holes when they
+  fill at least an eighth of their box and are four cells deep, and else the
+  full boxes they fill. Parts of one body far apart are tried apart;
 - **loose**: identical parallel cuboids without that grid;
 - **generic**: everything else — other cell types, rotated singletons and, under
   point matching, groups smaller than `MIN_CLUSTER_CELLS` (8).

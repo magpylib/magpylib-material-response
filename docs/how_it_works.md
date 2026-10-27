@@ -176,7 +176,8 @@ unknowns, solved all at once so that every cell agrees with every other.
 The interactions $\mathsf{T}_{ij}$ are the heart of it: N cells have N² of them.
 There are two ways to take the field of one cell at another:
 
-- **at its centre** (`interaction="point"`, the default), for any cell type;
+- **at its centre** (`interaction="point"`, the default), for any cell type,
+  except cylinder segments close together, which are averaged;
 - **averaged over it** (`interaction="newell"`), for cuboids all turned the same
   way.
 
@@ -277,12 +278,13 @@ The answer converges as the cells shrink, slowly: halving the cell size, which
 takes eight times the cells, cuts the error to about a third. Soft iron is the
 hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
-Its magnetic moment, 0.02889 A m², is known to 0.1 %: finite-element solutions
-of rising order and mesh density converge to it
-([#76](https://github.com/magpylib/magpylib-material-response/issues/76)). The
+Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
+elements give it, `fem_study(cube, lambda s: s.moment[2], orders=(3, 4, 5))`, in
+seconds ([Checking a result with finite elements](examples/fem_check.md)). The
 polarizability of a cube of infinite susceptibility, 3.6443 times its volume
-(Helsing and Perfekt 2013), gives 0.028895 A m², 0.02 % away, through $m = VH /
-(1/3.6443 + 1/\chi)$, which is exact for ellipsoids:
+(Helsing and Perfekt 2013), gives 0.028895 A m² through
+$m=VH/(1/3.6443+1/\chi)$, 0.05 % high: that formula is exact for ellipsoids
+only.
 
 ```{code-cell} ipython3
 def soft_cube():
@@ -303,7 +305,7 @@ def moment(solved):
     return sum(c.volume * c.orientation.apply(c.polarization)[2] for c in solved.sources_all) / magpy.mu_0
 
 
-EXACT = 0.02889  # A m², the converged moment of this cube (#76)
+EXACT = 0.028880  # A m², this cube's moment by finite elements, orders 3 to 5
 runs = []
 for rule in ("point", "newell"):
     for n in (27, 64, 216, 512, 1728, 4096):
@@ -358,9 +360,8 @@ convolution, so FFTs compute it in N log N time and little memory.
 
 The default, `solver="auto"`, looks at how the cells are arranged and picks.
 Here three parts are meshed three ways, and coloured by how the solver sees
-them: a cuboid mesh is one grid (blue); a voxelized sphere is many small full
-boxes of grid (blue) and an irregular rim (orange); tetrahedra lie on no grid
-(grey).
+them: a cuboid mesh is one grid (blue), and so is a voxelized sphere, a grid
+with holes; tetrahedra lie on no grid (grey).
 
 ```{code-cell} ipython3
 block = soft_cube()

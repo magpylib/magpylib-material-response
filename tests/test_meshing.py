@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -17,7 +19,7 @@ from magpylib_material_response.meshing import (
     slice_Cuboid,
     voxelize,
 )
-from magpylib_material_response.meshing_utils import trimesh_from_model3d
+from magpylib_material_response.meshing_utils import get_volume, trimesh_from_model3d
 
 
 def test_mesh_Cuboid():
@@ -401,14 +403,124 @@ def test_trimesh_from_model3d_tiny_scale():
 
 def test_voxelize_small_target_finite_cells():
     """Regression: grid_elems=1 caused division by zero, and an empty grid
-    crashed with an opaque reshape error; both now behave cleanly."""
+    crashed with an opaque reshape error; both now behave cleanly. A body
+    thinner than the cells is refused instead of refined without end."""
     sphere = magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=0.001)
     with pytest.raises(ValueError, match="no cell centres"):
-        voxelize(sphere, 3)  # grid too coarse: clean error, no crash
+        voxelize(sphere, 3, strict_inside=True)  # grid too coarse: clean error
+    disc = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(0.01, 1e-6))
+    with pytest.raises(ValueError, match="no spacing"):
+        voxelize(disc, 50)
     coll = voxelize(sphere, 100)
     dims = np.array([c.dimension for c in coll.sources_all])
     assert np.isfinite(dims).all()
     assert (dims > 0).all()
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=0.01),
+        magpy.magnet.CylinderSegment(
+            polarization=(0, 0, 1), dimension=(0.002, 0.005, 0.004, 0, 270)
+        ),
+    ],
+    ids=["sphere", "cylinder-segment"],
+)
+def test_voxelize_keeps_the_volume(obj):
+    """The cells hold the object's exact volume, and a magnet's moment with it;
+    the cells wholly inside, at the grid's edge, hold less."""
+
+    def volume(coll):
+        return sum(np.prod(c.dimension) for c in coll.sources_all)
+
+    exact = get_volume(obj)
+    np.testing.assert_allclose(volume(voxelize(obj, 1000)), exact, rtol=1e-12)
+    assert volume(voxelize(obj, 1000, strict_inside=True)) < 0.9 * exact
+
+
+def _cube_mesh(centre):
+    corners = [(x, y, z) for x in (-0.5, 0.5) for y in (-0.5, 0.5) for z in (-0.5, 0.5)]
+    return magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 1), points=np.array(corners) + centre
+    )
+
+
+_SEG = magpy.magnet.CylinderSegment
+_CYL = magpy.magnet.Cylinder
+
+
+@pytest.mark.parametrize(
+    ("obj", "target", "outcome", "cells"),
+    [
+        (magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=1), 1000, "exact", 1021),
+        (magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=1), 5000, "exact", 4945),
+        (
+            _SEG(polarization=(0, 0, 1), dimension=(9, 10, 20, 0, 360)),
+            1000,
+            "exact",
+            None,
+        ),
+        (_SEG(polarization=(0, 0, 1), dimension=(0, 1, 1, 0, 45)), 10, "exact", None),
+        (_CYL(polarization=(0, 0, 1), dimension=(1, 0.05)), 500, "exact", 325),
+        (_CYL(polarization=(0, 0, 1), dimension=(1, 0.03)), 200, "within 1 %", None),
+        (
+            _SEG(polarization=(0, 0, 1), dimension=(9, 10, 20, 0, 360)),
+            10,
+            "warns",
+            None,
+        ),
+        (_CYL(polarization=(0, 0, 1), dimension=(1, 0.05)), 10, "refuses", None),
+        (_cube_mesh(0.4), 300, "exact", 343),
+        (_cube_mesh(5), 300, "strict", None),
+    ],
+    ids=[
+        "sphere: the spacing updates, 1,021 cells",
+        "sphere: the spacing updates, 4,945 cells",
+        "tube: the scan finds the exact spacing",
+        "pie with a face through the origin: offset lattice",
+        "disc: exact at another count before a near miss",
+        "thin disc: within 1 %",
+        "tube in 10 cells: closest within 5 %, a warning",
+        "disc thinner than the cells: refused",
+        "mesh off its own origin: lattice at its middle",
+        "mesh far off its own origin, cells wholly inside: grid at its middle",
+    ],
+)
+def test_voxelize_hard_shapes(obj, target, outcome, cells):
+    """The spacing search across its fallbacks: exact near the target, exact at
+    another count, within 1 %, the closest within 5 % with a warning, refused."""
+    if outcome == "refuses":
+        with pytest.raises(ValueError, match="within 5%"):
+            voxelize(obj, target)
+        return
+    if outcome == "strict":  # the grid sits on the mesh, at its size wherever it is
+        cells = voxelize(obj, target, strict_inside=True).sources_all
+        pos = np.array([c.position for c in cells])
+        assert len(cells) > 0
+        assert np.all(np.abs(pos - 5) < 0.5)
+        return
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        coll = voxelize(obj, target)
+    assert any("closest holds" in str(w.message) for w in caught) is (
+        outcome == "warns"
+    )
+    held = sum(np.prod(c.dimension) for c in coll.sources_all) / get_volume(obj)
+    miss = {"exact": 1e-12, "within 1 %": 0.01, "warns": 0.05}[outcome]
+    assert abs(held - 1) <= miss
+    if cells is not None:
+        assert len(coll.sources_all) == cells
+    observer = (
+        np.array([0.4, 0.4, 3.4])
+        if isinstance(obj, magpy.magnet.TriangularMesh)
+        else None
+    )
+    if observer is not None:  # the cells sit where the mesh is
+        expected = obj.getB(observer)
+        np.testing.assert_allclose(
+            coll.getB(observer), expected, rtol=0, atol=1e-9 * np.linalg.norm(expected)
+        )
 
 
 def test_cells_are_force_targets():
@@ -442,20 +554,17 @@ def test_mesh_Cylinder_thin_ring_centroids_inside():
             x, y, _ = cell.centroid
             assert r1 <= np.hypot(x, y) <= r2
 
+    # the magnet beside it magnetizes it along +x; how close the moment comes is
+    # a validation case against finite elements, not this test
     src = magpy.magnet.Cuboid(
         polarization=(1, 0, 0), dimension=(0.01, 0.01, 0.01), position=(0.015, 0, 0)
     )
     src.susceptibility = 0
-
-    def moment_x(target):
+    for target in (12, 48):
         cells = mesh_Cylinder(tube, target)
         cells.susceptibility = 1000
         out = apply_demag(magpy.Collection(src.copy(), cells)).children[1]
-        return sum(c.polarization[0] * c.volume for c in out.children)
-
-    reference = moment_x(800)
-    for target in (12, 48):
-        np.testing.assert_allclose(moment_x(target), reference, rtol=0.05)
+        assert sum(c.polarization[0] * c.volume for c in out.children) > 0
 
 
 def _segment_dimensions(cells):

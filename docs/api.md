@@ -28,6 +28,25 @@
 
 .. autoclass:: magpylib_material_response.convergence.MeshStudy
    :members: from_values
+
+.. autofunction:: magpylib_material_response.convergence.compare
+
+.. autoclass:: magpylib_material_response.convergence.Comparison
+```
+
+## Finite elements — `fem`
+
+Needs the `fem` extra: `pip install "magpylib-material-response[fem]"`.
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.fem.fem_solve
+
+.. autofunction:: magpylib_material_response.fem.fem_study
+
+.. autoclass:: magpylib_material_response.fem.FemSolution
+   :members: getB, getH
+
+.. autoclass:: magpylib_material_response.fem.FemStudy
 ```
 
 ## Meshing — `meshing`

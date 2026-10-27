@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import magpylib as magpy
 import numpy as np
 import pytest
 
-from magpylib_material_response.convergence import SAFETY_FACTOR, MeshStudy, mesh_study
+from magpylib_material_response.convergence import (
+    SAFETY_FACTOR,
+    MeshStudy,
+    compare,
+    mesh_study,
+)
 from magpylib_material_response.meshing import mesh_Cuboid
 
 
@@ -127,3 +134,43 @@ def test_mesh_study_checks_the_meshes():
             levels=(8, 9, 10),
             mesher=lambda coll, n: mesh_Cuboid(coll.sources[0], (n, 1, 1)),
         )
+
+
+def test_compare_flags_agreement_per_observer():
+    """Two values agree when their error bars overlap, or when they are equal;
+    an entry that differs without an error bar does not, and does not count."""
+    a = SimpleNamespace(
+        values=np.array([[(0, 0, 1.0), (0, 0, 1.0), (0, 0, 1.0), (0, 0, 0)]]),
+        errors=np.array([0.01, 0.01, np.nan, np.nan]),
+    )
+    b = SimpleNamespace(
+        values=np.array([[(0, 0, 1.015), (0, 0, 1.03), (0, 0, 1.01), (0, 0, 0)]]),
+        errors=np.array([0.01, 0.01, 0.01, np.nan]),
+    )
+
+    result = compare(a, b)
+
+    np.testing.assert_allclose(result.difference, [0.015, 0.03, 0.01, 0], atol=1e-12)
+    np.testing.assert_array_equal(result.agree, [True, False, False, True])
+    assert result.agreement == 2 / 3
+
+
+def test_compare_takes_the_finest_mesh():
+    """A mesh study's error is for its finest value, not the extrapolated one."""
+    cells = np.array([100, 800, 6400])
+    values = [np.array([(0, 0, 1.0 - 0.5 * n**-0.5)]) for n in cells]
+    mom = MeshStudy.from_values(cells, values)
+    fem = SimpleNamespace(values=[np.array([(0, 0, 1.0)])], errors=np.array([0.0]))
+
+    result = compare(mom, fem)
+
+    np.testing.assert_allclose(result.a, values[-1])
+    np.testing.assert_allclose(result.a_errors, mom.errors * abs(values[-1][0, 2]))
+    assert result.agree.all()
+
+
+def test_compare_refuses_different_quantities():
+    a = SimpleNamespace(values=[np.zeros((3, 3))], errors=np.zeros(3))
+    b = SimpleNamespace(values=[np.zeros((4, 3))], errors=np.zeros(4))
+    with pytest.raises(ValueError, match="same quantity"):
+        compare(a, b)

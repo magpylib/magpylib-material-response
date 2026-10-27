@@ -369,11 +369,179 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
     return _collection_from_obj_and_cells(cuboid, cells[::-1], **kwargs)
 
 
-def voxelize(obj, target_elems, strict_inside=True, **kwargs):
+#: Spacing updates `voxelize` tries for touching cells that hold the volume.
+VOXELIZE_MAX_TUNING = 10
+#: Lattices `voxelize` tries, as offsets in spacings: a site at the origin, then
+#: a cell corner there. Faces through the origin, such as a cylinder segment's
+#: sides, pass through a row of cell centres on the first and split no cell on
+#: the second; thin bodies centred there keep a middle layer only on the first.
+VOXELIZE_OFFSETS = (0.0, 0.5)
+#: Cell counts `voxelize` prefers around `target_elems`, as a factor either way.
+VOXELIZE_COUNT_RANGE = 1.5
+#: Spacings `voxelize` scans when the updates find none, 1 % apart from 0.8 to
+#: 1.25 times the target's, outward from it.
+VOXELIZE_SCAN = np.array(
+    sorted(np.geomspace(0.8, 1.25, 46), key=lambda f: abs(np.log(f)))
+)
+#: Share of the volume `voxelize` cells may miss without a warning.
+VOXELIZE_WARN_MISS = 0.01
+#: Share of the volume `voxelize` cells may miss at all; beyond it, it refuses.
+VOXELIZE_MAX_MISS = 0.05
+
+
+def _local_box(obj):
+    """Lower and upper corners of a box holding `obj` in its own frame, and the
+    point its lattice is anchored at: the origin, but the middle of the box for
+    a triangle mesh, whose vertices need not be centred on its origin."""
+    name = obj.__class__.__name__
+    if name == "TriangularMesh":
+        lo, hi = obj.vertices.min(axis=0), obj.vertices.max(axis=0)
+        return lo, hi, (lo + hi) / 2
+    if name == "Cuboid":
+        half = np.asarray(obj.dimension, dtype=float) / 2
+    elif name == "Cylinder":
+        d, h = obj.dimension
+        half = np.array([d / 2, d / 2, h / 2])
+    elif name == "CylinderSegment":
+        _, r2, h, _, _ = obj.dimension
+        half = np.array([r2, r2, h / 2])
+    else:  # Sphere; get_volume refuses other shapes first
+        half = np.full(3, obj.diameter / 2)
+    return -half, half, np.zeros(3)
+
+
+def _lattice_inside(obj, spacing, box, offset=0.0):
+    """The points inside `obj` of a cubic lattice of `spacing`, shifted by
+    `offset` spacings on every axis from a site at the box's anchor, over the
+    box (see :func:`_local_box`). The box, not a cube around the object, bounds
+    the lattice: a 0.3 mm wire 20 mm long needs 4,400 times fewer points."""
+    lo, hi, centre = box
+    axes = []
+    for a, b, c in zip(lo, hi, centre, strict=True):
+        first = np.floor((a - c) / spacing - offset)
+        last = np.ceil((b - c) / spacing - offset)
+        axes.append(c + (np.arange(first, last + 1) + offset) * spacing)
+    grid = np.stack(np.meshgrid(*axes, indexing="ij"), -1).reshape(-1, 3)
+    return grid[mask_inside(obj, grid, tolerance=1e-14)]
+
+
+def _voxel_edge(obj, vol, box, target):
+    """The spacing and lattice offset of touching cubic cells, kept where their
+    centre lies inside `obj`, that hold its volume `vol` at a count near
+    `target`, and the share of the volume they miss; ``None`` when no spacing
+    keeps any cell.
+
+    N touching cells of edge h hold the volume when h = (V / N)^(1/3). From the
+    target's spacing, moving h there reaches that point within a few lattices
+    on compact bodies. Rings and tubes gain or lose cells by whole rings and the
+    moves can jump past it, and flat bodies hold their volume only with whole
+    layers. Then every lattice met, along the moves and on a scan of spacings
+    outward from the target's, with each count's exact spacing, is a candidate,
+    taken in this order: exact near the target, where the scan stops; within
+    ``VOXELIZE_WARN_MISS`` near the target; exact at any count; within
+    ``VOXELIZE_WARN_MISS`` at any count; within ``VOXELIZE_MAX_MISS`` near the
+    target, then at any count. Spacings stay within a factor of 2 of the
+    target's: on a body
+    thinner than the cells, the exact spacing of a count met is tiny, and its
+    lattice would hold billions of points.
     """
-    Split-up a Magpylib magnet into a regular grid of identical cells. A grid of
-    identical cube cells and containing the object is created. Only the cells with their
-    barycenter inside the original object are kept.
+    start = (vol / target) ** (1 / 3)
+    seen = {}  # (count, offset) -> (volume miss, spacing)
+
+    def visit(h, offset):
+        n = len(_lattice_inside(obj, h, box, offset))
+        miss = abs(n * h**3 / vol - 1)
+        if n and miss < seen.get((n, offset), (np.inf,))[0]:
+            seen[n, offset] = (miss, h)
+        return n, miss
+
+    def near(n):
+        return target / VOXELIZE_COUNT_RANGE <= n <= target * VOXELIZE_COUNT_RANGE
+
+    for offset in VOXELIZE_OFFSETS:
+        h = start
+        for _ in range(VOXELIZE_MAX_TUNING):
+            n, miss = visit(h, offset)
+            if n == 0:
+                break
+            if miss < 1e-12:
+                if near(n):
+                    return h, offset, 0.0
+                break
+            h = (vol / n) ** (1 / 3)
+            if not start / 2 <= h <= 2 * start:
+                break
+    # outward from the target's spacing, trying each count's exact spacing as
+    # it is met, until one near the target holds: on a triangle mesh every
+    # lattice is a costly inside test
+    tried = set()
+
+    def exact_near():
+        return any(m < 1e-12 and near(n) for (n, _), (m, _) in seen.items())
+
+    for offset in VOXELIZE_OFFSETS:
+        for h in start * VOXELIZE_SCAN:
+            n, _ = visit(h, offset)
+            if n and (n, offset) not in tried:
+                tried.add((n, offset))
+                if start / 2 <= (vol / n) ** (1 / 3) <= 2 * start:
+                    visit((vol / n) ** (1 / 3), offset)
+            if exact_near():
+                break
+        if exact_near():
+            break
+    if not seen:
+        return None
+
+    def by_count(item):
+        (n, offset), (miss, _) = item
+        return abs(n - target), miss, offset
+
+    def by_miss(item):
+        (n, offset), (miss, _) = item
+        return miss, abs(n - target), offset
+
+    exact = 1e-12
+    # (largest miss, near the target only, ranking), tried in this order
+    for max_miss, near_only, rank in (
+        (exact, True, by_count),
+        (VOXELIZE_WARN_MISS, True, by_miss),
+        (exact, False, by_count),
+        (VOXELIZE_WARN_MISS, False, by_count),
+        (VOXELIZE_MAX_MISS, True, by_miss),
+        (VOXELIZE_MAX_MISS, False, by_count),
+        (np.inf, False, by_miss),
+    ):
+        pool = [
+            (key, value)
+            for key, value in seen.items()
+            if value[0] <= max_miss and (near(key[0]) or not near_only)
+        ]
+        if pool:
+            (_, offset), (miss, h) = min(pool, key=rank)
+            return h, offset, miss
+    return None
+
+
+def voxelize(obj, target_elems, strict_inside=False, **kwargs):
+    """
+    Split-up a Magpylib magnet into a regular grid of identical, touching cube
+    cells. The cells whose centre lies inside the object are kept, and the grid
+    spacing is tuned so that together they hold the object's volume, and a
+    uniformly polarized magnet its moment. Untuned, they hold 96 to 109 % of a
+    sphere's volume, depending on the cell count. The count lands within a
+    factor of 1.5 of `target_elems` where a spacing there holds the volume,
+    exactly or within 1 %. Otherwise the count that holds it is taken, as a
+    flat body holds its volume only with whole layers of cells; failing that,
+    the closest volume near the target, with a warning; beyond a 5 % miss it
+    refuses. Two lattices are tried: one with a cell centred at the object's
+    origin, and one with a cell corner there, which splits no cell along faces
+    through the origin, such as a cylinder segment's sides.
+
+    From a susceptibility of about 10 on, the staircase outline sets the moment
+    instead: a sphere at χ = 1000 comes out 5 % high at 3,000 cells, and the
+    error shrinks slowly. Meshes that follow the surface, such as `mesh_Cylinder`
+    or `mesh_TriangularMesh`, converge faster.
 
     Parameters
     ----------
@@ -381,34 +549,43 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
         Input object to be discretized
     target_elems: int
         Target number of cells
-    strict_inside: bool
-        If True, also filters out the cells with vertices outside the object boundaries
+    strict_inside: bool, default=False
+        If True, keep only the cells lying wholly inside the object, untuned.
+        They hold less than its volume: a sphere at 1,000 cells loses a quarter.
 
     Returns
     -------
     discretization: magpylib.Collection
         Collection of Cuboid cells
+
+    Raises
+    ------
+    ValueError
+        If no cell centre lies inside the object, or no spacing holds its
+        volume within 5 %, as on a body thinner than the cells.
     """
     pol0 = obj.polarization
     vol, containing_cube_edge = get_volume(obj, return_containing_cube_edge=True)
-    vol_ratio = (containing_cube_edge**3) / vol
-
-    # clamp to >=2: the cell size below divides by (grid_elems - 1)
-    grid_elems = [max(2, int((vol_ratio * target_elems) ** (1 / 3)))] * 3
-    grid_dim = [containing_cube_edge] * 3
-
-    slices = [
-        slice(-d / 2, d / 2, N * 1j) for d, N in zip(grid_dim, grid_elems, strict=False)
-    ]
-    grid = np.mgrid[slices].reshape(len(slices), -1).T
-    grid = grid[mask_inside(obj, grid, tolerance=1e-14)]
-    if grid.size == 0:
-        msg = (
-            "voxelize produced no cell centres inside the object; increase target_elems"
-        )
-        raise ValueError(msg)
-    cube_cell_dim = np.array([containing_cube_edge / (grid_elems[0] - 1)] * 3)
+    no_centres = (
+        "voxelize produced no cell centres inside the object; increase target_elems"
+    )
     if strict_inside:
+        vol_ratio = (containing_cube_edge**3) / vol
+        # clamp to >=2: the cell size below divides by (grid_elems - 1)
+        grid_elems = [max(2, int((vol_ratio * target_elems) ** (1 / 3)))] * 3
+        grid_dim = [containing_cube_edge] * 3
+        # centred where the lattice of the other mode is anchored: a triangle
+        # mesh's vertices need not be centred on its origin
+        centre = _local_box(obj)[2]
+        slices = [
+            slice(c - d / 2, c + d / 2, N * 1j)
+            for c, d, N in zip(centre, grid_dim, grid_elems, strict=False)
+        ]
+        grid = np.mgrid[slices].reshape(len(slices), -1).T
+        grid = grid[mask_inside(obj, grid, tolerance=1e-14)]
+        if grid.size == 0:
+            raise ValueError(no_centres)
+        cube_cell_dim = np.array([containing_cube_edge / (grid_elems[0] - 1)] * 3)
         elemgrid = np.array(
             list(product(*[[-cube_cell_dim[0] / 2, cube_cell_dim[0] / 2]] * 3))
         )
@@ -421,6 +598,31 @@ def voxelize(obj, target_elems, strict_inside=True, **kwargs):
         if grid.size == 0:
             msg = "No cuboids left with strict-inside method"
             raise ValueError(msg)
+    else:
+        box = _local_box(obj)
+        tuned = _voxel_edge(obj, vol, box, target_elems)
+        if tuned is None:
+            raise ValueError(no_centres)
+        edge, offset, miss = tuned
+        grid = _lattice_inside(obj, edge, box, offset)
+        held = len(grid) * edge**3 / vol
+        if miss > VOXELIZE_MAX_MISS:
+            msg = (
+                f"voxelize finds no spacing near target_elems={target_elems} at "
+                "which touching cells hold the object's volume within "
+                f"{VOXELIZE_MAX_MISS:.0%} (the closest holds {held:.0%}): the object "
+                "is thinner than the cells, or its shape does not fit their "
+                "lattice; try more cells, or strict_inside=True"
+            )
+            raise ValueError(msg)
+        if miss > VOXELIZE_WARN_MISS:
+            warnings.warn(
+                f"voxelize finds no spacing near target_elems={target_elems} at "
+                "which touching cells hold the object's volume exactly; the "
+                f"closest holds {held:.1%}.",
+                stacklevel=2,
+            )
+        cube_cell_dim = np.full(3, edge)
 
     cells = []
     for pos in grid:
