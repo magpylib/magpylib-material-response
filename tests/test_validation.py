@@ -31,7 +31,7 @@ def test_reference_is_current(name):
 )
 def test_refused(name, method):
     if not METHODS[method].can_solve(CASES[name]):
-        pytest.skip(f"{method} is not available here")
+        pytest.skip(f"{method} does not solve this case here")
     error = refusal(CASES[name], METHODS[method])
     assert error is not None
     assert CASES[name].refused in str(error)

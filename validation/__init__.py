@@ -1,7 +1,8 @@
 """Validation of the methods against finite elements (issue #82, step 2).
 
 Two lists: the cases (``cases.py``), each a model and its sensors, and the
-methods (``methods.py``), each an adapter with settings from coarse to fine.
+methods (``methods.py``), each an adapter with settings from coarse to fine,
+with magpylib alone, the model without its material response, as the floor.
 Every case has a finite-element reference stored in ``references/``, made once
 by ``python -m validation.references`` (needs the fem extra). ``python -m
 validation.run`` solves cases with methods and prints the error of B in each

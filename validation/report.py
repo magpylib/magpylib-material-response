@@ -4,9 +4,11 @@ since the night before.
     python -m validation.report records.jsonl                        # the table
     python -m validation.report records.jsonl --previous last.jsonl  # and what got worse
 
-Both print Markdown. With ``--previous`` the exit status is 1 when an error grew
-or a problem got larger at a setting both nights ran. Times are reported, never
-failed on: a shared runner's noise is larger than most changes.
+Both print Markdown. The exit status is 1 when a method's best error on a case
+is no better than magpylib alone, the model without its material response,
+and with ``--previous`` also when an error grew or a problem got larger at a
+setting both nights ran. Times are reported, never failed on: a shared runner's
+noise is larger than most changes.
 
 An error is that of the worst sensor group the reference resolves: a group
 below its reference's own error says nothing. The time to an accuracy is that
@@ -62,7 +64,8 @@ def _time(seconds):
 
 
 def _percent(value):
-    return f"{100 * value:.2g} %"
+    percent = 100 * value
+    return f"{percent:,.0f} %" if percent >= 100 else f"{percent:.2g} %"
 
 
 def reach(records, case, method, target):
@@ -87,36 +90,67 @@ def _fastest(times):
     return f"{method}, {second / first:.2g}x"
 
 
+def _baseline(method):
+    return getattr(METHODS[method], "baseline", False)
+
+
+def _best(records, case, method):
+    """The least error `method` reached on `case` and whether it sat below the
+    reference's own error, or None."""
+    errors = [
+        measured(r) for r in records if r["case"] == case and r["method"] == method
+    ]
+    return min(errors) if errors else None
+
+
 def table(records):
-    """Markdown: per case, each method's time to each target, the fastest,
-    and the best error each method reached (≤ when below the reference's own
-    error)."""
+    """Markdown: per case, each method's time to each target, the fastest, the
+    best error each method reached (≤ when below the reference's own error),
+    and magpylib alone's."""
     present = {r["method"] for r in records}
-    methods = [m for m in METHODS if m in present]
+    methods = [m for m in METHODS if m in present and not _baseline(m)]
+    floors = [m for m in METHODS if m in present and _baseline(m)]
     head = ["case"]
     for target in TARGETS:
         head += [f"{m} to {_percent(target)}" for m in methods] + ["fastest"]
-    head += [f"best {m}" for m in methods]
+    head += [f"best {m}" for m in methods] + [f"{m} alone" for m in floors]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for name in CASES:
-        rows = [r for r in records if r["case"] == name]
-        if not rows:
+        if not any(r["case"] == name for r in records):
             continue
         cells = [CASES[name].title]
         for target in TARGETS:
             times = {m: reach(records, name, m, target) for m in methods}
             cells += [_time(t) for t in times.values()] + [_fastest(times)]
-        for method in methods:
-            errors = [measured(r) for r in rows if r["method"] == method]
-            if not errors:
+        for method in methods + floors:
+            best = _best(records, name, method)
+            if best is None:
                 cells.append("-")
                 continue
-            error, below = min(errors)
-            best = ("≤ " if below else "") + _percent(error)
+            error = ("≤ " if best[1] else "") + _percent(best[0])
             failure = CASES[name].known_failures.get(method)
-            cells.append(f"{best} (known failure)" if failure else best)
+            cells.append(f"{error} (known failure)" if failure else error)
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
+
+
+def floor(records):
+    """Markdown lines, one per case and method whose best error is no better
+    than magpylib alone's: the material response bought nothing."""
+    lines = []
+    for base in (m for m in METHODS if _baseline(m)):
+        for name in CASES:
+            alone = _best(records, name, base)
+            if alone is None or alone[1]:
+                continue
+            for method in (m for m in METHODS if not _baseline(m)):
+                best = _best(records, name, method)
+                if best is not None and best[0] >= alone[0]:
+                    lines.append(
+                        f"- {name}: {method} at best {_percent(best[0])}, "
+                        f"{base} alone {_percent(alone[0])}"
+                    )
+    return lines
 
 
 def compare(records, previous):
@@ -155,8 +189,11 @@ def main(argv=None):
     records = read(args.records)
     print("## Time to accuracy\n")
     print(table(records))
+    useless = floor(records)
+    print("\n## Against magpylib alone\n")
+    print("\n".join(useless) if useless else "Every method beats it on every case.")
     if args.previous is None:
-        return 0
+        return 1 if useless else 0
     previous = read(args.previous)
     worse, slower = compare(records, previous)
     print("\n## Since the night before\n")
@@ -171,7 +208,7 @@ def main(argv=None):
     if slower:
         print(f"\nMore than {SLOWER}x slower, for information:\n")
         print("\n".join(slower))
-    return 1 if worse else 0
+    return 1 if worse or useless else 0
 
 
 if __name__ == "__main__":

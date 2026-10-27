@@ -26,7 +26,8 @@ and this project adheres to
   holds 19 cases, 16 with a stored reference; every PR checks the method of
   moments against them and is timed against its base branch in a comment, and
   every night all methods run at every setting against references made again,
-  their records kept on a `benchmarks` branch. It found a mesh NGSolve could not
+  their records kept on a `benchmarks` branch, and must beat magpylib alone, the
+  model without its material response. It found a mesh NGSolve could not
   assemble, which `fem_solve` now makes again at another grading. Two docs
   pages: checking a result with finite elements, and a magnet in a steel tube,
   where the method of moments converges inside but behind the shield needs far

@@ -105,7 +105,7 @@ def _row(record):
         worst = max(limits, key=limits.get)
         error = "< " + _percent(limits[worst])
     return (
-        f"{record['case']:<20} {record['method']:<4} {record['setting']!s:>3} "
+        f"{record['case']:<20} {record['method']:<8} {record['setting']!s:>3} "
         f"{error:>11}  {worst:<20} {sum(seconds.values()):>8.2f} s "
         f"({seconds['prepare']:.2f} / {seconds['solve']:.2f} / "
         f"{seconds['getB']:.3f})  {record['counts']['unknowns']:>8}{note}"
@@ -146,20 +146,20 @@ def main(argv=None):
             if METHODS[m].can_solve(CASES[c]) and not CASES[c].refused
         ]
     print(
-        f"{'case':<20} {'':<4} {'set':>3} {'error':>11}  {'worst group':<20} "
+        f"{'case':<20} {'':<8} {'set':>3} {'error':>11}  {'worst group':<20} "
         f"{'time':>10} (prepare / solve / getB)  unknowns"
     )
     records = []
     for case, method, settings in plan:
         if not references.path(case).exists():
-            print(f"{case.name:<20} {method.name:<4}     no reference yet")
+            print(f"{case.name:<20} {method.name:<8}     no reference yet")
             continue
         for setting in settings:
             try:
                 record = run(case, method, setting)
             except TooLarge as error:
                 print(
-                    f"{case.name:<20} {method.name:<4} {setting!s:>3} too large: {error}"[
+                    f"{case.name:<20} {method.name:<8} {setting!s:>3} too large: {error}"[
                         :120
                     ]
                 )

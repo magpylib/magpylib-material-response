@@ -142,9 +142,12 @@ and others that are hard for the method of moments, nearly all with a stored
 finite-element reference at their sensors. A test holds the method of moments to
 its stored accuracy on every pull request, and every night all methods run at
 every setting against references made again, so that a change in either method
-shows. From a clone of the repository:
+shows. Magpylib alone, the model without its material response, is the floor: 18
+% off on the three cuboids, 721 % under the soft plate, and 100 % wherever only
+soft parts answer. The method of moments beats it on every case, by a factor of
+11 to 130 at its finest mesh. From a clone of the repository:
 
 ```bash
-python -m validation.run --cases plate --methods MoM FEM  # error against time
-python -m validation.references --check                   # make the references again
+python -m validation.run --cases plate --methods magpylib MoM FEM  # error against time
+python -m validation.references --check                            # make the references again
 ```

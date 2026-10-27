@@ -36,6 +36,33 @@ class Solved:
     counts: dict[str, int]
 
 
+class Magpylib:
+    """magpylib alone: the model as given, without its material response. The
+    floor every method must beat. Soft parts carry no polarization until
+    solved, so on a model of soft parts only it is 100 % off. One setting, one
+    getB."""
+
+    name = "magpylib"
+    settings = (0,)
+    growth = 1
+    baseline = True
+
+    def settings_for(self, case):  # noqa: ARG002
+        return self.settings
+
+    @staticmethod
+    def can_solve(case):
+        # it solves anything magpylib takes; refusing is the other methods' part
+        return case.waits is None and case.refused is None
+
+    @staticmethod
+    def solve(collection, sensors, setting, **options):  # noqa: ARG004
+        start = time.perf_counter()
+        B = magpy.getB(collection, sensors)
+        seconds = {"prepare": 0.0, "solve": 0.0, "getB": time.perf_counter() - start}
+        return Solved(B, seconds, {"unknowns": 0})
+
+
 class MoM:
     """Method of moments, ``apply_demag`` on uniform cells. A setting is the
     number of cells across the thinnest part that responds
@@ -118,4 +145,4 @@ class FEM:
         )
 
 
-METHODS = {method.name: method for method in (MoM(), FEM())}
+METHODS = {method.name: method for method in (Magpylib(), MoM(), FEM())}
