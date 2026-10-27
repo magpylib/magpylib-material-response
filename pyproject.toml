@@ -187,3 +187,8 @@ messages_control.disable = [
   "invalid-name", # TODO - review later
   "protected-access", # TODO - review later
 ]
+
+
+[tool.codespell]
+# netgen's name for a face's inner region (FaceDescriptor.domin)
+ignore-words-list = "domin"

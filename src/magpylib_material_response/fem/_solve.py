@@ -36,8 +36,8 @@ References
   techniques for static and quasi-static electromagnetic field problems", IEEE
   Trans. Magn. 33(1), 663-676.
 - J. Simkin, C. W. Trowbridge (1979) "On the use of the total scalar potential
-  in the numerical solution of field problems in electromagnetics", Int. J.
-  Numer. Methods Eng. 14(3), 423-440.
+  in the numerical solution of field problems in electromagnetics",
+  International Journal for Numerical Methods in Engineering 14(3), 423-440.
 """
 
 from __future__ import annotations
