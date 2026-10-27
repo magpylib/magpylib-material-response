@@ -9,4 +9,10 @@ sensor group against the reference, with the time of each phase: prepare,
 solve and getB. ``tests/test_validation.py`` runs each method at the setting
 ``pr_check.json`` stores for it and fails when a group's error or the size of
 the problem grows.
+
+In CI, ``timing.py`` times that check against the PR's base branch for a
+comment (``.github/workflows/timing.yml``), and every night the references are
+made again and every method runs at every setting; ``report.py`` turns the
+records into a table of time to accuracy and lists what got worse since the
+last night that passed (``.github/workflows/nightly.yml``).
 """

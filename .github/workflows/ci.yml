@@ -79,9 +79,34 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  bare:
+    name: Without the extras
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Install package without tetgen and NGSolve
+        run: |
+          uv venv
+          uv pip install . "pytest>=9"
+
+      - name: Test package
+        run: .venv/bin/python -m pytest -ra
+
   pass:
     if: always()
-    needs: [lint, checks]
+    needs: [lint, checks, bare]
     runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:

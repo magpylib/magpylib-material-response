@@ -324,6 +324,33 @@ def _thin_ring():
     return magpy.Collection(tube, magnet), groups
 
 
+def _shield_tube():
+    """A magnet (25 mm across, 10 mm tall, 1.22 T, chi = 0.05) on the axis of
+    an open steel tube (radius 22.5 to 25 mm, 130 mm long, chi = 100) that
+    reaches 15 mm past it on one side: #36's model, by @AadityaPrabhu. Sensors
+    on #36's line between the magnet and the wall, on the axis beyond the
+    magnet, and outside the tube beside it."""
+    magnet = magpy.magnet.Cylinder(
+        polarization=(0, 0, 1.22),
+        dimension=(25 * MM, 10 * MM),
+        style_label="magnet, 1.22 T",
+    )
+    magnet.susceptibility = 0.05
+    tube = magpy.magnet.CylinderSegment(
+        polarization=(0, 0, 0),
+        dimension=(22.5 * MM, 25 * MM, 130 * MM, 0, 360),
+        position=(0, 0, 50 * MM),
+        style_label="tube, χ = 100",
+    )
+    tube.susceptibility = 100
+    groups = {
+        "between magnet and wall": _line((-18.45, 0, 0), (-18.45, 0, 100), 21),
+        "on the axis": _line((0, 0, 10), (0, 0, 100), 10),
+        "outside the tube": _line((30, 0, 0), (60, 0, 0), 7),
+    }
+    return magpy.Collection(magnet, tube), groups
+
+
 def _cad_plate(n_fillet=6, n_hole=24):
     """Vertices and faces of a 20 x 12 x 4 mm plate with 3 mm fillets on its
     vertical edges and a 3 mm hole 3 mm off centre, exported as a CAD tool does:
@@ -498,6 +525,14 @@ CASES = {
             "typical",
             _thin_ring,
             known_failures={"MoM": ISSUES + "92"},
+        ),
+        # order 4 takes 1.9 million unknowns and 8.4 GB
+        Case(
+            "shield_tube",
+            "Magnet in a steel tube (#36)",
+            "typical",
+            _shield_tube,
+            reference_orders=(2, 3, 4),
         ),
         # order 5 on its mesh would need about 11 GB
         Case(

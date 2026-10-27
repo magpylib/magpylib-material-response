@@ -1,0 +1,115 @@
+name: Nightly validation
+
+# Every validation case with every method at every setting, against the stored
+# finite-element references, which are made again first. The records go to the
+# benchmarks branch, one file a night; a night is compared with the baseline
+# there, the last night that passed, and fails when an error grew or a
+# reference moved. Run it by hand with "accept" to make a night the baseline
+# after an intended change.
+
+on:
+  # TEMPORARY: one run on its PR's branch; removed before merging
+  push:
+    branches: [fem-plan]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      accept:
+        description: "Make this night the baseline, even if it is worse"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: 3
+
+jobs:
+  validation:
+    name: Every case, every method
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: write # the records, on the benchmarks branch
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Install package
+        run: uv sync
+
+      - name: The references still hold
+        id: references
+        continue-on-error: true
+        run: uv run python -m validation.references --check | tee references.txt
+
+      - name: Every case, every method
+        run: uv run python -m validation.run --out records.jsonl
+
+      - name: The baseline
+        run: |
+          if git fetch origin benchmarks; then
+            git show origin/benchmarks:baseline.jsonl > baseline.jsonl || rm -f baseline.jsonl
+          fi
+
+      - name: Report
+        id: report
+        continue-on-error: true
+        run: |
+          if [ -f baseline.jsonl ]; then
+            uv run python -m validation.report records.jsonl --previous baseline.jsonl > report.md
+          else
+            uv run python -m validation.report records.jsonl > report.md
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -f report.md ] && cat report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f references.txt ]; then
+            printf '\n## References made again\n\n```\n' >> "$GITHUB_STEP_SUMMARY"
+            cat references.txt >> "$GITHUB_STEP_SUMMARY"
+            printf '```\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the records on the benchmarks branch
+        if: always() && github.ref == 'refs/heads/main' && hashFiles('records.jsonl') != ''
+        env:
+          PASSED: ${{ steps.references.outcome == 'success' && steps.report.outcome == 'success' }}
+          ACCEPT: ${{ inputs.accept || false }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse --verify -q origin/benchmarks; then
+            git worktree add -B benchmarks kept origin/benchmarks
+          else
+            git worktree add --orphan -b benchmarks kept
+          fi
+          day=$(date -u +%F)
+          mkdir -p kept/history
+          cp records.jsonl "kept/history/$day.jsonl"
+          [ -f report.md ] && cp report.md "kept/history/$day.md"
+          if [ "$PASSED" = "true" ] || [ "$ACCEPT" = "true" ]; then
+            cp records.jsonl kept/baseline.jsonl
+          fi
+          git -C kept add history baseline.jsonl 2>/dev/null || git -C kept add history
+          git -C kept commit -m "Nightly validation, $day"
+          git -C kept push origin benchmarks
+
+      - name: Fail on what moved
+        if: steps.references.outcome == 'failure' || steps.report.outcome == 'failure'
+        run: |
+          echo "A reference moved or an error grew: see the summary."
+          exit 1

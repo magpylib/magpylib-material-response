@@ -140,7 +140,7 @@ def main(argv=None):
                     said = "NOT REFUSED" if error is None else f"refused: {error}"
                     print(f"{case.name}, {method.name}: {said}"[:120])
         plan = [
-            (CASES[c], METHODS[m], args.settings or METHODS[m].settings)
+            (CASES[c], METHODS[m], args.settings or METHODS[m].settings_for(CASES[c]))
             for c in args.cases
             for m in args.methods
             if METHODS[m].can_solve(CASES[c]) and not CASES[c].refused

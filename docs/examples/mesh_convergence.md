@@ -29,8 +29,8 @@ Three parts from sensor and actuator design follow. The levels passed to
 `mesh_study`, such as `(4, 8, 16)`, are cells across the thinnest part that
 responds: its default mesher, `mesh_uniform`, cuts every such part into cells of
 that one size, which the solver multiplies by FFT. Each study runs here in
-seconds; the same study on meshes eight times finer, run separately, shows how
-good its estimate is.
+seconds; finite elements on the same models, run separately, show how good its
+estimate is.
 
 ```{code-cell} ipython3
 import magpylib as magpy
@@ -81,9 +81,9 @@ report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
 +++ {"user_expressions": []}
 
 The gain 0.5 mm from the tip falls from 4.34 to 4.27 as the cells shrink, while
-the gain 2 mm out rises. The same study on 4,096 to 262,144 cells puts the gains
-at 4.259, 3.346 and 2.168, to within 0.14 %. Against these, the finest mesh here
-is 0.30 %, 0.07 % and 0.11 % off; `mesh_study` said 0.44 %, 0.13 % and 0.17 %.
+the gain 2 mm out rises. Finite elements put the gains at 4.259, 3.347 and
+2.168, to within 0.001 %. Against these, the finest mesh here is 0.29 %, 0.06 %
+and 0.11 % off; `mesh_study` said 0.44 %, 0.13 % and 0.17 %.
 
 ## A Halbach array on back iron
 
@@ -132,9 +132,9 @@ fig
 
 The bars are the estimated error at each point, too small to see on the scale of
 the field: 0.03 % for the whole profile, 0.1 % at the worst point, at the end of
-the array. Against the same study on 3,840 to 245,760 cells, itself good to 0.03
-%, the finest mesh here is 0.02 % off overall and 0.08 % at that point, under
-the estimate at all 21 points.
+the array. Against finite elements, good to 0.001 %, the finest mesh here is
+0.02 % off overall and 0.08 % at that point, under the estimate at all 21
+points.
 
 ## A steel sheet shielding a sensor
 
@@ -159,33 +159,31 @@ report(shield, ["axis", "6 mm out", "12 mm out"], "mT", 1e3)
 +++ {"user_expressions": []}
 
 On the axis the residual field falls from 12.4 mT on the coarsest mesh to 6.1
-mT. The same study on 4,608 to 294,912 cells puts the three sensors at 5.52,
-5.85 and 8.80 mT, to within 3.3 %, 1.1 % and 0.09 %. Against these, the finest
-mesh here is 10.0 %, 3.2 % and 0.26 % off, and `mesh_study` said 13.6 %, 4.7 %
-and 0.23 %. The last falls 0.03 % short, less than the uncertainty of its
-reference: the error is an estimate, not a bound.
+mT. Finite elements put the three sensors at 5.53, 5.85 and 8.80 mT, to within
+0.002 %. Against these, the finest mesh here is 9.9 %, 3.1 % and 0.30 % off, and
+`mesh_study` said 13.6 %, 4.7 % and 0.23 %. The last falls 0.07 % short: the
+error is an estimate, not a bound.
 
 <details>
-<summary>The reference values: the same studies on meshes eight times finer
-(6 minutes and 6 GB, not run here)</summary>
+<summary>The reference values: finite elements at orders 3 to 5, with the
+<code>fem</code> extra (under 3 minutes, not run here)</summary>
+
+The same models are cases of the repository's validation suite
+(`validation/cases.py`), whose stored references these are.
 
 ```python
-finer = [
-    mesh_study(bar.parent, gain, (8, 16, 32)),
-    mesh_study(array, profile, (4, 8, 16)),
-    mesh_study(sheet.parent, behind, (2, 4, 8)),
+from magpylib_material_response.convergence import compare
+from magpylib_material_response.fem import fem_study
+
+fem = [
+    fem_study(bar.parent, sensors, orders=(3, 4, 5)),
+    fem_study(array, profile, orders=(3, 4, 5)),
+    fem_study(sheet.parent, behind, orders=(3, 4, 5)),
 ]
-
-
-def per_entry(value):
-    return np.linalg.norm(value, axis=-1) if np.ndim(value) == 2 else np.abs(value)
-
-
-for study, reference in zip((concentrator, halbach, shield), finer, strict=True):
-    off = per_entry(study.values[-1] - reference.estimate) / per_entry(
-        reference.estimate
-    )
-    print(f"reference {per_entry(reference.estimate)}, within {reference.errors}")
+print(f"gains {(fem[0].estimate[:, 0] + B0) / B0}, within {fem[0].errors}")
+for study, reference in zip((halbach, shield), fem[1:], strict=True):
+    comparison = compare(study, reference)
+    off = comparison.difference / np.linalg.norm(comparison.b, axis=-1)
     print(f"finest mesh here off by {off}, estimated {study.errors}")
 ```
 

@@ -278,12 +278,13 @@ The answer converges as the cells shrink, slowly: halving the cell size, which
 takes eight times the cells, cuts the error to about a third. Soft iron is the
 hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
-Its magnetic moment, 0.02889 A m², is known to 0.1 %: finite-element solutions
-of rising order and mesh density converge to it
-([#76](https://github.com/magpylib/magpylib-material-response/issues/76)). The
+Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
+elements give it at orders 3 to 5
+([Checking a result with finite elements](examples/fem_check.md)). The
 polarizability of a cube of infinite susceptibility, 3.6443 times its volume
-(Helsing and Perfekt 2013), gives 0.028895 A m², 0.02 % away, through $m = VH /
-(1/3.6443 + 1/\chi)$, which is exact for ellipsoids:
+(Helsing and Perfekt 2013), gives 0.028895 A m² through
+$m=VH/(1/3.6443+1/\chi)$, 0.05 % high: that formula is exact for ellipsoids
+only.
 
 ```{code-cell} ipython3
 def soft_cube():
@@ -304,7 +305,7 @@ def moment(solved):
     return sum(c.volume * c.orientation.apply(c.polarization)[2] for c in solved.sources_all) / magpy.mu_0
 
 
-EXACT = 0.02889  # A m², the converged moment of this cube (#76)
+EXACT = 0.028880  # A m², this cube's moment by finite elements, orders 3 to 5
 runs = []
 for rule in ("point", "newell"):
     for n in (27, 64, 216, 512, 1728, 4096):

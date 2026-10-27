@@ -2,6 +2,7 @@
 
     python -m validation.references             # the cases without a file
     python -m validation.references plate       # these, even if they exist
+    python -m validation.references --check     # make them all again, compare
 
 Needs the fem extra. Each case is solved by ``fem_study`` at its reference
 orders (3, 4 and 5 unless the case says otherwise) on one mesh whose elements at
@@ -17,6 +18,10 @@ A case may keep a reference made elsewhere, with the components it gives and
 how it was made, which this module never overwrites: ``ucore.json``, Bz on the
 docs' line from the two-potential FEM of issue #76 (scikit-fem), an independent
 check of fem's currents.
+
+``--check`` makes every reference of this module again, without writing it, and
+fails when one moved by more than its stored error and its new one together: a
+change in fem or in NGSolve, which the nightly run catches.
 """
 
 from __future__ import annotations
@@ -59,6 +64,29 @@ def _finer_at_sensors(factor):
 
 def make(case):
     """Solve `case` by finite elements and write its reference."""
+    data = _solve(case)
+    FOLDER.mkdir(exist_ok=True)
+    temporary = path(case).with_suffix(".tmp")
+    temporary.write_text(json.dumps(data, indent=1) + "\n")
+    temporary.replace(path(case))
+    return data
+
+
+def check(case):
+    """Solve `case` again and compare with its stored reference: per group, how
+    far B moved, ‖ΔB‖ / ‖B‖, and how far it may move, the stored error and
+    the new one together."""
+    stored, new = load(case), _solve(case)
+    moved = {}
+    for group, old in stored["groups"].items():
+        B = np.array(new["groups"][group]["B"])
+        offset = float(np.linalg.norm(B - old["B"]) / np.linalg.norm(old["B"]))
+        moved[group] = (offset, old["error"] + new["groups"][group]["error"])
+    return moved
+
+
+def _solve(case):
+    """The reference of `case` by finite elements, as ``make`` writes it."""
     import ngsolve  # noqa: PLC0415
 
     from magpylib_material_response.fem import fem_solve, fem_study  # noqa: PLC0415
@@ -103,7 +131,7 @@ def make(case):
             "order_change": float(by_order),
             "mesh_change": float(by_mesh),
         }
-    data = {
+    return {
         "case": case.name,
         "hash": case.hash(),
         "orders": list(orders),
@@ -114,11 +142,6 @@ def make(case):
         "versions": {"ngsolve": ngsolve.__version__, "magpylib": magpy.__version__},
         "groups": stored,
     }
-    FOLDER.mkdir(exist_ok=True)
-    temporary = path(case).with_suffix(".tmp")
-    temporary.write_text(json.dumps(data, indent=1) + "\n")
-    temporary.replace(path(case))
-    return data
 
 
 def load(case):
@@ -145,9 +168,34 @@ def load(case):
     return data
 
 
+def _check_all():
+    """Make every reference of this module again; 1 if one moved too far."""
+    failed = 0
+    for case in CASES.values():
+        if (
+            case.reference
+            or case.refused
+            or case.waits
+            or not path(case).exists()
+            or "made_by" in json.loads(path(case).read_text())
+        ):
+            continue
+        for group, (offset, allowed) in check(case).items():
+            verdict = "ok" if offset <= allowed else "MOVED"
+            failed += offset > allowed
+            print(
+                f"{case.name:<14} {group:<26} moved {offset:.1e}, "
+                f"may move {allowed:.1e}  {verdict}",
+                flush=True,
+            )
+    return 1 if failed else 0
+
+
 def main(names):
     from .methods import FEM  # noqa: PLC0415
 
+    if names == ["--check"]:
+        return _check_all()
     cases = [CASES[n] for n in names] or [
         c
         for c in CASES.values()
@@ -162,7 +210,8 @@ def main(names):
         data = make(case)
         errors = ", ".join(f"{g} {v['error']:.1e}" for g, v in data["groups"].items())
         print(f"{case.name}: {data['seconds']} s; {errors}", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))

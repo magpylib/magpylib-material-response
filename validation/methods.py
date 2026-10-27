@@ -49,6 +49,9 @@ class MoM:
     growth = 64
     max_cells = 20_000
 
+    def settings_for(self, case):  # noqa: ARG002
+        return self.settings
+
     @staticmethod
     def can_solve(case):
         return case.waits is None
@@ -86,6 +89,11 @@ class FEM:
     settings = (2, 3, 4, 5)
     # time per order, measured: 1.3 to 3.4
     growth = 3
+
+    def settings_for(self, case):
+        """Orders up to the reference's highest: past it, FEM would be checked
+        against a coarser solution of its own, and may not fit in memory."""
+        return tuple(s for s in self.settings if s <= max(case.reference_orders))
 
     @staticmethod
     def can_solve(case):
