@@ -39,6 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - uses: actions/setup-python@v7
@@ -84,6 +85,18 @@ jobs:
             printf '```\n' >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Upload the records
+        if: always() && hashFiles('records.jsonl') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-records
+          path: |
+            records.jsonl
+            report.md
+            references.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Keep the records on the benchmarks branch
         if:
           always() && github.ref == 'refs/heads/main' &&
@@ -93,6 +106,7 @@ jobs:
             ${{ steps.references.outcome == 'success' && steps.report.outcome ==
             'success' }}
           ACCEPT: ${{ inputs.accept || false }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -110,7 +124,8 @@ jobs:
           fi
           git -C kept add history baseline.jsonl 2>/dev/null || git -C kept add history
           git -C kept commit -m "Nightly validation, $day"
-          git -C kept push origin benchmarks
+          git -C kept push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" benchmarks
 
       - name: Fail on what moved
         if:

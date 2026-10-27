@@ -73,15 +73,9 @@ def _time(seconds):
 def compare(folder):
     """Markdown: each case's time on the base and here, slowest change first."""
     base, head = _rounds(folder, "base"), _rounds(folder, "head")
+    title = f"{MARKER}\n### Timing against the base branch\n\n"
     if not base:
-        return "\n".join(
-            [
-                MARKER,
-                "### Timing against the base branch",
-                "",
-                "The base could not run.",
-            ]
-        )
+        return f"{title}The base could not run."
     rows, flagged, total = [], 0, [0.0, 0.0]
     for key in head[0]["times"]:
         then, then_spread = _least(base, key)
@@ -98,38 +92,30 @@ def compare(folder):
         flag = ratio > SLOWER and then > FLOOR
         flagged += flag
         spread = max(then_spread, now_spread)
-        rows.append(
-            (
-                ratio,
-                f"| {key} | {_time(then)} | {_time(now)} | "
-                f"{'**' if flag else ''}{ratio:.2f}×{'**' if flag else ''} | "
-                f"{100 * spread:.0f} % |",
-            )
-        )
+        bold = "**" if flag else ""
+        cells = [key, _time(then), _time(now), f"{bold}{ratio:.2f}x{bold}"]
+        rows.append((ratio, f"| {' | '.join(cells)} | {100 * spread:.0f} % |"))
     rows.sort(key=lambda row: -row[0])
     summary = (
         f"PR check solved by this PR in {_time(total[1])} against "
-        f"{_time(total[0])} on the base ({total[1] / total[0]:.2f}×), "
+        f"{_time(total[0])} on the base ({total[1] / total[0]:.2f}x), "
         f"least of {len(head)} rounds each."
         if total[0] > 0
         else "No case ran on both."
     )
     if flagged:
-        summary += f" {flagged} case(s) more than {SLOWER}× slower, in bold."
-    return "\n".join(
+        summary += f" {flagged} case(s) more than {SLOWER}x slower, in bold."
+    table = "\n".join(
         [
-            MARKER,
-            "### Timing against the base branch",
-            "",
-            summary,
-            "",
             "| case | base | this PR | ratio | spread between rounds |",
             "|---|---|---|---|---|",
             *(row for _, row in rows),
-            "",
-            f"Base {base[0]['version']}, this PR {head[0]['version']}. "
-            "For information only: nothing fails on time yet.",
         ]
+    )
+    versions = f"Base {base[0]['version']}, this PR {head[0]['version']}."
+    return (
+        f"{title}{summary}\n\n{table}\n\n{versions} "
+        "For information only: nothing fails on time yet."
     )
 
 

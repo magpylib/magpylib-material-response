@@ -57,7 +57,7 @@ def _seconds(record):
 
 def _time(seconds):
     if seconds is None:
-        return "–"
+        return "-"
     return f"{seconds * 1e3:.0f} ms" if seconds < 1 else f"{seconds:.1f} s"
 
 
@@ -80,11 +80,11 @@ def _fastest(times):
     """The fastest method and how many times faster than the next."""
     reached = sorted((t, m) for m, t in times.items() if t is not None)
     if not reached:
-        return "–"
+        return "-"
     if len(reached) == 1:
         return f"{reached[0][1]} only"
     (first, method), (second, _) = reached[:2]
-    return f"{method}, {second / first:.2g}×"
+    return f"{method}, {second / first:.2g}x"
 
 
 def table(records):
@@ -109,7 +109,7 @@ def table(records):
         for method in methods:
             errors = [measured(r) for r in rows if r["method"] == method]
             if not errors:
-                cells.append("–")
+                cells.append("-")
                 continue
             error, below = min(errors)
             best = ("≤ " if below else "") + _percent(error)
@@ -169,7 +169,7 @@ def main(argv=None):
         if changed:
             print("\nVersions changed: " + ", ".join(changed) + ".")
     if slower:
-        print(f"\nMore than {SLOWER}× slower, for information:\n")
+        print(f"\nMore than {SLOWER}x slower, for information:\n")
         print("\n".join(slower))
     return 1 if worse else 0
 
