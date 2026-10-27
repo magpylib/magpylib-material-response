@@ -9,6 +9,12 @@ from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
 from magpylib_material_response.face_charge._sheet import saturation
+from magpylib_material_response.face_charge._triangle import field as triangle_field
+from magpylib_material_response.face_charge._triangle import (
+    frames,
+    normal_field,
+    normal_field_far,
+)
 
 TRIANGLE = np.array([[0.0, 0.0, 0.0], [0.004, 0.001, 0.0], [0.001, 0.003, 0.0005]])
 NORMAL = np.cross(TRIANGLE[1] - TRIANGLE[0], TRIANGLE[2] - TRIANGLE[0])
@@ -81,6 +87,20 @@ def test_linear_charge_is_the_limit_of_uniform_pieces():
         _relative(magpy.getH(pieces, far, sumup=True), _one_face(CHARGE).getH(far))
         < 1e-3
     )
+
+
+def test_normal_fields_are_the_fields_normal_part():
+    rng = np.random.default_rng(1)
+    V = rng.normal(size=(40, 3, 3))
+    fr = frames(V)
+    near, far = rng.normal(size=(30, 3)) * 3, rng.normal(size=(30, 3)) * 50
+    for X, kernel, tol in ((near, normal_field, 1e-13), (far, normal_field_far, 1e-9)):
+        En = np.einsum("amnd,nd->amn", triangle_field(X, V, fr), fr[1])
+        assert np.abs(kernel(X, V, fr) - En).max() < tol * np.abs(En).max()
+    one = rng.integers(0, len(V), len(near))  # observer i with triangle one[i]
+    pairs = normal_field(near, V[one], tuple(a[one] for a in fr), pairs=True)
+    assert np.allclose(pairs, normal_field(near, V, fr)[:, np.arange(len(near)), one])
+    assert np.isfinite(normal_field(V[:, 0], V, fr)).all()  # observers on vertices
 
 
 def test_copies_keep_their_own_charge():

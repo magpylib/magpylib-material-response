@@ -120,3 +120,107 @@ def field(X, V, fr):
             psi_rho[..., None] * E0 - sum_L[k] / s[None, :, None] - g * Phi[..., None]
         )
     return np.stack(out)
+
+
+def normal_field(X, V, fr, pairs=False):
+    """``n . int phi (x - y) / R^3 dS``: only the component along each
+    triangle's normal, which is all a Galerkin flux needs. With ``n . L_e =
+    w f_e`` and ``g`` in the plane it is ``psi(rho) sign(w) sum beta - w sum
+    (g.m) f``.
+
+    ``X`` (M, 3) observers, ``V`` (N, 3, 3) triangles and ``fr`` their
+    :func:`frames`: returns (3 densities, M, N). With ``pairs``, ``X`` and ``V``
+    have the same length and observer ``i`` goes with triangle ``i`` only:
+    returns (3 densities, M).
+    """
+    cen, n, e1, e2, s, _ = fr
+    if pairs:
+        x, Vb, nb, cb, e1b, e2b, sb = X, V, n, cen, e1, e2, s
+    else:
+        x = X[:, None, :]
+        Vb, nb, cb, e1b, e2b, sb = (
+            V[None],
+            n[None],
+            cen[None],
+            e1[None],
+            e2[None],
+            s[None],
+        )
+    w = np.sum((x - Vb[..., 0, :]) * nb, axis=-1)
+    rho = x - w[..., None] * nb
+    # lifted off the plane as in `field`, every distance taken from there
+    w = np.where(w == 0, 1e-12 * sb, w)
+    x = rho + w[..., None] * nb
+    abs_w = np.abs(w)
+    sum_beta = 0.0
+    sum_mf = [0.0, 0.0]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for i, j in ((0, 1), (1, 2), (2, 0)):
+            p, q = Vb[..., i, :], Vb[..., j, :]
+            t = (q - p) / np.linalg.norm(q - p, axis=-1)[..., None]
+            m = np.cross(t, nb)
+            l_minus = np.sum((p - x) * t, axis=-1)
+            l_plus = np.sum((q - x) * t, axis=-1)
+            P0 = np.sum((p - rho) * m, axis=-1)
+            R_minus = np.linalg.norm(x - p, axis=-1)
+            R_plus = np.linalg.norm(x - q, axis=-1)
+            R02 = P0**2 + w**2
+            f = _log_sum(R_plus, l_plus, R02) - _log_sum(R_minus, l_minus, R02)
+            sum_beta = (
+                sum_beta
+                + np.arctan2(P0 * l_plus, R02 + abs_w * R_plus)
+                - np.arctan2(P0 * l_minus, R02 + abs_w * R_minus)
+            )
+            for k, e in enumerate((e1b, e2b)):
+                sum_mf[k] = sum_mf[k] + np.sum(e * m, axis=-1) * f
+    En0 = np.sign(w) * sum_beta
+    out = [En0]
+    for k, e in enumerate((e1b, e2b)):
+        psi_rho = np.sum((rho - cb) * e, axis=-1) / sb
+        out.append(psi_rho * En0 - w * sum_mf[k] / sb)
+    return np.stack(out)
+
+
+def normal_field_far(X, V, fr):
+    """:func:`normal_field` for all observers against all triangles, (3, M, N),
+    with every dot product one matrix product: ``|x - p|^2 = |x|^2 - 2 x.p +
+    |p|^2``, only logarithms, arctangents and roots per pair. For pairs farther
+    apart than a triangle's size: the cancellation in ``|x - p|^2`` grows as
+    ``(size / distance)^2`` times the rounding."""
+    cen, n, e1, e2, s, _ = fr
+    xx = np.sum(X * X, axis=1)[:, None]
+    w = X @ n.T - np.sum(V[:, 0] * n, axis=1)[None]
+    w = np.where(w == 0, 1e-12 * s[None], w)
+    abs_w = np.abs(w)
+    R = [
+        np.sqrt(
+            np.maximum(xx - 2 * X @ V[:, k].T + np.sum(V[:, k] ** 2, axis=1)[None], 0.0)
+        )
+        for k in range(3)
+    ]
+    sum_beta = 0.0
+    sum_mf = [0.0, 0.0]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for i, j in ((0, 1), (1, 2), (2, 0)):
+            p, q = V[:, i], V[:, j]
+            t = (q - p) / np.linalg.norm(q - p, axis=1)[:, None]
+            m = np.cross(t, n)
+            xt, xm = X @ t.T, X @ m.T
+            l_minus = np.sum(p * t, axis=1)[None] - xt
+            l_plus = np.sum(q * t, axis=1)[None] - xt
+            P0 = np.sum(p * m, axis=1)[None] - xm
+            R02 = P0**2 + w**2
+            f = _log_sum(R[j], l_plus, R02) - _log_sum(R[i], l_minus, R02)
+            sum_beta = (
+                sum_beta
+                + np.arctan2(P0 * l_plus, R02 + abs_w * R[j])
+                - np.arctan2(P0 * l_minus, R02 + abs_w * R[i])
+            )
+            for k, e in enumerate((e1, e2)):
+                sum_mf[k] = sum_mf[k] + np.sum(e * m, axis=1)[None] * f
+    En0 = np.sign(w) * sum_beta
+    out = [En0]
+    for k, e in enumerate((e1, e2)):
+        psi_rho = (X @ e.T - np.sum(cen * e, axis=1)[None]) / s[None]
+        out.append(psi_rho * En0 - w * sum_mf[k] / s[None])
+    return np.stack(out)
