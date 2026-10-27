@@ -33,8 +33,9 @@ musl.
 
 ## A magnet beside a soft cube
 
-The model of [Soft magnets](soft_magnets.md): a magnet (χ = 0.5) beside a cube of
-soft iron (χ = 3999) turned by 45°, with 41 sensors on a line 1 mm below them.
+The model of [Soft magnets](soft_magnets.md): a magnet (χ = 0.5) beside a cube
+of soft iron (χ = 3999) turned by 45°, with 41 sensors on a line 1 mm below
+them.
 
 ```{code-cell} ipython3
 import magpylib as magpy
@@ -69,9 +70,9 @@ print(f"{comparison.relative_difference:.2%} apart; {comparison.agree.sum()} of 
 
 +++ {"user_expressions": []}
 
-Each method takes seconds here, and FEM's error is a third of MoM's. Two
-values agree when they are no farther apart than their two error bars together;
-where they disagree, at least one bar is too short.
+Each method takes seconds here, and FEM's error is a third of MoM's. Two values
+agree when they are no farther apart than their two error bars together; where
+they disagree, at least one bar is too short.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -101,19 +102,19 @@ fig
 +++ {"user_expressions": []}
 
 They disagree in two places, and both times MoM's bar is the short one: FEM at
-order 5 puts the sensor just under the soft cube's corner, at 1.5 mm, 1.31 % from
-MoM's finest mesh, where `mesh_study` estimated 1.15 %, and FEM's order 4 within
-0.002 %. Far to the left the field is weak and both differences are below 0.1 %.
-A disagreement is the cue to refine the mesh there, or to take FEM's value.
+order 5 puts the sensor just under the soft cube's corner, at 1.5 mm, 1.31 %
+from MoM's finest mesh, where `mesh_study` estimated 1.15 %, and FEM's order 4
+within 0.002 %. Far to the left the field is weak and both differences are below
+0.1 %. A disagreement is the cue to refine the mesh there, or to take FEM's
+value.
 
 ## What `fem_solve` does
 
 `fem_solve(model, order, observers=...)` solves one model at one polynomial
 order and returns a solution with `moment`, and with `getB` and `getH`, which
 leave out a uniform `H_ext` as a model solved by `apply_demag` does. `fem_study`
-solves
-it at rising orders on one mesh and takes 1.25 times the last change as the
-error of the highest, per sensor and in all.
+solves it at rising orders on one mesh and takes 1.25 times the last change as
+the error of the highest, per sensor and in all.
 
 - **Shapes:** cuboids, cylinders, cylinder segments, spheres, tetrahedra and
   triangular meshes, magnets with remanence and a linear susceptibility, also
@@ -128,8 +129,8 @@ error of the highest, per sensor and in all.
   coil is not meshed. A current through a magnet, through the hole of a ring
   magnet, or along an open path is refused.
 - **Memory is the limit**, not time: the
-  [magnet in a steel tube](shield_tube.md) takes 1.9 million unknowns and 8.4
-  GB at order 4, in 50 s.
+  [magnet in a steel tube](shield_tube.md) takes 1.9 million unknowns and 8.4 GB
+  at order 4, in 50 s.
 
 Both methods take the same susceptibility, so FEM checks the numerics, not the
 material model.

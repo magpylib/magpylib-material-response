@@ -85,9 +85,13 @@ jobs:
           fi
 
       - name: Keep the records on the benchmarks branch
-        if: always() && github.ref == 'refs/heads/main' && hashFiles('records.jsonl') != ''
+        if:
+          always() && github.ref == 'refs/heads/main' &&
+          hashFiles('records.jsonl') != ''
         env:
-          PASSED: ${{ steps.references.outcome == 'success' && steps.report.outcome == 'success' }}
+          PASSED:
+            ${{ steps.references.outcome == 'success' && steps.report.outcome ==
+            'success' }}
           ACCEPT: ${{ inputs.accept || false }}
         run: |
           git config user.name "github-actions[bot]"
@@ -109,7 +113,9 @@ jobs:
           git -C kept push origin benchmarks
 
       - name: Fail on what moved
-        if: steps.references.outcome == 'failure' || steps.report.outcome == 'failure'
+        if:
+          steps.references.outcome == 'failure' || steps.report.outcome ==
+          'failure'
         run: |
           echo "A reference moved or an error grew: see the summary."
           exit 1

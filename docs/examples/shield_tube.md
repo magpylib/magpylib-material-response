@@ -26,8 +26,8 @@ the magnet is 25 mm across and 10 mm tall, polarized along the axis at 1.22 T,
 with a susceptibility of 0.05; the tube (χ = 100) has radii of 22.5 and 25 mm
 and runs 130 mm, from 15 mm behind the magnet's centre to 115 mm in front of it.
 
-The tube is a `CylinderSegment` that goes all the way round, and
-`mesh_Cylinder` cuts it into cells around it, across its wall and along it.
+The tube is a `CylinderSegment` that goes all the way round, and `mesh_Cylinder`
+cuts it into cells around it, across its wall and along it.
 
 ```{code-cell} ipython3
 import json
@@ -100,11 +100,11 @@ Inside the tube the method of moments converges: the error between the magnet
 and the wall falls from 6 % to 2 % as the cells along the tube triple, and on
 the axis it is under 1 % from the start. Outside, the field is what the tube
 lets through, 3 mT beside the magnet where the magnet alone gives 21 mT, and the
-cells are 88 % and 48 % off. Cells along the tube decide it, more than
-cells around or across: the flux turns into the wall near the magnet, within a
-few cells. Cells of one size fine enough there would number in the thousands,
-and curved cells cost more than cuboids. For the field a shield lets through,
-take the finite-element value.
+cells are 88 % and 48 % off. Cells along the tube decide it, more than cells
+around or across: the flux turns into the wall near the magnet, within a few
+cells. Cells of one size fine enough there would number in the thousands, and
+curved cells cost more than cuboids. For the field a shield lets through, take
+the finite-element value.
 
 ```{code-cell} ipython3
 :tags: [hide-input]

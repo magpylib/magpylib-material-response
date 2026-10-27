@@ -75,7 +75,12 @@ def compare(folder):
     base, head = _rounds(folder, "base"), _rounds(folder, "head")
     if not base:
         return "\n".join(
-            [MARKER, "### Timing against the base branch", "", "The base could not run."]
+            [
+                MARKER,
+                "### Timing against the base branch",
+                "",
+                "The base could not run.",
+            ]
         )
     rows, flagged, total = [], 0, [0.0, 0.0]
     for key in head[0]["times"]:

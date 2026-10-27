@@ -163,7 +163,9 @@ def main(argv=None):
     print("\n".join(worse) if worse else "No error grew and no problem got larger.")
     if records and previous:
         now, then = records[0]["versions"], previous[0]["versions"]
-        changed = [f"{k} {then.get(k)} → {v}" for k, v in now.items() if then.get(k) != v]
+        changed = [
+            f"{k} {then.get(k)} → {v}" for k, v in now.items() if then.get(k) != v
+        ]
         if changed:
             print("\nVersions changed: " + ", ".join(changed) + ".")
     if slower:
