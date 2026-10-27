@@ -148,6 +148,46 @@ def test_cube_as_triangles_converges_as_the_cuboid():
     assert abs(errors[1]) < 1.1e-3
 
 
+def _mesh_cube(position=(0, 0, 0), **kwargs):
+    """A 10 mm cube as a TriangularMesh of 12 triangles."""
+    V, F = _cube_as_triangles()
+    return magpy.magnet.TriangularMesh(
+        vertices=V, faces=F, position=position, polarization=(0, 0, 0), **kwargs
+    )
+
+
+def test_triangle_mesh_part_couples_as_a_cuboid():
+    """A cube given as a triangle mesh beside a turned soft cuboid, in an
+    applied field: the field around them as with two cuboids."""
+    turned = R.from_euler("z", 30, degrees=True)
+    sensors = np.array([[0, 0.02, 0], [0.0075, 0, 0.012], [-0.02, 0, 0]])
+    fields = []
+    for first in (_mesh_cube(), _cuboid()):
+        coll = magpy.Collection(
+            first, _cuboid(position=(0.015, 0, 0), orientation=turned)
+        )
+        coll.susceptibility = 100.0
+        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
+        solved = apply_face_charge(coll, level=3)
+        assert all(isinstance(s, ChargeSheet) for s in solved.sources_all)
+        fields.append(solved.getB(sensors))
+    assert _relative(*fields) < 5e-4
+
+
+def test_touching_a_triangle_mesh_raises_or_warns():
+    soft = magpy.Collection(_mesh_cube(), _cuboid(position=(0.01, 0, 0)))
+    soft.susceptibility = 100.0
+    with pytest.raises(NotImplementedError, match="triangle mesh"):
+        apply_face_charge(soft)
+    part = _mesh_cube()
+    part.susceptibility = 100.0
+    magnet = magpy.magnet.Cuboid(
+        dimension=(0.004,) * 3, position=(0, 0, 0.007), polarization=(0, 0, 1)
+    )
+    with pytest.warns(UserWarning, match="not graded toward the magnet"):
+        apply_face_charge(magpy.Collection(part, magnet), level=1)
+
+
 def test_copies_keep_their_own_charge():
     a = _one_face(CHARGE)
     b = a.copy()

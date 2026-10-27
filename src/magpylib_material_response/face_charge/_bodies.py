@@ -225,6 +225,9 @@ def add_contact_lines(bodies, outlines=()):
     against each other; otherwise the lines bound the footprint (its box in
     this body's frame)."""
     signs = np.array(list(itertools.product([-1, 1], repeat=3)))
+    bodies = [
+        b for b in bodies if isinstance(b, Body)
+    ]  # triangle meshes are not graded
     for a in bodies:
         tol = CONTACT * np.max(a.half)
         for b in (*bodies, *outlines):
