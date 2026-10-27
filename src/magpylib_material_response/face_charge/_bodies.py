@@ -21,6 +21,7 @@ import itertools
 
 import magpylib as magpy
 import numpy as np
+import scipy.linalg
 
 from magpylib_material_response.face_charge._panels import (
     Galerkin,
@@ -53,8 +54,9 @@ class Body:
         self.extra = [[], [], []]  # edges added as they are, per axis: bisections
         self.panels = self.galerkin = self.G = None
 
-    def build(self):
-        """Mesh the faces and assemble the self block."""
+    def mesh(self):
+        """Mesh the faces; the self block waits for ``assemble``, so that the
+        unknowns can be counted first."""
         layer = LAYER * np.min(self.half)
         edges = []
         for k, h in enumerate(self.half):
@@ -64,11 +66,15 @@ class Body:
             edges.append(np.unique(np.round(e / h, 12)) * h)
         self.panels = Panels(self.half, edges)
         self.galerkin = Galerkin(self.panels)
+        self.G = None
+
+    def assemble(self):
+        """The self block of the faces as last meshed."""
         self.G = self.galerkin.assemble()
 
     def bisect(self, panels):
         """Split these panels in two along both in-plane axes: in the tensor
-        mesh, the whole strips through them. Takes effect at the next build."""
+        mesh, the whole strips through them. Takes effect at the next mesh."""
         p = self.panels
         for n in panels:
             self.extra[p.i[n]].append(0.5 * (p.p1[n] + p.p2[n]))
@@ -241,7 +247,8 @@ def solve_system(bodies, external):
     n_bodies = len(bodies)
     offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
     n = offsets[-1]
-    A = np.zeros((n + n_bodies, n + n_bodies))
+    # column-major, which the in-place factorization below needs
+    A = np.zeros((n + n_bodies, n + n_bodies), order="F")
     rhs = np.zeros(n + n_bodies)
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
@@ -263,5 +270,7 @@ def solve_system(bodies, external):
         for ib, b in enumerate(bodies):
             if ib != ia:
                 A[rows, offsets[ib] : offsets[ib + 1]] = -cross_block(a, b)
-    x = np.linalg.solve(A, rhs)
+    # in place: factorizing a copy of this dense system peaked at three times
+    # its size
+    x = scipy.linalg.solve(A, rhs, overwrite_a=True, check_finite=False)
     return [x[offsets[k] : offsets[k + 1]] for k in range(n_bodies)]

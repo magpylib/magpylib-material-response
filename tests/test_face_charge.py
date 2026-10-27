@@ -222,3 +222,10 @@ def test_unsupported_input_raises(model, chi, error):
         src.susceptibility = chi
     with pytest.raises(error):
         apply_face_charge(model)
+
+
+def test_too_many_unknowns_raise_before_assembly():
+    cube = _cuboid()
+    cube.susceptibility = 10
+    with pytest.raises(ValueError, match="max_unknowns"):
+        apply_face_charge(magpy.Collection(cube), max_unknowns=10)

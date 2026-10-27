@@ -21,7 +21,9 @@ POINTS_PER_CALL = (
 )
 
 
-def apply_face_charge(collection, *, level=3, refine=0, min_log_time=None):
+def apply_face_charge(
+    collection, *, level=3, refine=0, max_unknowns=30_000, min_log_time=None
+):
     """Solve the collection's linear cuboids on their surfaces.
 
     A cuboid with a uniform, isotropic susceptibility (on itself or a parent
@@ -46,6 +48,11 @@ def apply_face_charge(collection, *, level=3, refine=0, min_log_time=None):
         again; a round roughly doubles the unknowns. Two rounds from level 3
         resolve the field under a magnet close to a soft face better than
         uniform panels with four times the unknowns.
+    max_unknowns : int, default 30_000
+        Refuse a solve with more unknowns than this. All bodies form one dense
+        system, of 8 n² bytes for n unknowns: 30,000 take 7 GB. Unknowns grow
+        with the square of `level` and with every refinement round, and with
+        the number of bodies: 100 small cubes take 14,400 at level 1.
     min_log_time : float, optional
         Log steps that take longer than this, in seconds; by default the value
         of :func:`~magpylib_material_response.configure_logging`.
@@ -61,6 +68,8 @@ def apply_face_charge(collection, *, level=3, refine=0, min_log_time=None):
 
     Raises
     ------
+    ValueError
+        If a solve would need more than `max_unknowns` unknowns.
     NotImplementedError
         For a non-cuboid source or an anisotropic susceptibility (both bring
         back charge inside the body: mesh it and use ``apply_demag``), and for
@@ -78,7 +87,7 @@ def apply_face_charge(collection, *, level=3, refine=0, min_log_time=None):
         logger.info("Face charge: no cuboid with a susceptibility to solve")
         return out
 
-    with timelog("Face-charge meshing and assembly", min_log_time=min_log_time):
+    with timelog("Face-charge meshing", min_log_time=min_log_time):
         bodies = [
             Body(
                 obj.dimension,
@@ -97,7 +106,7 @@ def apply_face_charge(collection, *, level=3, refine=0, min_log_time=None):
         ]
         add_contact_lines(bodies)
         for body in bodies:
-            body.build()
+            body.mesh()
 
     def external(points):
         H = np.zeros((len(points), 3))
@@ -109,7 +118,20 @@ def apply_face_charge(collection, *, level=3, refine=0, min_log_time=None):
         return H
 
     for rnd in range(refine + 1):
-        with timelog("Face-charge solve", min_log_time=min_log_time):
+        unknowns = sum(b.n_dofs for b in bodies)
+        if unknowns > max_unknowns:
+            after = f" after {rnd} refinement rounds" if rnd else ""
+            msg = (
+                f"level={level}{after} needs {unknowns:,} unknowns, more than "
+                f"max_unknowns={max_unknowns:,}: the dense system would take about "
+                f"{8 * unknowns**2 / 1e9:.0f} GB. Lower the level or the refinement, "
+                "raise max_unknowns, or mesh the parts for apply_demag."
+            )
+            raise ValueError(msg)
+        with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
+            for body in bodies:
+                if body.G is None:
+                    body.assemble()
             coefs = solve_system(bodies, external)
         sheets = [
             ChargeSheet._from_body(b, c) for b, c in zip(bodies, coefs, strict=True)
@@ -129,7 +151,7 @@ def apply_face_charge(collection, *, level=3, refine=0, min_log_time=None):
             marked = np.flatnonzero(e > MARK * top)
             if marked.size:
                 body.bisect(marked)
-                body.build()
+                body.mesh()
     logger.info(
         "Face charge: average polarization up to {J:.3g} T; above the material's knee, saturation matters",
         J=max(np.linalg.norm(s.mean_polarization) for s in sheets),

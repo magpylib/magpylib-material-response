@@ -10,9 +10,9 @@ from __future__ import annotations
 import importlib.util
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import magpylib as magpy
+import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
 from magpylib_material_response.demag import apply_demag
@@ -21,9 +21,6 @@ from magpylib_material_response.face_charge._apply import _split
 from magpylib_material_response.meshing import mesh_uniform
 
 from .cases import CASES
-
-if TYPE_CHECKING:
-    import numpy as np
 
 
 class TooLarge(Exception):
@@ -192,7 +189,12 @@ class FaceCharge:
     def solve(collection, sensors, setting, **options):
         """`options` go to ``apply_face_charge``."""
         start = time.perf_counter()
-        solved = apply_face_charge(collection, level=setting, **options)
+        try:
+            solved = apply_face_charge(collection, level=setting, **options)
+        except ValueError as error:
+            if "max_unknowns" not in str(error):
+                raise
+            raise TooLarge(str(error)) from error
         solved_at = time.perf_counter()
         B = magpy.getB(solved, sensors)
         sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
@@ -203,8 +205,14 @@ class FaceCharge:
                 "solve": solved_at - start,
                 "getB": time.perf_counter() - solved_at,
             },
-            {"unknowns": int(sum(s.charge_densities.size for s in sheets))},
+            {"unknowns": sum(_unknowns(s) for s in sheets)},
         )
+
+
+def _unknowns(sheet):
+    """Three per panel: the charge is linear across each."""
+    panels = sheet._panels
+    return 3 * (len(sheet.faces) if panels is None else len(np.unique(panels)))
 
 
 METHODS = {method.name: method for method in (Magpylib(), MoM(), FaceCharge(), FEM())}

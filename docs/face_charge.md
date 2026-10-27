@@ -45,8 +45,11 @@ positive charge being a north pole; `style.mesh.grid.show` draws the panels.
   settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
   than `apply_demag` in the same time.
 - **Where it is slower:** a few weak magnets alone (`apply_demag` reaches the
-  same accuracy faster), many touching bodies (one dense coupled system) and
-  thin sheets (panels sized to the thickness across the whole sheet).
+  same accuracy faster), many bodies (one dense coupled system: 100 small cubes
+  take 7,200 unknowns at level 1 and four times as many at level 2) and thin
+  sheets (panels sized to the thickness across the whole sheet). A solve that
+  would need more than `max_unknowns`, 30,000 by default, a 7 GB system, is
+  refused before it is assembled.
 - **What it leaves to `apply_demag`:** other shapes, saturation, an anisotropic
   susceptibility and one varying inside a part, all of which bring back charge
   inside the part, and objects moving along paths. `apply_face_charge` raises
