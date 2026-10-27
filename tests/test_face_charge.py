@@ -5,9 +5,11 @@ from __future__ import annotations
 import magpylib as magpy
 import numpy as np
 import pytest
+from scipy.spatial import ConvexHull
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge._mesh import graded_triangles
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import field as triangle_field
 from magpylib_material_response.face_charge._triangle import (
@@ -101,6 +103,31 @@ def test_normal_fields_are_the_fields_normal_part():
     pairs = normal_field(near, V[one], tuple(a[one] for a in fr), pairs=True)
     assert np.allclose(pairs, normal_field(near, V, fr)[:, np.arange(len(near)), one])
     assert np.isfinite(normal_field(V[:, 0], V, fr)).all()  # observers on vertices
+
+
+def _cube_as_triangles(half=0.005):
+    """A cube as 12 triangles, outward."""
+    V = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
+    F = ConvexHull(V).simplices
+    n = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    inward = np.einsum("fd,fd->f", n, V[F].mean(1)) < 0
+    F[inward] = F[inward][:, [0, 2, 1]]
+    return half * V, F
+
+
+def test_graded_triangles_cover_the_mesh_toward_its_edges():
+    V, F = _cube_as_triangles()
+    T = graded_triangles(V, F, ell=0.005, m=3, g=2.5)
+    area = 0.5 * np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
+    assert np.isclose(area.sum(), 6 * 0.01**2)
+    # the first layer, 0.005 / 3**2.5 deep, lies along the cube's edges
+    on_face = np.isclose(np.abs(T[..., 2]), 0.005).all(1)
+    assert np.isclose(
+        np.sort(np.unique(np.round(np.abs(T[on_face][..., 0]), 12)))[-2],
+        0.005 * (1 - 3**-2.5),
+    )
+    with pytest.raises(ValueError, match="closed mesh"):
+        graded_triangles(V, F[:-1], ell=0.005, m=2, g=2.5)
 
 
 def test_copies_keep_their_own_charge():
