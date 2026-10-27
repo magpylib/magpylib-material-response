@@ -1,0 +1,143 @@
+{
+ "cuboids": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "line below": 0.005194
+   },
+   "unknowns": 768
+  }
+ },
+ "plate": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "above the magnet": 0.003694,
+    "beside the magnet": 0.01377,
+    "under the plate": 1.842,
+    "off the side": 0.1223
+   },
+   "unknowns": 6432
+  }
+ },
+ "ucore": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "30 mm above the poles": 0.1518
+   },
+   "unknowns": 2112
+  }
+ },
+ "soft_magnets": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "1 mm below": 0.008506,
+    "3 mm below": 0.003658,
+    "5 mm below": 0.002821
+   },
+   "unknowns": 576
+  }
+ },
+ "concentrator": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "on the axis, past the end": 0.02047,
+    "1 mm above the bar": 0.0357
+   },
+   "unknowns": 1536
+  }
+ },
+ "halbach": {
+  "MoM": {
+   "setting": 2,
+   "errors": {
+    "2 mm above the array": 0.001851
+   },
+   "unknowns": 1440
+  }
+ },
+ "sheet": {
+  "MoM": {
+   "setting": 1,
+   "errors": {
+    "2 mm behind the sheet": 0.6099
+   },
+   "unknowns": 1731
+  }
+ },
+ "cylinder": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "1 mm off the surface": 0.1076,
+    "50 mm away": 0.02698
+   },
+   "unknowns": 144
+  }
+ },
+ "concentrator_newell": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "on the axis, past the end": 0.02254,
+    "1 mm above the bar": 0.03356
+   },
+   "unknowns": 1536
+  }
+ },
+ "sides_off": {
+  "MoM": {
+   "setting": 4,
+   "errors": {
+    "above the magnet": 0.003085,
+    "beside the magnet": 0.01014,
+    "under the plate": 1.649,
+    "off the side": 0.1159
+   },
+   "unknowns": 5160
+  }
+ },
+ "anisotropic": {
+  "MoM": {
+   "setting": 8,
+   "errors": {
+    "0.1 mm above the top": 0.002305,
+    "0.2 mm above the top": 0.001342
+   },
+   "unknowns": 1536
+  }
+ },
+ "gmres_stops": {
+  "MoM": {
+   "setting": 8,
+   "errors": {
+    "1 mm above the top": 0.03843,
+    "30 mm above": 0.0197
+   },
+   "unknowns": 1536
+  }
+ },
+ "small_bodies": {
+  "MoM": {
+   "setting": 2,
+   "errors": {
+    "1 mm above the layer": 0.1332,
+    "30 mm away": 0.1269
+   },
+   "unknowns": 2400
+  }
+ },
+ "many_sizes": {
+  "MoM": {
+   "setting": 1,
+   "errors": {
+    "1 mm above the layer": 0.2029,
+    "30 mm away": 0.1681
+   },
+   "unknowns": 402
+  }
+ }
+}

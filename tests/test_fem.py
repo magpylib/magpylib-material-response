@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation
 
 pytest.importorskip("ngsolve")
 
-from magpylib_material_response.fem import fem_solve, fem_study
+from magpylib_material_response.fem import _solve, fem_solve, fem_study
 
 B_EXT = 0.01
 
@@ -144,6 +144,33 @@ def test_every_shape_solves(make):
     assert np.all(study.values[:, 2] > 0)
 
 
+def test_edge_layers_match_across_faces(monkeypatch):
+    """On this cuboid, an observer above it made NGSolve's edge layers leave a
+    prism's square face against two triangles, which no assembly accepts
+    (#98); the mesh is made again at the next grading."""
+    checks = []
+    conforming = _solve._conforming
+    monkeypatch.setattr(
+        _solve,
+        "_conforming",
+        lambda mesh: checks.append(conforming(mesh)) or checks[-1],
+    )
+    box = magpy.magnet.Cuboid(
+        dimension=(1.0935e-3, 1.4e-3, 0.8991e-3), polarization=(0, 0, 0)
+    )
+    box.susceptibility = 100
+    model = magpy.Collection(box)
+    model.H_ext = (B_EXT, 0, 0)
+    observer = np.array([(0, 0, 2e-3)])
+
+    solution = fem_solve(model, order=2, observers=observer)
+
+    if checks[0]:
+        pytest.skip("netgen meshed this cuboid matching at the first grading here")
+    assert checks[-1]
+    assert np.all(np.isfinite(solution.getB(observer)))
+
+
 def test_kept_solutions_stay_valid():
     """Every order curves the shared mesh; a solution kept from a study reads its
     field on its own geometry afterwards. A lone observer gets one error."""
@@ -204,19 +231,247 @@ def _magnet():
     return magpy.Collection(magnet)
 
 
-@pytest.mark.parametrize(
-    ("model", "kwargs", "error"),
-    [
-        (
-            lambda: magpy.Collection(
-                magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1)),
-                magpy.current.Circle(diameter=3, current=1),
-            ),
-            {},
-            NotImplementedError,
+def _loop(*vertices):
+    """A closed Polyline of 1 A through `vertices`, back to the first."""
+    return magpy.current.Polyline(current=1, vertices=[*vertices, vertices[0]])
+
+
+def _soft(make, chi):
+    part = make()
+    part.susceptibility = chi
+    return part
+
+
+def _cube(position=(0, 0, 0)):
+    return _soft(
+        lambda: magpy.magnet.Cuboid(
+            dimension=(1, 1, 1), polarization=(0, 0, 0), position=position
         ),
-        (_two_fields, {}, ValueError),
-        (lambda: magpy.Collection(magpy.misc.Dipole(moment=(0, 0, 1))), {}, TypeError),
+        10,
+    )
+
+
+def _ring():
+    return _soft(
+        lambda: magpy.magnet.CylinderSegment(
+            dimension=(2, 3, 2, 0, 360), polarization=(0, 0, 0)
+        ),
+        1000,
+    )
+
+
+def _wired_magnet():
+    """A wire straight through a magnet: its field is given in the air only."""
+    return magpy.Collection(
+        _cube(), _loop((-2, 0, 0), (2, 0, 0), (2, 0, 3), (-2, 0, 3))
+    )
+
+
+def _crossing_wire():
+    """A wire crossing a magnet between its vertices: none of them is inside."""
+    return magpy.Collection(
+        _cube(), _loop((-1, 0, 0), (5, 0, 0), (5, 0, 4), (-1, 0, 4))
+    )
+
+
+def _clipped_corner():
+    """A wire cutting 0.06 off a cube's corner, under the coarse spacing."""
+    return magpy.Collection(
+        _cube(), _loop((1.56, -0.6, 0), (-0.6, 1.56, 0), (-3, -3, 0))
+    )
+
+
+def _wired_tetrahedron():
+    tetrahedron = _soft(
+        lambda: magpy.magnet.Tetrahedron(
+            vertices=[(0, 0, 0), (2, 0, 0), (0, 2, 0), (0, 0, 2)],
+            polarization=(0, 0, 0),
+        ),
+        10,
+    )
+    return magpy.Collection(
+        tetrahedron, _loop((0.3, 0.3, -1), (0.3, 0.3, 1), (-2, 0.3, 1), (-2, 0.3, -1))
+    )
+
+
+def _open_wire():
+    wire = magpy.current.Polyline(current=1, vertices=[(0, 0, 5), (0, 0, 50)])
+    return magpy.Collection(_ring(), wire)
+
+
+def _sheet():
+    sheet = magpy.current.TriangleSheet(
+        vertices=[(5, 0, 0), (6, 0, 0), (5, 1, 0)],
+        faces=[(0, 1, 2)],
+        current_densities=[(1, 0, 0)],
+    )
+    return magpy.Collection(_cube(), sheet)
+
+
+def _linked_ring():
+    """A loop through a soft ring's hole: its field circulates in the ring and
+    has no potential there."""
+    return magpy.Collection(
+        _ring(), _loop((0, 0, -50), (0, 0, 50), (50, 0, 50), (50, 0, -50))
+    )
+
+
+def _lead_beside_a_coil():
+    """1 A through a ring's hole beside a coil of 8,000 A that links nothing."""
+    coil = magpy.current.Circle(current=8000, diameter=20, position=(0, 0, 10))
+    lead = _loop((0, 0, -50), (0, 0, 50), (50, 0, 50), (50, 0, -50))
+    return magpy.Collection(_ring(), coil, lead)
+
+
+def _closed_core():
+    """A coil round one bar of a closed square core: its current links the
+    core however short the coil is."""
+    bars = [
+        magpy.magnet.Cuboid(dimension=d, polarization=(0, 0, 0), position=p)
+        for d, p in (
+            ((20, 4, 4), (0, -8, 0)),
+            ((20, 4, 4), (0, 8, 0)),
+            ((4, 12, 4), (-8, 0, 0)),
+            ((4, 12, 4), (8, 0, 0)),
+        )
+    ]
+    core = magpy.Collection(*bars)
+    core.susceptibility = 1000
+    coil = magpy.current.Circle(current=10, diameter=8, position=(0, -8, 0))
+    coil.rotate_from_angax(90, "y")
+    return magpy.Collection(core, coil)
+
+
+def _band_round_a_cube():
+    """A closed strip round a cube, 1 mm wide."""
+    phi = np.linspace(0, 2 * np.pi, 25)[:-1]
+    ring = np.column_stack([1.5 * np.cos(phi), 1.5 * np.sin(phi), np.zeros(24)])
+    vertices = np.stack([ring, ring + np.array([0, 0, 1])], axis=1).reshape(-1, 3)
+    strip = magpy.current.TriangleStrip(
+        current=1, vertices=np.concatenate([vertices, vertices[:2]])
+    )
+    return magpy.Collection(_cube(), strip)
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        # a coil hugging a ring from outside, 1e-4 apart, goes through no hole
+        lambda: magpy.Collection(
+            _ring(), magpy.current.Circle(current=1, diameter=6.0002)
+        ),
+        lambda: magpy.Collection(
+            _ring(), magpy.current.Circle(current=1, diameter=2, position=(6, 0, 0))
+        ),
+        # cubes touching along an edge: the edge adds loops round no hole
+        lambda: magpy.Collection(
+            _cube(),
+            _cube((1, 1, 0)),
+            magpy.current.Circle(current=1, diameter=0.5, position=(3, 0, 0)),
+        ),
+        _band_round_a_cube,
+    ],
+    ids=[
+        "coil-hugging-a-ring",
+        "coil-beside-a-ring",
+        "cubes-on-an-edge",
+        "band-round-a-cube",
+    ],
+)
+def test_solves_currents_that_link_nothing(model):
+    observer = np.array([(0, 0, 5)])
+    solution = fem_solve(model(), 1, observers=observer, edge_layers=0)
+    assert np.all(np.isfinite(solution.getB(observer)))
+
+
+@pytest.mark.parametrize("air_first", [True, False])
+def test_magnet_faces_know_their_outward_normal(air_first):
+    """A magnet face is named by the side the magnet is on, so that its normal
+    can be turned outward of the magnet whichever region netgen puts first:
+    the outward normal integrates x . n to three times the volume."""
+    import ngsolve as ng  # noqa: PLC0415
+    from netgen.occ import Box, Glue, OCCGeometry, Pnt, Sphere  # noqa: PLC0415
+
+    box = Box(Pnt(-1, -1, -1), Pnt(1, 1, 2)).mat("part0")
+    box.faces.name = "surface"
+    air = (Sphere(Pnt(0, 0, 0), 5) - box).mat("air")
+    ngmesh = OCCGeometry(Glue([air, box] if air_first else [box, air])).GenerateMesh(
+        maxh=1
+    )
+    assert _solve._name_magnet_faces(ngmesh) == 1
+    mesh = ng.Mesh(ngmesh)
+    x = ng.CF((ng.x, ng.y, ng.z))
+    normal = _solve.outward(mesh, 1)
+    flux = ng.Integrate(ng.InnerProduct(x, normal) * ng.ds("magnet_.*"), mesh)
+    assert flux == pytest.approx(3 * 2 * 2 * 3, rel=1e-9)
+
+
+def test_a_far_coil_acts_as_a_uniform_field():
+    """A loop of 1 m round a model of 10 mm drives it as a uniform field does,
+    to its own unevenness over the model, about 1e-5. With the currents the
+    magnets take the total potential, with the field as H_ext the reduced one.
+    Two soft cubes touch across the field's direction, a magnet sits beside
+    them, and the field is read outside and inside them."""
+    loop = magpy.current.Circle(current=B_EXT / magpy.mu_0, diameter=1.0)
+
+    def model(*currents):
+        cubes = [
+            magpy.magnet.Cuboid(
+                dimension=(0.005,) * 3, polarization=(0, 0, 0), position=(0, 0, z)
+            )
+            for z in (-0.0025, 0.0025)
+        ]
+        for cube in cubes:
+            cube.susceptibility = 1000
+        magnet = magpy.magnet.Cuboid(
+            dimension=(0.003,) * 3, polarization=(0, 0, 0.5), position=(0, 0.006, 0)
+        )
+        magnet.susceptibility = 0.05
+        return magpy.Collection(*cubes, magnet, *currents)
+
+    # above the cubes, 0.1 mm inside the upper one, where the lift of the
+    # applied potential lives, and in the magnet
+    observers = np.array([(0, 0, 0.008), (0, 0, 0.0049), (0, 0.006, 0)])
+    plain = model()
+    plain.H_ext = tuple(magpy.getB(loop, np.zeros(3)))
+    driven = fem_solve(model(loop), order=2, observers=observers)
+    reference = fem_solve(plain, order=2, observers=observers)
+
+    scale = np.abs(reference.getB(observers)).max()
+    np.testing.assert_allclose(
+        driven.getB(observers) - loop.getB(observers),
+        reference.getB(observers),
+        atol=2e-5 * scale,
+    )
+    np.testing.assert_allclose(
+        driven.getH(observers) - loop.getH(observers),
+        reference.getH(observers),
+        atol=2e-5 * scale / magpy.mu_0,
+    )
+    np.testing.assert_allclose(
+        driven.moment, reference.moment, atol=1e-4 * np.abs(reference.moment).max()
+    )
+
+
+@pytest.mark.parametrize(
+    ("model", "kwargs", "error", "match"),
+    [
+        (_wired_magnet, {}, ValueError, "runs through a magnet"),
+        (_crossing_wire, {}, ValueError, "runs through a magnet"),
+        (_clipped_corner, {}, ValueError, "runs through a magnet"),
+        (_wired_tetrahedron, {}, ValueError, "runs through a magnet"),
+        (_open_wire, {}, ValueError, "Open current paths"),
+        (_sheet, {}, TypeError, "TriangleSheet"),
+        (_linked_ring, {}, ValueError, "links a magnet"),
+        (_lead_beside_a_coil, {}, ValueError, "1 A"),
+        (_closed_core, {}, ValueError, "links a magnet"),
+        (_two_fields, {}, ValueError, "different applied fields"),
+        (
+            lambda: magpy.Collection(magpy.misc.Dipole(moment=(0, 0, 1))),
+            {},
+            TypeError,
+            "Only magnets, currents",
+        ),
         (
             lambda: magpy.Collection(
                 magpy.misc.Triangle(
@@ -225,14 +480,28 @@ def _magnet():
             ),
             {},
             TypeError,
+            "with a volume",
         ),
-        (_overlapping, {}, ValueError),
-        (_magnet, {"edge_layers": -1}, ValueError),
-        (_magnet, {"maxh": float("nan")}, ValueError),
-        (_magnet, {"observer_maxh": 0.1, "observers": None}, ValueError),
+        (_overlapping, {}, ValueError, "overlap"),
+        (_magnet, {"edge_layers": -1}, ValueError, "edge_layers"),
+        (_magnet, {"maxh": float("nan")}, ValueError, "maxh must be positive"),
+        (
+            _magnet,
+            {"observer_maxh": 0.1, "observers": None},
+            ValueError,
+            "needs observers",
+        ),
     ],
     ids=[
-        "current",
+        "current-through-a-magnet",
+        "current-crossing-a-magnet",
+        "current-clipping-a-corner",
+        "current-through-a-tetrahedron",
+        "open-current",
+        "sheet-current",
+        "current-through-a-ring",
+        "lead-beside-a-strong-coil",
+        "coil-round-a-closed-core",
         "two-applied-fields",
         "dipole",
         "triangle",
@@ -242,7 +511,7 @@ def _magnet():
         "observer-maxh-without-observers",
     ],
 )
-def test_refuses_what_it_cannot_model(model, kwargs, error):
+def test_refuses_what_it_cannot_model(model, kwargs, error, match):
     kwargs = {"observers": [(0, 0, 5)], **kwargs}
-    with pytest.raises(error):
+    with pytest.raises(error, match=match):
         fem_solve(model(), 2, **kwargs)

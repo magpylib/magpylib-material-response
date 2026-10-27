@@ -15,15 +15,22 @@ and this project adheres to
   magnets' own shapes, and estimate the error by raising the element order. An
   independent check of the method of moments: with an exact open boundary and
   layers refined toward the edges, it puts a cube's polarizability within 2e-5
-  of Helsing and Perfekt's in seconds. Magnets and a uniform applied field for
-  now, current sources later. The reference data of the docs and the tests are
-  now its results, which `scripts/fem_references.py` recomputes, in place of
-  exports from a commercial code that no one could rerun. `compare` puts a
-  `mesh_study` and a `fem_study` side by side, per observer: both values, both
-  error bars, and whether they agree
+  of Helsing and Perfekt's in seconds. Magnets, a uniform applied field and
+  current sources: with currents the magnets take the total potential, so a coil
+  around soft iron costs no accuracy, and on the U-core of the docs it agrees
+  with an independent FEM within 0.25 %. The reference data of the docs and the
+  tests are now its results, which `scripts/fem_references.py` recomputes, in
+  place of exports from a commercial code that no one could rerun. `compare`
+  puts a `mesh_study` and a `fem_study` side by side, per observer: both values,
+  both error bars, and whether they agree. In the repository, `validation/`
+  holds 18 cases, 15 with a stored reference; every PR checks the method of
+  moments against them, and both methods are timed to a given accuracy. It found
+  a mesh NGSolve could not assemble, which `fem_solve` now makes again at
+  another grading
   ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
-  [#95](https://github.com/magpylib/magpylib-material-response/pull/95)).
+  [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
+  [#99](https://github.com/magpylib/magpylib-material-response/pull/99)).
 
 ### Changed
 
