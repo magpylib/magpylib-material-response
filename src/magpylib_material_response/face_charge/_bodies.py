@@ -18,6 +18,7 @@ fixing its net charge to zero.
 from __future__ import annotations
 
 import itertools
+from typing import NamedTuple
 
 import magpylib as magpy
 import numpy as np
@@ -33,6 +34,10 @@ from magpylib_material_response.face_charge._rectangle import rectangle_field
 GRADING = 2.5  # power of the panel grading toward edges and contact lines
 LAYER = 2.0  # graded layer length, in half the body's smallest side
 CHUNK = 2_000_000  # kernel evaluations per call, about 0.5 GB
+# faces closer than this, in a body's largest half-side, touch: their lines
+# grade the mesh, and coplanar panels couple exactly. Lines closer than this
+# are one line. Coordinates from float32 CAD data are good to about 1e-7.
+CONTACT = 1e-6
 
 
 class Body:
@@ -60,10 +65,11 @@ class Body:
         layer = LAYER * np.min(self.half)
         edges = []
         for k, h in enumerate(self.half):
+            lines = _merge(np.asarray(self.lines[k], float), h)
             e = np.concatenate(
-                [graded_edges(h, self.lines[k], layer, self.m, GRADING), self.extra[k]]
+                [graded_edges(h, lines, layer, self.m, GRADING), self.extra[k]]
             )
-            edges.append(np.unique(np.round(e / h, 12)) * h)
+            edges.append(_merge(e, h))
         self.panels = Panels(self.half, edges)
         self.galerkin = Galerkin(self.panels)
         self.G = None
@@ -88,28 +94,53 @@ class Body:
         return np.asarray(x) @ self.R.T + self.position
 
 
+def _merge(x, h):
+    """The coordinates `x` on ``[-h, h]``, sorted, those closer than
+    ``CONTACT h`` to the one before dropped: two lines a hair apart would make
+    panels of no area."""
+    kept = []
+    for value in np.sort(x):
+        if not kept or value - kept[-1] > CONTACT * h:
+            kept.append(value)
+    return np.array(kept)
+
+
 def _relative(a, b):
     """b's frame seen from a's: the rotation from b's frame to a's, and b's
     centre in a's frame."""
     return a.R.T @ b.R, (b.position - a.position) @ a.R
 
 
-def add_contact_lines(bodies):
-    """Grade each body's mesh toward the outline of every body touching it.
+class Outline(NamedTuple):
+    """A cuboid that is not solved, such as a magnet without susceptibility:
+    its half-sides, rotation (its frame to global) and centre."""
+
+    half: np.ndarray
+    R: np.ndarray
+    position: np.ndarray
+
+
+def add_contact_lines(bodies, outlines=()):
+    """Grade each body's mesh toward the outline of every body, and of every
+    fixed cuboid (``outlines``), touching it: the charge jumps there, and so
+    does a touching magnet's field.
 
     Exact when the two are turned by multiples of 90 degrees against each
     other; otherwise the lines bound the footprint (its box in this body's
     frame)."""
     signs = np.array(list(itertools.product([-1, 1], repeat=3)))
-    for a, b in itertools.permutations(bodies, 2):
-        Rab, cb = _relative(a, b)
-        corners = cb + (signs * b.half) @ Rab.T
-        lo, hi = corners.min(0), corners.max(0)
-        gap = np.maximum(0, np.maximum(lo - a.half, -a.half - hi))
-        if np.linalg.norm(gap) > 1e-12:
-            continue
-        for k in range(3):
-            a.lines[k] = sorted(set(a.lines[k]) | {lo[k], hi[k]})
+    for a in bodies:
+        for b in (*bodies, *outlines):
+            if b is a:
+                continue
+            Rab, cb = _relative(a, b)
+            corners = cb + (signs * b.half) @ Rab.T
+            lo, hi = corners.min(0), corners.max(0)
+            gap = np.maximum(0, np.maximum(lo - a.half, -a.half - hi))
+            if np.linalg.norm(gap) > CONTACT * np.max(a.half):
+                continue
+            for k in range(3):
+                a.lines[k] = sorted(set(a.lines[k]) | {lo[k], hi[k]})
 
 
 def _clip(poly, x0, x1, y0, y1):
@@ -150,7 +181,7 @@ def _polygon_rule(poly):
     return np.array(pts).reshape(-1, 2), np.array(wts)
 
 
-def cross_block(a, b, tol=1e-9):
+def cross_block(a, b, tol=CONTACT):
     """``G_ab`` (a.n_dofs x b.n_dofs): the flux of b's charge through a's test
     functions."""
     pa, pb = a.panels, b.panels
@@ -185,7 +216,6 @@ def cross_block(a, b, tol=1e-9):
                     pa.p2[tc][:, None, None],
                     pa.q1[tc][:, None, None],
                     pa.q2[tc][:, None, None],
-                    inplane=False,
                 )  # (3 test densities, tc, gauss, src)
                 block = np.einsum("atgn,gn,gb->tanb", w3, wts[:, src], phi)
                 G[np.ix_(tc, [0, 1, 2], src, [0, 1, 2])] = -sa * block
@@ -252,7 +282,11 @@ def solve_system(bodies, external):
     rhs = np.zeros(n + n_bodies)
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
-        A[rows, rows] = -a.G
+        # each self block is assembled here and freed once copied, so that only
+        # one lives beside the system
+        a.assemble()
+        np.negative(a.G, out=A[rows, rows])
+        a.G = None
         idx = np.arange(offsets[ia], offsets[ia + 1])
         A[idx, idx] += (1 / a.chi + 0.5) * a.galerkin.mass
         border = np.zeros(a.n_dofs)
@@ -269,7 +303,9 @@ def solve_system(bodies, external):
             rhs[rows] += a.galerkin.load_constant(remanence) / a.chi
         for ib, b in enumerate(bodies):
             if ib != ia:
-                A[rows, offsets[ib] : offsets[ib + 1]] = -cross_block(a, b)
+                np.negative(
+                    cross_block(a, b), out=A[rows, offsets[ib] : offsets[ib + 1]]
+                )
     # in place: factorizing a copy of this dense system peaked at three times
     # its size
     x = scipy.linalg.solve(A, rhs, overwrite_a=True, check_finite=False)

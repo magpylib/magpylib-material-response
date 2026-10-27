@@ -212,9 +212,33 @@ def _cuboid(**kwargs):
             10.0,
             NotImplementedError,
         ),
+        (
+            lambda: magpy.Collection(
+                _cuboid(),
+                magpy.current.Circle(current=[1, 2, 3], diameter=0.02),
+            ),
+            10.0,
+            NotImplementedError,
+        ),
+        (
+            lambda: magpy.Collection(
+                magpy.magnet.Cuboid(
+                    dimension=(0.01,) * 3, polarization=[(0, 0, 1), (0, 0, 2)]
+                )
+            ),
+            10.0,
+            NotImplementedError,
+        ),
         (_cuboid, 10.0, TypeError),
     ],
-    ids=["not a cuboid", "anisotropic", "path", "not a collection"],
+    ids=[
+        "not a cuboid",
+        "anisotropic",
+        "path",
+        "current path",
+        "polarization path",
+        "not a collection",
+    ],
 )
 def test_unsupported_input_raises(model, chi, error):
     model = model()
@@ -229,3 +253,67 @@ def test_too_many_unknowns_raise_before_assembly():
     cube.susceptibility = 10
     with pytest.raises(ValueError, match="max_unknowns"):
         apply_face_charge(magpy.Collection(cube), max_unknowns=10)
+    # a refinement round over the limit is skipped: the round before is kept
+    cube = _cuboid()
+    cube.susceptibility, cube.H_ext = 10, (0, 0, 0.01)
+    with pytest.warns(UserWarning, match="round 0's"):
+        solved = apply_face_charge(
+            magpy.Collection(cube), level=2, refine=1, max_unknowns=300
+        )
+    assert np.isfinite(solved.getB((0, 0, 0.01))).all()
+
+
+@pytest.mark.parametrize("gap", [0.0, 1e-9])
+def test_magnet_touching_a_soft_part_matches_fem(gap):
+    """A magnet without susceptibility resting on soft iron: its field jumps at
+    the edges of its footprint, which the mesh must follow. The reference is
+    fem_study at orders 3 to 5, good to 5e-5 at each sensor."""
+    soft = _cuboid()
+    soft.susceptibility = 1000
+    magnet = magpy.magnet.Cuboid(
+        dimension=(0.004, 0.004, 0.002),
+        polarization=(0, 0, 1.2),
+        position=(0, 0, 0.006 + gap),
+    )
+    magnet.susceptibility = 0
+    sensors = np.array([(0, 0, 8), (6, 0, 2), (0, 0, -7)]) * 1e-3
+    B = apply_face_charge(magpy.Collection(soft, magnet)).getB(sensors)
+    fem = np.array([296.762, 7.806, 3.882]) * 1e-3
+    np.testing.assert_allclose(np.linalg.norm(B, axis=1), fem, rtol=0.01)
+
+
+@pytest.mark.parametrize("offset", [1e-13, 1e-10])
+def test_parts_a_hair_apart_solve_as_touching(offset):
+    """Two soft blocks side by side on a soft plate, their shared face off by a
+    hair, as in rounded CAD data."""
+
+    def solve(shift):
+        plate = magpy.magnet.Cuboid(
+            dimension=(0.01, 0.01, 0.001), polarization=(0, 0, 0)
+        )
+        blocks = [
+            magpy.magnet.Cuboid(
+                dimension=(0.005, 0.01, 0.002),
+                polarization=(0, 0, 0),
+                position=(x, 0, 0.0015),
+            )
+            for x in (-0.0025, 0.0025 + shift)
+        ]
+        coll = magpy.Collection(plate, *blocks)
+        coll.susceptibility, coll.H_ext = 1000, (0, 0, 0.01)
+        return apply_face_charge(coll, level=2).getB([(0, 0, 0.004), (0.008, 0, 0)])
+
+    # the block moved by the offset itself: 2e-8 of its size
+    np.testing.assert_allclose(solve(offset), solve(0.0), rtol=1e-6, atol=1e-9)
+
+
+def test_currents_take_no_susceptibility():
+    """A susceptibility set on the collection reaches its magnets, not a coil in
+    it, as with apply_demag."""
+    plate = _cuboid()
+    coil = magpy.current.Circle(current=10, diameter=0.02, position=(0, 0, 0.01))
+    coll = magpy.Collection(plate, coil)
+    coll.susceptibility = 1000
+    solved = apply_face_charge(coll, level=1)
+    assert isinstance(solved.sources_all[0], ChargeSheet)
+    assert np.isfinite(solved.getB((0, 0, 0.02))).all()

@@ -168,7 +168,6 @@ class Galerkin:
                         y[None, :, ja],
                         y[None, :, ka] - w0,
                         *bounds,
-                        inplane=False,
                     )  # (3 test densities, ta, sb)
                     phi = np.array([1.0, s_g, t_g])
                     acc += w3[..., None] * (wts[g, sb][None, None, :, None] * phi)
@@ -201,15 +200,3 @@ class Galerkin:
         F = np.zeros((self.panels.N, 3))
         F[:, 0] = values * self.panels.area
         return F.ravel()
-
-    def moment(self, c):
-        """Magnetic moment (A m^2, body frame) of the charge ``c``: the
-        integral of ``sigma r`` over the faces."""
-        p = self.panels
-        c = c.reshape(p.N, 3)
-        m = (c[:, 0] * p.area) @ p.center
-        idx = np.arange(p.N)
-        first = np.zeros((p.N, 3))
-        first[idx, p.i] = c[:, 1] * p.area * self.hp / 3
-        first[idx, p.j] = c[:, 2] * p.area * self.hq / 3
-        return m + first.sum(0)

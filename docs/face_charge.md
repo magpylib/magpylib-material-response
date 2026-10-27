@@ -47,10 +47,15 @@ positive charge being a north pole; `style.mesh.grid.show` draws the panels.
   elements on nine of 11 validation cases, up to 34 times (below).
 - **Where it is slower:** a few weak magnets alone (`apply_demag` reaches the
   same accuracy faster), many bodies (one dense coupled system: 100 small cubes
-  take 7,200 unknowns at level 1 and four times as many at level 2) and thin
-  sheets (panels sized to the thickness across the whole sheet). A solve that
-  would need more than `max_unknowns`, 30,000 by default, a 7 GB system, is
-  refused before it is assembled.
+  take 7,200 unknowns at level 1 and four times as many at level 2), thin sheets
+  (panels sized to the thickness across the whole sheet), and parts a small gap
+  apart: the mesh is graded toward the outline of a touching part, magnets
+  included, but not toward one a gap away. A solve that would need more than
+  `max_unknowns`, 20,000 by default, a 3.2 GB system, is refused before it is
+  assembled.
+- **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
+  the part's own magnetization, and `getJ` gives 0. For B inside a part, such as
+  the flux in a yoke, mesh it and use `apply_demag`.
 - **What it leaves to `apply_demag`:** other shapes, saturation, an anisotropic
   susceptibility and one varying inside a part, all of which bring back charge
   inside the part, and objects moving along paths. `apply_face_charge` raises
@@ -80,7 +85,8 @@ finite elements are `fem_solve` at orders 2 to 5:
 
 ¹ The reference, from an independent FEM, is good to 0.25 %. ² The references
 are good to 0.2 % for the cuboids of many sizes and 1.5 % for the 100 cubes. ³
-1.8 % at level 2, in three minutes and 6.6 GB.
+1.8 % at level 2, in three minutes and 6.6 GB, with `max_unknowns` raised to its
+28,800 unknowns.
 
 Face charge reaches 1 % faster than finite elements on nine of these cases, 5 to
 34 times faster on six. Finite elements catch up where fields close to a surface

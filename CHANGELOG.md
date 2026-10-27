@@ -44,7 +44,7 @@ and this project adheres to
   reference's uncertainty, 0.64 % at worst. `refine` splits the panels where the
   charge jumps most, and each sheet reports `jump_indicator` and
   `mean_polarization`, hints for accuracy and saturation. All bodies form one
-  dense system: `max_unknowns`, 30,000 (7 GB) by default, refuses a larger one
+  dense system: `max_unknowns`, 20,000 (3.2 GB) by default, refuses a larger one
   before it is assembled
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89)).
 

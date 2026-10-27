@@ -2,27 +2,31 @@
 
 from __future__ import annotations
 
+import warnings
+
 import magpylib as magpy
 import numpy as np
 from loguru import logger
+from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
-from magpylib_material_response.demag import get_H_ext
+from magpylib_material_response.demag import _has_path, get_H_ext
 from magpylib_material_response.face_charge._bodies import (
     Body,
+    Outline,
     add_contact_lines,
     solve_system,
 )
 from magpylib_material_response.face_charge._sheet import ChargeSheet
 from magpylib_material_response.utils import timelog
 
-MARK = 0.5  # a refinement round splits panels above this share of the largest indicator
+MARK = 0.5  # a refinement round splits panels above this share of the largest jump
 POINTS_PER_CALL = (
     5_000  # external-field points per magpylib call: a coil at many points takes GBs
 )
 
 
 def apply_face_charge(
-    collection, *, level=3, refine=0, max_unknowns=30_000, min_log_time=None
+    collection, *, level=3, refine=0, max_unknowns=20_000, min_log_time=None
 ):
     """Solve the collection's linear cuboids on their surfaces.
 
@@ -48,11 +52,12 @@ def apply_face_charge(
         again; a round roughly doubles the unknowns. Two rounds from level 3
         resolve the field under a magnet close to a soft face better than
         uniform panels with four times the unknowns.
-    max_unknowns : int, default 30_000
+    max_unknowns : int, default 20_000
         Refuse a solve with more unknowns than this. All bodies form one dense
-        system, of 8 n² bytes for n unknowns: 30,000 take 7 GB. Unknowns grow
+        system, of 8 n² bytes for n unknowns: 20,000 take 3.2 GB, and up to
+        twice that while a single large body is assembled. Unknowns grow
         with the square of `level` and with every refinement round, and with
-        the number of bodies: 100 small cubes take 14,400 at level 1.
+        the number of bodies: 100 small cubes take 7,200 at level 1.
     min_log_time : float, optional
         Log steps that take longer than this, in seconds; by default the value
         of :func:`~magpylib_material_response.configure_logging`.
@@ -64,12 +69,17 @@ def apply_face_charge(
         :class:`ChargeSheet` carrying its solved surface charge, at the same
         place in the hierarchy and with its label; the other sources are
         copied as they are. Like a collection solved by ``apply_demag``, its
-        field excludes the applied field ``H_ext``.
+        field excludes the applied field ``H_ext``. Fields hold outside the
+        solved parts: inside one, ``getB`` gives mu0 H, without the part's own
+        magnetization, which depends on the field of every source at once; for
+        B inside a part, mesh it and use ``apply_demag``.
 
     Raises
     ------
     ValueError
-        If a solve would need more than `max_unknowns` unknowns.
+        If the first solve would need more than `max_unknowns` unknowns. A
+        refinement round that would is skipped with a warning, and the round
+        before it is returned.
     NotImplementedError
         For a non-cuboid source or an anisotropic susceptibility (both bring
         back charge inside the body: mesh it and use ``apply_demag``), and for
@@ -104,34 +114,52 @@ def apply_face_charge(
                 solved, get_H_ext(*(obj for obj, _ in solved)), strict=True
             )
         ]
-        add_contact_lines(bodies)
+        outlines = [
+            Outline(
+                np.asarray(src.dimension, float) / 2,
+                src.orientation.as_matrix(),
+                src.position,
+            )
+            for src in fixed
+            if isinstance(src, magpy.magnet.Cuboid)
+        ]
+        add_contact_lines(bodies, outlines)
         for body in bodies:
             body.mesh()
 
     def external(points):
+        # B / mu0, not H: only the normal part enters the load, and B's is
+        # continuous across a magnet's face, where a magnet touching a solved
+        # part has its Gauss points; magpylib gives H there from inside the
+        # magnet, which is (B - J) / mu0
         H = np.zeros((len(points), 3))
         if fixed:
             for a in range(0, len(points), POINTS_PER_CALL):
-                H[a : a + POINTS_PER_CALL] = magpy.getH(
-                    fixed, points[a : a + POINTS_PER_CALL], sumup=True
+                H[a : a + POINTS_PER_CALL] = (
+                    magpy.getB(fixed, points[a : a + POINTS_PER_CALL], sumup=True)
+                    / magpy.mu_0
                 )
         return H
 
     for rnd in range(refine + 1):
         unknowns = sum(b.n_dofs for b in bodies)
+        if unknowns > max_unknowns and rnd:
+            # the rounds solved so far are kept, not thrown away
+            warnings.warn(
+                f"Refinement round {rnd} would need {unknowns:,} unknowns, more than "
+                f"max_unknowns={max_unknowns:,}; the result is round {rnd - 1}'s.",
+                stacklevel=2,
+            )
+            break
         if unknowns > max_unknowns:
-            after = f" after {rnd} refinement rounds" if rnd else ""
             msg = (
-                f"level={level}{after} needs {unknowns:,} unknowns, more than "
+                f"level={level} needs {unknowns:,} unknowns, more than "
                 f"max_unknowns={max_unknowns:,}: the dense system would take about "
-                f"{8 * unknowns**2 / 1e9:.0f} GB. Lower the level or the refinement, "
-                "raise max_unknowns, or mesh the parts for apply_demag."
+                f"{8 * unknowns**2 / 1e9:.1f} GB. Lower the level, raise max_unknowns, "
+                "or mesh the parts for apply_demag."
             )
             raise ValueError(msg)
         with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
-            for body in bodies:
-                if body.G is None:
-                    body.assemble()
             coefs = solve_system(bodies, external)
         sheets = [
             ChargeSheet._from_body(b, c) for b, c in zip(bodies, coefs, strict=True)
@@ -147,8 +175,12 @@ def apply_face_charge(
         )
         if rnd == refine or not top:
             break
-        for body, e in zip(bodies, indicators, strict=True):
-            marked = np.flatnonzero(e > MARK * top)
+        # marked by the jump itself, not its share of each sheet's peak, so that
+        # a weakly driven part is not split as much as the one that matters
+        jumps = [s._panel_jumps()[0] for s in sheets]
+        largest = max(j.max(initial=0.0) for j in jumps)
+        for body, j in zip(bodies, jumps, strict=True):
+            marked = np.flatnonzero(j > MARK * largest)
             if marked.size:
                 body.bisect(marked)
                 body.mesh()
@@ -164,7 +196,12 @@ def apply_face_charge(
     )
     replace, parents = {}, {}
     for (obj, _), sheet in zip(solved, sheets, strict=True):
-        sheet.style.label = obj.style.label or f"{type(obj).__name__}, face charge"
+        # the sheet looks like the part it replaces
+        style = obj.style
+        sheet.style.label = style.label or f"{type(obj).__name__}, face charge"
+        sheet.style.color, sheet.style.opacity = style.color, style.opacity
+        sheet.style.magnetization.show = style.magnetization.show
+        sheet.style.magnetization.color = style.magnetization.color.as_dict()
         old = twin[id(obj)]
         replace[id(old)] = sheet
         parents[id(old.parent)] = old.parent
@@ -187,14 +224,15 @@ def _inherited(obj, name):
 
 def _split(collection):
     """The cuboids to solve, as (object, susceptibility), and the fixed sources."""
-    objects = [collection, *collection.sources_all]
-    if any(
-        np.asarray(obj.position).ndim > 1 and len(obj.position) > 1 for obj in objects
-    ):
+    if any(_has_path(obj) for obj in (collection, *collection.sources_all)):
         msg = "apply_face_charge solves one configuration; objects moving along paths are not supported."
         raise NotImplementedError(msg)
     solved, fixed = [], []
     for src in collection.sources_all:
+        if not isinstance(src, BaseMagnet):
+            # currents take no susceptibility, even one set on a parent
+            fixed.append(src)
+            continue
         chi = _inherited(src, "susceptibility")
         if chi is None or not np.any(chi):
             fixed.append(src)

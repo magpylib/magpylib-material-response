@@ -178,6 +178,15 @@ class ChargeSheet(magpy.misc.CustomSource):
     def panel_indicator(self):
         """:attr:`jump_indicator` per panel, in the order of the panel ids (per
         face when the sheet has no panels)."""
+        weighted, peak, total = self._panel_jumps()
+        if not peak:
+            return weighted
+        return weighted / (peak * np.sqrt(total))
+
+    def _panel_jumps(self):
+        """Per panel, the largest jump of the charge at its corners times the
+        square root of its area, in A: comparable between sheets. Also the
+        peak charge and the sheet's area."""
         inv, area = self._corner_groups()
         q = self._q.ravel()
         panel = (
@@ -187,7 +196,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         )
         peak = np.abs(q).max(initial=0.0)
         if not peak:
-            return np.zeros(panel.max(initial=-1) + 1)
+            return np.zeros(panel.max(initial=-1) + 1), 0.0, float(area.sum() / 3)
         hi = np.full(inv.max() + 1, -np.inf)
         lo = np.full(inv.max() + 1, np.inf)
         np.maximum.at(hi, inv, q)
@@ -197,7 +206,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         size = np.zeros(panel.max() + 1)
         np.maximum.at(jump, panel, per_face)
         np.add.at(size, panel, area[::3])
-        return jump * np.sqrt(size / size.sum()) / peak
+        return jump * np.sqrt(size), peak, float(size.sum())
 
     def _corner_groups(self):
         """The group of each face corner (3m,), corners sharing a vertex and a
@@ -247,24 +256,27 @@ class ChargeSheet(magpy.misc.CustomSource):
         q = self._smoothed()
         v = np.sign(q) * np.sqrt(np.abs(q))
         style = self.style
-        traces = [
-            {
-                "type": "mesh3d",
-                "x": P[:, 0],
-                "y": P[:, 1],
-                "z": P[:, 2],
-                "i": i,
-                "j": j,
-                "k": k,
-                "color": style.color,
+        mesh = {
+            "type": "mesh3d",
+            "x": P[:, 0],
+            "y": P[:, 1],
+            "z": P[:, 2],
+            "i": i,
+            "j": j,
+            "k": k,
+            "color": style.color,
+        }
+        if style.magnetization.show:
+            # the range is pinned to include zero, the colour scale's middle
+            lo, hi = v.min(initial=0.0), v.max(initial=0.0)
+            mesh |= {
                 "intensity": v,
-                "colorscale": _colorscale(
-                    v.min(initial=0.0), v.max(initial=0.0), style.magnetization.color
-                ),
+                "colorscale": _colorscale(lo, hi, style.magnetization.color),
+                "cmin": lo,
+                "cmax": hi,
                 "showscale": False,
-                **kwargs,
             }
-        ]
+        traces = [{**mesh, **kwargs}]
         grid = style.mesh.grid
         if grid.show:
             x, y, z = (
