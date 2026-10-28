@@ -9,7 +9,7 @@ from scipy.spatial import ConvexHull
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
-from magpylib_material_response.face_charge._bodies import solve_system
+from magpylib_material_response.face_charge._bodies import _solve, solve_system
 from magpylib_material_response.face_charge._mesh import graded_triangles
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import (
@@ -500,6 +500,20 @@ def test_too_many_unknowns_raise_before_assembly():
             magpy.Collection(cube), level=2, refine=1, max_unknowns=300
         )
     assert np.isfinite(solved.getB((0, 0, 0.01))).all()
+
+
+@pytest.mark.parametrize(
+    "condition", [1e3, 1e10], ids=["refined", "past single precision"]
+)
+def test_mixed_precision_solves_to_double_accuracy(monkeypatch, condition):
+    monkeypatch.setattr("magpylib_material_response.face_charge._bodies.MIXED", 0)
+    rng = np.random.default_rng(0)
+    q = np.linalg.qr(rng.normal(size=(200, 200)))[0]
+    A = np.asfortranarray(q * np.geomspace(1, 1 / condition, 200) @ q.T)
+    b = rng.normal(size=200)
+    x = _solve(A.copy(order="F"), b)
+    residual = np.abs(b - A @ x).max() / (np.abs(A).sum(1).max() * np.abs(x).max())
+    assert residual < 1e-14
 
 
 @pytest.mark.parametrize(

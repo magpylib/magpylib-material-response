@@ -44,6 +44,11 @@ LAYER = 2.0  # graded layer length, in half the body's smallest side
 # grade the mesh, and coplanar panels couple exactly. Lines closer than this
 # are one line. Coordinates from float32 CAD data are good to about 1e-7.
 CONTACT = 1e-6
+# systems from this size on are factorized in single precision and refined, for
+# a single-precision copy beside them, half their size again; smaller ones solve
+# in milliseconds anyway
+MIXED = 2_000
+REFINEMENTS = 30  # at most, as dsgesv
 
 
 class Part:
@@ -521,7 +526,29 @@ def solve_system(bodies, external):
                 coupling_block(a, bodies[ib]),
                 out=A[rows, offsets[ib] : offsets[ib + 1]],
             )
+    x = _solve(A, rhs)
+    return [x[offsets[k] : offsets[k + 1]] for k in range(n_bodies)]
+
+
+def _solve(A, b):
+    """``A x = b``, overwriting ``A``. From ``MIXED`` unknowns on, as LAPACK's
+    ``dsgesv``, which scipy does not wrap: LU in single precision, three times
+    faster, refined against ``A`` until the residual is at double's rounding;
+    in double alone if that stalls."""
+    n = len(b)
+    if n >= MIXED:
+        lu = scipy.linalg.lu_factor(
+            A.astype(np.float32, order="F"), overwrite_a=True, check_finite=False
+        )
+        norm = scipy.linalg.norm(A, np.inf, check_finite=False)
+        tol = np.sqrt(n) * np.finfo(float).eps * norm
+        x, r = np.zeros(n), b
+        for _ in range(REFINEMENTS):
+            x += scipy.linalg.lu_solve(lu, r.astype(np.float32), check_finite=False)
+            r = b - A @ x
+            if np.abs(r).max() <= tol * np.abs(x).max():
+                return x
+        del lu
     # in place: factorizing a copy of this dense system peaked at three times
     # its size
-    x = scipy.linalg.solve(A, rhs, overwrite_a=True, check_finite=False)
-    return [x[offsets[k] : offsets[k + 1]] for k in range(n_bodies)]
+    return scipy.linalg.solve(A, b, overwrite_a=True, check_finite=False)

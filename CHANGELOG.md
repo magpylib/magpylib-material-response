@@ -44,9 +44,10 @@ and this project adheres to
   On the six documented examples it lands within each reference's uncertainty,
   0.64 % at worst. `refine` splits the panels where the charge jumps most, and
   each sheet reports `jump_indicator` and `mean_polarization`, hints for
-  accuracy and saturation. All bodies form one dense system: `max_unknowns`,
-  20,000 (3.2 GB) by default, refuses a larger one before it is assembled.
-  `to_json` saves a solved collection
+  accuracy and saturation. All bodies form one dense system, factorized in
+  single precision and refined to double's accuracy: `max_unknowns`, 20,000 (3.2
+  GB, 4.8 GB while solved) by default, refuses a larger one before it is
+  assembled. `to_json` saves a solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104)).
 

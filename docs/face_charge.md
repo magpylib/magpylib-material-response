@@ -48,14 +48,14 @@ parts solved together share it, so their colours compare.
   own uncertainty, 0.64 % at worst, where `apply_demag` at the documented
   settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
   than `apply_demag` in the same time, and it reaches 1 % faster than finite
-  elements on every validation case both reach it on, 2 to 108 times (below).
+  elements on every validation case both reach it on, 2 to 105 times (below).
 - **Where it is slower:** a few weak magnets alone (`apply_demag` reaches the
   same accuracy faster), many bodies (one dense coupled system: 100 small cubes
   take 7,200 unknowns at level 1 and four times as many at level 2), thin sheets
   (panels sized to the thickness across the whole sheet), and two solved parts a
   small gap apart, as the mesh is graded toward touching parts only. A solve
-  that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB system,
-  is refused before it is assembled.
+  that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB system
+  and 4.8 GB while it is solved, is refused before it is assembled.
 - **Magnets on a part:** a magnet without susceptibility resting on a solved
   part, or close above it, converges like the rest when it is a cuboid aligned
   with the part: the mesh follows its footprint and the field near it is
@@ -92,18 +92,18 @@ solved = apply_face_charge(magpy.Collection(part, coil), level=2)
 ![The validation's CAD part in a 10 mT field along a direction no symmetry helps with, and the U-core as one closed mesh with its coil, each solved at level 2 and drawn by show() with its graded triangles.](_static/images/face_charge_triangles.png)
 
 - **How well:** the validation's CAD part, a plate with filleted corners and a
-  round hole, reaches 0.70 % of its finite-element reference at level 1 in 0.30
-  s, 0.16 % at level 2 in 0.75 s, and the reference's own 0.07 % from level 3,
-  in 1.6 s. The U-core as one closed mesh is within its reference's 0.25 % from
+  round hole, reaches 0.70 % of its finite-element reference at level 1 in 0.31
+  s, 0.16 % at level 2 in 0.66 s, and the reference's own 0.07 % from level 3,
+  in 1.3 s. The U-core as one closed mesh is within its reference's 0.25 % from
   level 2.
 - **Cuboids stay cuboids:** a box given as triangles needs twice the unknowns of
   its rectangle panels for the same accuracy, and the U-core as three cuboids
   reaches its reference's accuracy 5 times faster than as one mesh. Give a part
   as cuboids where it is made of them: on the nine validation cases both solve,
-  rectangle panels reach 1 % as fast to 17 times faster, and a thin sheet needs
+  rectangle panels reach 1 % as fast to 16 times faster, and a thin sheet needs
   too many triangles to solve at all.
 
-![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 15 ms to 3.9 s on ten cases, triangles 30 ms to 18 s on nine, the thin sheet refused as too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
+![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 16 ms to 3.3 s on ten cases, triangles 32 ms to 17 s on nine, the thin sheet refused as too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
 
 - **Touching parts:** faces of two parts in one plane couple exactly, whatever
   their panels, and a triangle mesh is graded toward the outline of whatever
@@ -129,26 +129,26 @@ finite elements are `fem_solve` at orders 2 to 5:
 | ---------------------------- | -----------------: | ---------: | -------------------: | -----------: |
 | Three cuboids, turned        |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
 | Magnet beside a soft cube    |             0.02 s |      2.3 s |               0.09 s |        2.3 s |
-| U-core driven by a coil      |             0.13 s |      8.5 s |                  – ¹ |          – ¹ |
-| Flux concentrator            |             0.03 s |     0.83 s |               0.06 s |        3.3 s |
-| Halbach array on back iron   |             0.06 s |      1.5 s |               0.06 s |        6.3 s |
+| U-core driven by a coil      |             0.14 s |      8.5 s |                  – ¹ |          – ¹ |
+| Flux concentrator            |             0.03 s |     0.83 s |               0.07 s |        3.3 s |
+| Halbach array on back iron   |             0.07 s |      1.5 s |               0.07 s |        6.3 s |
 | Iron cube in 10 mT           |             0.03 s |     0.52 s |               0.05 s |        2.0 s |
-| Magnet on a soft plate       |             0.09 s |      3.1 s |               0.52 s |        5.0 s |
-| Magnet on a plate, sides off |             0.09 s |      2.8 s |               0.53 s |        2.8 s |
-| Thin shielding sheet         |             0.39 s |      2.7 s |                1.3 s |         10 s |
-| CAD part, a triangle mesh    |             0.30 s |       11 s |                1.6 s |         21 s |
-| Cuboids of many sizes        |              4.0 s |      8.3 s |                  – ² |          – ² |
+| Magnet on a soft plate       |             0.09 s |      3.1 s |               0.44 s |        5.0 s |
+| Magnet on a plate, sides off |             0.09 s |      2.8 s |               0.47 s |        2.8 s |
+| Thin shielding sheet         |             0.32 s |      2.7 s |                1.0 s |         10 s |
+| CAD part, a triangle mesh    |             0.31 s |       11 s |                1.3 s |         21 s |
+| Cuboids of many sizes        |              3.6 s |      8.3 s |                  – ² |          – ² |
 | 100 small cubes              |                – ³ |        – ² |                    – |            – |
 
 ¹ The reference, from an independent FEM, is good to 0.25 %. ² The references
 are good to 0.2 % for the cuboids of many sizes and 1.5 % for the 100 cubes. ³
-1.8 % at level 2, in 37 s and 7.7 GB, with `max_unknowns` raised to its 28,800
+1.8 % at level 2, in 35 s and 10 GB, with `max_unknowns` raised to its 28,800
 unknowns.
 
 Face charge reaches 1 % faster than finite elements on all eleven cases both
-reach it on, 17 to 108 times faster on nine. Finite elements come closest where
-fields close to a surface need fine panels (the plate with its sides off, 5
-times at 0.1 %), on the thin sheet (7 times) and where many bodies form one
+reach it on, 17 to 105 times faster on nine. Finite elements come closest where
+fields close to a surface need fine panels (the plate with its sides off, 6
+times at 0.1 %), on the thin sheet (8 times) and where many bodies form one
 large dense system (the cuboids of many sizes, twice).
 
 ## How accurate a solve is
@@ -189,6 +189,8 @@ with `K'` the adjoint double-layer operator of the surface, which depends on the
 shape only. The faces are cut into panels graded toward the edges, where a soft
 part's charge is singular. Each panel carries a charge linear across it, with
 fields in closed form, and the equation is solved in its Galerkin form. Touching
-parts are coupled exactly, even when their panels do not match. On a cube the
-method reproduces the polarizability of Helsing and Perfekt (2013) from below,
-as a Galerkin method should: 4.5e-4 off at level 4.
+parts are coupled exactly, even when their panels do not match. From 2,000
+unknowns on, the dense system is factorized in single precision and refined to
+double's accuracy, three times faster. On a cube the method reproduces the
+polarizability of Helsing and Perfekt (2013) from below, as a Galerkin method
+should: 4.5e-4 off at level 4.

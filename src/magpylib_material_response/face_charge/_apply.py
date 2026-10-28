@@ -73,10 +73,12 @@ def apply_face_charge(
         uniform panels with four times the unknowns.
     max_unknowns : int, default 20_000
         Refuse a solve with more unknowns than this. All bodies form one dense
-        system, of 8 n² bytes for n unknowns: 20,000 take 3.2 GB, and up to
-        twice that while a single large body is assembled. Unknowns grow
-        with the square of `level` and with every refinement round, and with
-        the number of bodies: 100 small cubes take 7,200 at level 1.
+        system, of 8 n² bytes for n unknowns: 20,000 take 3.2 GB, half as
+        much again while it is solved (in single precision, refined to double's
+        accuracy), and up to twice that while a single large body is
+        assembled. Unknowns grow with the square of `level` and with every
+        refinement round, and with the number of bodies: 100 small cubes take
+        7,200 at level 1.
     min_log_time : float, optional
         Log steps that take longer than this, in seconds; by default the value
         of :func:`~magpylib_material_response.configure_logging`.
