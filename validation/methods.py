@@ -166,7 +166,7 @@ class FEM:
 class FaceCharge:
     """Face charge, ``apply_face_charge``: the charge on the parts' faces, no
     volume mesh. A setting is the panel level, the panels in each graded layer
-    toward a face's edges. It solves cuboids and triangle meshes with a
+    toward a face's edges. It solves magnets of any shape with a volume and a
     uniform, isotropic susceptibility, beside any other source, coils
     included."""
 
@@ -178,9 +178,9 @@ class FaceCharge:
     def settings_for(self, case):  # noqa: ARG002
         return self.settings
 
-    @staticmethod
-    def can_solve(case):
-        if case.waits is not None or _same_solve(case, "FaceCharge"):
+    @classmethod
+    def can_solve(cls, case):
+        if case.waits is not None or _same_solve(case, cls.name):
             return False
         # imported here: the PR timing runs these adapters on a base branch
         # that may not have face charge yet
@@ -213,6 +213,10 @@ class FaceCharge:
             if "max_unknowns" not in str(error):
                 raise
             raise TooLarge(str(error)) from error
+        if solved.face_charge_info["rounds"] < options.get("refine", 0):
+            # a round over max_unknowns is skipped, not solved: not this setting
+            msg = "a refinement round needs more than max_unknowns"
+            raise TooLarge(msg)
         solved_at = time.perf_counter()
         B = magpy.getB(solved, sensors)
         sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
@@ -227,10 +231,28 @@ class FaceCharge:
         )
 
 
+class FaceChargeRefined(FaceCharge):
+    """Face charge with one round of refinement, ``refine=1``: the panels whose
+    charge jumps most split once and the whole solved again. Shields and thin
+    walls need it: outside the steel tube 1.0 % at level 3, 5.6 % without."""
+
+    name = "FaceChargeRefined"
+    settings = (1, 2, 3, 4)
+
+    @staticmethod
+    def solve(collection, sensors, setting, **options):
+        return FaceCharge.solve(
+            collection, sensors, setting, **{**options, "refine": 1}
+        )
+
+
 def _unknowns(sheet):
     """Three per panel: the charge is linear across each."""
     panels = sheet._panels
     return 3 * (len(sheet.faces) if panels is None else len(np.unique(panels)))
 
 
-METHODS = {method.name: method for method in (Magpylib(), MoM(), FaceCharge(), FEM())}
+METHODS = {
+    method.name: method
+    for method in (Magpylib(), MoM(), FaceCharge(), FaceChargeRefined(), FEM())
+}

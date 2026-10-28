@@ -21,17 +21,8 @@ from magpylib_material_response.demag import (
     get_susceptibilities,
 )
 from magpylib_material_response.meshing import _thinnest as _thinnest_part
-from magpylib_material_response.meshing_utils import mask_inside
+from magpylib_material_response.meshing_utils import SOLIDS, mask_inside
 
-#: The magnets fem meshes: those with a volume.
-SOLIDS = (
-    magpy.magnet.Cuboid,
-    magpy.magnet.Cylinder,
-    magpy.magnet.CylinderSegment,
-    magpy.magnet.Sphere,
-    magpy.magnet.Tetrahedron,
-    magpy.magnet.TriangularMesh,
-)
 #: More sharp edges than this meeting at a corner break netgen's geometric
 #: refinement (an icosahedron, five at each corner, fails to assemble, and finer
 #: triangle meshes crash); such corners and their edges get no edge layers.

@@ -93,29 +93,48 @@ class TriBody(Part):
         self.T = self.fr = self.mass = self.G = None
         self.fine = None  # triangles whose load takes a finer rule
         self.contacts = []  # lines (point, direction, normal) to grade toward
+        self.split = None  # the triangles and shells of a bisection, to mesh
 
     def mesh(self):
-        """The triangles graded toward the sharp edges; the self block waits
-        for ``assemble``, so that the unknowns can be counted first."""
-        T = [
-            graded_triangles(
-                self.vertices,
-                self.faces[self.shells == k],
-                LAYER * self.thickness[k],
-                self.m,
-                GRADING,
-                contacts=self.contacts,
-            )
-            for k in range(self.shells.max() + 1)
-        ]
-        self.T = np.concatenate(T)
-        self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
+        """The triangles graded toward the sharp edges, or as bisected since;
+        the self block waits for ``assemble``, so that the unknowns can be
+        counted first."""
+        if self.split is not None:
+            (self.T, self.shell), self.split = self.split, None
+        else:
+            T = [
+                graded_triangles(
+                    self.vertices,
+                    self.faces[self.shells == k],
+                    LAYER * self.thickness[k],
+                    self.m,
+                    GRADING,
+                    contacts=self.contacts,
+                )
+                for k in range(self.shells.max() + 1)
+            ]
+            self.T = np.concatenate(T)
+            self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
         self.fr = frames(self.T)
         # mass blocks, exact with the degree-2 rule
         P = np.einsum("qk,fkd->fqd", BARY3, self.T)
         phi = self.basis(P)
         self.mass = np.einsum("fq,fqa,fqb->fab", self.fr[5][:, None] * W3, phi, phi)
         self.G = None
+
+    def bisect(self, panels):
+        """Cut these triangles into four at their edges' midpoints; their
+        neighbours need no cut, the charge being discontinuous between
+        triangles. Takes effect at the next mesh."""
+        a, b, c = (self.T[panels, i] for i in range(3))
+        ab, bc, ca = (a + b) / 2, (b + c) / 2, (c + a) / 2
+        keep = np.ones(len(self.T), bool)
+        keep[panels] = False
+        children = [(a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)]
+        self.split = (
+            np.concatenate([self.T[keep], *(np.stack(t, 1) for t in children)]),
+            np.concatenate([self.shell[keep], np.tile(self.shell[panels], 4)]),
+        )
 
     @property
     def n_dofs(self):
@@ -472,6 +491,12 @@ def add_triangle_contact_lines(bodies, outlines=()):
     a cuboid toward the extent of a touching mesh's triangles in its face."""
     surfaces = [_triangles(b) for b in bodies]
     others = [(_triangles(o), o) for o in outlines]
+    # each part's box: parts apart are not searched, a sphere's 1,280 face
+    # planes against each other part's triangles
+    boxes = [
+        (T.reshape(-1, 3).min(0), T.reshape(-1, 3).max(0))
+        for T in [*surfaces, *(T for T, _ in others)]
+    ]
     for ia, a in enumerate(bodies):
         for ib, (Tb, b) in enumerate(
             [(surfaces[k], bodies[k]) for k in range(len(bodies))] + others
@@ -479,6 +504,9 @@ def add_triangle_contact_lines(bodies, outlines=()):
             if ib == ia or not (isinstance(a, TriBody) or isinstance(b, TriBody)):
                 continue
             tol = contact_tol(a, b)
+            (lo_a, hi_a), (lo_b, hi_b) = boxes[ia], boxes[ib]
+            if np.any(lo_a > hi_b + tol) or np.any(lo_b > hi_a + tol):
+                continue
             if isinstance(a, TriBody):
                 _grade_mesh(a, surfaces[ia], Tb, tol)
             elif isinstance(a, Body):

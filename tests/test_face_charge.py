@@ -9,6 +9,7 @@ from scipy.spatial import ConvexHull
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
 from magpylib_material_response.face_charge._mesh import graded_triangles
 from magpylib_material_response.face_charge._parallel import run
@@ -42,9 +43,13 @@ def _one_face(charge, **kwargs):
     return ChargeSheet(TRIANGLE, [[0, 1, 2]], [charge], **kwargs)
 
 
-def _plate_under_magnet():
-    plate = magpy.magnet.Cuboid(
-        dimension=(0.01, 0.01, 0.004), polarization=(0, 0, 0), style_label="plate"
+def _plate_under_magnet(shape="cuboid"):
+    plate = (
+        magpy.magnet.Cuboid(
+            dimension=(0.01, 0.01, 0.004), polarization=(0, 0, 0), style_label="plate"
+        )
+        if shape == "cuboid"
+        else magpy.magnet.Cylinder(dimension=(0.012, 0.004), polarization=(0, 0, 0))
     )
     plate.susceptibility = 1000.0
     magnet = magpy.magnet.Cuboid(
@@ -457,14 +462,75 @@ def test_returns_a_solved_copy():
     assert np.linalg.norm(solved.getB(far)) < 1e-4
 
 
-def test_refine_lowers_the_jump_indicator():
+@pytest.mark.parametrize(
+    ("shape", "factor"), [("cuboid", 5), ("disc", 2)], ids=["panels", "triangles"]
+)
+def test_refine_lowers_the_jump_indicator(shape, factor):
     solved = [
-        apply_face_charge(_plate_under_magnet(), level=3, refine=refine)
+        apply_face_charge(_plate_under_magnet(shape), level=3, refine=refine)
         for refine in (0, 2)
     ]
     jumps = [s.sources_all[0].jump_indicator for s in solved]
-    assert jumps[1] < jumps[0] / 5
+    assert jumps[1] < jumps[0] / factor
     assert [s.face_charge_info["rounds"] for s in solved] == [0, 2]
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        magpy.magnet.Cylinder(dimension=(2, 2)),
+        magpy.magnet.CylinderSegment(dimension=(0.5, 1, 2, 0, 360)),
+        magpy.magnet.CylinderSegment(dimension=(0.5, 1, 2, -30, 250)),
+        magpy.magnet.CylinderSegment(dimension=(0, 1, 2, 10, 200)),
+        magpy.magnet.Sphere(diameter=2),
+    ],
+    ids=["cylinder", "tube", "segment", "slice", "sphere"],
+)
+def test_curved_parts_are_faceted_closed_outward_at_their_volume(src):
+    V, F = _closed_surface(src, level=2)
+    directed = np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]])
+    assert len(np.unique(directed, axis=0)) == len(directed)  # wound one way
+    pairs = np.unique(np.sort(directed, axis=1), axis=0, return_counts=True)[1]
+    assert np.all(pairs == 2)  # closed
+    volume = np.einsum("fd,fd->", V[F[:, 0]], np.cross(V[F[:, 1]], V[F[:, 2]])) / 6
+    exact = (
+        np.pi * src.diameter**3 / 6
+        if isinstance(src, magpy.magnet.Sphere)
+        else np.pi * src.dimension[0] ** 2 / 4 * src.dimension[1]
+        if isinstance(src, magpy.magnet.Cylinder)
+        else np.radians(src.dimension[4] - src.dimension[3])
+        * (src.dimension[1] ** 2 - src.dimension[0] ** 2)
+        / 2
+        * src.dimension[2]
+    )
+    assert volume == pytest.approx(exact, rel=1e-12)  # positive: outward
+
+
+def test_coaxial_parts_share_their_facets():
+    """A cylinder in a tube that touches it: the tube's inner corners are the
+    cylinder's, wherever the tube's angles start, so the two do not overlap."""
+    core, _ = _closed_surface(magpy.magnet.Cylinder(dimension=(2, 2)), level=2)
+    tube, _ = _closed_surface(
+        magpy.magnet.CylinderSegment(dimension=(1, 1.5, 2, -45, 315)), level=2
+    )
+    rim = core[np.abs(np.linalg.norm(core[:, :2], axis=1)) > 0.5]
+    assert {tuple(v) for v in np.round(rim, 9)} <= {tuple(v) for v in np.round(tube, 9)}
+
+
+def test_soft_sphere_gives_the_exact_dipole():
+    a, chi, B0 = 0.005, 1000.0, 0.01
+    sphere = magpy.magnet.Sphere(diameter=2 * a, polarization=(0, 0, 0))
+    sphere.susceptibility = chi
+    model = magpy.Collection(sphere)
+    model.H_ext = (0, 0, B0)
+    m = np.array([0, 0, 4 * np.pi * a**3 * chi / (chi + 3) * B0 / magpy.mu_0])
+    dipole = magpy.misc.Dipole(moment=m)
+    solved = apply_face_charge(model, level=1)
+    for points, rtol in (
+        ([(0, 0, 0.006), (0.006, 0, 0)], 5e-3),
+        ([(0, 0, 0.05)], 1e-3),
+    ):
+        assert _relative(solved.getB(points), dipole.getB(points)) < rtol
 
 
 def test_show_colours_the_charge_and_draws_panel_edges():
@@ -552,7 +618,10 @@ def _flipped_cube():
     [
         (
             lambda: magpy.Collection(
-                magpy.magnet.Cylinder(dimension=(0.01, 0.01), polarization=(0, 0, 0))
+                magpy.misc.Triangle(
+                    vertices=[(0, 0, 0), (0.01, 0, 0), (0, 0.01, 0)],
+                    polarization=(0, 0, 0),
+                )
             ),
             10.0,
             NotImplementedError,
@@ -585,7 +654,7 @@ def _flipped_cube():
         (lambda: magpy.Collection(_cubes_sharing_an_edge()), 10.0, ValueError),
     ],
     ids=[
-        "not a cuboid",
+        "no volume",
         "anisotropic",
         "path",
         "current path",
@@ -608,9 +677,15 @@ def test_too_many_unknowns_raise_before_assembly():
     cube.susceptibility = 10
     with pytest.raises(ValueError, match="max_unknowns"):
         apply_face_charge(magpy.Collection(cube), max_unknowns=10)
-    # a refinement round over the limit is skipped: the round before is kept
     cube = _cuboid()
     cube.susceptibility, cube.H_ext = 10, (0, 0, 0.01)
+    # by default the highest level that fits; a level asked for raises
+    with pytest.warns(UserWarning, match="solved at level 2"):
+        solved = apply_face_charge(magpy.Collection(cube.copy()), max_unknowns=300)
+    assert solved.face_charge_info["level"] == 2
+    with pytest.raises(ValueError, match="max_unknowns"):
+        apply_face_charge(magpy.Collection(cube.copy()), level=3, max_unknowns=300)
+    # a refinement round over the limit is skipped: the round before is kept
     with pytest.warns(UserWarning, match="round 0's"):
         solved = apply_face_charge(
             magpy.Collection(cube), level=2, refine=1, max_unknowns=300
@@ -725,6 +800,18 @@ def test_currents_take_no_susceptibility():
     coll.susceptibility = 1000
     solved = apply_face_charge(coll, level=1)
     assert isinstance(solved.sources_all[0], ChargeSheet)
+    assert np.isfinite(solved.getB((0, 0, 0.02))).all()
+
+
+def test_a_flat_magnet_beside_a_meshed_part_drives_it():
+    """A misc.Triangle has no hull for the contact checks: its triangle stands
+    for it."""
+    disc = magpy.magnet.Cylinder(dimension=(0.01, 0.01), polarization=(0, 0, 0))
+    disc.susceptibility = 100
+    flat = magpy.misc.Triangle(
+        polarization=(0, 0, 1), vertices=[(0.02, 0, 0), (0.03, 0, 0), (0.02, 0.01, 0)]
+    )
+    solved = apply_face_charge(magpy.Collection(disc, flat), level=1)
     assert np.isfinite(solved.getB((0, 0, 0.02))).all()
 
 

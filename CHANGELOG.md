@@ -38,23 +38,26 @@ and this project adheres to
   [#99](https://github.com/magpylib/magpylib-material-response/pull/99),
   [#101](https://github.com/magpylib/magpylib-material-response/pull/101),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
-- `face_charge.apply_face_charge` solves cuboids and closed triangle meshes,
-  such as CAD exports, with a uniform, isotropic susceptibility on their
-  surfaces, without a volume mesh, coupled to each other and to every other
-  source; each solved part becomes a `ChargeSheet`, an ordinary magpylib source.
-  On the six documented examples it lands within each reference's uncertainty,
-  0.64 % at worst. `refine` splits the panels where the charge jumps most, and
-  each sheet reports `jump_indicator` and `mean_polarization`, hints for
-  accuracy and saturation; the solved collection's `face_charge_info` holds the
-  unknowns, level, refinement rounds and time, and the unknowns are logged
-  before the solve. All bodies form one dense system, factorized in single
-  precision and refined to double's accuracy: `max_unknowns`, 20,000 (3.2 GB,
-  4.8 GB while solved) by default, refuses a larger one before it is assembled.
-  It runs on magpylib's `defaults.threads` threads where magpylib has that
-  setting, otherwise on up to 8. `to_json` saves a solved collection
+- `face_charge.apply_face_charge` solves cuboids, cylinders, cylinder segments,
+  spheres, tetrahedra and closed triangle meshes, such as CAD exports, with a
+  uniform, isotropic susceptibility on their surfaces, without a volume mesh,
+  coupled to each other and to every other source; each solved part becomes a
+  `ChargeSheet`, an ordinary magpylib source. On the six documented examples it
+  lands within each reference's uncertainty, 0.64 % at worst. `refine` splits
+  the panels where the charge jumps most, and each sheet reports
+  `jump_indicator` and `mean_polarization`, hints for accuracy and saturation;
+  the solved collection's `face_charge_info` holds the unknowns, level,
+  refinement rounds and time, and the unknowns are logged before the solve. All
+  bodies form one dense system, factorized in single precision and refined to
+  double's accuracy: `max_unknowns`, 20,000 (3.2 GB, 4.8 GB while solved) by
+  default, refuses a larger one before it is assembled; without a `level`, the
+  highest level up to 3 that fits is taken. It runs on magpylib's
+  `defaults.threads` threads where magpylib has that setting, otherwise on up
+  to 8. `to_json` saves a solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
-  [#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
+  [#110](https://github.com/magpylib/magpylib-material-response/pull/110),
+  [#113](https://github.com/magpylib/magpylib-material-response/pull/113)).
 
 ### Changed
 
