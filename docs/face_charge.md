@@ -40,10 +40,11 @@ parts solved together share it, so their colours compare.
 
 ## When it fits
 
-- **What it solves:** cuboids, alone or touching, placed and turned freely, and
-  closed triangle meshes such as CAD exports (below), each with a uniform
-  isotropic susceptibility and a uniform remanence, driven by any other magpylib
-  sources and by the applied field `H_ext`.
+- **What it solves:** cuboids, alone or touching, placed and turned freely,
+  cylinders, cylinder segments and spheres (below), and closed triangle meshes
+  such as CAD exports (below), each with a uniform isotropic susceptibility and
+  a uniform remanence, driven by any other magpylib sources and by the applied
+  field `H_ext`.
 - **How well:** on the six documented examples it lands within each reference's
   own uncertainty, 0.64 % at worst, where `apply_demag` at the documented
   settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
@@ -57,7 +58,10 @@ parts solved together share it, so their colours compare.
   panels also make a thin part converge early: take `level=2`. A 0.5 mm plate
   under a magnet is within 0.03 % of level 3 there, in 0.5 s instead of 1.7. A
   solve that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB
-  system and 4.8 GB while it is solved, is refused before it is assembled.
+  system and 4.8 GB while it is solved, is refused before it is assembled;
+  without a `level`, the highest level up to 3 that fits is taken instead, with
+  a warning. A thin wall that shields a field, such as a tube around a magnet,
+  needs `refine=1` (below).
 - **Magnets on a part:** a magnet without susceptibility resting on a solved
   part, or close above it, converges like the rest when it is a cuboid aligned
   with the part: the mesh follows its footprint and the field near it is
@@ -67,10 +71,9 @@ parts solved together share it, so their colours compare.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, and `getJ` gives 0. For B inside a part, such as
   the flux in a yoke, mesh it and use `apply_demag`.
-- **What it leaves to `apply_demag`:** other shapes (a cylinder or a sphere can
-  be exported as a triangle mesh), saturation, an anisotropic susceptibility and
-  one varying inside a part, all of which bring back charge inside the part, and
-  objects moving along paths. `apply_face_charge` raises for these.
+- **What it leaves to `apply_demag`:** saturation, an anisotropic susceptibility
+  and one varying inside a part, all of which bring back charge inside the part,
+  and objects moving along paths. `apply_face_charge` raises for these.
 
 ## Triangle meshes and CAD exports
 
@@ -115,9 +118,36 @@ solved = apply_face_charge(magpy.Collection(part, coil), level=2)
   only follow their own axes; with one of them as a triangle mesh the solve
   converges steadily. A magnet that is not a cuboid touching a triangle mesh
   warns, as its footprint is not graded toward.
-- **Limits:** the mesh must be closed. `refine` splits cuboid panels only. A
-  curved face exported as many narrow facets keeps a charge per facet, so a fine
-  export costs unknowns.
+- **Limits:** the mesh must be closed. A curved face exported as many narrow
+  facets keeps a charge per facet, so a fine export costs unknowns; a cylinder
+  or a sphere is better given as itself (next section).
+
+## Cylinders, cylinder segments and spheres
+
+A curved face is cut into flat facets, `12 (level + 1)` per turn (48 at level
+3), widened so that the part keeps its true volume, and then meshed as a
+triangle mesh is. The widening matters more than the facets' number: on a soft
+cylinder at level 3, 24 widened facets are 0.02 % off 50 mm away, 96 facets
+without it 0.16 %. A sphere is a geodesic polyhedron that gets finer with the
+level, as it has no edge to grade toward. Against the validation's FEM
+references and the exact field of a sphere, on one M4 Pro:
+
+| Part                                   | Error, time                                                | `apply_demag` at best |
+| -------------------------------------- | ---------------------------------------------------------- | --------------------- |
+| Soft cylinder, 1 mm off its surface    | 0.54 % in 0.12 s at level 2, 0.11 % in 0.3 s at level 3    | 2.4 %                 |
+| Soft sphere, 1 mm off its surface      | 0.20 % in 0.09 s at level 1, 0.12 % in 0.4 s at level 3    |                       |
+| Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.85 % in 4.4 s with `refine=1` | 395 %                 |
+| Steel tube around a magnet, outside it | 5.6 % in 8.9 s at level 3, 1.0 % in 21 s with `refine=1`   | 41 %                  |
+| Soft rod 1 mm across, 20 mm long       | 0.07 % in 2.7 s at level 2, the default here               |                       |
+
+- **Thin walls that shield** converge slowly with the level: outside the tube
+  the field is what is left of the magnet's after the tube takes most of it, and
+  the tube's cells are sized to its width, not its wall. `refine=1` splits the
+  triangles where the charge jumps, at the rims and near the magnet, and brings
+  it within 1 %.
+- **Slender parts** are converged well below level 3: the rod is within 0.4 % at
+  level 1. Without a `level`, the highest level that fits `max_unknowns` is
+  taken.
 
 ## Against finite elements
 
@@ -166,9 +196,11 @@ solve for free. For the plate under the magnet the worst error of B 0.25 mm
 above the plate is 1 to 3 times it.
 
 `refine` uses the same jumps: each round splits the panels where they are
-largest and solves again. For the plate, `refine=2` from level 3 (2,688
-unknowns, under 2 s) puts B 0.25 mm above the plate within 0.04 %, where uniform
-panels need 10,350 unknowns and 20 s for 0.13 %.
+largest, a cuboid's panel in two along both axes and a triangle into four, and
+solves again. For the plate, `refine=2` from level 3 (2,688 unknowns, under 2 s)
+puts B 0.25 mm above the plate within 0.04 %, where uniform panels need 10,350
+unknowns and 20 s for 0.13 %. Outside the steel tube, one round from level 3
+brings 5.6 % down to 1.0 %.
 
 ## Whether saturation matters
 

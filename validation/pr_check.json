@@ -131,6 +131,14 @@
     "50 mm away": 0.02085
    },
    "unknowns": 144
+  },
+  "FaceCharge": {
+   "setting": 2,
+   "errors": {
+    "1 mm off the surface": 0.005421,
+    "50 mm away": 0.001022
+   },
+   "unknowns": 1752
   }
  },
  "concentrator_newell": {
@@ -221,6 +229,27 @@
     "60 mm away": 0.002883
    },
    "unknowns": 2706
+  }
+ },
+ "thin_ring": {
+  "FaceCharge": {
+   "setting": 2,
+   "errors": {
+    "inside, on the axis": 0.04967,
+    "far side": 0.002538
+   },
+   "unknowns": 4320
+  }
+ },
+ "shield_tube": {
+  "FaceCharge": {
+   "setting": 1,
+   "errors": {
+    "between magnet and wall": 0.01793,
+    "on the axis": 0.001535,
+    "outside the tube": 0.3464
+   },
+   "unknowns": 3108
   }
  }
 }
