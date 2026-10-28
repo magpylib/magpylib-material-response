@@ -54,7 +54,7 @@ def test_pr_setting_holds(name, method):
     assert record["counts"]["unknowns"] <= stored["unknowns"]
 
 
-def _record(error, case="plate", method="MoM", unknowns=10, reference_error=1e-4):
+def _record(error, case="plate", method="MoM", unknowns=1000, reference_error=1e-4):
     return {
         "case": case,
         "method": method,
@@ -73,12 +73,16 @@ def _record(error, case="plate", method="MoM", unknowns=10, reference_error=1e-4
         (_record(0.011), True),  # grew past the slack
         (_record(0.01001), False),
         (_record(float("nan")), True),
-        (_record(0.01, unknowns=11), True),
+        (_record(0.01, unknowns=1001), True),
         (_record(2.1e-6, reference_error=1e-5), False),  # the reference cannot tell
+        # netgen's mesh varies with the runner, and FEM's error with it
+        (_record(0.013, method="FEM", unknowns=1010), False),
+        (_record(0.016, method="FEM"), True),
     ],
 )
 def test_report_against_the_baseline(tonight, fails):
-    baseline = [_record(0.01 if tonight["errors"]["g"] > 1e-4 else 2e-6)]
+    error = 0.01 if tonight["errors"]["g"] > 1e-4 else 2e-6
+    baseline = [_record(error, method=tonight["method"])]
     worse, _, _ = report.compare([tonight], baseline)
     assert bool(worse) == fails
     # the baseline keeps the least error any night reached, so a drift adds up
