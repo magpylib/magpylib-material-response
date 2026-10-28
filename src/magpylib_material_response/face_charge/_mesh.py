@@ -425,7 +425,18 @@ def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=()):
                     ]
         cells += [(c, normal) for c in local if len(c) >= 3]
     cells = _split_cells(cells, ell * (1 - ((m - 1) / m) ** g), tol)
-    triangles = [(c[0], c[q], c[q + 1]) for c, _ in cells for q in range(1, len(c) - 1)]
+    triangles = []
+    for c, _ in cells:
+        if len(c) <= 4:
+            triangles += [(c[0], c[q], c[q + 1]) for q in range(1, len(c) - 1)]
+        else:  # many corners, as along an arc: fanned from one corner they
+            # would be needles, so from the cell's centroid
+            fan = np.stack([np.broadcast_to(c[0], (len(c) - 2, 3)), c[1:-1], c[2:]], 1)
+            area = np.linalg.norm(
+                np.cross(fan[:, 1] - fan[:, 0], fan[:, 2] - fan[:, 0]), axis=1
+            )
+            centre = area @ fan.mean(1) / area.sum()
+            triangles += [(centre, c[q], c[(q + 1) % len(c)]) for q in range(len(c))]
     T = np.array(triangles)
     # and any needle left: its smallest height, twice its area over its longest
     # side, far below the layers' depth
