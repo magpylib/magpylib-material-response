@@ -611,9 +611,15 @@ def test_too_many_unknowns_raise_before_assembly():
     cube.susceptibility = 10
     with pytest.raises(ValueError, match="max_unknowns"):
         apply_face_charge(magpy.Collection(cube), max_unknowns=10)
-    # a refinement round over the limit is skipped: the round before is kept
     cube = _cuboid()
     cube.susceptibility, cube.H_ext = 10, (0, 0, 0.01)
+    # by default the highest level that fits; a level asked for raises
+    with pytest.warns(UserWarning, match="solved at level 2"):
+        solved = apply_face_charge(magpy.Collection(cube.copy()), max_unknowns=300)
+    assert solved.face_charge_info["level"] == 2
+    with pytest.raises(ValueError, match="max_unknowns"):
+        apply_face_charge(magpy.Collection(cube.copy()), level=3, max_unknowns=300)
+    # a refinement round over the limit is skipped: the round before is kept
     with pytest.warns(UserWarning, match="round 0's"):
         solved = apply_face_charge(
             magpy.Collection(cube), level=2, refine=1, max_unknowns=300

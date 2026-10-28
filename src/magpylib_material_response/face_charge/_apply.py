@@ -57,7 +57,7 @@ POINTS_PER_CALL = (
 
 
 def apply_face_charge(
-    collection, *, level=3, refine=0, max_unknowns=20_000, min_log_time=None
+    collection, *, level=None, refine=0, max_unknowns=20_000, min_log_time=None
 ):
     """Solve the collection's linear cuboids and triangle meshes on their surfaces.
 
@@ -77,12 +77,15 @@ def apply_face_charge(
         it is. Curved faces are cut into flat facets, ``12 (level + 1)`` per
         turn, widened so that the body keeps its volume. A triangle mesh must
         be closed.
-    level : int, default 3
+    level : int, optional
         Mesh level: the panels in each graded layer toward a face's edges. A
         triangle mesh is graded toward its sharp edges, over half the
         thickness of each closed shell: its smallest width, or the wall to a
         cavity. Fields far from the bodies are converged at low levels; fields
-        within a panel's size of a surface need higher ones.
+        within a panel's size of a surface need higher ones. By default 3, or
+        the highest level whose unknowns fit `max_unknowns`, with a warning:
+        slender parts are converged well below level 3, a soft rod 1 mm
+        across and 20 mm long within 0.07 % at level 2.
     refine : int, default 0
         Rounds of refinement. Each splits the panels whose charge jumps most
         (see :attr:`ChargeSheet.jump_indicator`), over all solved parts, and
@@ -132,8 +135,9 @@ def apply_face_charge(
     if not isinstance(collection, magpy.Collection):
         msg = f"apply_face_charge takes a magpylib Collection; got {type(collection).__name__}."
         raise TypeError(msg)
+    chosen = level is not None
     try:
-        level, refine = operator.index(level), operator.index(refine)
+        level, refine = operator.index(level if chosen else 3), operator.index(refine)
     except TypeError:
         msg = f"level and refine must be integers; got level={level!r}, refine={refine!r}."
         raise TypeError(msg) from None
@@ -149,29 +153,46 @@ def apply_face_charge(
         out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
         return out
 
-    with timelog("Face-charge meshing", min_log_time=min_log_time):
+    outlines = [
+        Outline(
+            np.asarray(src.dimension, float) / 2,
+            src.orientation.as_matrix(),
+            src.position,
+        )
+        for src in fixed
+        if isinstance(src, magpy.magnet.Cuboid)
+    ]
+    boxes = [_box(src) for src in fixed if isinstance(src, BaseMagnet)]
+    applied = get_H_ext(*(obj for obj, _ in solved))
+
+    def meshed(level):
         bodies = [
             _part(obj, chi, np.asarray(h_ext, float) / magpy.mu_0, level)
-            for (obj, chi), h_ext in zip(
-                solved, get_H_ext(*(obj for obj, _ in solved)), strict=True
-            )
-        ]
-        outlines = [
-            Outline(
-                np.asarray(src.dimension, float) / 2,
-                src.orientation.as_matrix(),
-                src.position,
-            )
-            for src in fixed
-            if isinstance(src, magpy.magnet.Cuboid)
+            for (obj, chi), h_ext in zip(solved, applied, strict=True)
         ]
         add_contact_lines(bodies, outlines)
         add_triangle_contact_lines(bodies, outlines)
-        boxes = [_box(src) for src in fixed if isinstance(src, BaseMagnet)]
-        _warn_unaligned(bodies, solved, boxes, fixed)
         for body in bodies:
             body.mesh()
             body.fine = near_panels(body, boxes)
+        return bodies
+
+    with timelog("Face-charge meshing", min_log_time=min_log_time):
+        bodies = meshed(level)
+        first = sum(b.n_dofs for b in bodies)
+        # by default, the highest level that fits
+        while not chosen and level > 1 and sum(b.n_dofs for b in bodies) > max_unknowns:
+            level -= 1
+            bodies = meshed(level)
+        if level < 3 and not chosen and sum(b.n_dofs for b in bodies) <= max_unknowns:
+            warnings.warn(
+                f"Level 3 would need {first:,} unknowns, more than max_unknowns="
+                f"{max_unknowns:,}; solved at level {level} "
+                f"({sum(b.n_dofs for b in bodies):,}). Pass level= to choose it.",
+                stacklevel=2,
+            )
+        info["level"] = level
+        _warn_unaligned(bodies, solved, boxes, fixed)
 
     # oblique steps of 1e-9 to 1e-5 of the parts' size, off any edge line
     size = max(np.max(b.half) for b in bodies)
