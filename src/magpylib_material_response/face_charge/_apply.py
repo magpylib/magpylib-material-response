@@ -1,4 +1,4 @@
-"""Solve a magpylib collection's cuboids by their face charges."""
+"""Solve a magpylib collection's cuboids and triangle meshes by their face charges."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import magpylib as magpy
 import numpy as np
 from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
+from scipy.spatial import ConvexHull  # pylint: disable=no-name-in-module
+from scipy.spatial.transform import Rotation
 
 from magpylib_material_response.demag import (
     _get_susceptibility_from_hierarchy,
@@ -20,13 +22,20 @@ from magpylib_material_response.face_charge._bodies import (
     Body,
     Outline,
     add_contact_lines,
+    contact_tol,
     near_panels,
     solve_system,
 )
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
+from magpylib_material_response.face_charge._triangle import frames
+from magpylib_material_response.face_charge._tribody import (
+    TriBody,
+    add_triangle_contact_lines,
+)
 from magpylib_material_response.utils import timelog
 
 MARK = 0.5  # a refinement round splits panels above this share of the largest jump
+SOLVABLE = (magpy.magnet.Cuboid, magpy.magnet.TriangularMesh, magpy.magnet.Tetrahedron)
 POINTS_PER_CALL = (
     5_000  # external-field points per magpylib call: a coil at many points takes GBs
 )
@@ -35,9 +44,9 @@ POINTS_PER_CALL = (
 def apply_face_charge(
     collection, *, level=3, refine=0, max_unknowns=20_000, min_log_time=None
 ):
-    """Solve the collection's linear cuboids on their surfaces.
+    """Solve the collection's linear cuboids and triangle meshes on their surfaces.
 
-    A cuboid with a uniform, isotropic susceptibility (on itself or a parent
+    A part with a uniform, isotropic susceptibility (on itself or a parent
     collection) and a uniform remanence has no magnetic charge inside: its whole
     response is a charge on its faces. Those faces are solved together, coupled
     to each other and driven by every other source in the collection and by the
@@ -47,24 +56,30 @@ def apply_face_charge(
     Parameters
     ----------
     collection : magpylib.Collection
-        The model. Cuboids with a nonzero susceptibility are solved; every
-        other source acts on them as it is.
+        The model. Cuboids, triangle meshes (``TriangularMesh``, a CAD
+        export) and tetrahedra with a nonzero susceptibility are solved; every
+        other source acts on them as it is. A triangle mesh must be closed.
     level : int, default 3
-        Mesh level: the panels in each graded layer toward a face's edges.
-        Fields far from the bodies are converged at low levels; fields within a
-        panel's size of a surface need higher ones.
+        Mesh level: the panels in each graded layer toward a face's edges. A
+        triangle mesh is graded toward its sharp edges, over half the
+        thickness of each closed shell: its smallest width, or the wall to a
+        cavity. Fields far from the bodies are converged at low levels; fields
+        within a panel's size of a surface need higher ones.
     refine : int, default 0
-        Rounds of refinement. Each splits the panels whose charge jumps most
-        (see :attr:`ChargeSheet.jump_indicator`), over all bodies, and solves
-        again; a round roughly doubles the unknowns. Two rounds from level 3
+        Rounds of refinement. Each splits the cuboid panels whose charge jumps
+        most (see :attr:`ChargeSheet.jump_indicator`), over all cuboids, and
+        solves again; a round roughly doubles the unknowns. Triangle meshes
+        keep their level's mesh. Two rounds from level 3
         resolve the field under a magnet close to a soft face better than
         uniform panels with four times the unknowns.
     max_unknowns : int, default 20_000
         Refuse a solve with more unknowns than this. All bodies form one dense
-        system, of 8 n² bytes for n unknowns: 20,000 take 3.2 GB, and up to
-        twice that while a single large body is assembled. Unknowns grow
-        with the square of `level` and with every refinement round, and with
-        the number of bodies: 100 small cubes take 7,200 at level 1.
+        system, of 8 n² bytes for n unknowns: 20,000 take 3.2 GB, half as
+        much again while it is solved (in single precision, refined to double's
+        accuracy), and up to twice that while a single large body is
+        assembled. Unknowns grow with the square of `level` and with every
+        refinement round, and with the number of bodies: 100 small cubes take
+        7,200 at level 1.
     min_log_time : float, optional
         Log steps that take longer than this, in seconds; by default the value
         of :func:`~magpylib_material_response.configure_logging`.
@@ -72,7 +87,7 @@ def apply_face_charge(
     Returns
     -------
     magpylib.Collection
-        A copy of the collection in which each solved cuboid is replaced by a
+        A copy of the collection in which each solved part is replaced by a
         :class:`ChargeSheet` carrying its solved surface charge, at the same
         place in the hierarchy and with its label; the other sources are
         copied as they are. Like a collection solved by ``apply_demag``, its
@@ -88,9 +103,9 @@ def apply_face_charge(
         refinement round that would is skipped with a warning, and the round
         before it is returned.
     NotImplementedError
-        For a non-cuboid source or an anisotropic susceptibility (both bring
-        back charge inside the body: mesh it and use ``apply_demag``), and for
-        objects moving along paths.
+        For another shape, such as a cylinder (export it as a triangle mesh),
+        an anisotropic susceptibility (it brings back charge inside the body:
+        mesh it and use ``apply_demag``), and objects moving along paths.
     """
     if not isinstance(collection, magpy.Collection):
         msg = f"apply_face_charge takes a magpylib Collection; got {type(collection).__name__}."
@@ -106,22 +121,12 @@ def apply_face_charge(
     solved, fixed = _split(collection)
     out = collection.copy()
     if not solved:
-        logger.info("Face charge: no cuboid with a susceptibility to solve")
+        logger.info("Face charge: no part with a susceptibility to solve")
         return out
 
     with timelog("Face-charge meshing", min_log_time=min_log_time):
         bodies = [
-            Body(
-                obj.dimension,
-                obj.position,
-                obj.orientation.as_matrix(),
-                chi,
-                J0=None
-                if obj.polarization is None or not np.any(obj.polarization)
-                else obj.polarization,
-                applied=np.asarray(h_ext, float) / magpy.mu_0,
-                m=level,
-            )
+            _part(obj, chi, np.asarray(h_ext, float) / magpy.mu_0, level)
             for (obj, chi), h_ext in zip(
                 solved, get_H_ext(*(obj for obj, _ in solved)), strict=True
             )
@@ -136,6 +141,7 @@ def apply_face_charge(
             if isinstance(src, magpy.magnet.Cuboid)
         ]
         add_contact_lines(bodies, outlines)
+        add_triangle_contact_lines(bodies, outlines)
         boxes = [_box(src) for src in fixed if isinstance(src, BaseMagnet)]
         _warn_unaligned(bodies, solved, boxes, fixed)
         for body in bodies:
@@ -188,9 +194,7 @@ def apply_face_charge(
             raise ValueError(msg)
         with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
             coefs = solve_system(bodies, external)
-        sheets = [
-            ChargeSheet._from_body(b, c) for b, c in zip(bodies, coefs, strict=True)
-        ]
+        sheets = [_sheet_of(b, c) for b, c in zip(bodies, coefs, strict=True)]
         jumps = [s._panel_jumps() for s in sheets]
         top = max(
             w.max(initial=0.0) / (peak * np.sqrt(total)) if peak else 0.0
@@ -203,13 +207,16 @@ def apply_face_charge(
             jump=top,
             round=f" (refinement round {rnd})" if rnd else "",
         )
-        if rnd == refine or not top:
+        # refinement splits rectangle panels; triangle meshes keep their level's
+        cuboids = [k for k, b in enumerate(bodies) if isinstance(b, Body)]
+        if rnd == refine or not top or not cuboids:
             break
         # marked by the jump itself, not its share of each sheet's peak, so that
         # a weakly driven part is not split as much as the one that matters
-        largest = max(w.max(initial=0.0) for w, _, _ in jumps)
-        for body, (w, _, _) in zip(bodies, jumps, strict=True):
-            marked = np.flatnonzero(w > MARK * largest)
+        largest = max(jumps[k][0].max(initial=0.0) for k in cuboids)
+        for k in cuboids:
+            body = bodies[k]
+            marked = np.flatnonzero(jumps[k][0] > MARK * largest)
             if marked.size:
                 body.bisect(marked)
                 body.mesh()
@@ -254,7 +261,7 @@ def apply_face_charge(
 
 
 def _split(collection):
-    """The cuboids to solve, as (object, susceptibility), and the fixed sources."""
+    """The parts to solve, as (object, susceptibility), and the fixed sources."""
     if any(_has_path(obj) for obj in (collection, *collection.sources_all)):
         msg = "apply_face_charge solves one configuration; objects moving along paths are not supported."
         raise NotImplementedError(msg)
@@ -271,10 +278,11 @@ def _split(collection):
         if chi is None or not np.any(chi):
             fixed.append(src)
             continue
-        if not isinstance(src, magpy.magnet.Cuboid):
+        if not isinstance(src, SOLVABLE):
             msg = (
-                f"apply_face_charge solves cuboids; {src} has a susceptibility. "
-                "Mesh it and use apply_demag instead."
+                f"apply_face_charge solves cuboids and triangle meshes; {src} has a "
+                "susceptibility. Export it as a TriangularMesh, or mesh it and use "
+                "apply_demag instead."
             )
             raise NotImplementedError(msg)
         chi = np.asarray(chi, float)
@@ -286,6 +294,133 @@ def _split(collection):
             raise NotImplementedError(msg)
         solved.append((src, float(chi.flat[0])))
     return solved, fixed
+
+
+def _part(obj, chi, applied, level):
+    """The body that solves ``obj``: a cuboid's panels, or a triangle mesh."""
+    J0 = (
+        None
+        if obj.polarization is None or not np.any(obj.polarization)
+        else obj.polarization
+    )
+    R = obj.orientation.as_matrix()
+    if isinstance(obj, magpy.magnet.Cuboid):
+        return Body(
+            obj.dimension, obj.position, R, chi, J0=J0, applied=applied, m=level
+        )
+    vertices, faces = _closed_surface(obj)
+    directed = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+    shared = np.unique(np.sort(directed, axis=1), axis=0, return_counts=True)[1]
+    if np.any(shared != 2):
+        msg = (
+            f"{obj!r} has an edge shared by {shared[shared != 2][0]} triangles: face "
+            "charge needs closed surfaces, each edge shared by two triangles. "
+            "Give solids that meet along an edge a mesh each."
+        )
+        raise ValueError(msg)
+    if len(np.unique(directed, axis=0)) < len(directed):
+        msg = (
+            f"The faces of {obj!r} are not wound consistently: an edge runs the "
+            "same way in two of them. Create the TriangularMesh with "
+            "reorient_faces=True."
+        )
+        raise ValueError(msg)
+    return TriBody(
+        vertices, faces, obj.position, R, chi, J0=J0, applied=applied, m=level
+    )
+
+
+def _closed_surface(src):
+    """A magnet's surface, in its own frame, as vertices and outward faces."""
+    if isinstance(src, magpy.magnet.Cuboid):
+        signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
+        V = signs * np.asarray(src.dimension, float) / 2
+        F = ConvexHull(V).simplices
+    elif isinstance(src, magpy.magnet.Tetrahedron):
+        V = np.asarray(src.vertices, float)
+        F = ConvexHull(V).simplices
+    elif isinstance(src, magpy.magnet.TriangularMesh):
+        V, F = np.asarray(src.vertices, float), np.array(src.faces, int)
+    else:  # another shape: its bounding box
+        centre, half, _, _ = _box(src)
+        signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
+        V = centre + signs * half
+        F = ConvexHull(V).simplices
+    T = V[F]
+    n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    if isinstance(src, magpy.magnet.TriangularMesh):
+        # consistently wound, as magpylib leaves a closed mesh: all turned
+        # together if they face inward
+        if np.einsum("fd,fd->", n, T.mean(1)) < 0:
+            F = F[:, [0, 2, 1]]
+    else:  # convex: each face turned away from the centre
+        inward = np.einsum("fd,fd->f", n, T.mean(1) - V.mean(0)) < 0
+        F = F.copy()
+        F[inward] = F[inward][:, [0, 2, 1]]
+    return V, F
+
+
+def _global_triangles(src_or_body):
+    """A solved body's or a magnet's surface triangles (n, 3, 3), global."""
+    if isinstance(src_or_body, TriBody):
+        b = src_or_body
+        return b.to_global(b.vertices[b.faces].reshape(-1, 3)).reshape(-1, 3, 3)
+    if isinstance(src_or_body, Body):
+        b = src_or_body
+        signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
+        V = signs * b.half
+        return b.to_global(V[ConvexHull(V).simplices].reshape(-1, 3)).reshape(-1, 3, 3)
+    V, F = _closed_surface(src_or_body)
+    R, position = (
+        src_or_body.orientation.as_matrix(),
+        np.asarray(src_or_body.position, float),
+    )
+    return (V[F].reshape(-1, 3) @ R.T + position).reshape(-1, 3, 3)
+
+
+def _vertices_on(corners, triangles, tol):
+    """True if a corner of ``corners`` (n, 3, 3) lies on one of ``triangles``;
+    one of no area has no plane to lie in."""
+    P = np.unique(corners.reshape(-1, 3), axis=0)
+    cross = np.cross(
+        triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
+    )
+    triangles = triangles[np.linalg.norm(cross, axis=1) > 0]
+    _, n, _, _, _, _ = frames(triangles)
+    a = triangles[:, 0]
+    v0, v1 = triangles[:, 1] - a, triangles[:, 2] - a
+    d00, d01, d11 = (
+        np.einsum("fd,fd->f", x, y) for x, y in ((v0, v0), (v0, v1), (v1, v1))
+    )
+    denom = d00 * d11 - d01**2
+    step = max(1, 2_000_000 // max(len(triangles), 1))
+    for k in range(0, len(P), step):
+        v2 = P[k : k + step, None] - a[None]  # (k, f, 3)
+        near = np.abs(np.einsum("kfd,fd->kf", v2, n)) <= tol
+        d20, d21 = np.einsum("kfd,fd->kf", v2, v0), np.einsum("kfd,fd->kf", v2, v1)
+        v = (d11 * d20 - d01 * d21) / denom
+        w = (d00 * d21 - d01 * d20) / denom
+        inside = (v >= -1e-9) & (w >= -1e-9) & (v + w <= 1 + 1e-9)
+        if np.any(near & inside):
+            return True
+    return False
+
+
+def _touch(first, second, tol):
+    """True if two surfaces touch: a corner of either on the other."""
+    return _vertices_on(first, second, tol) or _vertices_on(second, first, tol)
+
+
+def _sheet_of(body, c):
+    """The ChargeSheet of a solved body."""
+    if isinstance(body, Body):
+        return ChargeSheet._from_body(body, c)
+    return ChargeSheet.from_triangles(
+        body.T,
+        body.coefficients_at_corners(c),
+        position=body.position,
+        orientation=Rotation.from_matrix(body.R),
+    )
 
 
 def _box(src):
@@ -313,7 +448,8 @@ def _hidden(sheet, body, bodies, outlines):
     cancelled by the other side's, would set the colour scale."""
     C = sheet.triangles.mean(axis=1) @ body.R.T + body.position
     hidden = np.zeros(len(C), bool)
-    for other in (*bodies, *outlines):
+    # against exact boxes only: a triangle mesh's bounding box is not its shape
+    for other in (*(b for b in bodies if isinstance(b, Body)), *outlines):
         if other is not body:
             local = np.abs((C - other.position) @ other.R)
             hidden |= np.all(local <= other.half + CONTACT * np.max(other.half), axis=1)
@@ -326,6 +462,22 @@ def _warn_unaligned(bodies, solved, boxes, fixed):
     follow its footprint, where its field jumps."""
     magnets = [src for src in fixed if isinstance(src, BaseMagnet)]
     for body, (obj, _) in zip(bodies, solved, strict=True):
+        if isinstance(body, TriBody):
+            # a cuboid's footprint is graded toward; another shape's is not
+            surface = _global_triangles(body)
+            for src in magnets:
+                if not isinstance(src, magpy.magnet.Cuboid) and _touch(
+                    surface, _global_triangles(src), contact_tol(body)
+                ):
+                    warnings.warn(
+                        f"{src} touches {obj}, a triangle mesh face charge solves, "
+                        "and is not a cuboid: its triangles are not graded toward "
+                        "the magnet's footprint, where its field jumps. Expect "
+                        "errors of a few percent near it, falling slowly with "
+                        "level; fem_solve checks it.",
+                        stacklevel=3,
+                    )
+            continue
         for src, (centre, half, R, position) in zip(magnets, boxes, strict=True):
             local = (position + centre @ R.T - body.position) @ body.R
             Rab = body.R.T @ R

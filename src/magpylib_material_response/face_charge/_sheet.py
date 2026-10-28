@@ -9,11 +9,10 @@ from magpylib._src.exceptions import MagpylibBadUserInput
 from magpylib._src.style import TriangularMeshStyle
 from scipy.spatial.transform import Rotation
 
+from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
-from magpylib_material_response.face_charge._triangle import field as triangle_field
-from magpylib_material_response.face_charge._triangle import frames
+from magpylib_material_response.face_charge._triangle import charge_field, frames
 
-CHUNK = 2_000_000  # kernel evaluations per call, about 0.5 GB
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 
 
@@ -232,10 +231,14 @@ class ChargeSheet(magpy.misc.CustomSource):
         out = np.zeros((len(X), 3))
         if field in ("M", "J"):
             return out  # the source carries no magnetization of its own
-        step = max(1, CHUNK // max(len(self._V), 1))
-        for a in range(0, len(X), step):
-            E = triangle_field(X[a : a + step], self._V, self._frames)  # (3, k, m, 3)
-            out[a : a + step] = np.einsum("kxnd,nk->xd", E, self._c) / FOUR_PI
+        step = max(1, CHUNK // (max(len(self._V), 1) * threads()))
+
+        def chunk(a):  # each its own observers
+            out[a : a + step] = (
+                charge_field(X[a : a + step], self._V, self._frames, self._c) / FOUR_PI
+            )
+
+        run(chunk, range(0, len(X), step), work=len(X) * len(self._V))
         return out if field == "H" else magpy.mu_0 * out
 
     # ── display ───────────────────────────────────────────────────────────

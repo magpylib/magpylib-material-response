@@ -5,10 +5,21 @@ from __future__ import annotations
 import magpylib as magpy
 import numpy as np
 import pytest
+from scipy.spatial import ConvexHull
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge._bodies import _solve, solve_system
+from magpylib_material_response.face_charge._mesh import graded_triangles
+from magpylib_material_response.face_charge._parallel import run
 from magpylib_material_response.face_charge._sheet import saturation
+from magpylib_material_response.face_charge._triangle import (
+    charge_field,
+    frames,
+    normal_field,
+    normal_field_far,
+)
+from magpylib_material_response.face_charge._tribody import TriBody
 
 TRIANGLE = np.array([[0.0, 0.0, 0.0], [0.004, 0.001, 0.0], [0.001, 0.003, 0.0005]])
 NORMAL = np.cross(TRIANGLE[1] - TRIANGLE[0], TRIANGLE[2] - TRIANGLE[0])
@@ -81,6 +92,277 @@ def test_linear_charge_is_the_limit_of_uniform_pieces():
         _relative(magpy.getH(pieces, far, sumup=True), _one_face(CHARGE).getH(far))
         < 1e-3
     )
+
+
+def test_normal_fields_are_the_fields_normal_part():
+    rng = np.random.default_rng(1)
+    V = rng.normal(size=(40, 3, 3))
+    fr = frames(V)
+    near, far = rng.normal(size=(30, 3)) * 3, rng.normal(size=(30, 3)) * 50
+    for X, kernel, tol in ((near, normal_field, 1e-13), (far, normal_field_far, 1e-9)):
+        # each triangle's field of each density alone, along its normal
+        En = np.array(
+            [
+                [
+                    charge_field(X, V[[k]], tuple(f[[k]] for f in fr), np.eye(3)[[a]])
+                    @ fr[1][k]
+                    for k in range(len(V))
+                ]
+                for a in range(3)
+            ]
+        ).transpose(0, 2, 1)
+        assert np.abs(kernel(X, V, fr) - En).max() < tol * np.abs(En).max()
+    one = rng.integers(0, len(V), len(near))  # observer i with triangle one[i]
+    pairs = normal_field(near, V[one], tuple(a[one] for a in fr), pairs=True)
+    assert np.allclose(pairs, normal_field(near, V, fr)[:, np.arange(len(near)), one])
+    assert all(np.isfinite(normal_field(V[:, k], V, fr)).all() for k in range(3))
+
+
+def _cube_as_triangles(half=0.005):
+    """A cube as 12 triangles, outward."""
+    V = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)], float)
+    F = ConvexHull(V).simplices
+    n = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    inward = np.einsum("fd,fd->f", n, V[F].mean(1)) < 0
+    F[inward] = F[inward][:, [0, 2, 1]]
+    return half * V, F
+
+
+def _cube_cut(n, half=0.005):
+    """A cube with each face cut into n x n squares of two triangles, outward."""
+    g, V, F = np.linspace(-1, 1, n + 1), [], []
+    for axis in range(3):
+        u, v = (axis + 1) % 3, (axis + 2) % 3
+        for side in (-1, 1):
+            first = len(V)
+            for a in g:
+                for b in g:
+                    p = np.zeros(3)
+                    p[axis], p[u], p[v] = side, a, b
+                    V.append(p)
+            for i in range(n):
+                for j in range(n):
+                    q = first + i * (n + 1) + j
+                    F += [[q, q + n + 1, q + n + 2], [q, q + n + 2, q + 1]]
+    V, weld = np.unique(np.round(V, 12), axis=0, return_inverse=True)
+    F = weld.ravel()[np.array(F)]
+    n_ = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    inward = np.einsum("fd,fd->f", n_, V[F].mean(1)) < 0
+    F[inward] = F[inward][:, [0, 2, 1]]
+    return half * V, F
+
+
+def test_graded_triangles_cover_the_mesh_toward_its_edges():
+    V, F = _cube_as_triangles()
+    T = graded_triangles(V, F, ell=0.005, m=3, g=2.5)
+    area = 0.5 * np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
+    assert np.isclose(area.sum(), 6 * 0.01**2)
+    # the first layer, 0.005 / 3**2.5 deep, lies along the cube's edges
+    on_face = np.isclose(np.abs(T[..., 2]), 0.005).all(1)
+    assert np.isclose(
+        np.sort(np.unique(np.round(np.abs(T[on_face][..., 0]), 12)))[-2],
+        0.005 * (1 - 3**-2.5),
+    )
+    with pytest.raises(ValueError, match="closed mesh"):
+        graded_triangles(V, F[:-1], ell=0.005, m=2, g=2.5)
+
+
+def test_cube_as_triangles_converges_as_the_cuboid():
+    """A cube given as 12 triangles, chi -> inf: the polarizability converges
+    onto Helsing & Perfekt's 3.644305 as the cuboid solver's does."""
+    V, F = _cube_as_triangles(half=1.0)
+    errors = []
+    for m in (2, 3):
+        body = TriBody(V, F, (0, 0, 0), np.eye(3), chi=1e12, applied=(0, 0, 1.0), m=m)
+        body.mesh()
+        (c,) = solve_system([body], np.zeros_like)
+        P, W, B = body.quad()
+        q = np.einsum("fqa,fa->fq", B, c.reshape(-1, 3))
+        errors.append(np.einsum("fq,fq,fq->", W, q, P[..., 2]) / 8 / 3.644305 - 1)
+    assert -3.5e-3 < errors[0] < errors[1] < 0
+    assert abs(errors[1]) < 1.1e-3
+
+
+def test_triangle_mesh_part_couples_as_a_cuboid():
+    """A cube given as a triangle mesh beside a turned soft cuboid, in an
+    applied field: the field around them as with two cuboids."""
+    turned = R.from_euler("z", 30, degrees=True)
+    sensors = np.array([[0, 0.02, 0], [0.0075, 0, 0.012], [-0.02, 0, 0]])
+    fields = []
+    for first in (_mesh_cube(), _cuboid()):
+        coll = magpy.Collection(
+            first, _cuboid(position=(0.015, 0, 0), orientation=turned)
+        )
+        coll.susceptibility = 100.0
+        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
+        solved = apply_face_charge(coll, level=3)
+        assert all(isinstance(s, ChargeSheet) for s in solved.sources_all)
+        fields.append(solved.getB(sensors))
+    assert _relative(*fields) < 5e-4
+
+
+@pytest.mark.parametrize(
+    ("turn", "offset"),
+    [(0, 0.0), (-45, 0.0), (30, 1.0)],
+    ids=["aligned", "turned, float32", "turned, far away, float32, finely cut"],
+)
+def test_triangle_mesh_touching_a_cuboid_solves_as_two_cuboids(turn, offset):
+    """A smaller soft cuboid against a face of a cube given as a triangle
+    mesh, offset on it: their faces in contact couple exactly, and the mesh
+    is graded toward the cuboid's footprint. Turned, with the turn in the
+    mesh's float32 vertices, as a CAD export gives: the contact planes found
+    whichever sign their normals round to, and no slivers where the layers
+    meet. Far from the origin in float32, where rounding grows with the
+    distance, its faces cut into strips: the same."""
+    rot = R.from_euler("z", turn, degrees=True)
+    at = offset * np.array([1.0, -0.6, 0.4])
+    V, F = _cube_cut(4) if offset else _cube_as_triangles()
+    mesh = magpy.magnet.TriangularMesh(
+        vertices=(rot.apply(V) + at).astype(np.float32 if turn or offset else float),
+        faces=F,
+        polarization=(0, 0, 0),
+    )
+    sensors = at + np.array([[0, 0.02, 0], [0.005, 0, 0.012], [0.0125, 0.0061, 0]])
+    fields = []
+    for first in (mesh, _cuboid(position=at, orientation=rot)):
+        side = magpy.magnet.Cuboid(
+            dimension=(0.006, 0.004, 0.004),
+            position=at + rot.apply((0.008, 0.001, 0)),
+            orientation=rot,
+            polarization=(0, 0, 0),
+        )
+        coll = magpy.Collection(first, side)
+        coll.susceptibility = 100.0
+        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
+        fields.append(apply_face_charge(coll, level=3).getB(sensors))
+    assert _relative(*fields) < 3e-4
+    part = _mesh_cube()
+    part.susceptibility = 100.0
+    disc = magpy.magnet.Cylinder(
+        dimension=(0.004, 0.002), position=(0, 0, 0.006), polarization=(0, 0, 1)
+    )
+    with pytest.warns(UserWarning, match="is not a cuboid"):
+        apply_face_charge(magpy.Collection(part, disc), level=1)
+
+
+def _cube_with_a_sliver(edge, turn=None, dtype=float):
+    """The cube mesh with a triangle split at the midpoint of one of its edges,
+    a cube edge or a face's diagonal, and the sliver an STL repair leaves in
+    the T-junction: of no area, or of rounding's once turned."""
+    V, F = _cube_as_triangles()
+    k, j = next(
+        (k, j)
+        for k in range(len(F))
+        for j in range(3)
+        if (np.count_nonzero(V[F[k, j]] != V[F[k, (j + 1) % 3]]) == 1) == edge
+    )
+    a, b, c = F[k, j], F[k, (j + 1) % 3], F[k, (j + 2) % 3]
+    m = len(V)
+    V = np.vstack([V, (V[a] + V[b]) / 2])
+    F = np.vstack([np.delete(F, k, axis=0), [[a, m, c], [m, b, c], [a, b, m]]])
+    # magpylib's own checks divide by its zero area
+    return magpy.magnet.TriangularMesh(
+        vertices=(V if turn is None else turn.apply(V)).astype(dtype),
+        faces=F,
+        polarization=(0, 0, 0),
+        reorient_faces=False,
+        check_selfintersecting="skip",
+    )
+
+
+def _awkward(case):
+    """An awkward mesh, as parts, its clean twin, as parts, and the
+    susceptibility they are compared at."""
+    V, F = _cube_as_triangles(half=0.004)
+    shift = np.array([0.004, 0.004, 0.004])
+    if case == "two shells, one inside out":
+        far = np.array([0.006, 0, 0])
+        parts = [
+            magpy.magnet.TriangularMesh(
+                vertices=np.vstack([V - far, V + far]),
+                faces=np.vstack([F, F[:, [0, 2, 1]] + len(V)]),
+                polarization=(0, 0, 0),
+                reorient_faces=False,
+                check_disconnected="ignore",
+            )
+        ]
+        twins = [_mesh_at(V + x, F) for x in (-far, far)]
+        return parts, twins, 1e4
+    if case == "two cubes welded at a corner":
+        # the second cube's corner at the origin is the first's
+        own, theirs = np.argmin(V.sum(1)), np.argmax(V.sum(1))
+        index = np.r_[np.arange(own), -1, np.arange(own, len(V) - 1)] + len(V)
+        index[own] = theirs
+        parts = [
+            magpy.magnet.TriangularMesh(
+                vertices=np.vstack([V - shift, np.delete(V + shift, own, axis=0)]),
+                faces=np.vstack([F, index[F]]),
+                polarization=(0, 0, 0),
+            )
+        ]
+        return parts, [_mesh_at(V - shift, F), _mesh_at(V + shift, F)], 1e6
+    if case == "a cavity magpylib turned outward":
+        Vi, Fi = _cube_as_triangles(half=0.002)
+        V, F = 1.25 * V, np.vstack([F, Fi[:, [0, 2, 1]] + len(V)])
+        V = np.vstack([V, Vi])
+        parts, twins = (
+            [
+                magpy.magnet.TriangularMesh(
+                    vertices=V,
+                    faces=F,
+                    polarization=(0, 0, 0),
+                    check_disconnected="ignore",
+                    **kwargs,
+                )
+            ]
+            for kwargs in ({}, {"reorient_faces": False})
+        )
+        return parts, twins, 1e4
+    if case == "a sliver on a sharp edge, turned, float32":
+        turn = R.from_euler("xyz", (17, 33, 61), degrees=True)
+        V, F = _cube_as_triangles()
+        twin = _mesh_at(turn.apply(V).astype(np.float32), F)
+        return [_cube_with_a_sliver(True, turn, np.float32)], [twin], 100.0
+    return [_cube_with_a_sliver(False)], [_mesh_cube()], 100.0
+
+
+def _mesh_at(V, F):
+    return magpy.magnet.TriangularMesh(vertices=V, faces=F, polarization=(0, 0, 0))
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "two shells, one inside out",
+        "two cubes welded at a corner",
+        "a cavity magpylib turned outward",
+        "a sliver on a sharp edge, turned, float32",
+        "a flat triangle on a diagonal",
+    ],
+)
+def test_awkward_meshes_solve_as_their_clean_twins(case):
+    """Each closed shell of a mesh keeps its own net charge zero, whichever way
+    it is wound, and two solids sharing only a corner are two; a shell inside
+    another bounds a cavity, whichever way magpylib turned it; a sliver
+    changes nothing, on a sharp edge too, beside another part too."""
+    parts, twins, chi = _awkward(case)
+    sensors = np.array(
+        [[0, 0.02, 0], [0.013, 0, 0.004], [0, -0.004, -0.012], [0.001, 0.0005, 0]]
+    )
+    fields = []
+    for soft in (parts, twins):
+        for part in soft:
+            part.susceptibility = chi
+        side = _cuboid(position=(0.004, -0.002, 0.016))
+        side.susceptibility = 50.0
+        magnet = magpy.magnet.Cuboid(
+            dimension=(0.004,) * 3, position=(0, 0.012, 0), polarization=(0, 0.5, 1)
+        )
+        coll = magpy.Collection(*soft, side, magnet)
+        fields.append(apply_face_charge(coll, level=2).getB(sensors))
+    # the welded cubes' triangles near their corner couple as close pairs of
+    # one mesh, more finely than two meshes do: 7e-5 apart
+    assert _relative(*fields) < 1e-4
 
 
 def test_copies_keep_their_own_charge():
@@ -230,6 +512,41 @@ def _cuboid(**kwargs):
     return magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0), **kwargs)
 
 
+def _mesh_cube(position=(0, 0, 0), **kwargs):
+    """A 10 mm cube as a TriangularMesh of 12 triangles."""
+    V, F = _cube_as_triangles()
+    return magpy.magnet.TriangularMesh(
+        vertices=V, faces=F, position=position, polarization=(0, 0, 0), **kwargs
+    )
+
+
+def _cubes_sharing_an_edge():
+    """Two cubes welded along an edge: four triangles on it."""
+    V, F = _cube_as_triangles()
+    shift = np.array([0.01, 0.01, 0])
+    V2 = V + shift
+    # the second cube's vertices on the first's edge are the first's
+    same = [int(np.flatnonzero(np.all(np.isclose(V, v), 1))[0]) for v in V2[:2]]
+    index = np.arange(len(V), 2 * len(V))
+    index[:2] = same
+    return magpy.magnet.TriangularMesh(
+        vertices=np.vstack([V, V2]),
+        faces=np.vstack([F, index[F]]),
+        polarization=(0, 0, 0),
+        reorient_faces=False,
+        check_open="skip",
+    )
+
+
+def _flipped_cube():
+    """The cube mesh with one triangle turned over, left so."""
+    V, F = _cube_as_triangles()
+    F[0] = F[0, [0, 2, 1]]
+    return magpy.magnet.TriangularMesh(
+        vertices=V, faces=F, polarization=(0, 0, 0), reorient_faces=False
+    )
+
+
 @pytest.mark.parametrize(
     ("model", "chi", "error"),
     [
@@ -264,6 +581,8 @@ def _cuboid(**kwargs):
             NotImplementedError,
         ),
         (_cuboid, 10.0, TypeError),
+        (lambda: magpy.Collection(_flipped_cube()), 10.0, ValueError),
+        (lambda: magpy.Collection(_cubes_sharing_an_edge()), 10.0, ValueError),
     ],
     ids=[
         "not a cuboid",
@@ -272,6 +591,8 @@ def _cuboid(**kwargs):
         "current path",
         "polarization path",
         "not a collection",
+        "faces wound both ways",
+        "an edge of four triangles",
     ],
 )
 def test_unsupported_input_raises(model, chi, error):
@@ -297,6 +618,28 @@ def test_too_many_unknowns_raise_before_assembly():
     assert np.isfinite(solved.getB((0, 0, 0.01))).all()
 
 
+def test_threads_take_the_callers_numpy_error_settings():
+    def divide(_):
+        return np.ones(1) / np.zeros(1)
+
+    with np.errstate(divide="raise"), pytest.raises(FloatingPointError):
+        run(divide, range(8))
+
+
+@pytest.mark.parametrize(
+    "condition", [1e3, 1e10], ids=["refined", "past single precision"]
+)
+def test_mixed_precision_solves_to_double_accuracy(monkeypatch, condition):
+    monkeypatch.setattr("magpylib_material_response.face_charge._bodies.MIXED", 0)
+    rng = np.random.default_rng(0)
+    q = np.linalg.qr(rng.normal(size=(200, 200)))[0]
+    A = np.asfortranarray(q * np.geomspace(1, 1 / condition, 200) @ q.T)
+    b = rng.normal(size=200)
+    x = _solve(A.copy(order="F"), b)
+    residual = np.abs(b - A @ x).max() / (np.abs(A).sum(1).max() * np.abs(x).max())
+    assert residual < 1e-14
+
+
 @pytest.mark.parametrize(
     ("gap", "fem", "rtol"),
     [
@@ -305,12 +648,13 @@ def test_too_many_unknowns_raise_before_assembly():
         (1e-4, (308.073, 7.721, 3.858), 0.02),
     ],
 )
-def test_magnet_on_a_soft_part_matches_fem(gap, fem, rtol):
-    """A magnet without susceptibility on soft iron, touching or 0.1 mm above:
-    its field jumps at the edges of its footprint, which the mesh and the load
-    must follow. The references are fem_study at orders 3 to 5, good to 5e-5
-    at each sensor."""
-    soft = _cuboid()
+@pytest.mark.parametrize("soft", [_cuboid, _mesh_cube], ids=["cuboid", "mesh"])
+def test_magnet_on_a_soft_part_matches_fem(gap, fem, rtol, soft):
+    """A magnet without susceptibility on soft iron, given as a cuboid or as a
+    triangle mesh, touching or 0.1 mm above: its field jumps at the edges of
+    its footprint, which the mesh and the load must follow. The references are
+    fem_study at orders 3 to 5, good to 5e-5 at each sensor."""
+    soft = soft()
     soft.susceptibility = 1000
     magnet = magpy.magnet.Cuboid(
         dimension=(0.004, 0.004, 0.002),

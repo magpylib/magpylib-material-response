@@ -212,5 +212,15 @@
    },
    "unknowns": 402
   }
+ },
+ "cad_part": {
+  "FaceCharge": {
+   "setting": 1,
+   "errors": {
+    "near the part": 0.007014,
+    "60 mm away": 0.002883
+   },
+   "unknowns": 2706
+  }
  }
 }
