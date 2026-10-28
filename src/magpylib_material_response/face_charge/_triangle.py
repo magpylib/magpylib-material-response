@@ -192,7 +192,7 @@ def normal_field_far(X, V, fr):
     with every dot product one matrix product: ``|x - p|^2 = |x|^2 - 2 x.p +
     |p|^2``. For pairs farther apart than a triangle's size: the cancellation in
     ``|x - p|^2`` grows as ``(|x| / distance)^2`` times the rounding, ``|x|``
-    from the frame's origin, the part's centre.
+    from the frame's origin: the callers centre it on the part.
 
     Two exact forms halve the work. ``sign(w) sum beta`` is the solid angle,
     one arctangent from the corners (van Oosterom and Strackee 1983), and
@@ -244,7 +244,8 @@ def normal_field_far(X, V, fr):
                 l_minus = np.sum((p - x) * tb, axis=1)
                 l_plus = np.sum((q - x) * tb, axis=1)
                 foot = (x - p) + l_minus[:, None] * tb  # from the edge line
-                R02 = np.sum(foot * foot, axis=1)
+                # at least w², lifted off the plane: finite on the edge line
+                R02 = np.maximum(np.sum(foot * foot, axis=1), w[a, b] ** 2)
                 R_minus = np.linalg.norm(x - p, axis=1)
                 R_plus = np.linalg.norm(x - q, axis=1)
                 f[a, b] = np.log(

@@ -19,10 +19,14 @@ import magpylib as magpy
 import numpy as np
 import scipy.sparse
 from scipy.sparse.csgraph import connected_components
-from scipy.spatial import ConvexHull, cKDTree  # pylint: disable=no-name-in-module
+from scipy.spatial import (  # pylint: disable=no-name-in-module
+    ConvexHull,
+    QhullError,
+    cKDTree,
+)
 
-from magpylib_material_response.face_charge._bodies import CONTACT, Body, Part
-from magpylib_material_response.face_charge._mesh import graded_triangles
+from magpylib_material_response.face_charge._bodies import Body, Part, contact_tol
+from magpylib_material_response.face_charge._mesh import graded_triangles, rounding
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
@@ -31,7 +35,7 @@ from magpylib_material_response.face_charge._triangle import (
     normal_field_far,
 )
 
-LAYER = 0.5  # graded layer length, in the mesh's smallest extent: half its thickness
+LAYER = 0.5  # graded layer length, in each shell's thickness: half of it
 GRADING = 2.5  # power of the grading toward sharp edges, as the cuboid panels'
 
 # 7-point degree-5 rule (Dunavant) and the 3-point degree-2 rule (edge midpoints)
@@ -80,11 +84,11 @@ class TriBody(Part):
         self.faces = np.asarray(faces, int)
         lo, hi = self.vertices.min(0), self.vertices.max(0)
         self.centre, self.half = (lo + hi) / 2, (hi - lo) / 2  # the bounding box
-        # the thickness: the smallest width across the convex hull, whatever
-        # frame the vertices are given in (a box's smallest side)
-        normals = ConvexHull(self.vertices).equations[:, :3]
-        self.thickness = np.ptp(self.vertices @ normals.T, axis=0).min()
-        self.shells = _shells(self.faces, len(self.vertices))
+        self.noise = rounding(self.vertices)  # float32's for float32 data
+        self.shells = _shells(self.faces)
+        inside = _nesting(self.vertices, self.faces, self.shells)
+        self.faces = _orient(self.vertices, self.faces, self.shells, inside)
+        self.thickness = _thickness(self.vertices, self.faces, self.shells, inside)
         self.shell = None  # each graded triangle's shell
         self.T = self.fr = self.mass = self.G = None
         self.fine = None  # triangles whose load takes a finer rule
@@ -93,14 +97,16 @@ class TriBody(Part):
     def mesh(self):
         """The triangles graded toward the sharp edges; the self block waits
         for ``assemble``, so that the unknowns can be counted first."""
-        ell = LAYER * self.thickness
         T = [
             graded_triangles(
-                self.vertices, F, ell, self.m, GRADING, contacts=self.contacts
+                self.vertices,
+                self.faces[self.shells == k],
+                LAYER * self.thickness[k],
+                self.m,
+                GRADING,
+                contacts=self.contacts,
             )
-            for F in (
-                self.faces[self.shells == k] for k in range(self.shells.max() + 1)
-            )
+            for k in range(self.shells.max() + 1)
         ]
         self.T = np.concatenate(T)
         self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
@@ -150,7 +156,7 @@ class TriBody(Part):
 
         def far(j0):  # each chunk its own source columns
             js = np.arange(j0, min(j0 + step, F))
-            flux = -normal_field_far(P[js].reshape(-1, 3), self.T, self.fr) / FOUR_PI
+            flux = -self.far_field(P[js].reshape(-1, 3)) / FOUR_PI
             WB = W[js][..., None] * B[js]  # (js, nq, 3)
             G[:, :, js, :] = np.matmul(
                 flux.reshape(3, len(js), nq, F).transpose(1, 3, 0, 2), WB[:, None]
@@ -184,10 +190,15 @@ class TriBody(Part):
         lists = cKDTree(cen).query_ball_point(cen, 2 * size)
         j = np.repeat(np.arange(len(cen)), [len(x) for x in lists])
         i = np.concatenate(lists).astype(int)
+        # with a margin: on a regular grid, cells two apart on a diagonal lie
+        # at exactly that distance, which rounding would decide
         keep = (
             (i != j)
             & (size[i] <= size[j])
-            & (np.linalg.norm(cen[i] - cen[j], axis=1) < size[i] + size[j])
+            & (
+                np.linalg.norm(cen[i] - cen[j], axis=1)
+                < (1 + 1e-6) * (size[i] + size[j])
+            )
         )
         pairs = np.unique(np.sort(np.stack([i[keep], j[keep]], 1), axis=1), axis=0)
         return (
@@ -267,11 +278,18 @@ class TriBody(Part):
         d = (np.asarray(X) - self.position) @ self.R - cen
         return np.stack([np.ones(len(d)), d @ e1 / s, d @ e2 / s], 1)
 
+    def far_field(self, X):
+        """:func:`normal_field_far` at points ``X`` (its frame), in coordinates
+        from the bounding box's centre: CAD exports often keep a part far from
+        its own origin, where the far kernel's cancellation grows."""
+        c = self.centre
+        return normal_field_far(X - c, self.T - c, (self.fr[0] - c, *self.fr[1:]))
+
     def test_flux(self, y, tol=0.0):
         """(3F, P): the flux of a unit charge at each point ``y`` (its frame)
         through each test function; none from points within ``tol`` of a
         triangle's plane, where a contact takes over."""
-        flux = -normal_field_far(y, self.T, self.fr) / FOUR_PI  # (3, P, F)
+        flux = -self.far_field(y) / FOUR_PI  # (3, P, F)
         n = self.fr[1]
         w = y @ n.T - np.sum(self.T[:, 0] * n, axis=1)[None]
         flux[:, np.abs(w) < tol] = 0.0
@@ -307,16 +325,122 @@ _BOX = np.array(
 )
 
 
-def _shells(F, n_vertices):
-    """Each face's closed shell, numbered from 0: the faces joined through
-    shared vertices."""
+def _shells(F):
+    """Each face's closed shell, numbered from 0: the faces joined across
+    shared edges, so that two solids meeting at a corner are two."""
     nf = len(F)
+    pairs = np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), 1)
+    edge = np.unique(pairs, axis=0, return_inverse=True)[1].ravel()
     links = scipy.sparse.coo_matrix(
-        (np.ones(3 * nf), (np.repeat(np.arange(nf), 3), nf + F.ravel())),
-        shape=(nf + n_vertices, nf + n_vertices),
+        (np.ones(3 * nf), (np.tile(np.arange(nf), 3), nf + edge)),
+        shape=(nf + edge.max() + 1,) * 2,
     )
     _, label = connected_components(links, directed=False)
     return np.unique(label[:nf], return_inverse=True)[1]
+
+
+def _winding(p, T):
+    """How many times the closed triangles ``T`` wind round the point ``p``:
+    the sum of their solid angles over 4 pi."""
+    a, b, c = (T[:, k] - p for k in range(3))
+    la, lb, lc = (np.linalg.norm(x, axis=1) for x in (a, b, c))
+    num = np.einsum("ij,ij->i", a, np.cross(b, c))
+    den = (
+        la * lb * lc
+        + np.einsum("ij,ij->i", a, b) * lc
+        + np.einsum("ij,ij->i", b, c) * la
+        + np.einsum("ij,ij->i", c, a) * lb
+    )
+    return np.arctan2(num, den).sum() / (2 * np.pi)
+
+
+def _nesting(V, F, shells):
+    """``inside[i, j]``: shell ``i`` lies inside shell ``j``, tested at the
+    centroid of its largest triangle."""
+    k = shells.max() + 1
+    inside = np.zeros((k, k), bool)
+    if k == 1:
+        return inside
+    T = V[F]
+    area = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
+    lo = np.array([T[shells == i].min((0, 1)) for i in range(k)])
+    hi = np.array([T[shells == i].max((0, 1)) for i in range(k)])
+    for i in range(k):
+        own = np.flatnonzero(shells == i)
+        p = T[own[np.argmax(area[own])]].mean(0)
+        for j in range(k):
+            if j != i and np.all(lo[j] <= lo[i]) and np.all(hi[i] <= hi[j]):
+                inside[i, j] = abs(_winding(p, T[shells == j])) > 0.5
+    return inside
+
+
+def _orient(V, F, shells, inside):
+    """The faces with each shell pointing out of the material, whichever way it
+    came: a shell inside an odd number of others bounds a cavity and points
+    into it (magpylib's ``reorient_faces`` turns such a shell outward), any
+    other points out."""
+    T = V[F]
+    volume = np.bincount(
+        shells, np.einsum("ij,ij->i", T[:, 0], np.cross(T[:, 1], T[:, 2]))
+    )
+    flip = (volume > 0) != (inside.sum(1) % 2 == 0)
+    F = F.copy()
+    turn = flip[shells]
+    F[turn] = F[turn][:, [0, 2, 1]]
+    return F
+
+
+def _thickness(V, F, shells, inside):
+    """Each shell's thickness: the smallest width across its convex hull, a
+    box's smallest side whatever the frame, or less where a shell lies inside
+    it or it lies inside one: the wall between them."""
+    k = shells.max() + 1
+    out = np.empty(k)
+    for i in range(k):
+        P = V[np.unique(F[shells == i])]
+        try:
+            hull = ConvexHull(P)
+        except QhullError:  # a shell of no volume
+            out[i] = np.ptp(P, axis=0).max()
+            continue
+        N = np.unique(np.round(hull.equations[:, :3], 12), axis=0)
+        Q = P[hull.vertices]
+        out[i] = min(
+            np.ptp(Q @ N[a : a + 256].T, axis=0).min() for a in range(0, len(N), 256)
+        )
+    for i, j in zip(*np.nonzero(inside), strict=True):
+        Ti, Tj = V[F[shells == i]], V[F[shells == j]]
+        wall = min(_gap(Ti.reshape(-1, 3), Tj), _gap(Tj.reshape(-1, 3), Ti))
+        out[i], out[j] = min(out[i], wall), min(out[j], wall)
+    return out
+
+
+def _gap(P, T):
+    """The smallest distance from the points ``P`` (p, 3) to the triangles ``T``
+    (t, 3, 3)."""
+    P = np.unique(P, axis=0)
+    best = np.inf
+    step = max(1, 200_000 // len(P))
+    for t0 in range(0, len(T), step):
+        a, b, c = (T[t0 : t0 + step, k] for k in range(3))
+        n = np.cross(b - a, c - a)
+        n /= np.linalg.norm(n, axis=1)[:, None]
+        d = P[:, None] - a  # (p, t, 3)
+        w = np.einsum("ptd,td->pt", d, n)
+        foot = P[:, None] - w[..., None] * n
+        within = np.ones(w.shape, bool)
+        dist = np.full(w.shape, np.inf)
+        for u, v in ((a, b), (b, c), (c, a)):
+            e = v - u
+            within &= np.einsum("ptd,td->pt", np.cross(e, foot - u), n) >= 0
+            s = np.clip(
+                np.einsum("ptd,td->pt", P[:, None] - u, e) / np.sum(e * e, 1), 0, 1
+            )
+            dist = np.minimum(
+                dist, np.linalg.norm(P[:, None] - u - s[..., None] * e, axis=-1)
+            )
+        best = min(best, np.where(within, np.abs(w), dist).min())
+    return best
 
 
 def _triangles(part):
@@ -354,7 +478,7 @@ def add_triangle_contact_lines(bodies, outlines=()):
         ):
             if ib == ia or not (isinstance(a, TriBody) or isinstance(b, TriBody)):
                 continue
-            tol = CONTACT * max(np.max(a.half), np.max(b.half))
+            tol = contact_tol(a, b)
             if isinstance(a, TriBody):
                 _grade_mesh(a, surfaces[ia], Tb, tol)
             elif isinstance(a, Body):
@@ -382,15 +506,17 @@ def _grade_mesh(a, Ta, Tb, tol):
             flat = flat[(flat.min(1) <= hi).all(1) & (flat.max(1) >= lo).all(1)]
         if not flat.size:
             continue
+        # edges found by their rounded ends, kept with their own: rounded to a
+        # large part's tolerance, a line would leave a small part's plane
         edges = {}
-        for tri in np.round(flat / tol).astype(np.int64):
+        for tri, key in zip(flat, np.round(flat / tol).astype(np.int64), strict=True):
             for u, v in ((0, 1), (1, 2), (2, 0)):
-                k = tuple(sorted((tuple(tri[u]), tuple(tri[v]))))
-                edges[k] = edges.get(k, 0) + 1
-        for (start, end), count in edges.items():
+                k = tuple(sorted((tuple(key[u]), tuple(key[v]))))
+                count, ends = edges.get(k, (0, (tri[u], tri[v])))
+                edges[k] = (count + 1, ends)
+        for count, (p, q) in edges.values():
             if count != 1:
                 continue
-            p, q = np.array(start) * tol, np.array(end) * tol
             t = q - p
             if np.linalg.norm(t) == 0:
                 continue

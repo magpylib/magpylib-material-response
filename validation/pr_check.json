@@ -217,10 +217,10 @@
   "FaceCharge": {
    "setting": 1,
    "errors": {
-    "near the part": 0.006965,
-    "60 mm away": 0.002869
+    "near the part": 0.007014,
+    "60 mm away": 0.002883
    },
-   "unknowns": 2922
+   "unknowns": 2706
   }
  }
 }

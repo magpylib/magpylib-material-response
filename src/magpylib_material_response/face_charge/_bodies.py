@@ -51,6 +51,15 @@ MIXED = 2_000
 REFINEMENTS = 30  # at most, as dsgesv
 
 
+def contact_tol(*parts):
+    """Faces closer than this touch: ``CONTACT`` of the largest part's size,
+    or the rounding of float32 coordinates, which grows with their distance
+    from the origin."""
+    return max(
+        max(CONTACT * np.max(p.half), 16 * getattr(p, "noise", 0.0)) for p in parts
+    )
+
+
 class Part:
     """What every solved part has: susceptibility ``chi`` and remanence ``J0``
     (T, in its own frame like magpylib's polarization), at ``position``, turned
@@ -64,6 +73,7 @@ class Part:
         self.J0 = None if J0 is None else np.asarray(J0, float)
         self.applied = np.zeros(3) if applied is None else np.asarray(applied, float)
         self.m = m
+        self.noise = 0.0  # the coordinates' rounding, where it is float32's
 
     def to_global(self, x):
         return np.asarray(x) @ self.R.T + self.position
@@ -453,7 +463,7 @@ def coupling_block(a, b):
     faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):
         return cross_block(a, [b])
-    tol = CONTACT * max(np.max(a.half), np.max(b.half))
+    tol = contact_tol(a, b)
     points, weights = b.sources()
     y = (points - a.position) @ a.R  # b's points in a's frame
     G = contact_block(a, b, tol)
@@ -533,22 +543,25 @@ def solve_system(bodies, external):
 def _solve(A, b):
     """``A x = b``, overwriting ``A``. From ``MIXED`` unknowns on, as LAPACK's
     ``dsgesv``, which scipy does not wrap: LU in single precision, three times
-    faster, refined against ``A`` until the residual is at double's rounding;
-    in double alone if that stalls."""
+    faster, refined against ``A`` until each row's residual is at double's
+    rounding; in double alone if that stalls."""
     n = len(b)
     if n >= MIXED:
-        lu = scipy.linalg.lu_factor(
-            A.astype(np.float32, order="F"), overwrite_a=True, check_finite=False
-        )
-        norm = scipy.linalg.norm(A, np.inf, check_finite=False)
-        tol = np.sqrt(n) * np.spacing(1.0) * norm  # spacing(1): double's epsilon
+        single = A.astype(np.float32, order="F")
+        # each row against its own size: the net-charge rows sum to 1, the
+        # others scale with the panels' areas
+        rows = np.zeros(n)
+        for j in range(0, n, 1024):
+            rows += np.abs(single[:, j : j + 1024]).sum(axis=1)
+        tol = np.sqrt(n) * np.spacing(1.0) * rows  # spacing(1): double's epsilon
+        lu = scipy.linalg.lu_factor(single, overwrite_a=True, check_finite=False)
         x, r = np.zeros(n), b
         for _ in range(REFINEMENTS):
             x += scipy.linalg.lu_solve(lu, r.astype(np.float32), check_finite=False)
             r = b - A @ x
-            if np.abs(r).max() <= tol * np.abs(x).max():
+            if (np.abs(r) <= tol * np.abs(x).max()).all():
                 return x
-        del lu
+        del lu, single
     # in place: factorizing a copy of this dense system peaked at three times
     # its size
     return scipy.linalg.solve(A, b, overwrite_a=True, check_finite=False)

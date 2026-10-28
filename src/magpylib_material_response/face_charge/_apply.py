@@ -22,6 +22,7 @@ from magpylib_material_response.face_charge._bodies import (
     Body,
     Outline,
     add_contact_lines,
+    contact_tol,
     near_panels,
     solve_system,
 )
@@ -60,10 +61,10 @@ def apply_face_charge(
         other source acts on them as it is. A triangle mesh must be closed.
     level : int, default 3
         Mesh level: the panels in each graded layer toward a face's edges. A
-        triangle mesh is graded toward its sharp edges, over half its
-        thickness (the smallest side of its bounding box). Fields far from the
-        bodies are converged at low levels; fields within a panel's size of a
-        surface need higher ones.
+        triangle mesh is graded toward its sharp edges, over half the
+        thickness of each closed shell: its smallest width, or the wall to a
+        cavity. Fields far from the bodies are converged at low levels; fields
+        within a panel's size of a surface need higher ones.
     refine : int, default 0
         Rounds of refinement. Each splits the cuboid panels whose charge jumps
         most (see :attr:`ChargeSheet.jump_indicator`), over all cuboids, and
@@ -309,6 +310,14 @@ def _part(obj, chi, applied, level):
         )
     vertices, faces = _closed_surface(obj)
     directed = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+    shared = np.unique(np.sort(directed, axis=1), axis=0, return_counts=True)[1]
+    if np.any(shared != 2):
+        msg = (
+            f"{obj!r} has an edge shared by {shared[shared != 2][0]} triangles: face "
+            "charge needs closed surfaces, each edge shared by two triangles. "
+            "Give solids that meet along an edge a mesh each."
+        )
+        raise ValueError(msg)
     if len(np.unique(directed, axis=0)) < len(directed):
         msg = (
             f"The faces of {obj!r} are not wound consistently: an edge runs the "
@@ -397,9 +406,8 @@ def _vertices_on(corners, triangles, tol):
     return False
 
 
-def _touch(first, second, scale):
+def _touch(first, second, tol):
     """True if two surfaces touch: a corner of either on the other."""
-    tol = CONTACT * scale
     return _vertices_on(first, second, tol) or _vertices_on(second, first, tol)
 
 
@@ -459,7 +467,7 @@ def _warn_unaligned(bodies, solved, boxes, fixed):
             surface = _global_triangles(body)
             for src in magnets:
                 if not isinstance(src, magpy.magnet.Cuboid) and _touch(
-                    surface, _global_triangles(src), np.max(body.half)
+                    surface, _global_triangles(src), contact_tol(body)
                 ):
                     warnings.warn(
                         f"{src} touches {obj}, a triangle mesh face charge solves, "
