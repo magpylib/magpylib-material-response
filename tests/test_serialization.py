@@ -344,3 +344,4 @@ def test_roundtrip_face_charge_solution():
     back = from_json(to_json(solved))[0]
     _assert_field_equal(back, solved, rtol=0, atol=0)
     assert back.children[0].style.color == "grey"
+    assert back.face_charge_info == solved.face_charge_info

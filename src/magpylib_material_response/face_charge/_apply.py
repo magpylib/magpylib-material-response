@@ -98,7 +98,7 @@ def apply_face_charge(
         B inside a part, mesh it and use ``apply_demag``. Its
         ``face_charge_info`` dict holds the last solve's ``unknowns``, the
         ``level``, the refinement ``rounds`` done and the wall time in
-        ``seconds``.
+        ``seconds``; ``to_json`` keeps it.
 
     Raises
     ------
@@ -200,11 +200,12 @@ def apply_face_charge(
             )
             raise ValueError(msg)
         # before the solve: the unknowns decide its time and memory
+        note = f" (refinement round {rnd})" if rnd else ""
         logger.info(
-            "Face charge: {n} bodies, {unknowns:,} unknowns{round}",
+            "Face charge: {n} bodies, {unknowns:,} unknowns{note}",
             n=len(bodies),
             unknowns=unknowns,
-            round=f" (refinement round {rnd})" if rnd else "",
+            note=note,
         )
         with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
             coefs = solve_system(bodies, external)
@@ -215,7 +216,9 @@ def apply_face_charge(
             w.max(initial=0.0) / (peak * np.sqrt(total)) if peak else 0.0
             for w, peak, total in jumps
         )
-        logger.info("Face charge: largest jump indicator {jump:.2%}", jump=top)
+        logger.info(
+            "Face charge: largest jump indicator {jump:.2%}{note}", jump=top, note=note
+        )
         # refinement splits rectangle panels; triangle meshes keep their level's
         cuboids = [k for k, b in enumerate(bodies) if isinstance(b, Body)]
         if rnd == refine or not top or not cuboids:

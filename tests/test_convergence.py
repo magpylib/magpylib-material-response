@@ -50,7 +50,8 @@ def test_estimate_recovers_a_power_law(limit, scale):
     ids=["oscillating", "implausibly-fast", "barely-shrinking", "one-component-turns"],
 )
 def test_estimate_declines_unsteady_results(values):
-    study = MeshStudy.from_values([27, 216, 1728], values)
+    with pytest.warns(UserWarning, match="do not change steadily"):
+        study = MeshStudy.from_values([27, 216, 1728], values)
     assert study.order is None
     np.testing.assert_array_equal(study.estimate, values[-1])
     assert np.isnan(study.error)
@@ -122,14 +123,18 @@ def test_mesh_study_counts_cells_that_respond_and_errs_per_observer(observers):
 def test_mesh_study_checks_the_meshes():
     cube = magpy.Collection(_soft_cube())
     with pytest.raises(ValueError, match="not more than"):
-        mesh_study(cube, [(0, 0, 0.01)], levels=(2, 2))
+        mesh_study(cube, [(0, 0, 0.01)], levels=(2, 2, 4))
     with pytest.raises(ValueError, match="inplace"):
         mesh_study(cube, [(0, 0, 0.01)], (1, 2), demag_kwargs={"inplace": True})
     with pytest.raises(ValueError, match="one of each"):
         MeshStudy.from_values([1, 8, 64], [1.0, 2.0])
     with pytest.warns(UserWarning, match="Two meshes give no error estimate"):
         MeshStudy.from_values([1, 8], [1.0, 2.0])
-    with pytest.warns(UserWarning, match="grew only"):
+    # meshes this alike do not change steadily either
+    with (
+        pytest.warns(UserWarning, match="grew only"),
+        pytest.warns(UserWarning, match="do not change steadily"),
+    ):
         mesh_study(
             magpy.Collection(_soft_cube()),
             [(0, 0, 0.01)],

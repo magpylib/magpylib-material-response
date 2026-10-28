@@ -69,7 +69,7 @@ class MeshStudy:
         cells)**(1/3): the error falls as ``h**order``, that is as
         ``cells**(-order / 3)``. None when the three finest results do not change
         steadily at an order within ``PLAUSIBLE_ORDERS``; there is then no
-        estimate.
+        estimate, and a warning says so.
     estimate : ndarray
         The value extrapolated to an infinitely fine mesh, or the finest value
         when ``order`` is None.
@@ -120,7 +120,10 @@ class MeshStudy:
             more results give an estimate; with two, ``order`` is None, with a
             warning.
         """
-        return _study(cells, values, seconds, stacklevel=3)
+        study = _study(cells, values, seconds, stacklevel=3)
+        if len(study.cells) < 3:
+            _warn_no_estimate("meshes", 2, "a finer mesh", stacklevel=2)
+        return study
 
 
 def _study(cells, values, seconds, stacklevel):
@@ -149,15 +152,26 @@ def _study(cells, values, seconds, stacklevel):
         _relative(np.linalg.norm(values[-1] - values[-2]), np.linalg.norm(values[-1]))
     )
     if len(cells) < 3:
-        warnings.warn(
-            "Two meshes give no error estimate, only last_change: error is NaN and "
-            "estimate the finer value. Solve three or more for an estimate.",
-            stacklevel=stacklevel,
-        )
         nan = np.full(np.shape(_sizes(values[-1])), np.nan)
         return MeshStudy(cells, values, seconds, None, values[-1], np.nan, nan, change)
     order, estimate, error, errors = _gci(cells, values)
+    if order is None:
+        _warn_no_estimate("meshes", len(cells), "a finer mesh", stacklevel)
     return MeshStudy(cells, values, seconds, order, estimate, error, errors, change)
+
+
+def _warn_no_estimate(what, count, finer, stacklevel):
+    """Say why a study of `count` results (meshes or orders) has no error
+    estimate: its NaN error alone does not. `stacklevel` counts from the caller."""
+    why = (
+        f"Two {what} give no error estimate"
+        if count < 3
+        else f"The last three {what} do not change steadily yet: no error estimate"
+    )
+    warnings.warn(
+        f"{why}, only last_change; error is NaN. Add {finer}.",
+        stacklevel=stacklevel + 1,
+    )
 
 
 def _sizes(value):
@@ -300,6 +314,8 @@ def mesh_study(
             "fresh mesh, whose cells carry the model's susceptibilities."
         )
         raise ValueError(msg)
+    if len(levels) < 3:  # said before the solves, which may take minutes
+        _warn_no_estimate("meshes", 2, "a finer mesh", stacklevel=2)
     if mesher is None:
         mesher = mesh_uniform
     if callable(quantity):

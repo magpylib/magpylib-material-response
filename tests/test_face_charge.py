@@ -458,13 +458,13 @@ def test_returns_a_solved_copy():
 
 
 def test_refine_lowers_the_jump_indicator():
-    jumps = [
+    solved = [
         apply_face_charge(_plate_under_magnet(), level=3, refine=refine)
-        .sources_all[0]
-        .jump_indicator
         for refine in (0, 2)
     ]
+    jumps = [s.sources_all[0].jump_indicator for s in solved]
     assert jumps[1] < jumps[0] / 5
+    assert [s.face_charge_info["rounds"] for s in solved] == [0, 2]
 
 
 def test_show_colours_the_charge_and_draws_panel_edges():

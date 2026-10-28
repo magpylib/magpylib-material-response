@@ -12,31 +12,32 @@ and this project adheres to
 
 - `magpylib_material_response.fem` in a new `fem` extra (NGSolve): `fem_solve`
   and `fem_study` solve the model `apply_demag` takes by finite elements, on the
-  magnets' own shapes, and estimate the error by raising the element order. An
-  independent check of the method of moments: with an exact open boundary and
-  layers refined toward the edges, it puts a cube's polarizability within 2e-5
-  of Helsing and Perfekt's in seconds. Magnets, a uniform applied field and
-  current sources: with currents the magnets take the total potential, so a coil
-  around soft iron costs no accuracy, and on the U-core of the docs it agrees
-  with an independent FEM within 0.25 %. The reference data of the docs and the
-  tests are now its results, which `scripts/fem_references.py` recomputes, in
-  place of exports from a commercial code that no one could rerun. `compare`
-  puts a `mesh_study` and a `fem_study` side by side, per observer: both values,
-  both error bars, and whether they agree. In the repository, `validation/`
-  holds 19 cases, 16 with a stored reference; every PR checks the method of
-  moments against them and is timed against its base branch in a comment, and
-  every night all methods climb their settings against references made again,
-  their records kept on a `benchmarks` branch, and must beat magpylib alone, the
-  model without its material response. It found a mesh NGSolve could not
-  assemble, which `fem_solve` now makes again at another grading. Two docs
-  pages: checking a result with finite elements, and a magnet in a steel tube,
-  where the method of moments converges inside but behind the shield needs far
-  more cells
+  magnets' own shapes, and estimate the error by raising the element order, or
+  warn when the orders give none. An independent check of the method of moments:
+  with an exact open boundary and layers refined toward the edges, it puts a
+  cube's polarizability within 2e-5 of Helsing and Perfekt's in seconds.
+  Magnets, a uniform applied field and current sources: with currents the
+  magnets take the total potential, so a coil around soft iron costs no
+  accuracy, and on the U-core of the docs it agrees with an independent FEM
+  within 0.25 %. The reference data of the docs and the tests are now its
+  results, which `scripts/fem_references.py` recomputes, in place of exports
+  from a commercial code that no one could rerun. `compare` puts a `mesh_study`
+  and a `fem_study` side by side, per observer: both values, both error bars,
+  and whether they agree. In the repository, `validation/` holds 19 cases, 16
+  with a stored reference; every PR checks the method of moments against them
+  and is timed against its base branch in a comment, and every night all methods
+  climb their settings against references made again, their records kept on a
+  `benchmarks` branch, and must beat magpylib alone, the model without its
+  material response. It found a mesh NGSolve could not assemble, which
+  `fem_solve` now makes again at another grading. Two docs pages: checking a
+  result with finite elements, and a magnet in a steel tube, where the method of
+  moments converges inside but behind the shield needs far more cells
   ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
   [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
   [#99](https://github.com/magpylib/magpylib-material-response/pull/99),
-  [#101](https://github.com/magpylib/magpylib-material-response/pull/101)).
+  [#101](https://github.com/magpylib/magpylib-material-response/pull/101),
+  [#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
 - `face_charge.apply_face_charge` solves cuboids and closed triangle meshes,
   such as CAD exports, with a uniform, isotropic susceptibility on their
   surfaces, without a volume mesh, coupled to each other and to every other
@@ -102,8 +103,9 @@ and this project adheres to
 ### Fixed
 
 - `to_json` saves magpylib's `current.TriangleStrip` and
-  `current.TriangleSheet`, and `fem_study` and `mesh_study` warn when two solves
-  give no error estimate instead of returning NaN silently
+  `current.TriangleSheet`, and `mesh_study` warns when it gives no error
+  estimate, from two meshes or from meshes that do not change steadily, instead
+  of returning NaN silently
   ([#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
 - `apply_demag`: a block between two bodies whose cells share no grid was always
   stored sparse above 2 GB. At high susceptibility that kept nearly every entry,
