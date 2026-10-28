@@ -93,29 +93,48 @@ class TriBody(Part):
         self.T = self.fr = self.mass = self.G = None
         self.fine = None  # triangles whose load takes a finer rule
         self.contacts = []  # lines (point, direction, normal) to grade toward
+        self.split = None  # the triangles and shells of a bisection, to mesh
 
     def mesh(self):
-        """The triangles graded toward the sharp edges; the self block waits
-        for ``assemble``, so that the unknowns can be counted first."""
-        T = [
-            graded_triangles(
-                self.vertices,
-                self.faces[self.shells == k],
-                LAYER * self.thickness[k],
-                self.m,
-                GRADING,
-                contacts=self.contacts,
-            )
-            for k in range(self.shells.max() + 1)
-        ]
-        self.T = np.concatenate(T)
-        self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
+        """The triangles graded toward the sharp edges, or as bisected since;
+        the self block waits for ``assemble``, so that the unknowns can be
+        counted first."""
+        if self.split is not None:
+            (self.T, self.shell), self.split = self.split, None
+        else:
+            T = [
+                graded_triangles(
+                    self.vertices,
+                    self.faces[self.shells == k],
+                    LAYER * self.thickness[k],
+                    self.m,
+                    GRADING,
+                    contacts=self.contacts,
+                )
+                for k in range(self.shells.max() + 1)
+            ]
+            self.T = np.concatenate(T)
+            self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
         self.fr = frames(self.T)
         # mass blocks, exact with the degree-2 rule
         P = np.einsum("qk,fkd->fqd", BARY3, self.T)
         phi = self.basis(P)
         self.mass = np.einsum("fq,fqa,fqb->fab", self.fr[5][:, None] * W3, phi, phi)
         self.G = None
+
+    def bisect(self, panels):
+        """Cut these triangles into four at their edges' midpoints; their
+        neighbours need no cut, the charge being discontinuous between
+        triangles. Takes effect at the next mesh."""
+        a, b, c = (self.T[panels, i] for i in range(3))
+        ab, bc, ca = (a + b) / 2, (b + c) / 2, (c + a) / 2
+        keep = np.ones(len(self.T), bool)
+        keep[panels] = False
+        children = [(a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)]
+        self.split = (
+            np.concatenate([self.T[keep], *(np.stack(t, 1) for t in children)]),
+            np.concatenate([self.shell[keep], np.tile(self.shell[panels], 4)]),
+        )
 
     @property
     def n_dofs(self):
