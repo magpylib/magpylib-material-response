@@ -230,7 +230,7 @@ class FaceCharge:
 class FaceChargeRefined(FaceCharge):
     """Face charge with one round of refinement, ``refine=1``: the panels whose
     charge jumps most split once and the whole solved again. Shields and thin
-    walls need it: outside the steel tube 1.0 % at level 3, 5.6 % without."""
+    walls need it: outside the steel tube 0.85 % at level 3, 5.6 % without."""
 
     name = "FaceChargeRefined"
     settings = (1, 2, 3, 4)

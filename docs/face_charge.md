@@ -136,8 +136,8 @@ references and the exact field of a sphere, on one M4 Pro:
 | -------------------------------------- | ---------------------------------------------------------- | --------------------- |
 | Soft cylinder, 1 mm off its surface    | 0.54 % in 0.12 s at level 2, 0.11 % in 0.3 s at level 3    | 2.4 %                 |
 | Soft sphere, 1 mm off its surface      | 0.20 % in 0.09 s at level 1, 0.12 % in 0.4 s at level 3    |                       |
-| Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.85 % in 4.4 s with `refine=1` | 395 %                 |
-| Steel tube around a magnet, outside it | 5.6 % in 8.9 s at level 3, 1.0 % in 21 s with `refine=1`   | 41 %                  |
+| Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.76 % in 5.3 s with `refine=1` | 395 %                 |
+| Steel tube around a magnet, outside it | 5.6 % in 8.9 s at level 3, 0.85 % in 22 s with `refine=1`  | 41 %                  |
 | Soft rod 1 mm across, 20 mm long       | 0.07 % in 2.7 s at level 2, the default here               |                       |
 
 - **Thin walls that shield** converge slowly with the level: outside the tube
@@ -200,7 +200,7 @@ largest, a cuboid's panel in two along both axes and a triangle into four, and
 solves again. For the plate, `refine=2` from level 3 (2,688 unknowns, under 2 s)
 puts B 0.25 mm above the plate within 0.04 %, where uniform panels need 10,350
 unknowns and 20 s for 0.13 %. Outside the steel tube, one round from level 3
-brings 5.6 % down to 1.0 %.
+brings 5.6 % down to 0.85 %.
 
 ## Whether saturation matters
 

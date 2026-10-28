@@ -88,7 +88,7 @@ def apply_face_charge(
         rounds from level 3 resolve the field under a magnet close to a soft
         face better than uniform panels with four times the unknowns; one round
         from level 3 puts the field outside a steel tube shielding a magnet
-        within 1.0 %, where level 3 alone is 5.6 % off.
+        within 0.85 %, where level 3 alone is 5.6 % off.
     max_unknowns : int, default 20_000
         Refuse a solve with more unknowns than this. All bodies form one dense
         system, of 8 n² bytes for n unknowns: 20,000 take 3.2 GB, half as
