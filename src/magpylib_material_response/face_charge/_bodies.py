@@ -35,7 +35,7 @@ from magpylib_material_response.face_charge._panels import (
     contract,
     graded_edges,
 )
-from magpylib_material_response.face_charge._parallel import CHUNK, THREADS, run
+from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import rectangle_field
 
 GRADING = 2.5  # power of the panel grading toward edges and contact lines
@@ -357,8 +357,8 @@ def cross_block(a, bs, tol=CONTACT):
             step = max(
                 1,
                 min(
-                    CHUNK // (n_gauss * len(src) * THREADS),
-                    -(-len(ta) * 6 // THREADS),
+                    CHUNK // (n_gauss * len(src) * threads()),
+                    -(-len(ta) * 6 // threads()),
                 ),
             )
             jobs += [(ta[c0 : c0 + step], src) for c0 in range(0, len(ta), step)]
@@ -458,7 +458,7 @@ def coupling_block(a, b):
     y = (points - a.position) @ a.R  # b's points in a's frame
     G = contact_block(a, b, tol)
     per_panel = len(y) // (b.n_dofs // 3)  # points of one source panel
-    panels = max(1, CHUNK // (max(a.n_dofs, 1) * 8 * per_panel * THREADS))
+    panels = max(1, CHUNK // (max(a.n_dofs, 1) * 8 * per_panel * threads()))
 
     def chunk(p0):  # whole source panels: their own columns of G
         rows = slice(p0 * per_panel, (p0 + panels) * per_panel)

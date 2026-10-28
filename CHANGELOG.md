@@ -47,7 +47,8 @@ and this project adheres to
   accuracy and saturation. All bodies form one dense system, factorized in
   single precision and refined to double's accuracy: `max_unknowns`, 20,000 (3.2
   GB, 4.8 GB while solved) by default, refuses a larger one before it is
-  assembled. `to_json` saves a solved collection
+  assembled. It runs on magpylib's `defaults.threads` threads where magpylib has
+  that setting, otherwise on up to 8. `to_json` saves a solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104)).
 

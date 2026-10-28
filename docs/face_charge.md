@@ -191,6 +191,8 @@ part's charge is singular. Each panel carries a charge linear across it, with
 fields in closed form, and the equation is solved in its Galerkin form. Touching
 parts are coupled exactly, even when their panels do not match. From 2,000
 unknowns on, the dense system is factorized in single precision and refined to
-double's accuracy, three times faster. On a cube the method reproduces the
+double's accuracy, three times faster. Assembly and fields run on
+`magpy.defaults.threads` threads where magpylib has that setting, otherwise on
+the CPUs the process may use, up to 8. On a cube the method reproduces the
 polarizability of Helsing and Perfekt (2013) from below, as a Galerkin method
 should: 4.5e-4 off at level 4.

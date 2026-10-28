@@ -26,7 +26,7 @@ import itertools
 
 import numpy as np
 
-from magpylib_material_response.face_charge._parallel import CHUNK, THREADS, run
+from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import rectangle_field
 
 
@@ -191,7 +191,7 @@ class Galerkin:
         for fa in range(6):
             for fb in range(6):
                 if fb != fa:
-                    step = max(1, CHUNK // (len(faces[fb]) * len(S) * THREADS))
+                    step = max(1, CHUNK // (len(faces[fb]) * len(S) * threads()))
                     ta = faces[fa]
                     jobs += [(fb, ta[c : c + step]) for c in range(0, len(ta), step)]
         run(block, jobs, work=p.N * p.N * len(S))

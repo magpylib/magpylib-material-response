@@ -9,7 +9,7 @@ from magpylib._src.exceptions import MagpylibBadUserInput
 from magpylib._src.style import TriangularMeshStyle
 from scipy.spatial.transform import Rotation
 
-from magpylib_material_response.face_charge._parallel import CHUNK, THREADS, run
+from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import charge_field, frames
 
@@ -231,7 +231,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         out = np.zeros((len(X), 3))
         if field in ("M", "J"):
             return out  # the source carries no magnetization of its own
-        step = max(1, CHUNK // (max(len(self._V), 1) * THREADS))
+        step = max(1, CHUNK // (max(len(self._V), 1) * threads()))
 
         def chunk(a):  # each its own observers
             out[a : a + step] = (

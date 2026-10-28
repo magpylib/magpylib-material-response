@@ -11,6 +11,7 @@ from scipy.spatial.transform import Rotation as R
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
 from magpylib_material_response.face_charge._mesh import graded_triangles
+from magpylib_material_response.face_charge._parallel import run
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import (
     charge_field,
@@ -500,6 +501,14 @@ def test_too_many_unknowns_raise_before_assembly():
             magpy.Collection(cube), level=2, refine=1, max_unknowns=300
         )
     assert np.isfinite(solved.getB((0, 0, 0.01))).all()
+
+
+def test_threads_take_the_callers_numpy_error_settings():
+    def divide(_):
+        return np.ones(1) / np.zeros(1)
+
+    with np.errstate(divide="raise"), pytest.raises(FloatingPointError):
+        run(divide, range(8))
 
 
 @pytest.mark.parametrize(

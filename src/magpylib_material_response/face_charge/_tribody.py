@@ -23,7 +23,7 @@ from scipy.spatial import ConvexHull, cKDTree  # pylint: disable=no-name-in-modu
 
 from magpylib_material_response.face_charge._bodies import CONTACT, Body, Part
 from magpylib_material_response.face_charge._mesh import graded_triangles
-from magpylib_material_response.face_charge._parallel import CHUNK, THREADS, run
+from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
     frames,
@@ -146,7 +146,7 @@ class TriBody(Part):
         G = np.zeros((F, 3, F, 3))
         P, W, B = self.quad()
         nq = P.shape[1]
-        step = max(1, CHUNK // (nq * F * THREADS))
+        step = max(1, CHUNK // (nq * F * threads()))
 
         def far(j0):  # each chunk its own source columns
             js = np.arange(j0, min(j0 + step, F))
@@ -160,7 +160,7 @@ class TriBody(Part):
         I, J = self.near_pairs()
         Pk, Wk, Bk = self.quad(1)
         Q = Pk.shape[1]
-        kstep = max(1, CHUNK // (Q * THREADS))
+        kstep = max(1, CHUNK // (Q * threads()))
 
         def near(k0):  # each pair once, so each batch its own entries
             i, j = I[k0 : k0 + kstep], J[k0 : k0 + kstep]
