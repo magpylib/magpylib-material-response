@@ -6,6 +6,16 @@ import magpylib as magpy
 import magpylib.graphics.model3d as _m3d
 import numpy as np
 
+#: magpylib's magnets with a volume: fem meshes them, face charge solves them
+SOLIDS = (
+    magpy.magnet.Cuboid,
+    magpy.magnet.Cylinder,
+    magpy.magnet.CylinderSegment,
+    magpy.magnet.Sphere,
+    magpy.magnet.Tetrahedron,
+    magpy.magnet.TriangularMesh,
+)
+
 
 def apportion_triple(triple, min_val=1, max_iter=30):
     """Apportion values of a triple, so that the minimum value `min_val` is respected

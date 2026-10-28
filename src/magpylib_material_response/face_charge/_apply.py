@@ -33,17 +33,10 @@ from magpylib_material_response.face_charge._tribody import (
     TriBody,
     add_triangle_contact_lines,
 )
+from magpylib_material_response.meshing_utils import SOLIDS
 from magpylib_material_response.utils import timelog
 
 MARK = 0.5  # a refinement round splits panels above this share of the largest jump
-SOLVABLE = (
-    magpy.magnet.Cuboid,
-    magpy.magnet.Cylinder,
-    magpy.magnet.CylinderSegment,
-    magpy.magnet.Sphere,
-    magpy.magnet.Tetrahedron,
-    magpy.magnet.TriangularMesh,
-)
 # straight facets per turn of a curved face, per level plus one: 48 at level 3,
 # 15 to 5 degrees apart at levels 1 to 5, below the 20 of a sharp edge. They
 # are widened to keep the true volume, which matters more than more facets: on
@@ -327,7 +320,7 @@ def _split(collection):
         if chi is None or not np.any(chi):
             fixed.append(src)
             continue
-        if not isinstance(src, SOLVABLE):
+        if not isinstance(src, SOLIDS):
             msg = (
                 f"{src} has a susceptibility but no volume: apply_face_charge solves "
                 "cuboids, cylinders, cylinder segments, spheres, tetrahedra and "
