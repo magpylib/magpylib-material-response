@@ -123,6 +123,12 @@ class FEM:
     settings = (2, 3, 4, 5)
     # time per order, measured: 1.3 to 3.4
     growth = 3
+    # netgen's mesh varies with the runner: with the same code and versions two
+    # nights meshed the cuboids 0.5 to 0.6 % apart at every order (55,885 and
+    # 55,587 unknowns at 2), and their errors moved by up to 28 %. Against the
+    # baseline, an FEM record may move this much before the night fails.
+    error_slack = 0.5
+    size_slack = 0.02
 
     def settings_for(self, case):
         """Orders up to the reference's highest: past it, FEM would be checked

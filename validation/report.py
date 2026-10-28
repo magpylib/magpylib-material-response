@@ -38,7 +38,9 @@ from .methods import METHODS
 
 TARGETS = (0.01, 0.001)
 #: relative growth of an error that still counts as the same: an iterative
-#: solve's last digits change with the BLAS and the number of threads
+#: solve's last digits change with the BLAS and the number of threads. A
+#: method may allow more as ``error_slack``, and growth of its problem size as
+#: ``size_slack``
 ERROR_SLACK = 1e-3
 #: a phase this many times slower than the baseline is listed
 SLOWER = 1.5
@@ -183,18 +185,20 @@ def compare(records, baseline):
         if old is None:
             continue
         where = "{} {} at {}".format(*_key(record))
+        method = METHODS[record["method"]]
+        slack = getattr(method, "error_slack", ERROR_SLACK)
         for group, error in record["errors"].items():
             was = old["errors"].get(group)
             if was is None:
                 continue
             limit = record["reference_errors"][group]
-            allowed = max(_finite(was), limit) * (1 + ERROR_SLACK)
+            allowed = max(_finite(was), limit) * (1 + slack)
             if not error <= allowed:
                 worse.append(
                     f"- {where}, {group}: error {_percent(was)} → {_percent(_finite(error))}"
                 )
         size, was = record["counts"]["unknowns"], old["counts"]["unknowns"]
-        if size > was:
+        if size > was * (1 + getattr(method, "size_slack", 0)):
             worse.append(f"- {where}: {was:,} → {size:,} unknowns")
         for phase, seconds in record["seconds"].items():
             then = old["seconds"].get(phase, 0)
