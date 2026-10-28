@@ -541,7 +541,7 @@ def _solve(A, b):
             A.astype(np.float32, order="F"), overwrite_a=True, check_finite=False
         )
         norm = scipy.linalg.norm(A, np.inf, check_finite=False)
-        tol = np.sqrt(n) * np.finfo(float).eps * norm
+        tol = np.sqrt(n) * np.spacing(1.0) * norm  # spacing(1): double's epsilon
         x, r = np.zeros(n), b
         for _ in range(REFINEMENTS):
             x += scipy.linalg.lu_solve(lu, r.astype(np.float32), check_finite=False)
