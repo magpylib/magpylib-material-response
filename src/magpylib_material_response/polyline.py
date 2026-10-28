@@ -259,12 +259,20 @@ def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
     """
     Move a grid along a polyline, defined by the vertices.
 
+    The grid is taken in absolute coordinates: it is the cross-section placed
+    at the first vertex, ``verts[0]``, and swept along the polyline. A grid
+    drawn around the origin therefore matches the path only when the polyline
+    starts at the origin. To sweep the same cross-section at another place,
+    shift ``verts`` and ``grid`` by the same offset; shifting only ``verts``
+    moves the cross-section off the path.
+
     Parameters
     ----------
     verts : np.ndarray, shape (n, d)
         Array of polyline vertices, where n is the number of vertices and d is the dimension.
     grid : np.ndarray, shape (m, d)
         Array of grid points to move along the polyline, where m is the number of points.
+        The points are given in absolute coordinates, as the cross-section at ``verts[0]``.
 
     Returns
     -------
