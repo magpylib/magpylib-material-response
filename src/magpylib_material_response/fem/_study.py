@@ -6,7 +6,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from magpylib_material_response.convergence import SAFETY_FACTOR, _relative, _sizes
+from magpylib_material_response.convergence import (
+    SAFETY_FACTOR,
+    _relative,
+    _sizes,
+    _warn_no_estimate,
+)
 from magpylib_material_response.fem._solve import Model
 
 
@@ -35,7 +40,7 @@ class FemStudy:
         Estimated relative error of the highest order: the last change
         relative to the highest-order value, times ``SAFETY_FACTOR``, with
         Euclidean norms over the whole quantity. NaN unless the changes shrink
-        (``ratio < 1``).
+        (``ratio < 1``), with a warning.
     errors : ndarray
         The same per entry of the quantity: per observer for fields at
         observers, per element for anything else.
@@ -85,7 +90,8 @@ def fem_study(
         mesh is refined there. Or a function of a :class:`FemSolution`
         returning the quantity of interest, such as ``lambda s: s.moment``.
     orders : sequence of int, default (2, 3, 4)
-        Polynomial orders, increasing. Three or more give an error estimate.
+        Polynomial orders, increasing. Three or more give an error estimate,
+        two only a warning.
     maxh, edge_layers, observer_maxh, solver_tol, max_iter, min_log_time
         As for :func:`fem_solve`.
 
@@ -126,6 +132,8 @@ def fem_study(
         msg = f"orders must increase; got {orders}."
         raise ValueError(msg)
     orders = [int(p) for p in orders]
+    if len(orders) < 3:  # said before the solves, which may take minutes
+        _warn_no_estimate("orders", 2, "a higher order", stacklevel=2)
     if callable(quantity):
         evaluate, observers = quantity, None
     else:
@@ -152,6 +160,8 @@ def fem_study(
     values = np.asarray(values)
     last = values[-1]
     ratio, change, error, errors = _estimate(values)
+    if ratio is not None and np.isnan(error):
+        _warn_no_estimate("orders", len(orders), "a higher order", stacklevel=2)
     return FemStudy(
         orders=np.asarray(orders),
         ndofs=np.asarray(ndofs),

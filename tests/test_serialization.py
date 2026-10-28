@@ -228,6 +228,28 @@ def test_roundtrip_circle_with_property_paths():
     np.testing.assert_allclose(out.getB((0, 0, 0.01)), circ.getB((0, 0, 0.01)))
 
 
+@pytest.mark.parametrize(
+    "src",
+    [
+        magpy.current.TriangleStrip(
+            current=2.5,
+            vertices=[(0, 0, 0), (0, 0.01, 0), (0.01, 0, 0), (0.01, 0.01, 0.002)],
+        ),
+        magpy.current.TriangleSheet(
+            vertices=[(0, 0, 0), (0.01, 0, 0), (0, 0.01, 0), (0.01, 0.01, 0.002)],
+            faces=[(0, 1, 2), (1, 3, 2)],
+            current_densities=[(1.0, 0, 0), (0, 2.0, 0)],
+            position=(0, 0, 0.001),
+        ),
+    ],
+    ids=["strip", "sheet"],
+)
+def test_roundtrip_current_sheets(src):
+    out = from_json(to_json(src))[0]
+    assert type(out) is type(src)
+    _assert_field_equal(src, out)
+
+
 def test_roundtrip_sphere():
     src = magpy.magnet.Sphere(polarization=(0, 0.5, 1), diameter=0.002)
     src.susceptibility = 0.4
@@ -322,3 +344,4 @@ def test_roundtrip_face_charge_solution():
     back = from_json(to_json(solved))[0]
     _assert_field_equal(back, solved, rtol=0, atol=0)
     assert back.children[0].style.color == "grey"
+    assert back.face_charge_info == solved.face_charge_info

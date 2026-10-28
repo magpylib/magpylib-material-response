@@ -118,7 +118,8 @@ def _serialize_recursive(obj, parent="warn"):
     Supported classes:
         - ``magpylib.magnet.Cuboid``, ``Cylinder``, ``CylinderSegment``,
           ``Sphere``, ``Tetrahedron``, ``TriangularMesh``
-        - ``magpylib.current.Polyline``, ``Circle``
+        - ``magpylib.current.Polyline``, ``Circle``, ``TriangleStrip``,
+          ``TriangleSheet``
         - ``magpylib_material_response.face_charge.ChargeSheet``
         - ``magpylib.Sensor``
         - ``magpylib.Collection`` (recursively)
@@ -159,6 +160,10 @@ def _serialize_recursive(obj, parent="warn"):
     h_ext = getattr(obj, "H_ext", None)
     if h_ext is not None:
         dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
+    # what apply_face_charge solved: numbers only
+    info = getattr(obj, "face_charge_info", None)
+    if info is not None:
+        dd["face_charge_info"] = dict(info)
 
     if isinstance(obj, BaseMagnet):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
@@ -180,8 +185,15 @@ def _serialize_recursive(obj, parent="warn"):
     elif isinstance(obj, magpy.magnet.TriangularMesh):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
         dd["faces"] = {"value": obj.faces.tolist()}
-    elif isinstance(obj, magpy.current.Polyline):
+    elif isinstance(obj, magpy.current.Polyline | magpy.current.TriangleStrip):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+    elif isinstance(obj, magpy.current.TriangleSheet):
+        dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
+        dd["faces"] = {"value": obj.faces.tolist()}
+        dd["current_densities"] = {
+            "value": obj.current_densities.tolist(),
+            "unit": "A/m",
+        }
     elif typ == "face_charge.ChargeSheet":
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
         dd["faces"] = {"value": obj.faces.tolist()}
@@ -260,9 +272,15 @@ def _deserialize_recursive(inp):
         _check_unit("Vertices", inp["vertices"], "m")
         kw["vertices"] = inp["vertices"]["value"]
         kw["faces"] = inp["faces"]["value"]
-    elif constr is magpy.current.Polyline:
+    elif constr in (magpy.current.Polyline, magpy.current.TriangleStrip):
         _check_unit("Vertices", inp["vertices"], "m")
         kw["vertices"] = inp["vertices"]["value"]
+    elif constr is magpy.current.TriangleSheet:
+        _check_unit("Vertices", inp["vertices"], "m")
+        _check_unit("Current densities", inp["current_densities"], "A/m")
+        kw["vertices"] = inp["vertices"]["value"]
+        kw["faces"] = inp["faces"]["value"]
+        kw["current_densities"] = inp["current_densities"]["value"]
     elif typ == "face_charge.ChargeSheet":
         _check_unit("Vertices", inp["vertices"], "m")
         _check_unit("Charge densities", inp["charge_densities"], "A/m")
@@ -286,6 +304,8 @@ def _deserialize_recursive(inp):
     if inp.get("H_ext") is not None:
         _check_unit("H_ext", inp["H_ext"], "T")
         obj.H_ext = inp["H_ext"]["value"]
+    if inp.get("face_charge_info") is not None:
+        obj.face_charge_info = inp["face_charge_info"]
 
     if constr is magpy.Collection:
         obj.add(*[_deserialize_recursive(child) for child in inp["children"]])
@@ -304,6 +324,8 @@ _MAGPYLIB_CLASSES = {
     "magnet.TriangularMesh": magpy.magnet.TriangularMesh,
     "current.Polyline": magpy.current.Polyline,
     "current.Circle": magpy.current.Circle,
+    "current.TriangleStrip": magpy.current.TriangleStrip,
+    "current.TriangleSheet": magpy.current.TriangleSheet,
     "Sensor": magpy.Sensor,
     "Collection": magpy.Collection,
 }

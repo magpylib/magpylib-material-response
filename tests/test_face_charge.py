@@ -458,13 +458,13 @@ def test_returns_a_solved_copy():
 
 
 def test_refine_lowers_the_jump_indicator():
-    jumps = [
+    solved = [
         apply_face_charge(_plate_under_magnet(), level=3, refine=refine)
-        .sources_all[0]
-        .jump_indicator
         for refine in (0, 2)
     ]
+    jumps = [s.sources_all[0].jump_indicator for s in solved]
     assert jumps[1] < jumps[0] / 5
+    assert [s.face_charge_info["rounds"] for s in solved] == [0, 2]
 
 
 def test_show_colours_the_charge_and_draws_panel_edges():
@@ -616,6 +616,10 @@ def test_too_many_unknowns_raise_before_assembly():
             magpy.Collection(cube), level=2, refine=1, max_unknowns=300
         )
     assert np.isfinite(solved.getB((0, 0, 0.01))).all()
+    info = solved.face_charge_info  # the solve that was kept, not the skipped one
+    assert (info["level"], info["rounds"]) == (2, 0)
+    assert 0 < info["unknowns"] <= 300
+    assert info["seconds"] > 0
 
 
 def test_threads_take_the_callers_numpy_error_settings():
