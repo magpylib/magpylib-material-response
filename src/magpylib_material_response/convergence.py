@@ -117,7 +117,8 @@ class MeshStudy:
         -------
         MeshStudy
             The estimate as :func:`mesh_study` gives it; see its notes. Three or
-            more results give an estimate; with two, ``order`` is None.
+            more results give an estimate; with two, ``order`` is None, with a
+            warning.
         """
         return _study(cells, values, seconds, stacklevel=3)
 
@@ -148,6 +149,11 @@ def _study(cells, values, seconds, stacklevel):
         _relative(np.linalg.norm(values[-1] - values[-2]), np.linalg.norm(values[-1]))
     )
     if len(cells) < 3:
+        warnings.warn(
+            "Two meshes give no error estimate, only last_change: error is NaN and "
+            "estimate the finer value. Solve three or more for an estimate.",
+            stacklevel=stacklevel,
+        )
         nan = np.full(np.shape(_sizes(values[-1])), np.nan)
         return MeshStudy(cells, values, seconds, None, values[-1], np.nan, nan, change)
     order, estimate, error, errors = _gci(cells, values)
@@ -231,8 +237,8 @@ def mesh_study(
         Refinement levels from coarse to fine, one mesh each, passed to
         ``mesher`` as its second argument. With the default mesher, cells across
         the thinnest part that responds: ``(2, 4, 8)`` gives meshes 8 times
-        apart. Three or more give an error estimate; refine by a factor of 4 to 8
-        in cells between meshes.
+        apart. Three or more give an error estimate, two only a warning; refine
+        by a factor of 4 to 8 in cells between meshes.
     mesher : callable, optional
         ``mesher(collection, level)`` returning the meshed collection;
         :func:`~magpylib_material_response.meshing.mesh_uniform` by default,

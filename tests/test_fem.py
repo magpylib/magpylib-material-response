@@ -139,7 +139,8 @@ def test_every_shape_solves(make):
     model = magpy.Collection(soft)
     model.H_ext = (0, 0, B_EXT)
 
-    study = fem_study(model, lambda s: s.moment, (1, 2))
+    with pytest.warns(UserWarning, match="Two orders give no error estimate"):
+        study = fem_study(model, lambda s: s.moment, (1, 2))
 
     assert np.all(study.values[:, 2] > 0)
 

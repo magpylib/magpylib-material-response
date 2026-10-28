@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -85,7 +86,8 @@ def fem_study(
         mesh is refined there. Or a function of a :class:`FemSolution`
         returning the quantity of interest, such as ``lambda s: s.moment``.
     orders : sequence of int, default (2, 3, 4)
-        Polynomial orders, increasing. Three or more give an error estimate.
+        Polynomial orders, increasing. Three or more give an error estimate,
+        two only a warning.
     maxh, edge_layers, observer_maxh, solver_tol, max_iter, min_log_time
         As for :func:`fem_solve`.
 
@@ -126,6 +128,12 @@ def fem_study(
         msg = f"orders must increase; got {orders}."
         raise ValueError(msg)
     orders = [int(p) for p in orders]
+    if len(orders) < 3:
+        warnings.warn(
+            "Two orders give no error estimate, only last_change: error is NaN. "
+            "Give three or more orders for an estimate.",
+            stacklevel=2,
+        )
     if callable(quantity):
         evaluate, observers = quantity, None
     else:

@@ -44,13 +44,16 @@ and this project adheres to
   On the six documented examples it lands within each reference's uncertainty,
   0.64 % at worst. `refine` splits the panels where the charge jumps most, and
   each sheet reports `jump_indicator` and `mean_polarization`, hints for
-  accuracy and saturation. All bodies form one dense system, factorized in
-  single precision and refined to double's accuracy: `max_unknowns`, 20,000 (3.2
-  GB, 4.8 GB while solved) by default, refuses a larger one before it is
-  assembled. It runs on magpylib's `defaults.threads` threads where magpylib has
-  that setting, otherwise on up to 8. `to_json` saves a solved collection
+  accuracy and saturation; the solved collection's `face_charge_info` holds the
+  unknowns, level, refinement rounds and time, and the unknowns are logged
+  before the solve. All bodies form one dense system, factorized in single
+  precision and refined to double's accuracy: `max_unknowns`, 20,000 (3.2 GB,
+  4.8 GB while solved) by default, refuses a larger one before it is assembled.
+  It runs on magpylib's `defaults.threads` threads where magpylib has that
+  setting, otherwise on up to 8. `to_json` saves a solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
-  [#104](https://github.com/magpylib/magpylib-material-response/pull/104)).
+  [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
+  [#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
 
 ### Changed
 
@@ -98,6 +101,10 @@ and this project adheres to
 
 ### Fixed
 
+- `to_json` saves magpylib's `current.TriangleStrip` and
+  `current.TriangleSheet`, and `fem_study` and `mesh_study` warn when two solves
+  give no error estimate instead of returning NaN silently
+  ([#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
 - `apply_demag`: a block between two bodies whose cells share no grid was always
   stored sparse above 2 GB. At high susceptibility that kept nearly every entry,
   in more memory than the dense block and far more while it was built, and the

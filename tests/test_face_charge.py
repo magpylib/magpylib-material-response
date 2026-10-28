@@ -616,6 +616,10 @@ def test_too_many_unknowns_raise_before_assembly():
             magpy.Collection(cube), level=2, refine=1, max_unknowns=300
         )
     assert np.isfinite(solved.getB((0, 0, 0.01))).all()
+    info = solved.face_charge_info  # the solve that was kept, not the skipped one
+    assert (info["level"], info["rounds"]) == (2, 0)
+    assert 0 < info["unknowns"] <= 300
+    assert info["seconds"] > 0
 
 
 def test_threads_take_the_callers_numpy_error_settings():

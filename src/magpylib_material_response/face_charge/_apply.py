@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import operator
+import time
 import warnings
 
 import magpylib as magpy
@@ -94,7 +95,10 @@ def apply_face_charge(
         field excludes the applied field ``H_ext``. Fields hold outside the
         solved parts: inside one, ``getB`` gives mu0 H, without the part's own
         magnetization, which depends on the field of every source at once; for
-        B inside a part, mesh it and use ``apply_demag``.
+        B inside a part, mesh it and use ``apply_demag``. Its
+        ``face_charge_info`` dict holds the last solve's ``unknowns``, the
+        ``level``, the refinement ``rounds`` done and the wall time in
+        ``seconds``.
 
     Raises
     ------
@@ -118,10 +122,13 @@ def apply_face_charge(
     if level < 1 or refine < 0:
         msg = f"level must be 1 or more and refine 0 or more; got level={level}, refine={refine}."
         raise ValueError(msg)
+    start = time.perf_counter()
     solved, fixed = _split(collection)
     out = collection.copy()
+    info = {"unknowns": 0, "level": level, "rounds": 0}
     if not solved:
         logger.info("Face charge: no part with a susceptibility to solve")
+        out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
         return out
 
     with timelog("Face-charge meshing", min_log_time=min_log_time):
@@ -192,21 +199,23 @@ def apply_face_charge(
                 "or mesh the parts for apply_demag."
             )
             raise ValueError(msg)
+        # before the solve: the unknowns decide its time and memory
+        logger.info(
+            "Face charge: {n} bodies, {unknowns:,} unknowns{round}",
+            n=len(bodies),
+            unknowns=unknowns,
+            round=f" (refinement round {rnd})" if rnd else "",
+        )
         with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
             coefs = solve_system(bodies, external)
+        info.update(unknowns=unknowns, rounds=rnd)
         sheets = [_sheet_of(b, c) for b, c in zip(bodies, coefs, strict=True)]
         jumps = [s._panel_jumps() for s in sheets]
         top = max(
             w.max(initial=0.0) / (peak * np.sqrt(total)) if peak else 0.0
             for w, peak, total in jumps
         )
-        logger.info(
-            "Face charge: {n} bodies, {unknowns} unknowns, largest jump indicator {jump:.2%}{round}",
-            n=len(bodies),
-            unknowns=sum(b.n_dofs for b in bodies),
-            jump=top,
-            round=f" (refinement round {rnd})" if rnd else "",
-        )
+        logger.info("Face charge: largest jump indicator {jump:.2%}", jump=top)
         # refinement splits rectangle panels; triangle meshes keep their level's
         cuboids = [k for k, b in enumerate(bodies) if isinstance(b, Body)]
         if rnd == refine or not top or not cuboids:
@@ -257,6 +266,7 @@ def apply_face_charge(
         children = [replace.get(id(child), child) for child in parent.children]
         parent.remove(*parent.children)
         parent.add(*children)
+    out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
     return out
 
 

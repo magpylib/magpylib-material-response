@@ -127,6 +127,8 @@ def test_mesh_study_checks_the_meshes():
         mesh_study(cube, [(0, 0, 0.01)], (1, 2), demag_kwargs={"inplace": True})
     with pytest.raises(ValueError, match="one of each"):
         MeshStudy.from_values([1, 8, 64], [1.0, 2.0])
+    with pytest.warns(UserWarning, match="Two meshes give no error estimate"):
+        MeshStudy.from_values([1, 8], [1.0, 2.0])
     with pytest.warns(UserWarning, match="grew only"):
         mesh_study(
             magpy.Collection(_soft_cube()),
