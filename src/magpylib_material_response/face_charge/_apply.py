@@ -36,7 +36,21 @@ from magpylib_material_response.face_charge._tribody import (
 from magpylib_material_response.utils import timelog
 
 MARK = 0.5  # a refinement round splits panels above this share of the largest jump
-SOLVABLE = (magpy.magnet.Cuboid, magpy.magnet.TriangularMesh, magpy.magnet.Tetrahedron)
+SOLVABLE = (
+    magpy.magnet.Cuboid,
+    magpy.magnet.Cylinder,
+    magpy.magnet.CylinderSegment,
+    magpy.magnet.Sphere,
+    magpy.magnet.Tetrahedron,
+    magpy.magnet.TriangularMesh,
+)
+# straight facets per turn of a curved face, per level plus one: 48 at level 3,
+# 15 to 5 degrees apart at levels 1 to 5, below the 20 of a sharp edge. They
+# are widened to keep the true volume, which matters more than more facets: on
+# a soft cylinder at level 3, 24 facets widened are 0.02 % off 50 mm away, 96
+# not widened 0.16 %. A sphere, with no edge to grade toward, refines by them
+# alone: 0.26, 0.06 and 0.016 % off 1 mm away with 320, 1280 and 5120 facets
+FACETS = 12
 POINTS_PER_CALL = (
     5_000  # external-field points per magpylib call: a coil at many points takes GBs
 )
@@ -57,9 +71,12 @@ def apply_face_charge(
     Parameters
     ----------
     collection : magpylib.Collection
-        The model. Cuboids, triangle meshes (``TriangularMesh``, a CAD
-        export) and tetrahedra with a nonzero susceptibility are solved; every
-        other source acts on them as it is. A triangle mesh must be closed.
+        The model. Magnets with a nonzero susceptibility are solved: cuboids,
+        cylinders, cylinder segments, spheres, tetrahedra and triangle meshes
+        (``TriangularMesh``, a CAD export); every other source acts on them as
+        it is. Curved faces are cut into flat facets, ``12 (level + 1)`` per
+        turn, widened so that the body keeps its volume. A triangle mesh must
+        be closed.
     level : int, default 3
         Mesh level: the panels in each graded layer toward a face's edges. A
         triangle mesh is graded toward its sharp edges, over half the
@@ -107,9 +124,8 @@ def apply_face_charge(
         refinement round that would is skipped with a warning, and the round
         before it is returned.
     NotImplementedError
-        For another shape, such as a cylinder (export it as a triangle mesh),
-        an anisotropic susceptibility (it brings back charge inside the body:
-        mesh it and use ``apply_demag``), and objects moving along paths.
+        For an anisotropic susceptibility (it brings back charge inside the
+        body: mesh it and use ``apply_demag``), and objects moving along paths.
     """
     if not isinstance(collection, magpy.Collection):
         msg = f"apply_face_charge takes a magpylib Collection; got {type(collection).__name__}."
@@ -293,9 +309,9 @@ def _split(collection):
             continue
         if not isinstance(src, SOLVABLE):
             msg = (
-                f"apply_face_charge solves cuboids and triangle meshes; {src} has a "
-                "susceptibility. Export it as a TriangularMesh, or mesh it and use "
-                "apply_demag instead."
+                f"{src} has a susceptibility but no volume: apply_face_charge solves "
+                "cuboids, cylinders, cylinder segments, spheres, tetrahedra and "
+                "triangle meshes."
             )
             raise NotImplementedError(msg)
         chi = np.asarray(chi, float)
@@ -321,7 +337,7 @@ def _part(obj, chi, applied, level):
         return Body(
             obj.dimension, obj.position, R, chi, J0=J0, applied=applied, m=level
         )
-    vertices, faces = _closed_surface(obj)
+    vertices, faces = _closed_surface(obj, level)
     directed = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
     shared = np.unique(np.sort(directed, axis=1), axis=0, return_counts=True)[1]
     if np.any(shared != 2):
@@ -343,8 +359,18 @@ def _part(obj, chi, applied, level):
     )
 
 
-def _closed_surface(src):
-    """A magnet's surface, in its own frame, as vertices and outward faces."""
+def _closed_surface(src, level=3):
+    """A magnet's surface, in its own frame, as vertices and outward faces;
+    curved faces cut into the facets of ``level``."""
+    # curved: wound outward as they are made
+    n = FACETS * (level + 1)
+    if isinstance(src, magpy.magnet.Cylinder):
+        d, h = src.dimension
+        return _turned(0.0, d / 2, h, 0.0, 360.0, n)
+    if isinstance(src, magpy.magnet.CylinderSegment):
+        return _turned(*src.dimension, n)
+    if isinstance(src, magpy.magnet.Sphere):
+        return _sphere(src.diameter, n)
     if isinstance(src, magpy.magnet.Cuboid):
         signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
         V = signs * np.asarray(src.dimension, float) / 2
@@ -371,6 +397,91 @@ def _closed_surface(src):
         F = F.copy()
         F[inward] = F[inward][:, [0, 2, 1]]
     return V, F
+
+
+def _turned(r1, r2, h, phi1, phi2, n):
+    """A cylinder segment's surface (radii, height, angles in degrees) as
+    vertices and outward faces: its arcs cut into straight facets, about ``n``
+    per turn, their radii widened by ``sqrt(step / sin(step))`` so that the
+    cross-section keeps its area. ``r1 = 0`` closes it on the axis; a full
+    turn has no end faces."""
+    full = np.isclose(phi2 - phi1, 360.0)
+    k = n if full else max(1, int(np.ceil(n * (phi2 - phi1) / 360.0 - 1e-9)))
+    step = np.radians(phi2 - phi1) / k
+    angles = np.radians(phi1) + step * np.arange(k if full else k + 1)
+    m, widen = len(angles), np.sqrt(step / np.sin(step))
+
+    def ring(r, z):
+        return np.c_[
+            r * widen * np.cos(angles), r * widen * np.sin(angles), np.full(m, z)
+        ]
+
+    if r1 > 0:
+        inner = [ring(r1, -h / 2), ring(r1, h / 2)]
+        i0, i1 = 2 * m + np.arange(m), 3 * m + np.arange(m)
+    else:  # on the axis: one point at each end
+        inner = [np.array([[0.0, 0.0, -h / 2]]), np.array([[0.0, 0.0, h / 2]])]
+        i0, i1 = np.full(m, 2 * m), np.full(m, 2 * m + 1)
+    V = np.vstack([ring(r2, -h / 2), ring(r2, h / 2), *inner])
+    o0, o1 = np.arange(m), m + np.arange(m)
+    F = []
+    for a in range(k):
+        b = (a + 1) % m
+        F += [(o0[a], o0[b], o1[b]), (o0[a], o1[b], o1[a])]  # outer side
+        F += [(i1[a], o1[a], o1[b]), (i0[a], o0[b], o0[a])]  # top and bottom
+        if r1 > 0:
+            F += [(i1[a], o1[b], i1[b]), (i0[a], i0[b], o0[b])]
+            F += [(i0[a], i1[b], i0[b]), (i0[a], i1[a], i1[b])]  # inner side
+    if not full:  # the two flat ends
+        F += [(i0[0], o0[0], o1[0]), (i0[0], o1[0], i1[0])]
+        F += [(i0[k], o1[k], o0[k]), (i0[k], i1[k], o1[k])]
+    return V, np.array(F)
+
+
+def _sphere(d, n):
+    """A sphere's surface as vertices and outward faces: each face of an
+    icosahedron cut into ``f**2`` triangles, their edges spanning about ``360 /
+    n`` degrees, projected onto the sphere and scaled to its volume."""
+    p = (1 + 5**0.5) / 2
+    corners = np.array([
+        (-1, p, 0), (1, p, 0), (-1, -p, 0), (1, -p, 0), (0, -1, p), (0, 1, p),
+        (0, -1, -p), (0, 1, -p), (p, 0, -1), (p, 0, 1), (-p, 0, -1), (-p, 0, 1),
+    ])  # fmt: skip
+    icosahedron = [
+        (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9),
+        (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8), (3, 9, 4), (3, 4, 2),
+        (3, 2, 6), (3, 6, 8), (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10),
+        (8, 6, 7), (9, 8, 1),
+    ]  # fmt: skip
+    f = max(1, round(n * 63.43 / 360))  # an icosahedron's edge spans 63.43 degrees
+    V, index, F = [], {}, []
+
+    def vertex(face, weights):
+        # one key per point, whichever face reaches it: its corners and weights
+        key = tuple(sorted((c, w) for c, w in zip(face, weights, strict=True) if w))
+        if len(key) == 3:  # inside the face: only this face has it
+            key = (face, key)
+        if key not in index:
+            index[key] = len(V)
+            V.append(np.asarray(weights, float) @ corners[list(face)])
+        return index[key]
+
+    for face in icosahedron:
+        grid = {
+            (i, j): vertex(face, (f - i - j, i, j))
+            for i in range(f + 1)
+            for j in range(f + 1 - i)
+        }
+        for i in range(f):
+            for j in range(f - i):
+                F.append((grid[i, j], grid[i + 1, j], grid[i, j + 1]))
+                if i + j < f - 1:
+                    F.append((grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]))
+    V = np.array(V)
+    V /= np.linalg.norm(V, axis=1)[:, None]
+    F = np.array(F)
+    volume = np.einsum("fd,fd->", V[F[:, 0]], np.cross(V[F[:, 1]], V[F[:, 2]])) / 6
+    return V * (d / 2) * (4 * np.pi / 3 / volume) ** (1 / 3), F
 
 
 def _global_triangles(src_or_body):

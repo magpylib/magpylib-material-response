@@ -552,7 +552,10 @@ def _flipped_cube():
     [
         (
             lambda: magpy.Collection(
-                magpy.magnet.Cylinder(dimension=(0.01, 0.01), polarization=(0, 0, 0))
+                magpy.misc.Triangle(
+                    vertices=[(0, 0, 0), (0.01, 0, 0), (0, 0.01, 0)],
+                    polarization=(0, 0, 0),
+                )
             ),
             10.0,
             NotImplementedError,
@@ -585,7 +588,7 @@ def _flipped_cube():
         (lambda: magpy.Collection(_cubes_sharing_an_edge()), 10.0, ValueError),
     ],
     ids=[
-        "not a cuboid",
+        "no volume",
         "anisotropic",
         "path",
         "current path",
