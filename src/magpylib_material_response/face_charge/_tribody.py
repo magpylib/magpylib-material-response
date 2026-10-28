@@ -425,16 +425,16 @@ def _gap(P, T):
         a, b, c = (T[t0 : t0 + step, k] for k in range(3))
         n = np.cross(b - a, c - a)
         n /= np.linalg.norm(n, axis=1)[:, None]
-        d = P[:, None] - a  # (p, t, 3)
-        w = np.einsum("ptd,td->pt", d, n)
+        d = P[:, None] - a  # (p, k, 3)
+        w = np.einsum("pkd,kd->pk", d, n)
         foot = P[:, None] - w[..., None] * n
         within = np.ones(w.shape, bool)
         dist = np.full(w.shape, np.inf)
         for u, v in ((a, b), (b, c), (c, a)):
             e = v - u
-            within &= np.einsum("ptd,td->pt", np.cross(e, foot - u), n) >= 0
+            within &= np.einsum("pkd,kd->pk", np.cross(e, foot - u), n) >= 0
             s = np.clip(
-                np.einsum("ptd,td->pt", P[:, None] - u, e) / np.sum(e * e, 1), 0, 1
+                np.einsum("pkd,kd->pk", P[:, None] - u, e) / np.sum(e * e, 1), 0, 1
             )
             dist = np.minimum(
                 dist, np.linalg.norm(P[:, None] - u - s[..., None] * e, axis=-1)
