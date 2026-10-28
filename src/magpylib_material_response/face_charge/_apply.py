@@ -31,6 +31,7 @@ from magpylib_material_response.face_charge._sheet import ChargeSheet, saturatio
 from magpylib_material_response.face_charge._triangle import frames
 from magpylib_material_response.face_charge._tribody import (
     TriBody,
+    _triangles,
     add_triangle_contact_lines,
 )
 from magpylib_material_response.meshing_utils import SOLIDS
@@ -245,9 +246,13 @@ def apply_face_charge(
             note=note,
         )
         with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
-            coefs = solve_system(bodies, external)
+            joined = _interfaces(bodies)
+            coefs = solve_system(bodies, external, joined)
         info.update(unknowns=unknowns, rounds=rnd)
-        sheets = [_sheet_of(b, c) for b, c in zip(bodies, coefs, strict=True)]
+        sheets = [
+            _sheet_of(b, c, ~shared)
+            for b, c, shared in zip(bodies, coefs, joined[0], strict=True)
+        ]
         jumps = [s._panel_jumps() for s in sheets]
         top = max(
             w.max(initial=0.0) / (peak * np.sqrt(total)) if peak else 0.0
@@ -261,10 +266,12 @@ def apply_face_charge(
         # marked by the jump itself, not its share of each sheet's peak, so that
         # a weakly driven part is not split as much as the one that matters
         largest = max(jump.max(initial=0.0) for jump, _, _ in jumps)
-        for body, (jump, _, _) in zip(bodies, jumps, strict=True):
+        for body, sheet, (jump, _, _) in zip(bodies, sheets, jumps, strict=True):
+            # a sheet's panels are the body's it kept, numbered anew
+            kept = np.unique(sheet._panels) if sheet._panels is not None else None
             marked = np.flatnonzero(jump > MARK * largest)
             if marked.size:
-                body.bisect(marked)
+                body.bisect(marked if kept is None else kept[marked])
                 body.mesh()
                 body.fine = near_panels(body, boxes)
     logger.info(
@@ -521,6 +528,96 @@ def _sphere(d, n):
     return V * (d / 2) * (4 * np.pi / 3 / volume) ** (1 / 3), F
 
 
+def _interfaces(bodies):
+    """Where two solved parts of one material touch, the panels they share:
+    across such a face nothing changes, B, H and M alike, so it carries no
+    charge. Left in, the two faces' charges must cancel, a pair that makes no
+    field and that the solve barely fixes, which leaks where their panels
+    differ (#112). Returns, per body, its panels lying wholly on the other
+    part with the opposite normal, and each closed shell's group: shells such
+    faces join hold no net charge together rather than each."""
+    shells = [b.shell.max() + 1 if isinstance(b, TriBody) else 1 for b in bodies]
+    first = np.cumsum([0, *shells])
+    parent = np.arange(first[-1])
+
+    def root(s):
+        while parent[s] != s:
+            s = parent[s]
+        return s
+
+    surfaces = [_triangles(b) for b in bodies]
+    shared = []
+    for ia, a in enumerate(bodies):
+        corners, normal, shell = _panel_geometry(a)
+        on_other = np.zeros(len(corners), bool)
+        for ib, b in enumerate(bodies):
+            if ib == ia or not _same_material(a, b):
+                continue
+            on, where = _on_surface(corners, normal, surfaces[ib], contact_tol(a, b))
+            on_other |= on
+            other = (
+                b.shells[where[on]]
+                if isinstance(b, TriBody)
+                else np.zeros(on.sum(), int)
+            )
+            for sa, sb in zip(first[ia] + shell[on], first[ib] + other, strict=True):
+                parent[root(sa)] = root(sb)
+        shared.append(on_other)
+    roots = np.array([root(s) for s in range(first[-1])])
+    return shared, np.unique(roots, return_inverse=True)[1].ravel()
+
+
+def _same_material(a, b):
+    """One susceptibility and one remanence, in global axes."""
+    if not np.isclose(a.chi, b.chi, rtol=1e-9, atol=0.0):
+        return False
+    ja, jb = (np.zeros(3) if p.J0 is None else p.R @ p.J0 for p in (a, b))
+    return np.allclose(ja, jb, rtol=1e-9, atol=1e-12)
+
+
+def _panel_geometry(body):
+    """Each panel's corners (P, k, 3) and outward normal (P, 3), global, and
+    its closed shell."""
+    if isinstance(body, TriBody):
+        corners = body.to_global(body.T.reshape(-1, 3)).reshape(-1, 3, 3)
+        return corners, body.fr[1] @ body.R.T, body.shell
+    p = body.panels
+    corners = body.to_global(p.corners().reshape(-1, 3)).reshape(-1, 4, 3)
+    return corners, p.normal @ body.R.T, np.zeros(p.N, int)
+
+
+def _on_surface(corners, normal, surface, tol):
+    """Per panel, whether its corners and centre all lie on ``surface``'s
+    triangles (n, 3, 3) facing the other way, within ``tol``; and a triangle
+    its centre lies on."""
+    points = np.concatenate([corners, corners.mean(1, keepdims=True)], axis=1)
+    on = np.zeros(points.shape[:2], bool)
+    where = np.zeros(len(points), int)
+    lo, hi = surface.reshape(-1, 3).min(0) - tol, surface.reshape(-1, 3).max(0) + tol
+    near = np.flatnonzero(((points >= lo) & (points <= hi)).all((1, 2)))
+    if not near.size:
+        return on.all(1), where
+    a, b, c = surface[:, 0], surface[:, 1], surface[:, 2]
+    n = np.cross(b - a, c - a)
+    n /= np.linalg.norm(n, axis=1)[:, None]
+    for t in range(len(surface)):
+        facing = near[normal[near] @ n[t] < -1 + 1e-6]
+        if not facing.size:
+            continue
+        x = points[facing] - a[t]
+        flat = np.abs(x @ n[t]) <= tol
+        # barycentric, inside within tol of each edge
+        e1, e2 = b[t] - a[t], c[t] - a[t]
+        g = np.linalg.inv(np.array([[e1 @ e1, e1 @ e2], [e1 @ e2, e2 @ e2]]))
+        u, v = np.einsum("ij,fpj->ifp", g, np.stack([x @ e1, x @ e2], axis=-1))
+        size = np.sqrt(np.linalg.norm(np.cross(e1, e2)))
+        slack = tol / size
+        inside = flat & (u >= -slack) & (v >= -slack) & (u + v <= 1 + slack)
+        on[facing] |= inside
+        where[facing[inside[:, -1]]] = t
+    return on.all(1), where
+
+
 def _global_triangles(src_or_body):
     """A solved body's or a magnet's surface triangles (n, 3, 3), global."""
     if isinstance(src_or_body, TriBody):
@@ -572,13 +669,21 @@ def _touch(first, second, tol):
     return _vertices_on(first, second, tol) or _vertices_on(second, first, tol)
 
 
-def _sheet_of(body, c):
-    """The ChargeSheet of a solved body."""
+def _sheet_of(body, c, keep):
+    """The ChargeSheet of a solved body, of the panels ``keep`` marks."""
     if isinstance(body, Body):
-        return ChargeSheet._from_body(body, c)
-    return ChargeSheet.from_triangles(
-        body.T,
-        body.coefficients_at_corners(c),
+        return ChargeSheet._from_body(body, c, keep=None if keep.all() else keep)
+    if keep.all():
+        return ChargeSheet.from_triangles(
+            body.T,
+            body.coefficients_at_corners(c),
+            position=body.position,
+            orientation=Rotation.from_matrix(body.R),
+        )
+    return ChargeSheet.from_triangles(  # each triangle its own panel, numbered as kept
+        body.T[keep],
+        body.coefficients_at_corners(c)[keep],
+        panels=np.flatnonzero(keep),
         position=body.position,
         orientation=Rotation.from_matrix(body.R),
     )

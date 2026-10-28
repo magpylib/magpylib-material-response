@@ -379,20 +379,21 @@ class ChargeSheet(magpy.misc.CustomSource):
         return cls(P[first], inv.reshape(-1, 3), charge_densities, **kwargs)
 
     @classmethod
-    def _from_body(cls, body, c, **kwargs):
+    def _from_body(cls, body, c, keep=None, **kwargs):
         """The sheet of a solved body: each rectangular panel, whose charge is
-        ``c0 + c1 s + c2 t`` across it, as two faces carrying it."""
+        ``c0 + c1 s + c2 t`` across it, as two faces carrying it; only the
+        panels ``keep`` marks, if given."""
         p = body.panels
-        c = np.asarray(c, float).reshape(p.N, 3)
-        corners = p.corners()
+        idx = np.arange(p.N) if keep is None else np.flatnonzero(keep)
+        c = np.asarray(c, float).reshape(p.N, 3)[idx]
+        corners, normal = p.corners()[idx], p.normal[idx]
         s, t = np.array([-1, 1, 1, -1]), np.array([-1, -1, 1, 1])
         qc = c[:, :1] + c[:, 1:2] * s + c[:, 2:3] * t  # (N, 4) at the corners
         V = np.concatenate([corners[:, [0, 1, 2]], corners[:, [0, 2, 3]]])
         q = np.concatenate([qc[:, [0, 1, 2]], qc[:, [0, 2, 3]]])
         n = np.cross(V[:, 1] - V[:, 0], V[:, 2] - V[:, 0])
-        inward = np.einsum("fd,fd->f", n, np.concatenate([p.normal, p.normal])) < 0
+        inward = np.einsum("fd,fd->f", n, np.concatenate([normal, normal])) < 0
         V[inward], q[inward] = V[inward][:, [0, 2, 1]], q[inward][:, [0, 2, 1]]
-        idx = np.arange(p.N)
         return cls.from_triangles(
             V,
             q,

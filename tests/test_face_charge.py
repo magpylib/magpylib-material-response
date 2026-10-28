@@ -250,6 +250,57 @@ def test_triangle_mesh_touching_a_cuboid_solves_as_two_cuboids(turn, offset):
         apply_face_charge(magpy.Collection(part, disc), level=1)
 
 
+def _bars(as_mesh):
+    """#112's soft bars of one material: wide, a short narrow bridge touching
+    each on part of its face, wide again; as three cuboids or one closed mesh."""
+    t, slabs = 0.008, [(-0.04, 0.0, 0.02), (0.0, 0.005, 0.01), (0.005, 0.045, 0.02)]
+    if not as_mesh:
+        return [
+            magpy.magnet.Cuboid(
+                dimension=(x1 - x0, 2 * h, t),
+                position=((x0 + x1) / 2, 0, -t / 2),
+                polarization=(0, 0, 0),
+            )
+            for x0, x1, h in slabs
+        ]
+    outline = [(-0.04, -0.02), (0, -0.02), (0, -0.01), (0.005, -0.01), (0.005, -0.02)]
+    outline += [(0.045, -0.02), (0.045, 0.02), (0.005, 0.02), (0.005, 0.01)]
+    outline += [(0, 0.01), (0, 0.02), (-0.04, 0.02)]
+    caps = [[0, 1, 2, 9, 10, 11], [2, 3, 8, 9], [5, 6, 7, 8, 3, 4]]  # convex, fanned
+    n = len(outline)
+    V = [(x, y, z) for z in (-t, 0.0) for x, y in outline]
+    F = [(k, (k + 1) % n, n + (k + 1) % n) for k in range(n)]
+    F += [(k, n + (k + 1) % n, n + k) for k in range(n)]
+    for cap in caps:
+        F += [(cap[0], cap[q + 1], cap[q]) for q in range(1, len(cap) - 1)]
+        F += [(n + cap[0], n + cap[q], n + cap[q + 1]) for q in range(1, len(cap) - 1)]
+    mesh = magpy.magnet.TriangularMesh(
+        vertices=V, faces=F, polarization=(0, 0, 0), reorient_faces=True
+    )
+    return [mesh]
+
+
+def test_touching_parts_of_one_material_solve_as_one():
+    """#112: across a face where parts of one material touch, nothing changes,
+    so it carries no charge. Both parts' charges there, which had to cancel,
+    leaked on a partial contact: 16 % at level 2 against the same solid as one
+    mesh."""
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 1.0, 0),
+        dimension=(0.005,) * 3,
+        position=(-0.001, 0.01, 0.0035),
+    )
+    line = [(x, 0.008, 0.0025) for x in np.linspace(-0.02, 0.02, 21)]
+    fields = []
+    for as_mesh in (False, True):
+        coll = magpy.Collection(*_bars(as_mesh), magnet.copy())
+        for part in coll.sources_all[:-1]:
+            part.susceptibility = 999.0
+        coll.sources_all[-1].susceptibility = 0.0
+        fields.append(apply_face_charge(coll, level=2).getB(line))
+    assert _relative(*fields) < 0.015
+
+
 def _cube_with_a_sliver(edge, turn=None, dtype=float):
     """The cube mesh with a triangle split at the midpoint of one of its edges,
     a cube edge or a face's diagonal, and the sliver an STL repair leaves in

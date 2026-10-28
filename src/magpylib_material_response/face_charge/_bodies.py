@@ -480,22 +480,29 @@ def coupling_block(a, b):
     return G
 
 
-def solve_system(bodies, external):
+def solve_system(bodies, external, joined=None):
     """Solve the coupled bodies.
 
     ``external`` maps global points ``(n, 3)`` to the field of the fixed sources
     there, H in A/m, global; each body adds its own uniform applied field.
-    Returns the charge coefficients of each body.
+    ``joined``, from where parts of one material touch: per body the panels
+    that carry no charge, and the group of each closed shell, whose members
+    hold no net charge together. Returns the charge coefficients of each body.
     """
     n_bodies = len(bodies)
     offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
     n = offsets[-1]
-    # a net-charge row each: a cuboid's, or each closed shell of a mesh's
+    # a net-charge row each: a cuboid's, or each closed shell of a mesh's, or
+    # each group of them that touching faces of one material join
     borders = [b.border().reshape(b.n_dofs, -1) for b in bodies]
-    fixes = n + np.cumsum([0] + [e.shape[1] for e in borders])
+    first = np.cumsum([0] + [e.shape[1] for e in borders])
+    group = np.arange(first[-1]) if joined is None else joined[1]
+    total = np.zeros(group.max() + 1)
+    for ia, border in enumerate(borders):
+        np.add.at(total, group[first[ia] : first[ia + 1]], border.sum(0))
     # column-major, which the in-place factorization below needs
-    A = np.zeros((fixes[-1], fixes[-1]), order="F")
-    rhs = np.zeros(fixes[-1])
+    A = np.zeros((n + len(total), n + len(total)), order="F")
+    rhs = np.zeros(n + len(total))
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
         # each self block is assembled here and freed once copied, so that only
@@ -504,9 +511,9 @@ def solve_system(bodies, external):
         np.negative(a.G, out=A[rows, rows])
         a.G = None
         a.add_mass(A[rows, rows], 1 / a.chi + 0.5)
-        border, fix = borders[ia], slice(fixes[ia], fixes[ia + 1])
-        A[rows, fix] = border
-        A[fix, rows] = (border / border.sum(0)).T
+        for col, g in enumerate(group[first[ia] : first[ia + 1]]):
+            A[rows, n + g] += borders[ia][:, col]  # two shells may join
+            A[n + g, rows] += borders[ia][:, col] / total[g]
 
         def field(x, a=a):
             return (external(a.to_global(x)) + a.applied) @ a.R
@@ -536,6 +543,15 @@ def solve_system(bodies, external):
                 coupling_block(a, bodies[ib]),
                 out=A[rows, offsets[ib] : offsets[ib + 1]],
             )
+    if joined is not None:  # the shared panels' unknowns: none
+        for ia, shared in enumerate(joined[0]):
+            dofs = (
+                offsets[ia]
+                + (3 * np.flatnonzero(shared)[:, None] + np.arange(3)).ravel()
+            )
+            A[dofs, :] = 0.0
+            A[dofs, dofs] = 1.0
+            rhs[dofs] = 0.0
     x = _solve(A, rhs)
     return [x[offsets[k] : offsets[k + 1]] for k in range(n_bodies)]
 
