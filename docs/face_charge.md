@@ -53,9 +53,11 @@ parts solved together share it, so their colours compare.
   same accuracy faster), many bodies (one dense coupled system: 100 small cubes
   take 7,200 unknowns at level 1 and four times as many at level 2), thin sheets
   (panels sized to the thickness across the whole sheet), and two solved parts a
-  small gap apart, as the mesh is graded toward touching parts only. A solve
-  that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB system
-  and 4.8 GB while it is solved, is refused before it is assembled.
+  small gap apart, as the mesh is graded toward touching parts only. Those small
+  panels also make a thin part converge early: take `level=2`. A 0.5 mm plate
+  under a magnet is within 0.03 % of level 3 there, in 0.5 s instead of 1.7. A
+  solve that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB
+  system and 4.8 GB while it is solved, is refused before it is assembled.
 - **Magnets on a part:** a magnet without susceptibility resting on a solved
   part, or close above it, converges like the rest when it is a cuboid aligned
   with the part: the mesh follows its footprint and the field near it is
