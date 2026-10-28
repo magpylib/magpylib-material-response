@@ -18,10 +18,12 @@ from __future__ import annotations
 import magpylib as magpy
 import numpy as np
 import scipy.sparse
-from scipy.spatial import cKDTree
+from scipy.sparse.csgraph import connected_components
+from scipy.spatial import ConvexHull, cKDTree  # pylint: disable=no-name-in-module
 
 from magpylib_material_response.face_charge._bodies import CONTACT, Body, Part
 from magpylib_material_response.face_charge._mesh import graded_triangles
+from magpylib_material_response.face_charge._parallel import CHUNK, THREADS, run
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
     frames,
@@ -29,7 +31,6 @@ from magpylib_material_response.face_charge._triangle import (
     normal_field_far,
 )
 
-CHUNK = 2_000_000  # kernel evaluations per call, about 0.5 GB
 LAYER = 0.5  # graded layer length, in the mesh's smallest extent: half its thickness
 GRADING = 2.5  # power of the grading toward sharp edges, as the cuboid panels'
 
@@ -79,6 +80,12 @@ class TriBody(Part):
         self.faces = np.asarray(faces, int)
         lo, hi = self.vertices.min(0), self.vertices.max(0)
         self.centre, self.half = (lo + hi) / 2, (hi - lo) / 2  # the bounding box
+        # the thickness: the smallest width across the convex hull, whatever
+        # frame the vertices are given in (a box's smallest side)
+        normals = ConvexHull(self.vertices).equations[:, :3]
+        self.thickness = np.ptp(self.vertices @ normals.T, axis=0).min()
+        self.shells = _shells(self.faces, len(self.vertices))
+        self.shell = None  # each graded triangle's shell
         self.T = self.fr = self.mass = self.G = None
         self.fine = None  # triangles whose load takes a finer rule
         self.contacts = []  # lines (point, direction, normal) to grade toward
@@ -86,10 +93,17 @@ class TriBody(Part):
     def mesh(self):
         """The triangles graded toward the sharp edges; the self block waits
         for ``assemble``, so that the unknowns can be counted first."""
-        ell = LAYER * np.min(2 * self.half)
-        self.T = graded_triangles(
-            self.vertices, self.faces, ell, self.m, GRADING, contacts=self.contacts
-        )
+        ell = LAYER * self.thickness
+        T = [
+            graded_triangles(
+                self.vertices, F, ell, self.m, GRADING, contacts=self.contacts
+            )
+            for F in (
+                self.faces[self.shells == k] for k in range(self.shells.max() + 1)
+            )
+        ]
+        self.T = np.concatenate(T)
+        self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
         self.fr = frames(self.T)
         # mass blocks, exact with the degree-2 rule
         P = np.einsum("qk,fkd->fqd", BARY3, self.T)
@@ -132,25 +146,30 @@ class TriBody(Part):
         G = np.zeros((F, 3, F, 3))
         P, W, B = self.quad()
         nq = P.shape[1]
-        step = max(1, CHUNK // (nq * F))
-        for j0 in range(0, F, step):
+        step = max(1, CHUNK // (nq * F * THREADS))
+
+        def far(j0):  # each chunk its own source columns
             js = np.arange(j0, min(j0 + step, F))
             flux = -normal_field_far(P[js].reshape(-1, 3), self.T, self.fr) / FOUR_PI
-            G[:, :, js, :] = np.einsum(
-                "ajqi,jq,jqb->iajb", flux.reshape(3, len(js), nq, F), W[js], B[js]
-            )
+            WB = W[js][..., None] * B[js]  # (js, nq, 3)
+            G[:, :, js, :] = np.matmul(
+                flux.reshape(3, len(js), nq, F).transpose(1, 3, 0, 2), WB[:, None]
+            ).transpose(1, 2, 0, 3)
+
+        run(far, range(0, F, step), work=F * F * nq)
         I, J = self.near_pairs()
         Pk, Wk, Bk = self.quad(1)
         Q = Pk.shape[1]
-        kstep = max(1, 200_000 // Q)
-        for k0 in range(0, len(I), kstep):
+        kstep = max(1, CHUNK // (Q * THREADS))
+
+        def near(k0):  # each pair once, so each batch its own entries
             i, j = I[k0 : k0 + kstep], J[k0 : k0 + kstep]
-            ii = np.repeat(i, Q)
-            fr = tuple(a[ii] for a in self.fr)
-            En = normal_field(Pk[j].reshape(-1, 3), self.T[ii], fr, pairs=True)
-            G[i, :, j, :] = np.einsum(
-                "akq,kq,kqb->kab", -En.reshape(3, len(i), Q) / FOUR_PI, Wk[j], Bk[j]
-            )
+            fr = tuple(a[i][:, None] for a in self.fr)
+            En = normal_field(Pk[j], self.T[i][:, None], fr, pairs=True)  # (3, k, Q)
+            WB = Wk[j][..., None] * Bk[j]  # (k, Q, 3)
+            G[i, :, j, :] = np.matmul(En.transpose(1, 0, 2), WB) / -FOUR_PI
+
+        run(near, range(0, len(I), kstep), work=len(I) * Q)
         # a triangle's own flux: the principal value is 0, the jump is the mass term
         G[np.arange(F), :, np.arange(F), :] = 0.0
         self.G = G.reshape(3 * F, 3 * F)
@@ -189,9 +208,13 @@ class TriBody(Part):
         return self.to_global(self.fr[0]), size
 
     def border(self):
-        """The net charge of each unknown: the area under its constant density."""
-        e = np.zeros(self.n_dofs)
-        e[0::3] = self.fr[5]
+        """The net charge of each unknown on each closed shell (3F, shells):
+        the area under its constant density. Each shell holds none by itself,
+        a cavity's too: through the material around it ``M = chi H``, so its
+        charge ``Q`` gives ``chi Q`` of M's flux, which B's zero flux makes
+        ``-Q``."""
+        e = np.zeros((self.n_dofs, self.shell.max() + 1))
+        e[3 * np.arange(len(self.T)), self.shell] = self.fr[5]
         return e
 
     # ── loads ──────────────────────────────────────────────────────────────
@@ -284,6 +307,18 @@ _BOX = np.array(
 )
 
 
+def _shells(F, n_vertices):
+    """Each face's closed shell, numbered from 0: the faces joined through
+    shared vertices."""
+    nf = len(F)
+    links = scipy.sparse.coo_matrix(
+        (np.ones(3 * nf), (np.repeat(np.arange(nf), 3), nf + F.ravel())),
+        shape=(nf + n_vertices, nf + n_vertices),
+    )
+    _, label = connected_components(links, directed=False)
+    return np.unique(label[:nf], return_inverse=True)[1]
+
+
 def _triangles(part):
     """A part's surface triangles (n, 3, 3), global: a triangle mesh's own, a
     cuboid's or a fixed cuboid's (an Outline) twelve."""
@@ -296,9 +331,11 @@ def _triangles(part):
 
 
 def _in_plane(T, point, normal, tol):
-    """The triangles of ``T`` lying in the plane through ``point``."""
+    """The triangles of ``T`` lying in the plane through ``point``; never one
+    of no area."""
     n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
-    n /= np.linalg.norm(n, axis=1)[:, None]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        n /= np.linalg.norm(n, axis=1)[:, None]
     return (np.abs(n @ normal) > 1 - 1e-9) & (
         np.abs((T.mean(1) - point) @ normal) < tol
     )
@@ -328,9 +365,12 @@ def _grade_mesh(a, Ta, Tb, tol):
     """Lines in a's face planes where b's coplanar faces end: the edges of
     b's triangles in that plane that only one of them has."""
     normals = np.cross(Ta[:, 1] - Ta[:, 0], Ta[:, 2] - Ta[:, 0])
-    normals /= np.linalg.norm(normals, axis=1)[:, None]
+    length = np.linalg.norm(normals, axis=1)
+    has_area = length > 0  # one of no area, as STL repairs leave, has no plane
     seen = set()
-    for point, normal in zip(Ta[:, 0], normals, strict=True):
+    for point, normal in zip(
+        Ta[has_area, 0], normals[has_area] / length[has_area, None], strict=True
+    ):
         key = (tuple(np.round(normal, 6) + 0.0), round(float(point @ normal) / tol))
         if key in seen:
             continue
@@ -347,10 +387,10 @@ def _grade_mesh(a, Ta, Tb, tol):
             for u, v in ((0, 1), (1, 2), (2, 0)):
                 k = tuple(sorted((tuple(tri[u]), tuple(tri[v]))))
                 edges[k] = edges.get(k, 0) + 1
-        for (p, q), count in edges.items():
+        for (start, end), count in edges.items():
             if count != 1:
                 continue
-            p, q = np.array(p) * tol, np.array(q) * tol
+            p, q = np.array(start) * tol, np.array(end) * tol
             t = q - p
             if np.linalg.norm(t) == 0:
                 continue

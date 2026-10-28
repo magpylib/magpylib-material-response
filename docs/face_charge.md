@@ -48,7 +48,7 @@ parts solved together share it, so their colours compare.
   own uncertainty, 0.64 % at worst, where `apply_demag` at the documented
   settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
   than `apply_demag` in the same time, and it reaches 1 % faster than finite
-  elements on ten of 12 validation cases, up to 34 times (below).
+  elements on every validation case both reach it on, 2 to 108 times (below).
 - **Where it is slower:** a few weak magnets alone (`apply_demag` reaches the
   same accuracy faster), many bodies (one dense coupled system: 100 small cubes
   take 7,200 unknowns at level 1 and four times as many at level 2), thin sheets
@@ -76,7 +76,7 @@ A part exported from CAD as a closed triangle mesh, a magpylib `TriangularMesh`,
 is solved on its surface triangles, with no tetrahedra, as is a `Tetrahedron`.
 Each triangle carries a charge linear across it, and the mesh is graded toward
 its sharp edges, where neighbouring triangles turn by more than 20°: layers over
-half the part's thickness, the smallest side of its bounding box, as the cuboid
+half the part's thickness, its smallest width in any direction, as the cuboid
 panels' layers. The flat faces are merged first, so that the export's long
 diagonals do not cross the layers.
 
@@ -92,17 +92,18 @@ solved = apply_face_charge(magpy.Collection(part, coil), level=2)
 ![The validation's CAD part in a 10 mT field along a direction no symmetry helps with, and the U-core as one closed mesh with its coil, each solved at level 2 and drawn by show() with its graded triangles.](_static/images/face_charge_triangles.png)
 
 - **How well:** the validation's CAD part, a plate with filleted corners and a
-  round hole, reaches 0.69 % of its finite-element reference at level 1 in 2.7
-  s, 0.16 % at level 2 in 5.3 s, and the reference's own 0.07 % from level 3.
-  The U-core as one closed mesh is within its reference's 0.25 % from level 2.
+  round hole, reaches 0.70 % of its finite-element reference at level 1 in 0.30
+  s, 0.16 % at level 2 in 0.75 s, and the reference's own 0.07 % from level 3,
+  in 1.6 s. The U-core as one closed mesh is within its reference's 0.25 % from
+  level 2.
 - **Cuboids stay cuboids:** a box given as triangles needs twice the unknowns of
   its rectangle panels for the same accuracy, and the U-core as three cuboids
-  reaches its accuracy 3 to 4 times faster than as one mesh. Give a part as
-  cuboids where it is made of them: on the eight validation cases both solve,
-  rectangle panels reach 1 % 1.1 to 14 times faster, and a thin sheet needs too
-  many triangles to solve at all.
+  reaches its reference's accuracy 5 times faster than as one mesh. Give a part
+  as cuboids where it is made of them: on the nine validation cases both solve,
+  rectangle panels reach 1 % as fast to 17 times faster, and a thin sheet needs
+  too many triangles to solve at all.
 
-![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 70 ms to 2.2 s on nine cases, triangles 107 ms to 4.4 s on eight, the thin sheet refused as too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
+![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 15 ms to 3.9 s on ten cases, triangles 30 ms to 18 s on nine, the thin sheet refused as too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
 
 - **Touching parts:** faces of two parts in one plane couple exactly, whatever
   their panels, and a triangle mesh is graded toward the outline of whatever
@@ -126,28 +127,29 @@ finite elements are `fem_solve` at orders 2 to 5:
 
 | Case                         | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
 | ---------------------------- | -----------------: | ---------: | -------------------: | -----------: |
-| Three cuboids, turned        |             0.17 s |      2.6 s |               0.17 s |        2.6 s |
-| Magnet beside a soft cube    |             0.12 s |      2.3 s |               0.45 s |        2.3 s |
-| U-core driven by a coil      |             0.25 s |      8.5 s |                  – ¹ |          – ¹ |
-| Flux concentrator            |             0.11 s |     0.83 s |               0.36 s |        3.3 s |
-| Halbach array on back iron   |             0.27 s |      1.5 s |               0.27 s |        6.3 s |
-| Iron cube in 10 mT           |             0.11 s |     0.52 s |               0.27 s |        2.0 s |
-| Magnet on a soft plate       |             0.32 s |      3.1 s |                3.4 s |        5.0 s |
-| Magnet on a plate, sides off |             0.32 s |      2.8 s |                3.4 s |        2.8 s |
-| Thin shielding sheet         |              2.2 s |      2.7 s |                7.6 s |         10 s |
-| CAD part, a triangle mesh    |              2.7 s |       11 s |                 10 s |         21 s |
-| Cuboids of many sizes        |               25 s |      8.3 s |                  – ² |          – ² |
+| Three cuboids, turned        |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
+| Magnet beside a soft cube    |             0.02 s |      2.3 s |               0.09 s |        2.3 s |
+| U-core driven by a coil      |             0.13 s |      8.5 s |                  – ¹ |          – ¹ |
+| Flux concentrator            |             0.03 s |     0.83 s |               0.06 s |        3.3 s |
+| Halbach array on back iron   |             0.06 s |      1.5 s |               0.06 s |        6.3 s |
+| Iron cube in 10 mT           |             0.03 s |     0.52 s |               0.05 s |        2.0 s |
+| Magnet on a soft plate       |             0.09 s |      3.1 s |               0.52 s |        5.0 s |
+| Magnet on a plate, sides off |             0.09 s |      2.8 s |               0.53 s |        2.8 s |
+| Thin shielding sheet         |             0.39 s |      2.7 s |                1.3 s |         10 s |
+| CAD part, a triangle mesh    |             0.30 s |       11 s |                1.6 s |         21 s |
+| Cuboids of many sizes        |              4.0 s |      8.3 s |                  – ² |          – ² |
 | 100 small cubes              |                – ³ |        – ² |                    – |            – |
 
 ¹ The reference, from an independent FEM, is good to 0.25 %. ² The references
 are good to 0.2 % for the cuboids of many sizes and 1.5 % for the 100 cubes. ³
-1.8 % at level 2, in three minutes and 6.6 GB, with `max_unknowns` raised to its
-28,800 unknowns.
+1.8 % at level 2, in 37 s and 7.7 GB, with `max_unknowns` raised to its 28,800
+unknowns.
 
-Face charge reaches 1 % faster than finite elements on ten of these cases, 5 to
-34 times faster on seven. Finite elements catch up where fields close to a
-surface need fine panels (the plate with its sides off, at 0.1 %) and where many
-bodies form one large dense system.
+Face charge reaches 1 % faster than finite elements on all eleven cases both
+reach it on, 17 to 108 times faster on nine. Finite elements come closest where
+fields close to a surface need fine panels (the plate with its sides off, 5
+times at 0.1 %), on the thin sheet (7 times) and where many bodies form one
+large dense system (the cuboids of many sizes, twice).
 
 ## How accurate a solve is
 

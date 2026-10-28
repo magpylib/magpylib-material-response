@@ -15,6 +15,7 @@ from __future__ import annotations
 import itertools
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 
 def polygon_rule(poly):
@@ -56,40 +57,40 @@ def clip_convex(subject, clip):
     return out
 
 
-def _canonical(normals, centres):
-    """Normals turned so that their largest component is positive, and each
-    plane's offset along it."""
-    k = np.abs(normals).argmax(1)
-    n = normals * np.sign(normals[np.arange(len(normals)), k])[:, None]
-    return n, np.einsum("kd,kd->k", n, centres)
-
-
 def coplanar_pairs(Pa, Na, Pb, Nb, tol):
     """Pairs ``(i, j)`` of a's and b's panels (corners ``P``, normals ``N``,
-    global) in one plane, within ``tol``, whose boxes overlap."""
-    na, da = _canonical(Na, Pa.mean(1))
-    nb, db = _canonical(Nb, Pb.mean(1))
-    planes = {}
-    for j, (n, d) in enumerate(
-        zip(np.round(nb, 6) + 0.0, np.floor(db / tol), strict=True)
-    ):
-        planes.setdefault((tuple(n), int(d)), []).append(j)
-    lo_b, hi_b = Pb.min(1), Pb.max(1)
-    lo_a, hi_a = Pa.min(1), Pa.max(1)
-    pairs = []
-    for i, (n, d) in enumerate(
-        zip(np.round(na, 6) + 0.0, np.floor(da / tol), strict=True)
-    ):
-        for dd in (-1, 0, 1):
-            for j in planes.get((tuple(n), int(d) + dd), ()):
-                if (
-                    abs(na[i] @ nb[j]) > 1 - 1e-9
-                    and abs(da[i] - db[j]) < tol
-                    and np.all(lo_a[i] < hi_b[j] + tol)
-                    and np.all(lo_b[j] < hi_a[i] + tol)
-                ):
-                    pairs.append((i, j))
-    return pairs
+    global) in one plane, within ``tol``, whose boxes overlap: as arrays.
+
+    Candidates by distance, each side searching twice its own panels' reach,
+    so that a pair is found by the larger of the two; then the plane, the same
+    whichever way the normals point, and the boxes."""
+    ca, cb = Pa.mean(1), Pb.mean(1)
+    ra = np.linalg.norm(Pa - ca[:, None], axis=-1).max(1)
+    rb = np.linalg.norm(Pb - cb[:, None], axis=-1).max(1)
+    ta, tb = cKDTree(ca), cKDTree(cb)
+    found = [
+        (np.repeat(np.arange(len(ca)), [len(x) for x in hits]), _flat(hits))
+        for hits in [tb.query_ball_point(ca, 2 * ra + tol)]
+    ] + [
+        (_flat(hits), np.repeat(np.arange(len(cb)), [len(x) for x in hits]))
+        for hits in [ta.query_ball_point(cb, 2 * rb + tol)]
+    ]
+    i = np.concatenate([f[0] for f in found])
+    j = np.concatenate([f[1] for f in found])
+    keep = (
+        (np.abs(np.einsum("kd,kd->k", Na[i], Nb[j])) > 1 - 1e-9)
+        & (np.abs(np.einsum("kd,kd->k", cb[j] - ca[i], Na[i])) < tol)
+        & (np.abs(np.einsum("kd,kd->k", ca[i] - cb[j], Nb[j])) < tol)
+        & np.all(Pa.min(1)[i] < Pb.max(1)[j] + tol, axis=1)
+        & np.all(Pb.min(1)[j] < Pa.max(1)[i] + tol, axis=1)
+    )
+    pairs = np.unique(np.stack([i[keep], j[keep]], 1), axis=0)
+    return pairs[:, 0], pairs[:, 1]
+
+
+def _flat(hits):
+    """``query_ball_point``'s lists of indices, end to end."""
+    return np.fromiter(itertools.chain.from_iterable(hits), int)
 
 
 def contact_block(a, b, tol):
@@ -98,7 +99,7 @@ def contact_block(a, b, tol):
     Pa, Na = a.panel_polygons()
     Pb, Nb = b.panel_polygons()
     G = np.zeros((a.n_dofs, b.n_dofs))
-    for i, j in coplanar_pairs(Pa, Na, Pb, Nb, tol):
+    for i, j in zip(*coplanar_pairs(Pa, Na, Pb, Nb, tol), strict=True):
         e1 = Pa[i][1] - Pa[i][0]
         e1 = e1 / np.linalg.norm(e1)
         frame = np.stack([e1, np.cross(Na[i], e1)])  # the plane's axes

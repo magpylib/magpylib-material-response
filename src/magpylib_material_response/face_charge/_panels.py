@@ -26,7 +26,15 @@ import itertools
 
 import numpy as np
 
+from magpylib_material_response.face_charge._parallel import CHUNK, THREADS, run
 from magpylib_material_response.face_charge._rectangle import rectangle_field
+
+
+def contract(w3, wts, phi):
+    """``sum_g w3[a, t, g, n] wts[g, n] phi[g, b]``, as ``(t, a, n, b)``: the
+    test fluxes at the Gauss points into the coupling of each pair of
+    functions, by matrix products."""
+    return np.matmul((w3 * wts).transpose(1, 0, 3, 2), phi)
 
 
 def graded_edges(a, lines, layer, m, g, tol=1e-9):
@@ -127,10 +135,20 @@ class Galerkin:
         self.qc = 0.5 * (p.q1 + p.q2)
         self.mass = (p.area[:, None] * np.array([1.0, 1 / 3, 1 / 3])).ravel()
         self.n_dofs = 3 * p.N
+        self._gauss = {}
 
     def gauss_points(self, nq):
         """Gauss points of every panel: points ``(nq^2, N, 3)``, weights
-        ``(nq^2, N)``, and the local ``s, t`` of each point ``(nq^2,)``."""
+        ``(nq^2, N)``, and the local ``s, t`` of each point ``(nq^2,)``; made
+        once a rule and shared, read-only."""
+        if nq not in self._gauss:
+            rule = self._gauss_points(nq)
+            for x in rule:
+                x.setflags(write=False)
+            self._gauss[nq] = rule
+        return self._gauss[nq]
+
+    def _gauss_points(self, nq):
         p = self.panels
         g, w = np.polynomial.legendre.leggauss(nq)
         S, T = np.meshgrid(g, g, indexing="ij")
@@ -147,34 +165,36 @@ class Galerkin:
         p = self.panels
         G = np.zeros((p.N, 3, p.N, 3))
         pts, wts, S, T = self.gauss_points(self.nq)
-        for fa in range(6):
-            ta = np.flatnonzero(p.face == fa)
-            ka, ia, ja, sa = p.k[ta[0]], p.i[ta[0]], p.j[ta[0]], p.sign[ta[0]]
-            bounds = (
-                p.p1[ta][:, None],
-                p.p2[ta][:, None],
-                p.q1[ta][:, None],
-                p.q2[ta][:, None],
+        faces = [np.flatnonzero(p.face == f) for f in range(6)]
+
+        phi = np.stack([np.ones(len(S)), S, T], 1)
+
+        def block(job):  # test rows ``tc`` against source face fb
+            fb, tc = job
+            ka, ia, ja, sa = p.k[tc[0]], p.i[tc[0]], p.j[tc[0]], p.sign[tc[0]]
+            sb = faces[fb]
+            y = pts[:, sb]  # (gauss, sb, 3)
+            w3 = rectangle_field(
+                y[None, ..., ia],
+                y[None, ..., ja],
+                y[None, ..., ka] - p.w0[tc][:, None, None],
+                p.p1[tc][:, None, None],
+                p.p2[tc][:, None, None],
+                p.q1[tc][:, None, None],
+                p.q2[tc][:, None, None],
+            )  # (3 test densities, tc, gauss, sb)
+            G[np.ix_(tc, [0, 1, 2], sb, [0, 1, 2])] = -sa * contract(
+                w3, wts[:, sb], phi
             )
-            w0 = p.w0[ta][:, None]
+
+        jobs = []
+        for fa in range(6):
             for fb in range(6):
-                if fb == fa:
-                    continue
-                sb = np.flatnonzero(p.face == fb)
-                acc = np.zeros((3, len(ta), len(sb), 3))
-                for g, (s_g, t_g) in enumerate(zip(S, T, strict=True)):
-                    y = pts[g, sb]
-                    w3 = rectangle_field(
-                        y[None, :, ia],
-                        y[None, :, ja],
-                        y[None, :, ka] - w0,
-                        *bounds,
-                    )  # (3 test densities, ta, sb)
-                    phi = np.array([1.0, s_g, t_g])
-                    acc += w3[..., None] * (wts[g, sb][None, None, :, None] * phi)
-                G[np.ix_(ta, [0, 1, 2], sb, [0, 1, 2])] = -sa * acc.transpose(
-                    1, 0, 2, 3
-                )
+                if fb != fa:
+                    step = max(1, CHUNK // (len(faces[fb]) * len(S) * THREADS))
+                    ta = faces[fa]
+                    jobs += [(fb, ta[c : c + step]) for c in range(0, len(ta), step)]
+        run(block, jobs, work=p.N * p.N * len(S))
         return G.reshape(3 * p.N, 3 * p.N)
 
     def load(self, field, nq=4, fine=None, nq_fine=16):

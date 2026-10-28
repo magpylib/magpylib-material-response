@@ -306,6 +306,14 @@ def _part(obj, chi, applied, level):
             obj.dimension, obj.position, R, chi, J0=J0, applied=applied, m=level
         )
     vertices, faces = _closed_surface(obj)
+    directed = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+    if len(np.unique(directed, axis=0)) < len(directed):
+        msg = (
+            f"The faces of {obj!r} are not wound consistently: an edge runs the "
+            "same way in two of them. Create the TriangularMesh with "
+            "reorient_faces=True."
+        )
+        raise ValueError(msg)
     return TriBody(
         vertices, faces, obj.position, R, chi, J0=J0, applied=applied, m=level
     )
@@ -360,8 +368,13 @@ def _global_triangles(src_or_body):
 
 
 def _vertices_on(corners, triangles, tol):
-    """True if a corner of ``corners`` (n, 3, 3) lies on one of ``triangles``."""
+    """True if a corner of ``corners`` (n, 3, 3) lies on one of ``triangles``;
+    one of no area has no plane to lie in."""
     P = np.unique(corners.reshape(-1, 3), axis=0)
+    cross = np.cross(
+        triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
+    )
+    triangles = triangles[np.linalg.norm(cross, axis=1) > 0]
     _, n, _, _, _, _ = frames(triangles)
     a = triangles[:, 0]
     v0, v1 = triangles[:, 1] - a, triangles[:, 2] - a

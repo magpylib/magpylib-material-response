@@ -27,6 +27,9 @@ from the centroid, divided by the triangle's scale ``sqrt(area)``.
     R. D. Graglia (1993) "On the numerical integration of the linear shape
     functions times the 3-D Green's function or its gradient on a plane
     triangle", IEEE Trans. Antennas Propag. 41(10), 1448-1455.
+
+    A. van Oosterom, J. Strackee (1983) "The solid angle of a plane
+    triangle", IEEE Trans. Biomed. Eng. 30(2), 125-126.
 """
 
 from __future__ import annotations
@@ -46,18 +49,28 @@ def frames(V):
     return V.mean(axis=1), n, e1, e2, np.sqrt(area), area
 
 
-def _log_sum(R, l, R02):
-    """``ln(R + l)``, stable where ``l < 0``: there ``R + l = R0^2 / (R - l)``."""
-    pos = l >= 0
-    return np.where(
-        pos,
-        np.log(np.where(pos, R + l, 1.0)),
-        np.log(np.where(pos, 1.0, R02)) - np.log(np.where(pos, 1.0, R - l)),
-    )
+_EDGES = ((0, 1), (1, 2), (2, 0))
 
 
-def field(X, V, fr):
-    """``int phi (x - y) / R^3 dS`` for the densities ``phi = 1, u, v``.
+def _r_plus_l(R, l, R02):
+    """``R + l``, stable where ``l < 0``: there it is ``R0^2 / (R - l)``."""
+    return np.where(l >= 0, R + l, R02 / (R - l))
+
+
+def _dot(a, b):
+    """Dot products along the last axis, broadcast."""
+    return a[..., 0] * b[..., 0] + a[..., 1] * b[..., 1] + a[..., 2] * b[..., 2]
+
+
+def charge_field(X, V, fr, c):
+    """``sum_n sum_k c[n, k] int phi_k (x - y) / R^3 dS`` over the triangles:
+    the field, times ``4 pi``, of charge ``c0 + c1 u + c2 v`` on each, (M, 3).
+
+    In each triangle's plane coordinates ``u, v, w``, with ``m = t x n = (tv,
+    -tu)`` and ``d_e = -P0 m + w n``, every term is a product of scalars, the
+    coefficients taken in per triangle; only the sum leaves the plane, by
+    three matrix products. ``sign(w) sum beta`` is the solid angle, taken as in
+    :func:`normal_field`.
 
     Parameters
     ----------
@@ -67,160 +80,180 @@ def field(X, V, fr):
         Triangles.
     fr : tuple
         Their :func:`frames`.
-
-    Returns
-    -------
-    ndarray, shape (3 densities, M, N, 3)
+    c : ndarray, shape (N, 3)
+        Each triangle's coefficients of ``1, u, v``.
     """
-    cen, n, e1, e2, s, _ = fr
-    x = X[:, None, :]
-    w = np.sum((x - V[None, :, 0]) * n[None], axis=-1)  # (M, N)
-    rho = x - w[..., None] * n[None]  # the projection onto the plane
-    # An observer exactly in the plane, on an edge's extension or at a vertex,
-    # makes edge logarithms infinite: lift it 1e-12 of the triangle off, and
-    # take every distance below from there.
-    w = np.where(w == 0, 1e-12 * s[None], w)
-    x = rho + w[..., None] * n[None]
-    sign_w = np.sign(w)
-    abs_w = np.abs(w)
-    E0 = np.zeros((*w.shape, 3))
-    Phi = np.zeros(w.shape)
-    sum_L = [
-        np.zeros((*w.shape, 3)),
-        np.zeros((*w.shape, 3)),
-    ]  # sum (g.m) L_e for g = e1, e2
+    _, n, e1, e2, s, area = fr
+    a = V[:, 0]
+    ub = _dot(V[:, 1] - a, e1)
+    uc, vc = _dot(V[:, 2] - a, e1), _dot(V[:, 2] - a, e2)
+    corners = ((0.0, 0.0), (ub, 0.0), (uc, vc))
+    u, v, w = (
+        np.matmul(X, np.stack([e1, e2, n]).transpose(0, 2, 1))
+        - np.stack([_dot(a, e1), _dot(a, e2), _dot(a, n)])[:, None]
+    )
+    # lifted off the plane as in `normal_field`
+    w = np.where(w == 0, 1e-12 * s, w)
+    w2, abs_w = w * w, np.abs(w)
+    du = [pu - u for pu, _ in corners]
+    dv = [pv - v for _, pv in corners]
+    R = [np.sqrt(du[k] * du[k] + dv[k] * dv[k] + w2) for k in range(3)]
+    den = R[0] * R[1] * R[2]
+    for (i, j), k in zip(_EDGES, (2, 0, 1), strict=True):
+        den = den + (du[i] * du[j] + dv[i] * dv[j] + w2) * R[k]
+    omega = 2 * np.arctan2(2 * area * abs_w, den)  # sum beta
+    c0, c1, c2 = c[:, 0], c[:, 1], c[:, 2]
+    # E0 = sum m f + n sign(w) sum beta, Phi = sum P0 f - |w| sum beta, and
+    # sum (g.m) L_e with g = c1 e1 + c2 e2, L_e = d_e f - t (R+ - R-)
+    E0u = E0v = Phi = SLu = SLv = SLw = 0.0
     with np.errstate(divide="ignore", invalid="ignore"):
-        for i, j in ((0, 1), (1, 2), (2, 0)):
-            p, q = V[None, :, i], V[None, :, j]
-            t = (q - p) / np.linalg.norm(q - p, axis=-1)[..., None]
-            m = np.cross(t, n[None])
-            l_minus = np.sum((p - x) * t, axis=-1)
-            l_plus = np.sum((q - x) * t, axis=-1)
-            P0 = np.sum((p - rho) * m, axis=-1)
-            R_minus = np.linalg.norm(x - p, axis=-1)
-            R_plus = np.linalg.norm(x - q, axis=-1)
-            R02 = P0**2 + w**2
-            f = _log_sum(R_plus, l_plus, R02) - _log_sum(R_minus, l_minus, R02)
-            beta = np.arctan2(P0 * l_plus, R02 + abs_w * R_plus) - np.arctan2(
-                P0 * l_minus, R02 + abs_w * R_minus
-            )
-            E0 += m * f[..., None] + n[None] * (sign_w * beta)[..., None]
-            Phi += P0 * f - abs_w * beta
-            d = (x - p) + l_minus[..., None] * t  # x minus its foot on the edge line
-            L = d * f[..., None] - t * (R_plus - R_minus)[..., None]
-            for k, e in enumerate((e1, e2)):
-                sum_L[k] += np.sum(e[None] * m, axis=-1)[..., None] * L
-    out = [E0]
-    for k, e in enumerate((e1, e2)):
-        psi_rho = (
-            np.sum((rho - cen[None]) * e[None], axis=-1) / s[None]
-        )  # density at the projection
-        g = e[None] / s[None, :, None]  # gradient of u (or v) in the plane
-        out.append(
-            psi_rho[..., None] * E0 - sum_L[k] / s[None, :, None] - g * Phi[..., None]
-        )
-    return np.stack(out)
+        for i, j in _EDGES:
+            (pu, pv), (qu, qv) = corners[i], corners[j]
+            L = np.sqrt((qu - pu) ** 2 + (qv - pv) ** 2)
+            tu, tv = (qu - pu) / L, (qv - pv) / L
+            l_minus = du[i] * tu + dv[i] * tv
+            l_plus = du[j] * tu + dv[j] * tv
+            P0 = du[i] * tv - dv[i] * tu
+            R02 = P0 * P0 + w2
+            f = np.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+            P0f, dR, gm = P0 * f, R[j] - R[i], c1 * tv - c2 * tu
+            E0u = E0u + tv * f
+            E0v = E0v - tu * f
+            Phi = Phi + P0f
+            SLu = SLu - gm * (P0f * tv + dR * tu)
+            SLv = SLv + gm * (P0f * tu - dR * tv)
+            SLw = SLw + gm * f
+    Phi = Phi - abs_w * omega
+    # the density at the projection, from the centroid (ub + uc, vc) / 3
+    psi = c0 + (c1 * (u - (ub + uc) / 3) + c2 * (v - vc / 3)) / s
+    Fu = psi * E0u - (SLu + c1 * Phi) / s
+    Fv = psi * E0v - (SLv + c2 * Phi) / s
+    Fw = psi * np.sign(w) * omega - w * SLw / s
+    return Fu @ e1 + Fv @ e2 + Fw @ n
 
 
 def normal_field(X, V, fr, pairs=False):
     """``n . int phi (x - y) / R^3 dS``: only the component along each
     triangle's normal, which is all a Galerkin flux needs. With ``n . L_e =
     w f_e`` and ``g`` in the plane it is ``psi(rho) sign(w) sum beta - w sum
-    (g.m) f``.
+    (g.m) f``, ``sign(w) sum beta`` the solid angle, taken as one arctangent
+    (van Oosterom and Strackee 1983, see :func:`normal_field_far`).
 
     ``X`` (M, 3) observers, ``V`` (N, 3, 3) triangles and ``fr`` their
-    :func:`frames`: returns (3 densities, M, N). With ``pairs``, ``X`` and ``V``
-    have the same length and observer ``i`` goes with triangle ``i`` only:
-    returns (3 densities, M).
+    :func:`frames`: returns (3 densities, M, N). With ``pairs``, observers and
+    triangles broadcast against each other instead, ``X`` (..., 3) against
+    ``V`` (..., 3, 3) and ``fr`` likewise: ``X`` (K, Q, 3) against ``V`` (K, 1,
+    3, 3) gives (3, K, Q), each triangle's own terms once for its Q observers.
+
+    In each triangle's plane coordinates ``u, v`` along ``e1, e2`` from its
+    first corner, and ``w``, every term is a product of scalars.
     """
-    cen, n, e1, e2, s, _ = fr
-    if pairs:
-        x, Vb, nb, cb, e1b, e2b, sb = X, V, n, cen, e1, e2, s
-    else:
-        x = X[:, None, :]
-        Vb, nb, cb, e1b, e2b, sb = (
-            V[None],
-            n[None],
-            cen[None],
-            e1[None],
-            e2[None],
-            s[None],
-        )
-    w = np.sum((x - Vb[..., 0, :]) * nb, axis=-1)
-    rho = x - w[..., None] * nb
-    # lifted off the plane as in `field`, every distance taken from there
-    w = np.where(w == 0, 1e-12 * sb, w)
-    x = rho + w[..., None] * nb
-    abs_w = np.abs(w)
-    sum_beta = 0.0
-    sum_mf = [0.0, 0.0]
+    _, n, e1, e2, s, area = fr
+    if not pairs:
+        X = X[:, None]
+        V, n, e1, e2, s, area = (a[None] for a in (V, n, e1, e2, s, area))
+    a = V[..., 0, :]
+    # the corners: (0, 0), (ub, 0), (uc, vc)
+    ub = _dot(V[..., 1, :] - a, e1)
+    uc, vc = _dot(V[..., 2, :] - a, e1), _dot(V[..., 2, :] - a, e2)
+    corners = ((0.0, 0.0), (ub, 0.0), (uc, vc))
+    d = X - a
+    u, v, w = _dot(d, e1), _dot(d, e2), _dot(d, n)
+    # lifted off the plane as in `field`
+    w = np.where(w == 0, 1e-12 * s, w)
+    w2 = w * w
+    du = [pu - u for pu, _ in corners]  # from the observer to each corner
+    dv = [pv - v for _, pv in corners]
+    R = [np.sqrt(du[k] * du[k] + dv[k] * dv[k] + w2) for k in range(3)]
+    den = R[0] * R[1] * R[2]
+    for (i, j), k in zip(_EDGES, (2, 0, 1), strict=True):
+        den = den + (du[i] * du[j] + dv[i] * dv[j] + w2) * R[k]
+    En0 = 2 * np.sign(w) * np.arctan2(2 * area * np.abs(w), den)
+    sum_mu = sum_mv = 0.0  # sum (e1.m) f and sum (e2.m) f, m = t x n = (tv, -tu)
     with np.errstate(divide="ignore", invalid="ignore"):
-        for i, j in ((0, 1), (1, 2), (2, 0)):
-            p, q = Vb[..., i, :], Vb[..., j, :]
-            t = (q - p) / np.linalg.norm(q - p, axis=-1)[..., None]
-            m = np.cross(t, nb)
-            l_minus = np.sum((p - x) * t, axis=-1)
-            l_plus = np.sum((q - x) * t, axis=-1)
-            P0 = np.sum((p - rho) * m, axis=-1)
-            R_minus = np.linalg.norm(x - p, axis=-1)
-            R_plus = np.linalg.norm(x - q, axis=-1)
-            R02 = P0**2 + w**2
-            f = _log_sum(R_plus, l_plus, R02) - _log_sum(R_minus, l_minus, R02)
-            sum_beta = (
-                sum_beta
-                + np.arctan2(P0 * l_plus, R02 + abs_w * R_plus)
-                - np.arctan2(P0 * l_minus, R02 + abs_w * R_minus)
-            )
-            for k, e in enumerate((e1b, e2b)):
-                sum_mf[k] = sum_mf[k] + np.sum(e * m, axis=-1) * f
-    En0 = np.sign(w) * sum_beta
-    out = [En0]
-    for k, e in enumerate((e1b, e2b)):
-        psi_rho = np.sum((rho - cb) * e, axis=-1) / sb
-        out.append(psi_rho * En0 - w * sum_mf[k] / sb)
-    return np.stack(out)
+        for i, j in _EDGES:
+            (pu, pv), (qu, qv) = corners[i], corners[j]
+            L = np.sqrt((qu - pu) ** 2 + (qv - pv) ** 2)
+            tu, tv = (qu - pu) / L, (qv - pv) / L
+            l_minus = du[i] * tu + dv[i] * tv
+            l_plus = du[j] * tu + dv[j] * tv
+            P0 = du[i] * tv - dv[i] * tu
+            R02 = P0 * P0 + w2
+            f = np.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+            sum_mu = sum_mu + tv * f
+            sum_mv = sum_mv - tu * f
+    # the densities at the projection, from the centroid (ub + uc, vc) / 3
+    psi_u, psi_v = (u - (ub + uc) / 3) / s, (v - vc / 3) / s
+    return np.stack([En0, psi_u * En0 - w * sum_mu / s, psi_v * En0 - w * sum_mv / s])
 
 
 def normal_field_far(X, V, fr):
     """:func:`normal_field` for all observers against all triangles, (3, M, N),
     with every dot product one matrix product: ``|x - p|^2 = |x|^2 - 2 x.p +
-    |p|^2``, only logarithms, arctangents and roots per pair. For pairs farther
-    apart than a triangle's size: the cancellation in ``|x - p|^2`` grows as
-    ``(size / distance)^2`` times the rounding."""
-    cen, n, e1, e2, s, _ = fr
+    |p|^2``. For pairs farther apart than a triangle's size: the cancellation in
+    ``|x - p|^2`` grows as ``(|x| / distance)^2`` times the rounding, ``|x|``
+    from the frame's origin, the part's centre.
+
+    Two exact forms halve the work. ``sign(w) sum beta`` is the solid angle,
+    one arctangent from the corners (van Oosterom and Strackee 1983), and
+    accurate far away where the edge terms cancel. ``f_e = ln((S + L) / (S -
+    L))``, ``S = R+ + R-``, ``L`` the edge's length, stable off the edge itself;
+    near it, the few pairs closer than ``S - L < L / 100`` are taken by the
+    stable branch.
+    """
+    cen, n, e1, e2, s, area = fr
+    # every dot product with an observer: -2 x.p for the corners, x.n, and the
+    # densities' x.e / s
+    XD = np.matmul(
+        X,
+        np.stack(
+            [
+                -2 * V[:, 0],
+                -2 * V[:, 1],
+                -2 * V[:, 2],
+                n,
+                e1 / s[:, None],
+                e2 / s[:, None],
+            ]
+        ).transpose(0, 2, 1),
+    )
     xx = np.sum(X * X, axis=1)[:, None]
-    w = X @ n.T - np.sum(V[:, 0] * n, axis=1)[None]
-    w = np.where(w == 0, 1e-12 * s[None], w)
-    abs_w = np.abs(w)
-    R = [
-        np.sqrt(
-            np.maximum(xx - 2 * X @ V[:, k].T + np.sum(V[:, k] ** 2, axis=1)[None], 0.0)
-        )
-        for k in range(3)
-    ]
-    sum_beta = 0.0
+    R2 = [np.maximum(XD[k] + np.sum(V[:, k] ** 2, axis=1) + xx, 0.0) for k in range(3)]
+    R = [np.sqrt(r2) for r2 in R2]
+    w = XD[3] - np.sum(V[:, 0] * n, axis=1)
+    w = np.where(w == 0, 1e-12 * s, w)
+    edge = [V[:, j] - V[:, i] for i, j in _EDGES]
+    L2 = [np.sum(d * d, axis=1) for d in edge]
+    # the corners' r_i.r_j = (R_i^2 + R_j^2 - L_ij^2) / 2, each times the third R
+    den = R[0] * R[1] * R[2]
+    for (i, j), l2, k in zip(_EDGES, L2, (2, 0, 1), strict=True):
+        den = den + 0.5 * (R2[i] + R2[j] - l2) * R[k]
+    out = np.empty((3, len(X), len(V)))
+    out[0] = 2 * np.sign(w) * np.arctan2(2 * area * np.abs(w), den)
     sum_mf = [0.0, 0.0]
     with np.errstate(divide="ignore", invalid="ignore"):
-        for i, j in ((0, 1), (1, 2), (2, 0)):
-            p, q = V[:, i], V[:, j]
-            t = (q - p) / np.linalg.norm(q - p, axis=1)[:, None]
+        for (i, j), d, l2 in zip(_EDGES, edge, L2, strict=True):
+            L = np.sqrt(l2)
+            t = d / L[:, None]
+            S = R[i] + R[j]
+            gap = S - L
+            f = np.log((S + L) / gap)
+            a, b = np.nonzero(gap < 1e-2 * L)
+            if len(a):
+                x, p, q, tb = X[a], V[b, i], V[b, j], t[b]
+                l_minus = np.sum((p - x) * tb, axis=1)
+                l_plus = np.sum((q - x) * tb, axis=1)
+                foot = (x - p) + l_minus[:, None] * tb  # from the edge line
+                R02 = np.sum(foot * foot, axis=1)
+                R_minus = np.linalg.norm(x - p, axis=1)
+                R_plus = np.linalg.norm(x - q, axis=1)
+                f[a, b] = np.log(
+                    _r_plus_l(R_plus, l_plus, R02) / _r_plus_l(R_minus, l_minus, R02)
+                )
             m = np.cross(t, n)
-            xt, xm = X @ t.T, X @ m.T
-            l_minus = np.sum(p * t, axis=1)[None] - xt
-            l_plus = np.sum(q * t, axis=1)[None] - xt
-            P0 = np.sum(p * m, axis=1)[None] - xm
-            R02 = P0**2 + w**2
-            f = _log_sum(R[j], l_plus, R02) - _log_sum(R[i], l_minus, R02)
-            sum_beta = (
-                sum_beta
-                + np.arctan2(P0 * l_plus, R02 + abs_w * R[j])
-                - np.arctan2(P0 * l_minus, R02 + abs_w * R[i])
-            )
             for k, e in enumerate((e1, e2)):
-                sum_mf[k] = sum_mf[k] + np.sum(e * m, axis=1)[None] * f
-    En0 = np.sign(w) * sum_beta
-    out = [En0]
+                sum_mf[k] = sum_mf[k] + (np.sum(e * m, axis=1) / s) * f
     for k, e in enumerate((e1, e2)):
-        psi_rho = (X @ e.T - np.sum(cen * e, axis=1)[None]) / s[None]
-        out.append(psi_rho * En0 - w * sum_mf[k] / s[None])
-    return np.stack(out)
+        psi_rho = XD[4 + k] - np.sum(cen * e, axis=1) / s  # density at the projection
+        out[1 + k] = psi_rho * out[0] - w * sum_mf[k]
+    return out

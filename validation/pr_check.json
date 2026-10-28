@@ -217,8 +217,8 @@
   "FaceCharge": {
    "setting": 1,
    "errors": {
-    "near the part": 0.00685,
-    "60 mm away": 0.002908
+    "near the part": 0.006965,
+    "60 mm away": 0.002869
    },
    "unknowns": 2922
   }

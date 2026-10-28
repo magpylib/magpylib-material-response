@@ -32,13 +32,14 @@ from magpylib_material_response.face_charge._contact import (
 from magpylib_material_response.face_charge._panels import (
     Galerkin,
     Panels,
+    contract,
     graded_edges,
 )
+from magpylib_material_response.face_charge._parallel import CHUNK, THREADS, run
 from magpylib_material_response.face_charge._rectangle import rectangle_field
 
 GRADING = 2.5  # power of the panel grading toward edges and contact lines
 LAYER = 2.0  # graded layer length, in half the body's smallest side
-CHUNK = 2_000_000  # kernel evaluations per call, about 0.5 GB
 # faces closer than this, in a body's largest half-side, touch: their lines
 # grade the mesh, and coplanar panels couple exactly. Lines closer than this
 # are one line. Coordinates from float32 CAD data are good to about 1e-7.
@@ -145,13 +146,14 @@ class Body(Part):
         pts, wts, S, T = self.galerkin.gauss_points(self.galerkin.nq)
         n_gauss, N = wts.shape
         phi = np.stack([np.ones(n_gauss), S, T], 1)
-        values = wts[..., None] * phi[:, None, :]  # (gauss, panel, density)
-        rows = np.repeat(np.arange(n_gauss * N), 3)
-        cols = (3 * np.tile(np.arange(N), n_gauss)[:, None] + np.arange(3)).ravel()
+        # panel by panel, as a TriBody's: a run of panels is a run of points
+        values = wts.T[..., None] * phi[None]  # (panel, gauss, density)
+        rows = np.repeat(np.arange(N * n_gauss), 3)
+        cols = (3 * np.repeat(np.arange(N), n_gauss)[:, None] + np.arange(3)).ravel()
         weights = scipy.sparse.csr_matrix(
-            (values.ravel(), (rows, cols)), shape=(n_gauss * N, self.n_dofs)
+            (values.ravel(), (rows, cols)), shape=(N * n_gauss, self.n_dofs)
         )
-        return self.to_global(pts.reshape(-1, 3)), weights
+        return self.to_global(pts.transpose(1, 0, 2).reshape(-1, 3)), weights
 
     def panel_polygons(self):
         """Each panel's corners (N, 4, 3) and outward normal (N, 3), global."""
@@ -304,49 +306,98 @@ def _clip(poly, x0, x1, y0, y1):
     return poly
 
 
-def cross_block(a, b, tol=CONTACT):
-    """``G_ab`` (a.n_dofs x b.n_dofs): the flux of b's charge through a's test
-    functions."""
-    pa, pb = a.panels, b.panels
-    Rab, cb = _relative(a, b)
-    pts, wts, S, T = b.galerkin.gauss_points(b.galerkin.nq)
-    n_gauss = len(S)
-    y = pts @ Rab.T + cb  # b's Gauss points in a's frame, (gauss, Nb, 3)
-    normal_b = pb.normal @ Rab.T
-    center_b = pb.center @ Rab.T + cb
+def cross_block(a, bs, tol=CONTACT):
+    """``G_ab`` of each cuboid b of ``bs``, side by side (a.n_dofs x the sum of
+    their n_dofs): the flux of b's charge through a's test functions. All of
+    them in one go, so that many small bodies take as few calls as two large."""
+    pa = a.panels
+    y, wts, normal_b, center_b, corners_b, blocks = [], [], [], [], [], []
+    for b in bs:
+        Rab, cb = _relative(a, b)
+        pts, w, S, T = b.galerkin.gauss_points(b.galerkin.nq)
+        y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
+        wts.append(w)
+        normal_b.append(b.panels.normal @ Rab.T)
+        center_b.append(b.panels.center @ Rab.T + cb)
+        corners_b.append(b.panels.corners() @ Rab.T + cb)  # (Nb, 4, 3)
+        blocks.append((b, Rab, cb))
+    y, wts = np.concatenate(y, 1), np.concatenate(wts, 1)
+    normal_b, center_b = np.concatenate(normal_b), np.concatenate(center_b)
+    corners_b = np.concatenate(corners_b)
+    lo_b, hi_b = corners_b.min(1), corners_b.max(1)
+    n_gauss, Nb = wts.shape
     phi = np.stack([np.ones(n_gauss), S, T], 1)
-    G = np.zeros((pa.N, 3, pb.N, 3))
+    G = np.zeros((pa.N, 3, Nb, 3))
     scale = np.max(a.half)
+    jobs = []
     for fa in range(6):
         ta = np.flatnonzero(pa.face == fa)
-        ka, ia, ja, sa = pa.k[ta[0]], pa.i[ta[0]], pa.j[ta[0]], pa.sign[ta[0]]
-        w0 = pa.w0[ta[0]]
-        # b's panels lying in this face plane are handled exactly, below
+        ia, ja, ka, w0 = pa.i[ta[0]], pa.j[ta[0]], pa.k[ta[0]], pa.w0[ta[0]]
+        # b's panels lying in this face plane are handled exactly, below; of
+        # them, those overlapping the face get a contact term
         coplanar = (np.abs(normal_b[:, ka]) > 1 - 1e-9) & (
             np.abs(center_b[:, ka] - w0) < tol * scale
         )
+        touching = (
+            coplanar
+            & (lo_b[:, ia] < pa.p2[ta].max())
+            & (hi_b[:, ia] > pa.p1[ta].min())
+            & (lo_b[:, ja] < pa.q2[ta].max())
+            & (hi_b[:, ja] > pa.q1[ta].min())
+        )
         src = np.flatnonzero(~coplanar)
         if len(src):
-            yy = y[:, src]
-            step = max(1, CHUNK // (n_gauss * len(src)))
-            for c0 in range(0, len(ta), step):
-                tc = ta[c0 : c0 + step]
-                w3 = rectangle_field(
-                    yy[None, ..., ia],
-                    yy[None, ..., ja],
-                    yy[None, ..., ka] - w0,
-                    pa.p1[tc][:, None, None],
-                    pa.p2[tc][:, None, None],
-                    pa.q1[tc][:, None, None],
-                    pa.q2[tc][:, None, None],
-                )  # (3 test densities, tc, gauss, src)
-                block = np.einsum("atgn,gn,gb->tanb", w3, wts[:, src], phi)
-                G[np.ix_(tc, [0, 1, 2], src, [0, 1, 2])] = -sa * block
-        if coplanar.any():
-            corners_b = pb.corners() @ Rab.T + cb  # in a's frame
-            for j in np.flatnonzero(coplanar):
-                _add_contact(G, pa, pb, ta, j, corners_b[j], (ia, ja, ka, w0), Rab, cb)
-    return G.reshape(a.n_dofs, b.n_dofs)
+            # chunks that all threads together hold in CHUNK, and enough of
+            # them across the six faces to keep every thread busy
+            step = max(
+                1,
+                min(
+                    CHUNK // (n_gauss * len(src) * THREADS),
+                    -(-len(ta) * 6 // THREADS),
+                ),
+            )
+            jobs += [(ta[c0 : c0 + step], src) for c0 in range(0, len(ta), step)]
+        if touching.any():
+            jobs.append((ta, touching))
+
+    def job(item):  # each job its own entries of G
+        tc, cols = item
+        ia, ja, ka = pa.i[tc[0]], pa.j[tc[0]], pa.k[tc[0]]
+        sa, w0 = pa.sign[tc[0]], pa.w0[tc[0]]
+        if cols.dtype == bool:  # coplanar panels: the exact contact term
+            first = 0
+            for b, Rab, cb in blocks:
+                last = first + b.panels.N
+                for j in np.flatnonzero(cols[first:last]):
+                    _add_contact(
+                        G[:, :, first:last],
+                        pa,
+                        b.panels,
+                        tc,
+                        j,
+                        corners_b[first + j],
+                        (ia, ja, ka, w0),
+                        Rab,
+                        cb,
+                    )
+                first = last
+            return
+        yy = y[:, cols]
+        w3 = rectangle_field(
+            yy[None, ..., ia],
+            yy[None, ..., ja],
+            yy[None, ..., ka] - w0,
+            pa.p1[tc][:, None, None],
+            pa.p2[tc][:, None, None],
+            pa.q1[tc][:, None, None],
+            pa.q2[tc][:, None, None],
+        )  # (3 test densities, tc, gauss, cols)
+        G[np.ix_(tc, [0, 1, 2], cols, [0, 1, 2])] = -sa * contract(
+            w3, wts[:, cols], phi
+        )
+
+    run(job, jobs, work=pa.N * Nb * n_gauss)
+    return G.reshape(a.n_dofs, 3 * Nb)
 
 
 def _add_contact(G, pa, pb, ta, j, corners, plane, Rab, cb):
@@ -396,15 +447,21 @@ def coupling_block(a, b):
     holds for bodies apart by about their panels' size or more, and where
     faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):
-        return cross_block(a, b)
+        return cross_block(a, [b])
     tol = CONTACT * max(np.max(a.half), np.max(b.half))
     points, weights = b.sources()
     y = (points - a.position) @ a.R  # b's points in a's frame
     G = contact_block(a, b, tol)
-    step = max(1, CHUNK // max(a.n_dofs, 1) // 8)
-    for p0 in range(0, len(y), step):
-        flux = a.test_flux(y[p0 : p0 + step], tol)  # (a.n_dofs, chunk)
-        G += (weights[p0 : p0 + step].T @ flux.T).T
+    per_panel = len(y) // (b.n_dofs // 3)  # points of one source panel
+    panels = max(1, CHUNK // (max(a.n_dofs, 1) * 8 * per_panel * THREADS))
+
+    def chunk(p0):  # whole source panels: their own columns of G
+        rows = slice(p0 * per_panel, (p0 + panels) * per_panel)
+        cols = slice(3 * p0, 3 * (p0 + panels))
+        flux = a.test_flux(y[rows], tol)  # (a.n_dofs, points)
+        G[:, cols] += (weights[rows, cols].T @ flux.T).T
+
+    run(chunk, range(0, b.n_dofs // 3, panels), work=a.n_dofs * len(y))
     return G
 
 
@@ -418,9 +475,12 @@ def solve_system(bodies, external):
     n_bodies = len(bodies)
     offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
     n = offsets[-1]
+    # a net-charge row each: a cuboid's, or each closed shell of a mesh's
+    borders = [b.border().reshape(b.n_dofs, -1) for b in bodies]
+    fixes = n + np.cumsum([0] + [e.shape[1] for e in borders])
     # column-major, which the in-place factorization below needs
-    A = np.zeros((n + n_bodies, n + n_bodies), order="F")
-    rhs = np.zeros(n + n_bodies)
+    A = np.zeros((fixes[-1], fixes[-1]), order="F")
+    rhs = np.zeros(fixes[-1])
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
         # each self block is assembled here and freed once copied, so that only
@@ -429,9 +489,9 @@ def solve_system(bodies, external):
         np.negative(a.G, out=A[rows, rows])
         a.G = None
         a.add_mass(A[rows, rows], 1 / a.chi + 0.5)
-        border = a.border()
-        A[rows, n + ia] = border
-        A[n + ia, rows] = border / border.sum()
+        border, fix = borders[ia], slice(fixes[ia], fixes[ia + 1])
+        A[rows, fix] = border
+        A[fix, rows] = (border / border.sum(0)).T
 
         def field(x, a=a):
             return (external(a.to_global(x)) + a.applied) @ a.R
@@ -439,11 +499,28 @@ def solve_system(bodies, external):
         rhs[rows] += a.load(field)
         if a.J0 is not None:
             rhs[rows] += a.load_remanence() / a.chi
+
+    for ia, a in enumerate(bodies):
+        rows = slice(offsets[ia], offsets[ia + 1])
+        cuboids, others = [], []
         for ib, b in enumerate(bodies):
             if ib != ia:
+                both = isinstance(a, Body) and isinstance(b, Body)
+                (cuboids if both else others).append(ib)
+        if cuboids:  # a against every other cuboid at once
+            G, first = cross_block(a, [bodies[ib] for ib in cuboids]), 0
+            for ib in cuboids:
+                last = first + bodies[ib].n_dofs
                 np.negative(
-                    coupling_block(a, b), out=A[rows, offsets[ib] : offsets[ib + 1]]
+                    G[:, first:last], out=A[rows, offsets[ib] : offsets[ib + 1]]
                 )
+                first = last
+            del G
+        for ib in others:
+            np.negative(
+                coupling_block(a, bodies[ib]),
+                out=A[rows, offsets[ib] : offsets[ib + 1]],
+            )
     # in place: factorizing a copy of this dense system peaked at three times
     # its size
     x = scipy.linalg.solve(A, rhs, overwrite_a=True, check_finite=False)
