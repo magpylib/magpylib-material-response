@@ -506,6 +506,17 @@ def test_curved_parts_are_faceted_closed_outward_at_their_volume(src):
     assert volume == pytest.approx(exact, rel=1e-12)  # positive: outward
 
 
+def test_coaxial_parts_share_their_facets():
+    """A cylinder in a tube that touches it: the tube's inner corners are the
+    cylinder's, wherever the tube's angles start, so the two do not overlap."""
+    core, _ = _closed_surface(magpy.magnet.Cylinder(dimension=(2, 2)), level=2)
+    tube, _ = _closed_surface(
+        magpy.magnet.CylinderSegment(dimension=(1, 1.5, 2, -45, 315)), level=2
+    )
+    rim = core[np.abs(np.linalg.norm(core[:, :2], axis=1)) > 0.5]
+    assert {tuple(v) for v in np.round(rim, 9)} <= {tuple(v) for v in np.round(tube, 9)}
+
+
 def test_soft_sphere_gives_the_exact_dipole():
     a, chi, B0 = 0.005, 1000.0, 0.01
     sphere = magpy.magnet.Sphere(diameter=2 * a, polarization=(0, 0, 0))

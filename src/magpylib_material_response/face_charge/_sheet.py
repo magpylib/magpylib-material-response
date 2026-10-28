@@ -3,19 +3,18 @@ surface charge that varies linearly across each face."""
 
 from __future__ import annotations
 
+import itertools
+
 import magpylib as magpy
 import numpy as np
 from magpylib._src.exceptions import MagpylibBadUserInput
 from magpylib._src.style import TriangularMeshStyle
+from scipy.spatial import cKDTree  # pylint: disable=no-name-in-module
 from scipy.spatial.transform import Rotation
 
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import charge_field, frames
-
-# degrees between two faces' normals within which they are one smooth surface,
-# as the mesher's sharp edges are those above it
-SMOOTH = 20.0
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 
@@ -172,16 +171,17 @@ class ChargeSheet(magpy.misc.CustomSource):
     @property
     def jump_indicator(self):
         """The largest jump of the charge between panels meeting at a point of
-        a smooth surface, a flat face or a curved one cut into facets, as a
-        share of the peak charge, weighted by the panel's size: times
-        ``sqrt(panel area / sheet area)``.
+        a flat face, as a share of the peak charge, weighted by the panel's
+        size: times ``sqrt(panel area / sheet area)``.
 
-        On a smooth surface of a uniform body the charge is continuous, so the jump
+        On a flat face of a uniform body the charge is continuous, so the jump
         is discretization error, free to read off a solved sheet. Unweighted it
         stays large in the first panels at a soft body's edges, where the
         charge is singular and the graded panels tiny; weighted, it points
         where the panels are too coarse for the field around the body, and
-        falls as the mesh is refined.
+        falls as the mesh is refined. It leaves out how far a curved part's
+        flat facets are from its true surface: that error falls with the
+        level, which sets the facets, not with ``refine``.
         """
         return float(self.panel_indicator().max(initial=0.0))
 
@@ -221,44 +221,35 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     def _corner_groups(self):
         """Each corner's group, face and charge: first the faces' corners
-        (3m), then the points where a face's edge passes through a vertex, as
-        next to a triangle refinement split, at the charge halfway along that
-        edge. A group is the corners at one vertex on one smooth surface, their
-        faces' normals within ``SMOOTH`` degrees: across a flat face, or across
-        the facets of a curved one."""
+        (3m), then every vertex inside another face's edge, a T-junction of
+        the graded mesh or of a refinement split, at that edge's charge there.
+        A group is the corners at one vertex in one face plane: across a flat
+        face the charge is continuous, so what differs there is discretization.
+        Across a curved part's facets it jumps by the magnetization's change of
+        normal, which no refinement removes."""
         P, F, q = self._vertices, self._faces, self._q
-        span = np.ptp(P, axis=0).max() or 1.0
-
-        def key(X):  # as from_triangles merges corners
-            return np.round(X / (1e-9 * span)).astype(np.int64)
-
-        middle = (P[F] + P[np.roll(F, -1, axis=1)]) / 2  # edge k: corner k to k + 1
-        inv = np.unique(
-            np.concatenate([key(P), key(middle.reshape(-1, 3))]),
-            axis=0,
-            return_inverse=True,
-        )[1].ravel()
-        vertex_at = np.full(inv.max() + 1, -1)
-        vertex_at[inv[: len(P)]] = np.arange(len(P))
-        on_edge = vertex_at[inv[len(P) :]]
-        hanging = np.flatnonzero(on_edge >= 0)
-        point = np.concatenate([F.ravel(), on_edge[hanging]])
-        face = np.concatenate([np.repeat(np.arange(len(F)), 3), hanging // 3])
+        a, b = P[F].reshape(-1, 3), P[np.roll(F, -1, axis=1)].reshape(-1, 3)
+        d = b - a  # edge k of face k // 3, from its corner k % 3 to the next
+        length = np.linalg.norm(d, axis=1)
+        tol = 1e-8 * (np.ptp(P, axis=0).max() or 1.0)
+        near = cKDTree(P).query_ball_point((a + b) / 2, length / 2 + tol)
+        edge = np.repeat(np.arange(len(near)), [len(c) for c in near])
+        vertex = np.fromiter(itertools.chain.from_iterable(near), int, len(edge))
+        t = np.einsum("kd,kd->k", P[vertex] - a[edge], d[edge]) / length[edge] ** 2
+        off = np.linalg.norm(P[vertex] - a[edge] - t[:, None] * d[edge], axis=1)
+        along = t * length[edge]
+        inside = (off <= tol) & (along > tol) & (along < length[edge] - tol)
+        edge, vertex, t = edge[inside], vertex[inside], t[inside]
+        start, end = q.ravel(), np.roll(q, -1, axis=1).ravel()
+        point = np.concatenate([F.ravel(), vertex])
+        face = np.concatenate([np.repeat(np.arange(len(F)), 3), edge // 3])
         charge = np.concatenate(
-            [q.ravel(), ((q + np.roll(q, -1, axis=1)) / 2).ravel()[hanging]]
+            [q.ravel(), start[edge] + t * (end[edge] - start[edge])]
         )
-        normal = self._frames[1][face]
-        group = np.empty(len(point), int)
-        cos, label = np.cos(np.radians(SMOOTH)), 0
-        order = np.argsort(point, kind="stable")
-        for at_point in np.split(order, np.flatnonzero(np.diff(point[order])) + 1):
-            left = at_point
-            while left.size:  # those within SMOOTH of the first left, together
-                same = normal[left] @ normal[left[0]] >= cos
-                group[left[same]] = label
-                label += 1
-                left = left[~same]
-        return group, face, charge
+        key = np.concatenate(
+            [point[:, None], np.round(self._frames[1][face], 6)], axis=1
+        )
+        return np.unique(key, axis=0, return_inverse=True)[1].ravel(), face, charge
 
     # ── field ─────────────────────────────────────────────────────────────
     def _field(self, field, observers):
@@ -352,8 +343,8 @@ class ChargeSheet(magpy.misc.CustomSource):
         return traces
 
     def _smoothed(self):
-        """Corner charges (3m,) averaged, by face area, over the corners at
-        one vertex on one smooth surface."""
+        """Corner charges (3m,) averaged, by face area, over the corners that
+        share a vertex and a face plane."""
         group, face, _ = self._corner_groups()
         inv, w = group[: self._q.size], self._frames[5][face[: self._q.size]]
         total, weight = np.bincount(inv, w * self._q.ravel()), np.bincount(inv, w)

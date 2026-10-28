@@ -42,7 +42,8 @@ MARK = 0.5  # a refinement round splits panels above this share of the largest j
 # are widened to keep the true volume, which matters more than more facets: on
 # a soft cylinder at level 3, 24 facets widened are 0.02 % off 50 mm away, 96
 # not widened 0.16 %. A sphere, with no edge to grade toward, refines by them
-# alone: 0.26, 0.06 and 0.016 % off 1 mm away with 320, 1280 and 5120 facets
+# alone: 0.20, 0.12 and 0.047 % off 1 mm away with 320, 1280 and 3380 facets at
+# levels 1, 3 and 5
 FACETS = 12
 POINTS_PER_CALL = (
     5_000  # external-field points per magpylib call: a coil at many points takes GBs
@@ -228,7 +229,8 @@ def apply_face_charge(
         if unknowns > max_unknowns:
             lower = "Lower the level, raise" if level > 1 else "Raise"
             msg = (
-                f"level={level} needs {unknowns:,} unknowns, more than "
+                f"{f'level={level}' if chosen else 'Even level 1'} needs "
+                f"{unknowns:,} unknowns, more than "
                 f"max_unknowns={max_unknowns:,}: the dense system would take about "
                 f"{8 * unknowns**2 / 1e9:.1f} GB. {lower} max_unknowns, or mesh the "
                 "parts for apply_demag."
@@ -419,15 +421,32 @@ def _closed_surface(src, level=3):
 
 def _turned(r1, r2, h, phi1, phi2, n):
     """A cylinder segment's surface (radii, height, angles in degrees) as
-    vertices and outward faces: its arcs cut into straight facets, about ``n``
-    per turn, their radii widened by ``sqrt(step / sin(step))`` so that the
-    cross-section keeps its area. ``r1 = 0`` closes it on the axis; a full
-    turn has no end faces."""
+    vertices and outward faces. Its arcs are cut at the multiples of ``360 /
+    n`` degrees, the same in every part's frame, so that coaxial parts' facets
+    meet instead of overlapping, and at its ends. Each vertex is widened so
+    that every facet's sector keeps its area, and the part its volume: by
+    ``sqrt(step / sin(step))``, at an end by what its facet needs. ``r1 = 0``
+    closes it on the axis; a full turn has no end faces."""
+    step = 2 * np.pi / n
     full = np.isclose(phi2 - phi1, 360.0)
-    k = n if full else max(1, int(np.ceil(n * (phi2 - phi1) / 360.0 - 1e-9)))
-    step = np.radians(phi2 - phi1) / k
-    angles = np.radians(phi1) + step * np.arange(k if full else k + 1)
-    m, widen = len(angles), np.sqrt(step / np.sin(step))
+    if full:
+        angles = step * np.arange(n)
+    else:
+        lo, hi = np.radians(phi1), np.radians(phi2)
+        grid = step * np.arange(np.ceil(lo / step), np.floor(hi / step) + 1)
+        # none within a quarter step of an end, which would leave a sliver
+        grid = grid[(grid > lo + step / 4) & (grid < hi - step / 4)]
+        angles = np.concatenate([[lo], grid, [hi]])
+    m = len(angles)
+    k = m if full else m - 1  # facets
+    widen = np.full(m, np.sqrt(step / np.sin(step)))
+    if not full:
+        gap = np.diff(angles)
+        if k == 1:
+            widen[:] = np.sqrt(gap[0] / np.sin(gap[0]))
+        else:  # the end facet's sector: widen[end] widen[next] sin(gap) = gap
+            widen[0] = gap[0] / (widen[1] * np.sin(gap[0]))
+            widen[-1] = gap[-1] / (widen[-2] * np.sin(gap[-1]))
 
     def ring(r, z):
         return np.c_[
