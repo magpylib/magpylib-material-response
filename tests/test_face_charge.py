@@ -792,6 +792,18 @@ def test_currents_take_no_susceptibility():
     assert np.isfinite(solved.getB((0, 0, 0.02))).all()
 
 
+def test_a_flat_magnet_beside_a_meshed_part_drives_it():
+    """A misc.Triangle has no hull for the contact checks: its triangle stands
+    for it."""
+    disc = magpy.magnet.Cylinder(dimension=(0.01, 0.01), polarization=(0, 0, 0))
+    disc.susceptibility = 100
+    flat = magpy.misc.Triangle(
+        polarization=(0, 0, 1), vertices=[(0.02, 0, 0), (0.03, 0, 0), (0.02, 0.01, 0)]
+    )
+    solved = apply_face_charge(magpy.Collection(disc, flat), level=1)
+    assert np.isfinite(solved.getB((0, 0, 0.02))).all()
+
+
 @pytest.mark.parametrize(
     ("level", "refine", "error"),
     [(0, 0, ValueError), (2, -1, ValueError), (2.5, 0, TypeError), (2, 1.0, TypeError)],

@@ -491,6 +491,12 @@ def add_triangle_contact_lines(bodies, outlines=()):
     a cuboid toward the extent of a touching mesh's triangles in its face."""
     surfaces = [_triangles(b) for b in bodies]
     others = [(_triangles(o), o) for o in outlines]
+    # each part's box: parts apart are not searched, a sphere's 1,280 face
+    # planes against each other part's triangles
+    boxes = [
+        (T.reshape(-1, 3).min(0), T.reshape(-1, 3).max(0))
+        for T in [*surfaces, *(T for T, _ in others)]
+    ]
     for ia, a in enumerate(bodies):
         for ib, (Tb, b) in enumerate(
             [(surfaces[k], bodies[k]) for k in range(len(bodies))] + others
@@ -498,6 +504,9 @@ def add_triangle_contact_lines(bodies, outlines=()):
             if ib == ia or not (isinstance(a, TriBody) or isinstance(b, TriBody)):
                 continue
             tol = contact_tol(a, b)
+            (lo_a, hi_a), (lo_b, hi_b) = boxes[ia], boxes[ib]
+            if np.any(lo_a > hi_b + tol) or np.any(lo_b > hi_a + tol):
+                continue
             if isinstance(a, TriBody):
                 _grade_mesh(a, surfaces[ia], Tb, tol)
             elif isinstance(a, Body):

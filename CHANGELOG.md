@@ -39,9 +39,9 @@ and this project adheres to
   [#101](https://github.com/magpylib/magpylib-material-response/pull/101),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
 - `face_charge.apply_face_charge` solves cuboids, cylinders, cylinder segments,
-  spheres and closed triangle meshes, such as CAD exports, with a uniform,
-  isotropic susceptibility on their surfaces, without a volume mesh, coupled to
-  each other and to every other source; each solved part becomes a
+  spheres, tetrahedra and closed triangle meshes, such as CAD exports, with a
+  uniform, isotropic susceptibility on their surfaces, without a volume mesh,
+  coupled to each other and to every other source; each solved part becomes a
   `ChargeSheet`, an ordinary magpylib source. On the six documented examples it
   lands within each reference's uncertainty, 0.64 % at worst. `refine` splits
   the panels where the charge jumps most, and each sheet reports

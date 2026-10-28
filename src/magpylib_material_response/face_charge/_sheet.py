@@ -13,6 +13,10 @@ from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import charge_field, frames
 
+# degrees between two faces' normals within which they are one smooth surface,
+# as the mesher's sharp edges are those above it
+SMOOTH = 20.0
+
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 
 
@@ -167,11 +171,12 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @property
     def jump_indicator(self):
-        """The largest jump of the charge between panels meeting at a corner of
-        a flat face, as a share of the peak charge, weighted by the panel's
-        size: times ``sqrt(panel area / sheet area)``.
+        """The largest jump of the charge between panels meeting at a point of
+        a smooth surface, a flat face or a curved one cut into facets, as a
+        share of the peak charge, weighted by the panel's size: times
+        ``sqrt(panel area / sheet area)``.
 
-        On a flat face of a uniform body the charge is continuous, so the jump
+        On a smooth surface of a uniform body the charge is continuous, so the jump
         is discretization error, free to read off a solved sheet. Unweighted it
         stays large in the first panels at a soft body's edges, where the
         charge is singular and the graded panels tiny; weighted, it points
@@ -192,38 +197,68 @@ class ChargeSheet(magpy.misc.CustomSource):
         """Per panel, the largest jump of the charge at its corners times the
         square root of its area, in A: comparable between sheets. Also the
         peak charge and the sheet's area."""
-        inv, area = self._corner_groups()
-        q = self._q.ravel()
+        group, face, q = self._corner_groups()
+        area = self._frames[5]
         panel = (
             np.arange(len(self._faces))
             if self._panels is None
             else np.unique(self._panels, return_inverse=True)[1]
         )
-        peak = np.abs(q).max(initial=0.0)
+        peak = np.abs(self._q).max(initial=0.0)
         if not peak:
-            return np.zeros(panel.max(initial=-1) + 1), 0.0, float(area.sum() / 3)
-        hi = np.full(inv.max() + 1, -np.inf)
-        lo = np.full(inv.max() + 1, np.inf)
-        np.maximum.at(hi, inv, q)
-        np.minimum.at(lo, inv, q)
-        per_face = (hi - lo)[inv].reshape(-1, 3).max(1)
+            return np.zeros(panel.max(initial=-1) + 1), 0.0, float(area.sum())
+        hi = np.full(group.max() + 1, -np.inf)
+        lo = np.full(group.max() + 1, np.inf)
+        np.maximum.at(hi, group, q)
+        np.minimum.at(lo, group, q)
+        per_face = np.zeros(len(self._faces))
+        np.maximum.at(per_face, face, (hi - lo)[group])
         jump = np.zeros(panel.max() + 1)
         size = np.zeros(panel.max() + 1)
         np.maximum.at(jump, panel, per_face)
-        np.add.at(size, panel, area[::3])
+        np.add.at(size, panel, area)
         return jump * np.sqrt(size), peak, float(size.sum())
 
     def _corner_groups(self):
-        """The group of each face corner (3m,), corners sharing a vertex and a
-        face plane, and each corner's face area (3m,)."""
-        _, n, _, _, _, area = self._frames
-        n = np.round(n, 6)
-        key = np.concatenate(
-            [self._faces.reshape(-1, 1), np.repeat(n, 3, axis=0)], axis=1
+        """Each corner's group, face and charge: first the faces' corners
+        (3m), then the points where a face's edge passes through a vertex, as
+        next to a triangle refinement split, at the charge halfway along that
+        edge. A group is the corners at one vertex on one smooth surface, their
+        faces' normals within ``SMOOTH`` degrees: across a flat face, or across
+        the facets of a curved one."""
+        P, F, q = self._vertices, self._faces, self._q
+        span = np.ptp(P, axis=0).max() or 1.0
+
+        def key(X):  # as from_triangles merges corners
+            return np.round(X / (1e-9 * span)).astype(np.int64)
+
+        middle = (P[F] + P[np.roll(F, -1, axis=1)]) / 2  # edge k: corner k to k + 1
+        inv = np.unique(
+            np.concatenate([key(P), key(middle.reshape(-1, 3))]),
+            axis=0,
+            return_inverse=True,
+        )[1].ravel()
+        vertex_at = np.full(inv.max() + 1, -1)
+        vertex_at[inv[: len(P)]] = np.arange(len(P))
+        on_edge = vertex_at[inv[len(P) :]]
+        hanging = np.flatnonzero(on_edge >= 0)
+        point = np.concatenate([F.ravel(), on_edge[hanging]])
+        face = np.concatenate([np.repeat(np.arange(len(F)), 3), hanging // 3])
+        charge = np.concatenate(
+            [q.ravel(), ((q + np.roll(q, -1, axis=1)) / 2).ravel()[hanging]]
         )
-        return np.unique(key, axis=0, return_inverse=True)[1].ravel(), np.repeat(
-            area, 3
-        )
+        normal = self._frames[1][face]
+        group = np.empty(len(point), int)
+        cos, label = np.cos(np.radians(SMOOTH)), 0
+        order = np.argsort(point, kind="stable")
+        for at_point in np.split(order, np.flatnonzero(np.diff(point[order])) + 1):
+            left = at_point
+            while left.size:  # those within SMOOTH of the first left, together
+                same = normal[left] @ normal[left[0]] >= cos
+                group[left[same]] = label
+                label += 1
+                left = left[~same]
+        return group, face, charge
 
     # ── field ─────────────────────────────────────────────────────────────
     def _field(self, field, observers):
@@ -317,10 +352,13 @@ class ChargeSheet(magpy.misc.CustomSource):
         return traces
 
     def _smoothed(self):
-        """Corner charges (3m,) averaged, by face area, over the corners that
-        share a vertex and a face plane."""
-        inv, w = self._corner_groups()
-        return (np.bincount(inv, w * self._q.ravel()) / np.bincount(inv, w))[inv]
+        """Corner charges (3m,) averaged, by face area, over the corners at
+        one vertex on one smooth surface."""
+        group, face, _ = self._corner_groups()
+        inv, w = group[: self._q.size], self._frames[5][face[: self._q.size]]
+        total, weight = np.bincount(inv, w * self._q.ravel()), np.bincount(inv, w)
+        # a group of points on edges alone has no weight here
+        return np.divide(total, weight, out=np.zeros_like(total), where=weight > 0)[inv]
 
     def _edges(self):
         """Vertex pairs (k, 2) of the edges between surface elements: an edge

@@ -1,4 +1,4 @@
-"""Solve a magpylib collection's cuboids and triangle meshes by their face charges."""
+"""Solve a magpylib collection's linear magnets by the charge on their faces."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ POINTS_PER_CALL = (
 def apply_face_charge(
     collection, *, level=None, refine=0, max_unknowns=20_000, min_log_time=None
 ):
-    """Solve the collection's linear cuboids and triangle meshes on their surfaces.
+    """Solve the collection's linear magnets on their surfaces.
 
     A part with a uniform, isotropic susceptibility (on itself or a parent
     collection) and a uniform remanence has no magnetic charge inside: its whole
@@ -83,11 +83,12 @@ def apply_face_charge(
         Rounds of refinement. Each splits the panels whose charge jumps most
         (see :attr:`ChargeSheet.jump_indicator`), over all solved parts, and
         solves again: a cuboid's panels in two along both axes, a triangle into
-        four. A round roughly doubles the unknowns. Two rounds from level 3
-        resolve the field under a magnet close to a soft face better than
-        uniform panels with four times the unknowns; one round from level 2
-        puts the field outside a thin tube shielding a magnet within 1.5 %,
-        where level 3 alone is 9 % off.
+        four. A round adds unknowns where the charge jumps: it doubles them on
+        a cuboid under a magnet, adds a tenth to a third on curved parts. Two
+        rounds from level 3 resolve the field under a magnet close to a soft
+        face better than uniform panels with four times the unknowns; one round
+        from level 3 puts the field outside a steel tube shielding a magnet
+        within 1.0 %, where level 3 alone is 5.6 % off.
     max_unknowns : int, default 20_000
         Refuse a solve with more unknowns than this. All bodies form one dense
         system, of 8 n² bytes for n unknowns: 20,000 take 3.2 GB, half as
@@ -167,7 +168,6 @@ def apply_face_charge(
         add_triangle_contact_lines(bodies, outlines)
         for body in bodies:
             body.mesh()
-            body.fine = near_panels(body, boxes)
         return bodies
 
     with timelog("Face-charge meshing", min_log_time=min_log_time):
@@ -185,6 +185,8 @@ def apply_face_charge(
                 stacklevel=2,
             )
         info["level"] = level
+        for body in bodies:  # once the level is chosen
+            body.fine = near_panels(body, boxes)
         _warn_unaligned(bodies, solved, boxes, fixed)
 
     # oblique steps of 1e-9 to 1e-5 of the parts' size, off any edge line
@@ -224,11 +226,12 @@ def apply_face_charge(
             )
             break
         if unknowns > max_unknowns:
+            lower = "Lower the level, raise" if level > 1 else "Raise"
             msg = (
                 f"level={level} needs {unknowns:,} unknowns, more than "
                 f"max_unknowns={max_unknowns:,}: the dense system would take about "
-                f"{8 * unknowns**2 / 1e9:.1f} GB. Lower the level, raise max_unknowns, "
-                "or mesh the parts for apply_demag."
+                f"{8 * unknowns**2 / 1e9:.1f} GB. {lower} max_unknowns, or mesh the "
+                "parts for apply_demag."
             )
             raise ValueError(msg)
         # before the solve: the unknowns decide its time and memory
@@ -384,6 +387,8 @@ def _closed_surface(src, level=3):
         return _turned(*src.dimension, n)
     if isinstance(src, magpy.magnet.Sphere):
         return _sphere(src.diameter, n)
+    if isinstance(src, magpy.misc.Triangle):  # a charged triangle: flat, no hull
+        return np.asarray(src.vertices, float), np.array([[0, 1, 2]])
     if isinstance(src, magpy.magnet.Cuboid):
         signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
         V = signs * np.asarray(src.dimension, float) / 2
