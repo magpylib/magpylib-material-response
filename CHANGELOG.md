@@ -95,6 +95,14 @@ and this project adheres to
   of a triangle mesh runs on chunks of points: a 792-face tube voxelized into
   3,000 cells needed over 3 GB and now takes 1.6 GB
   ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
+- Requires the magpylib release with
+  [magpylib#1059](https://github.com/magpylib/magpylib/pull/1059), which
+  computes fields in chunks, on threads. A drive of many current segments no
+  longer takes gigabytes: #108's coil of 2,400 segments around a soft core
+  solves by `apply_face_charge` in 0.28 GB instead of 4.0 GB, by `apply_demag`
+  in 0.26 GB instead of 2.0 GB, both 2 to 4 times faster. Face charge no longer
+  evaluates its drive in chunks of its own
+  ([#108](https://github.com/magpylib/magpylib-material-response/issues/108)).
 
 ### Removed
 

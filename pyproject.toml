@@ -30,7 +30,8 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "magpylib>=6.0",
+  # trial: magpylib/magpylib#1059 (chunked, threaded fields) until its release
+  "magpylib @ git+https://github.com/magpylib/magpylib@c4781f78bc0cf93bbb7df78073ce5794b49c00c7",
   "loguru>=0.5.0",
   "scipy>=1.12",
 ]
@@ -71,6 +72,7 @@ docs = [
 ]
 
 [tool.hatch]
+metadata.allow-direct-references = true
 version.source = "vcs"
 build.hooks.vcs.version-file = "src/magpylib_material_response/_version.py"
 
