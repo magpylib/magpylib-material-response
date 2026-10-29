@@ -159,12 +159,20 @@ def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
     Priority is given at the source level, however if value is not found, it is searched
     up the parent tree, if available. A magnet with none, on itself or any
-    parent, is fixed: 0, as in apply_face_charge."""
+    parent, is fixed: 0, as in apply_face_charge. When no magnet has one, a
+    warning says so: a susceptibility forgotten, or set on a parent the magnets
+    were meshed away from, would otherwise leave every part fixed silently."""
     n = len(sources)
 
     if susceptibility is None:
         # Get susceptibilities from source attributes
         susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
+        if n and not any(_has_susceptibility(src) for src in sources):
+            warnings.warn(
+                "No magnet has a susceptibility, on itself or a parent collection: "
+                "every one is fixed, and nothing responds.",
+                stacklevel=_outside_this_package(),
+            )
 
         susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
     else:
@@ -283,6 +291,15 @@ def _subtract_susceptibility_product(T, chi):
             T[rows] = -mixed.reshape(len(rows), -1)
     T[np.diag_indices_from(T)] += 1.0
     return T
+
+
+def _has_susceptibility(source):
+    """Whether `source` or one of its parents sets a susceptibility."""
+    while source is not None:
+        if getattr(source, "susceptibility", None) is not None:
+            return True
+        source = source.parent
+    return False
 
 
 def _get_susceptibility_from_hierarchy(source):
@@ -620,9 +637,12 @@ def _point_block_T(srcs_b, pos_a):
 SEGMENT_AVERAGE_REACH = 2.0
 #: Cells of a cluster whose susceptibility stays below this skip the average:
 #: point matching's positive eigenvalues, which turn the system indefinite
-#: only once chi times them reaches 1, are at most 0.16 on that tube with 3
-#: cells across (none on solid cylinders). A meshed cylinder of 110 cells at
-#: chi = 0.5 solves in 0.8 s, not 4.4 s, as before #100.
+#: only once chi times them reaches 1, are 0.16 on that tube with 3 cells
+#: across and up to 0.27 on shorter ones with more (none on solid cylinders).
+#: A meshed cylinder of 110 cells at chi = 0.5 solves in 0.8 s, not 4.4 s, as
+#: before #100. On a thin tube the field moves by up to 16 % where the switch
+#: is crossed, the two schemes' difference; point matching was the closer to
+#: FEM of the two at chi = 0.9.
 SEGMENT_AVERAGE_FROM_CHI = 1.0
 #: Gauss points per direction (radius, angle, height) of a cell average: 3
 #: instead of 2 moves that tube's moment by 0.5 points, 4 % of its error.

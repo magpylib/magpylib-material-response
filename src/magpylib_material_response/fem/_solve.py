@@ -362,9 +362,16 @@ class FemSolution:
     def _source(self):
         """This solution as a magpylib source, for magpylib to read on sensors:
         their pixels, paths, frames and handedness."""
-        return magpy.misc.CustomSource(
-            field_func=lambda field, observers: self._field(observers, field)
-        )
+        made = False
+
+        def field_func(field, observers):
+            if not made:  # magpylib tries a new one out on (1, 2, 3) and (4, 5, 6) m,
+                return np.zeros((len(observers), 3))  # which may lie on the ball
+            return self._field(observers, field)
+
+        source = magpy.misc.CustomSource(field_func=field_func)
+        made = True
+        return source
 
     def _field(self, observers, kind):
         obs, shape = _positions(observers)

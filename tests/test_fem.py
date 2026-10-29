@@ -164,6 +164,10 @@ def test_sensors_are_read_in_their_own_frames():
     with pytest.warns(UserWarning, match="Two orders give no error estimate"):
         study = fem_study(model, sensor, (1, 2), edge_layers=0)
     np.testing.assert_allclose(study.values[-1], study.solution.getB(sensor))
+    # magpylib tries a new field function out on two points of its own, which
+    # can lie on the meshed ball and warned
+    solution._field = lambda *_: pytest.fail("evaluated where magpylib probes")
+    solution._source()
 
 
 def test_edge_layers_match_across_faces(monkeypatch):
