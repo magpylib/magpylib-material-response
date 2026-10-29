@@ -43,8 +43,8 @@ MARK = 0.5  # a refinement round splits panels above this share of the largest j
 # are widened to keep the true volume, which matters more than more facets: on
 # a soft cylinder at level 3, 24 facets widened are 0.02 % off 50 mm away, 96
 # not widened 0.16 %. A sphere, with no edge to grade toward, refines by them
-# alone: 0.20, 0.12 and 0.047 % off 1 mm away with 320, 1280 and 3380 facets at
-# levels 1, 3 and 5
+# alone: 1 mm away, 1.4 and 0.35 % off in the worst direction with 320 and 1280
+# facets at levels 1 and 3, 0.19 and 0.05 % on its axes
 FACETS = 12
 POINTS_PER_CALL = (
     5_000  # external-field points per magpylib call: a coil at many points takes GBs

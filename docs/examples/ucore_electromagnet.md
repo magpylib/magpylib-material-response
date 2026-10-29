@@ -256,7 +256,7 @@ The three-cuboid core is convenient, but nothing forces cuboid cells. The same
 solid can be built as a **single closed `TriangularMesh`** — the U profile in
 the x–z plane, extruded along y — and handed to `mesh_TriangularMesh`, which
 drives [TetGen](https://tetgen.org) (optional dependency,
-`pip install magpylib-material-response[tetgen]`, see the
+`pip install "magpylib-material-response[tetgen]"`, see the
 [tetrahedral example](tetrahedral_meshes.md)):
 
 ```{code-cell} ipython3
@@ -401,8 +401,8 @@ about 14 % low at 768 cells. The three finest cuboid curves look converged only
 because those meshes differ by 6 % in cell size. A longer study on this model
 shows the climb continuing: the cuboid peak reaches 1.98 mT at 2,232 cells, 2.03
 mT at 3,822 and 2.07 mT at 8,019, and extrapolating that series gives 2.16 mT.
-The tetrahedral peak creeps up from 2.12 mT at 89 cells to 2.148 mT at 4,016.
-The two agree to within 1 %.
+The tetrahedral peak creeps up from 2.12 mT at about 90 cells to 2.148 mT at
+4,016. The two agree to within 1 %.
 
 Here the error of the cuboid grid shrinks only about as the cell size to the
 power 1.5: refine by a large factor, not a few percent, before trusting a
@@ -412,7 +412,7 @@ This is not special to the U-core. On a plain cube of the same iron (χ = 1000)
 in a uniform field, 128 tetrahedra put the induced moment within 1.5 % of its
 converged value, while cubes need 1,728 cells to get within 1.2 %. Nor does it
 come from the permeability: at χ = 10⁵ the 768 cuboid cells above still give
-1.95 mT against 2.30 mT for 432 tetrahedra, so the gap comes from the
+1.95 mT against 2.30 mT for about 440 tetrahedra, so the gap comes from the
 discretization. For high-permeability parts, prefer a tetrahedral mesh, and
 judge convergence over a large range of cell counts.
 

@@ -341,13 +341,22 @@ Clusters only decide _how fast_ a block is computed, never which rule it
 follows. Grid self-blocks are FFT convolutions in the iterative solver (a grid
 smaller than `MIN_GRID_CELLS`, 16, is treated as loose), and so is the block
 between two grids of one spacing and orientation when it is large
-(`FFT_CROSS_MIN_ENTRIES`): the displacement is $\mathbf{o}_A - \mathbf{o}*B +
-\mathbf{p} \odot (\mathbf{i} - \mathbf{j})$ for grid indices $\mathbf{i}$,
-$\mathbf{j}$, a convolution on a box of $N_A + N_B - 1$ per axis. The same index
-differences give the dense solver that block from one table, without sorting.
-Every other block is computed once per distinct displacement when fewer than 25
-% of the displacements are distinct, and reverse blocks follow by reciprocity
-where it is exact: $\mathsf{T}*{BA} = (V_A / V_B)\,\mathsf{T}_{AB}^\mathsf{T}$
+(`FFT_CROSS_MIN_ENTRIES`): the displacement is
+
+$$
+\mathbf{o}_A - \mathbf{o}_B + \mathbf{p} \odot (\mathbf{i} - \mathbf{j})
+$$
+
+for grid indices $\mathbf{i}$, $\mathbf{j}$, a convolution on a box of $N_A +
+N_B - 1$ per axis. The same index differences give the dense solver that block
+from one table, without sorting. Every other block is computed once per distinct
+displacement when fewer than 25 % of the displacements are distinct, and reverse
+blocks follow by reciprocity where it is exact,
+
+$$
+\mathsf{T}_{BA} = (V_A / V_B)\,\mathsf{T}_{AB}^\mathsf{T}
+$$
+
 for volume averaging between parallel cuboid clusters, $\mathsf{T}_{BA} =
 \mathsf{T}_{AB}^\mathsf{T}$ for point matching when both clusters share one cell
 shape and orientation. Each FFT block works in its cluster's own frame, rotating
@@ -402,7 +411,7 @@ apply_demag(collection, solver=..., interaction=...)
 │                      reverse blocks by reciprocity where it is exact
 │
 ├─ 4. Solve (I − S T) J = J⁽⁰⁾ + S μ0 (H_ext + H_cur)       [global frame]
-│      ├─ [direct]     numpy.linalg.solve(Q, rhs)                  O(N³)
+│      ├─ [direct]     scipy.linalg.solve(Q, rhs)                  O(N³)
 │      └─ [iterative]  GMRES with the block-Jacobi preconditioner
 │
 └─ 5. Write the self-consistent polarizations back to the magnet cells
@@ -419,10 +428,10 @@ apply_demag(collection, solver=..., interaction=...)
 | Loose / generic cells | $O(n^2)$ for those cells               | $O(n^2)$ or $O(\text{nnz})$ |
 
 Measured on one meshed cube (Apple Silicon, $\chi = 3$, `solver_tol=1e-8`, point
-matching): the iterative solver is about 40 times faster than the direct one at
-$N = 3{,}375$, and solves $N = 27{,}000$ in about 1.5 s, where the dense matrix
-alone would take 52 GB. Several separate bodies are slower: their blocks against
-each other are not convolutions.
+matching): the iterative solver is about 10 times faster than the direct one at
+$N = 3{,}375$, 0.2 s against 2.0 s, and solves $N = 27{,}000$ in under 2 s,
+where the dense matrix alone would take 52 GB. Several separate bodies are
+slower: their blocks against each other are not convolutions.
 
 ---
 
