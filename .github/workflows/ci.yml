@@ -104,9 +104,37 @@ jobs:
       - name: Test package
         run: .venv/bin/python -m pytest -ra
 
+  lowest:
+    name: At the lowest pins
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      # our own pins at their floors, the extras' too; what they pull in at its
+      # newest, as an install would take it
+      - name: Install package at its lowest pins
+        run: |
+          uv venv
+          uv pip install --resolution lowest-direct ".[tetgen,fem]" "pytest>=9"
+          uv pip list | grep -i -E "^(magpylib|numpy|scipy|loguru|tetgen|ngsolve) "
+
+      - name: Test package
+        run: .venv/bin/python -m pytest -ra
+
   pass:
     if: always()
-    needs: [lint, checks, bare]
+    needs: [lint, checks, bare, lowest]
     runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:

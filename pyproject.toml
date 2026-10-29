@@ -32,6 +32,10 @@ dynamic = ["version"]
 dependencies = [
   "magpylib>=6.0",
   "loguru>=0.5.0",
+  # NumPy's error state is per thread from 2.0; in 1.x it races between
+  # threads, and face charge, which runs on threads, warned of divisions it
+  # had told NumPy to ignore
+  "numpy>=2.0",
   "scipy>=1.17",
 ]
 
