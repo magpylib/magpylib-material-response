@@ -53,15 +53,14 @@ parts solved together share it, so their colours compare.
 - **Where it is slower:** a few weak magnets alone (`apply_demag` reaches the
   same accuracy faster), many bodies (one dense coupled system: 100 small cubes
   take 7,200 unknowns at level 1 and four times as many at level 2), thin sheets
-  (panels sized to the thickness across the whole sheet), and two solved parts a
-  small gap apart, as the mesh is graded toward touching parts only. Those small
-  panels also make a thin part converge early: take `level=2`. A 0.5 mm plate
-  under a magnet is within 0.03 % of level 3 there, in 0.5 s instead of 1.7. A
-  solve that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB
-  system and 4.8 GB while it is solved, is refused before it is assembled;
-  without a `level`, the highest level up to 3 that fits is taken instead, with
-  a warning. A thin wall that shields a field, such as a tube around a magnet,
-  needs `refine=1` (below).
+  (panels sized to the thickness across the whole sheet). Those small panels
+  also make a thin part converge early: take `level=2`. A 0.5 mm plate under a
+  magnet is within 0.03 % of level 3 there, in 0.5 s instead of 1.7. A solve
+  that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB system
+  and 4.8 GB while it is solved, is refused before it is assembled; without a
+  `level`, the highest level up to 3 that fits is taken instead, with a warning.
+  A thin wall that shields a field, such as a tube around a magnet, needs
+  `refine=1` (below).
 - **Magnets on a part:** a magnet without susceptibility resting on a solved
   part, or close above it, converges like the rest when it is a cuboid aligned
   with the part: the mesh follows its footprint and the field near it is
@@ -111,13 +110,18 @@ solved = apply_face_charge(magpy.Collection(part, coil), level=2)
 ![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 15 ms to 2.8 s on ten cases, triangles 31 ms to 14 s on nine, the thin sheet refused as too many unknowns.](_static/images/face_charge_rect_vs_tri.png)
 
 - **Touching parts:** faces of two parts in one plane couple exactly, whatever
-  their panels, and a triangle mesh is graded toward the outline of whatever
-  touches it, a turned footprint included. A cube given as triangles with a soft
-  cuboid against one of its faces matches two cuboids to 4e-5 at level 4. Turned
-  against each other, two cuboids converge erratically, as rectangle panels can
-  only follow their own axes; with one of them as a triangle mesh the solve
-  converges steadily. A magnet that is not a cuboid touching a triangle mesh
-  warns, as its footprint is not graded toward.
+  their panels, and a part is graded toward the outline of whatever touches it,
+  a turned footprint included, or comes within 1 % of its size. Parts of one
+  material that touch are solved as one: the faces they share carry no charge,
+  so a short bar between two wide ones is 0.83 % off the same solid as one mesh
+  at level 2, where both sides' charges, left to cancel, were 16 % off. A gap
+  far below the panels moves the field by its own effect: four pieces 1 µm from
+  a plate's side 0.13 %, as one piece, where they were 170 % off. A cube given
+  as triangles with a soft cuboid against one of its faces matches two cuboids
+  to 4e-5 at level 4. Turned against each other, two cuboids converge
+  erratically, as rectangle panels can only follow their own axes; with one of
+  them as a triangle mesh the solve converges steadily. A magnet that is not a
+  cuboid touching a triangle mesh warns, as its footprint is not graded toward.
 - **Limits:** the mesh must be closed. A curved face exported as many narrow
   facets keeps a charge per facet, so a fine export costs unknowns; a cylinder
   or a sphere is better given as itself (next section).

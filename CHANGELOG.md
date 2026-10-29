@@ -53,7 +53,9 @@ and this project adheres to
   default, refuses a larger one before it is assembled; without a `level`, the
   highest level up to 3 that fits is taken. It runs on magpylib's
   `defaults.threads` threads where magpylib has that setting, otherwise on up
-  to 8. `to_json` saves a solved collection
+  to 8. Parts of one material that touch are solved as one, and parts a gap
+  below their panels apart are graded toward each other. `to_json` saves a
+  solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110),
