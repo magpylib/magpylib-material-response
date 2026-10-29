@@ -110,7 +110,7 @@ def fem_study(
     geometrically toward the edges (Babuška and Guo 1996), until the finest
     layer limits it. The estimate takes that difference, the last change, as
     the error of the highest order too, times the factor of safety
-    ``SAFETY_FACTOR`` of :mod:`~magpylib_material_response.convergence`: an
+    ``SAFETY_FACTOR`` of ``magpylib_material_response.convergence``: an
     overestimate while the error still falls. It extrapolates nothing, because
     the rate slows as the layers start to limit: on a cube at orders 3, 4, 5
     the last ratio of changes, 0.09, would put the remaining error of the

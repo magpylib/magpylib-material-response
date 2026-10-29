@@ -177,7 +177,8 @@ The interactions $\mathsf{T}_{ij}$ are the heart of it: N cells have N² of them
 There are two ways to take the field of one cell at another:
 
 - **at its centre** (`interaction="point"`, the default), for any cell type,
-  except cylinder segments close together, which are averaged;
+  except cylinder segments close together at a susceptibility of 1 or more,
+  which are averaged;
 - **averaged over it** (`interaction="newell"`), for cuboids all turned the same
   way.
 
@@ -342,12 +343,13 @@ fig
 
 Tetrahedra reach the same error with fewer cells. A cuboid grid, though, solves
 far faster per cell, with FFT products the next section explains, so on this
-cube the cuboids win per second of solving. On other parts the balance shifts:
-on the core of the [U-core example](examples/ucore_electromagnet.md), a few
-hundred tetrahedra come closer than thousands of cuboids. The two interaction
-rules sit almost on top of each other. In practice: start coarse, multiply the
-cells by four to eight, and stop when the quantity you need, a force or a field
-at a sensor, changes by less than you can accept.
+cube the cuboids win per second of solving below about 1 %. On other parts the
+balance shifts: on the core of the
+[U-core example](examples/ucore_electromagnet.md), a few hundred tetrahedra come
+closer than thousands of cuboids. The two interaction rules sit almost on top of
+each other. In practice: start coarse, multiply the cells by four to eight, and
+stop when the quantity you need, a force or a field at a sensor, changes by less
+than you can accept.
 
 ## Solving: direct or iterative
 

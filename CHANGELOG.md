@@ -20,19 +20,20 @@ and this project adheres to
   magnets take the total potential, so a coil around soft iron costs no
   accuracy, and on the U-core of the docs it agrees with an independent FEM
   within 0.25 %. The reference data of the docs and the tests are now its
-  results, which `scripts/fem_references.py` recomputes, in place of exports
-  from a commercial code that no one could rerun. `compare` puts a `mesh_study`
-  and a `fem_study` side by side, per observer, positions or magpylib sensors
-  read in their own frames: both values, both error bars, and whether they
-  agree. In the repository, `validation/` holds 19 cases, 16 with a stored
-  reference; every PR checks the method of moments against them and is timed
-  against its base branch in a comment, and every night all methods climb their
-  settings against references made again, their records kept on a `benchmarks`
-  branch, and must beat magpylib alone, the model without its material response.
-  It found a mesh NGSolve could not assemble, which `fem_solve` now makes again
-  at another grading. Two docs pages: checking a result with finite elements,
-  and a magnet in a steel tube, where the method of moments converges inside but
-  behind the shield needs far more cells
+  results, which `scripts/fem_references.py` recomputes: `get_dataset` returns
+  them for `"FEMdata_test_cuboids"` and `"FEMdata_test_softmag"`, labelled
+  "FEM", in place of exports from a commercial code that no one could rerun.
+  `compare` puts a `mesh_study` and a `fem_study` side by side, per observer,
+  positions or magpylib sensors read in their own frames: both values, both
+  error bars, and whether they agree. In the repository, `validation/` holds 19
+  cases, 16 with a stored reference; every PR checks the method of moments
+  against them and is timed against its base branch in a comment, and every
+  night all methods climb their settings against references made again, their
+  records kept on a `benchmarks` branch, and must beat magpylib alone, the model
+  without its material response. It found a mesh NGSolve could not assemble,
+  which `fem_solve` now makes again at another grading. Two docs pages: checking
+  a result with finite elements, and a magnet in a steel tube, where the method
+  of moments converges inside but behind the shield needs far more cells
   ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
   [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
@@ -50,13 +51,14 @@ and this project adheres to
   the solved collection's `face_charge_info` holds the unknowns, level,
   refinement rounds and time, and the unknowns are logged before the solve. All
   bodies form one dense system, factorized in single precision and refined to
-  double's accuracy: `max_unknowns`, 20,000 (3.2 GB, 4.8 GB while solved) by
-  default, refuses a larger one before it is assembled, a triangle mesh's before
-  it is cut; without a `level`, the highest level up to 3 that fits is taken. It
-  runs on magpylib's `defaults.threads` threads where magpylib has that setting,
-  otherwise on up to 8. Parts of one material that touch are solved as one, and
-  parts a gap below their panels apart are graded toward each other. `to_json`
-  saves a solved collection
+  double's accuracy: `max_unknowns`, 20,000 by default (3.2 GB, up to about
+  twice that while one large part is assembled and solved), refuses a larger one
+  before it is assembled, a triangle mesh's before it is cut; without a `level`,
+  the highest level up to 3 that fits is taken. It runs on magpylib's
+  `defaults.threads` threads where magpylib has that setting, otherwise on up
+  to 8. Parts of one material that touch are solved as one, and parts a gap
+  below their panels apart are graded toward each other. `to_json` saves a
+  solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110),
@@ -67,11 +69,11 @@ and this project adheres to
 
 ### Changed
 
-- `voxelize` keeps the cells whose centre lies inside the object, as its
-  docstring said, and tunes the grid spacing so that these touching cells hold
-  the object's exact volume, and a magnet its moment, close to `target_elems`.
-  It kept only the cells lying wholly inside by default, which left a sphere a
-  quarter short of its volume at 1,000 cells, and its moment with it;
+- **Breaking:** `voxelize` keeps the cells whose centre lies inside the object,
+  as its docstring said, and tunes the grid spacing so that these touching cells
+  hold the object's exact volume, and a magnet its moment, close to
+  `target_elems`. It kept only the cells lying wholly inside by default, which
+  left a sphere 31 % short of its volume at 1,000 cells, and its moment with it;
   `strict_inside=True` still does that. Where no spacing near the target holds
   the volume, it takes the count that does, as a flat body holds it only with
   whole layers; failing that, the closest within 5 %, with a warning; beyond, it
@@ -96,9 +98,9 @@ and this project adheres to
   of a triangle mesh runs on chunks of points: a 792-face tube voxelized into
   3,000 cells needed over 3 GB and now takes 1.6 GB
   ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
-- **Requires NumPy 2.0.1 and scipy 1.17.** NumPy 1.x shares its error state
-  between threads: face charge, which runs on threads, warned of divisions it
-  had told NumPy to ignore. NumPy 2.0.0's `np.unique` broke `apply_demag`.
+- **Breaking:** requires NumPy 2.0.1 and scipy 1.17. NumPy 1.x shares its error
+  state between threads: face charge, which runs on threads, warned of divisions
+  it had told NumPy to ignore. NumPy 2.0.0's `np.unique` broke `apply_demag`.
   magpylib 6.0 already required scipy 1.17: the 1.12 stated here could not be
   installed. CI tests the package at its lowest pins
   ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).

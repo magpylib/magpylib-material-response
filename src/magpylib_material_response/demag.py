@@ -30,7 +30,7 @@ non-parallel, and would lose the lower bound, so there is none.
 Two evaluation strategies apply the chosen rule, so ``solver="direct"`` and
 ``solver="iterative"`` solve the same system:
 
-- ``"direct"``   materialises the dense ``T`` and calls ``np.linalg.solve``;
+- ``"direct"``   materialises the dense ``T`` and calls ``scipy.linalg.solve``;
 - ``"iterative"`` applies ``T`` matrix-free in GMRES — FFT convolution for
   uniform-grid clusters (:mod:`magpylib_material_response.demag_fft`), dense
   or row-sum-bounded sparse blocks for everything else.
