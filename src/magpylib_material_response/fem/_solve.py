@@ -106,8 +106,30 @@ OBSERVER_FLOOR = 0.1
 SHELL_MAXH = 0.125
 
 
+def _are_sensors(observers):
+    """Whether `observers` are magpylib sensors, one or several, not positions."""
+    if isinstance(observers, magpy.Sensor):
+        return True
+    return isinstance(observers, (list, tuple)) and any(
+        isinstance(o, magpy.Sensor) for o in observers
+    )
+
+
 def _positions(observers):
-    """Observers as an (n, 3) array in m, and the shape they came in."""
+    """Observers as an (n, 3) array in m, and the shape they came in; sensors
+    as the global positions magpylib reads them at, every pixel on every path
+    position, and no shape."""
+    if _are_sensors(observers):
+        points = []
+
+        def record(field, observers):  # noqa: ARG001  # pylint: disable=unused-argument
+            points.append(np.array(observers, dtype=float).reshape(-1, 3))
+            return np.zeros((len(points[-1]), 3))
+
+        source = magpy.misc.CustomSource(field_func=record)
+        points.clear()  # magpylib tries a new field function out on two points
+        magpy.getB(source, observers)
+        return np.concatenate(points), None
     obs = np.asarray(observers, dtype=float)
     if obs.shape[-1:] != (3,):
         msg = f"observers must have shape (..., 3); got {obs.shape}."
@@ -317,19 +339,39 @@ class FemSolution:
         self.moment = 3 / MU0 * model.length**3 * np.asarray(flux)
 
     def getB(self, observers):
-        """Flux density B in T at `observers`, positions (..., 3) in m.
+        """Flux density B in T at `observers`, positions (..., 3) in m, or
+        magpylib sensors, in their own frames as :func:`magpylib.getB` gives
+        them.
 
         The field of the model's magnets, remanent and induced, and of its
         currents, without the uniform applied field: what :func:`magpylib.getB`
         gives on a collection solved by
         :func:`~magpylib_material_response.demag.apply_demag`.
         """
+        if _are_sensors(observers):
+            return magpy.getB(self._source(), observers)
         return self._field(observers, "B")
 
     def getH(self, observers):
-        """Field H in A/m at `observers`, positions (..., 3) in m, without the
-        uniform applied field."""
+        """Field H in A/m at `observers`, positions (..., 3) in m or magpylib
+        sensors, without the uniform applied field."""
+        if _are_sensors(observers):
+            return magpy.getH(self._source(), observers)
         return self._field(observers, "H")
+
+    def _source(self):
+        """This solution as a magpylib source, for magpylib to read on sensors:
+        their pixels, paths, frames and handedness."""
+        made = False
+
+        def field_func(field, observers):
+            if not made:  # magpylib tries a new one out on (1, 2, 3) and (4, 5, 6) m,
+                return np.zeros((len(observers), 3))  # which may lie on the ball
+            return self._field(observers, field)
+
+        source = magpy.misc.CustomSource(field_func=field_func)
+        made = True
+        return source
 
     def _field(self, observers, kind):
         obs, shape = _positions(observers)
@@ -864,8 +906,8 @@ def fem_solve(
         The model, as :func:`~magpylib_material_response.demag.apply_demag`
         takes it before meshing: Cuboid, Cylinder, CylinderSegment, Sphere,
         Tetrahedron and TriangularMesh magnets with their polarization (the
-        remanence) and susceptibility, isotropic or along their own axes, in a
-        uniform applied field ``H_ext`` (mu0 H in T) and the field of current
+        remanence) and susceptibility, isotropic or along their own axes (none
+        on a magnet or its parents: fixed), in a uniform applied field ``H_ext`` (mu0 H in T) and the field of current
         sources, which are not meshed. The magnets must not overlap; a current
         must not run through a magnet or through a hole in one.
     order : int, default 3
@@ -879,9 +921,9 @@ def fem_solve(
         Layers of geometric refinement toward the magnets' edges and corners,
         where the field is singular. Each layer is 0.3 times as thick as the
         last.
-    observers : array_like, shape (..., 3), optional
-        Positions in m where the field will be read: the mesh is refined
-        there.
+    observers : array_like, shape (..., 3), or Sensor, optional
+        Positions in m, or magpylib sensors, where the field will be read: the
+        mesh is refined there.
     observer_maxh : float, optional
         Element size at the observers in m. By default 0.3 times each
         observer's distance to the nearest magnet, at most the magnets'

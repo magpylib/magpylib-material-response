@@ -333,11 +333,8 @@ def _split(collection):
             # currents take no susceptibility, even one set on a parent
             fixed.append(src)
             continue
-        try:
-            chi = _get_susceptibility_from_hierarchy(src)
-        except ValueError:  # none on the source or any parent
-            chi = None
-        if chi is None or not np.any(chi):
+        chi = _get_susceptibility_from_hierarchy(src)  # 0 if none is set
+        if not np.any(chi):
             fixed.append(src)
             continue
         if not isinstance(src, SOLIDS):

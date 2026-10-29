@@ -177,7 +177,8 @@ The interactions $\mathsf{T}_{ij}$ are the heart of it: N cells have N² of them
 There are two ways to take the field of one cell at another:
 
 - **at its centre** (`interaction="point"`, the default), for any cell type,
-  except cylinder segments close together, which are averaged;
+  except cylinder segments close together at a susceptibility of 1 or more,
+  which are averaged;
 - **averaged over it** (`interaction="newell"`), for cuboids all turned the same
   way.
 

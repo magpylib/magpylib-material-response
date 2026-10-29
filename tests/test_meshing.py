@@ -660,6 +660,34 @@ def test_H_ext_set_before_meshing_reaches_the_cells():
     np.testing.assert_allclose(J2, 2 * J)
 
 
+@pytest.mark.parametrize("mesher", [mesh_all, mesh_uniform])
+@pytest.mark.parametrize("on_parent", ["H_ext", "susceptibility"])
+def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher, on_parent):
+    """A copy has no parent: the applied field or the susceptibility set on the
+    model around the meshed collection was lost, and the part did not respond,
+    silently, where apply_face_charge and fem_solve read it."""
+
+    def model(on_parent):
+        cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+        inner = magpy.Collection(cube)
+        outer = magpy.Collection(inner)
+        cube.H_ext, cube.susceptibility = (0, 0, 0.01), 100
+        if on_parent:
+            setattr(outer, on_parent, getattr(cube, on_parent))
+            setattr(cube, on_parent, None)
+        return inner
+
+    cells = 64 if mesher is mesh_all else 4
+    inner = model(on_parent)
+    B = apply_demag(mesher(inner, cells)).getB((0, 0, 0.006))
+    assert inner.parent is not None  # left as it was
+    assert len(inner.children) == 1
+    assert B[2] > 1e-3
+    np.testing.assert_allclose(
+        B, apply_demag(mesher(model(None), cells)).getB((0, 0, 0.006))
+    )
+
+
 def test_mesh_all_returns_the_mesh_of_a_magnet_in_a_collection():
     magnet = magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
     outer = magpy.Collection(magnet)

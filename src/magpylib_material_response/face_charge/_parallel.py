@@ -24,6 +24,17 @@ _pool, _pool_threads = None, 0  # made on first use and kept while the count hol
 _worker = threading.local()
 
 
+def _forget_pool():
+    # a forked child inherits the pool but none of its threads: work handed to
+    # it would wait forever (a multiprocessing.Pool on Linux, after a solve)
+    global _pool, _pool_threads  # pylint: disable=global-statement
+    _pool, _pool_threads = None, 0
+
+
+if hasattr(os, "register_at_fork"):  # not on Windows
+    os.register_at_fork(after_in_child=_forget_pool)
+
+
 def threads():
     """The threads to run on: magpylib's ``defaults.threads`` where magpylib
     has it, else counted as it counts them: the CPUs this process may use, up

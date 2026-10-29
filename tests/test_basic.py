@@ -7,12 +7,13 @@ import numpy as np
 import pytest
 
 import magpylib_material_response
+from magpylib_material_response import demag
 from magpylib_material_response.demag import (
     apply_demag,
     get_susceptibilities,
 )
 from magpylib_material_response.face_charge import apply_face_charge
-from magpylib_material_response.meshing import mesh_Cuboid
+from magpylib_material_response.meshing import mesh_Cuboid, mesh_Cylinder, mesh_uniform
 
 
 def test_version():
@@ -46,6 +47,12 @@ def test_apply_demag_integration():
             [(2.5,), (3.0,)],
             np.array([2.5, 3.0, 2.5, 3.0, 2.5, 3.0]),
             id="source_scalar",
+        ),
+        pytest.param(
+            "source_none",
+            [(None,), (3.0,)],
+            np.array([0.0, 3.0, 0.0, 3.0, 0.0, 3.0]),
+            id="source_none_is_fixed",
         ),
         pytest.param(
             "source_vector",
@@ -129,12 +136,6 @@ def test_get_susceptibilities_hierarchy():
 @pytest.mark.parametrize(
     ("error_case", "setup_func", "error_message"),
     [
-        pytest.param(
-            "no_susceptibility",
-            lambda: [magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))],
-            "No susceptibility defined in any parent collection",
-            id="no_susceptibility",
-        ),
         pytest.param(
             "invalid_format",
             lambda: [_create_zone_with_bad_susceptibility()],
@@ -336,6 +337,24 @@ def test_H_ext_is_checked_before_the_solve(solver, h_ext, kind, match):
             solve(h_ext)
 
 
+@pytest.mark.parametrize(("chi", "averaged"), [(0.5, False), (1000, True)])
+def test_segment_cells_are_averaged_from_a_susceptibility_of_one(
+    monkeypatch, chi, averaged
+):
+    """#100's cell average made a small meshed cylinder 5 times slower to
+    solve, at any susceptibility; point matching goes wrong only once chi
+    times its positive eigenvalues, up to 0.27, nears 1."""
+    cylinder = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(1e-3, 1e-3))
+
+    def solve():
+        solved = apply_demag(mesh_Cylinder(cylinder, 40), susceptibility=chi)
+        return np.array([c.polarization for c in solved.sources_all])
+
+    J = solve()
+    monkeypatch.setattr(demag, "_segment_averages", lambda *_: None)
+    assert np.array_equal(J, solve()) is not averaged
+
+
 def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():
     """A thin tube at high susceptibility beside a magnet, in cylinder-segment
     cells. Point matching on curved cells gave the interaction matrix positive
@@ -364,3 +383,38 @@ def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():
         return sum(cell.polarization[0] * cell.volume for cell in tube)
 
     assert moment(2) == pytest.approx(moment(1), rel=0.01)
+
+
+def test_a_model_with_no_susceptibility_anywhere_warns():
+    """A part meshed away from the collection that set its susceptibility is
+    fixed: said, as it is not what was meant. An explicit 0 stays silent."""
+    plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.01,) * 3)
+    magpy.Collection(plate).susceptibility = 1000
+    with pytest.warns(UserWarning, match="No magnet has a susceptibility"):
+        apply_demag(mesh_Cuboid(plate, 8))
+    plate.susceptibility = 0
+    apply_demag(mesh_Cuboid(plate, 8))
+
+
+@pytest.mark.parametrize("solver", ["demag", "face charge", "fem"])
+def test_a_magnet_without_susceptibility_is_fixed_everywhere(solver):
+    """The face-charge page's model: a magnet with no susceptibility over a soft
+    plate. apply_face_charge took the magnet as fixed; apply_demag, mesh_study
+    and fem_solve refused it, and could not check face charge."""
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1), dimension=(0.01,) * 3, position=(0, 0, 0.0075)
+    )
+    plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.03, 0.03, 0.005))
+    plate.susceptibility = 1000
+    model = magpy.Collection(magnet, plate)
+    if solver == "demag":
+        solved = apply_demag(mesh_uniform(model, 4))
+    elif solver == "face charge":
+        solved = apply_face_charge(model, level=1)
+    else:
+        pytest.importorskip("ngsolve")
+        from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+
+        solved = fem_solve(model, order=2)
+    reference = apply_face_charge(model, level=2).getB((0, 0, 0.02))[2]
+    np.testing.assert_allclose(solved.getB((0, 0, 0.02))[2], reference, rtol=0.05)

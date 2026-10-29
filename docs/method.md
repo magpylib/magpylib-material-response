@@ -86,8 +86,8 @@ with `interaction` and applied to **every pair**:
 | `"point"` (default) | at the centroid of cell $i$ ¹       | any cell type and orientation          |
 | `"newell"`          | averaged over the whole of cell $i$ | cuboid cells, all with one orientation |
 
-¹ Averaged over cell $i$ between cylinder segments close together; see
-[point matching](#point-matching).
+¹ Averaged over cell $i$ between cylinder segments close together, from a
+susceptibility of 1; see [point matching](#point-matching).
 
 **Volume averaging** is the Galerkin form of the problem. For a soft body with a
 positive susceptibility in a uniform applied field, the induced moment along the
@@ -136,7 +136,12 @@ Averaged, every eigenvalue is negative and the moment holds at −12 %, −11 % 
 −11 %; what is left falls as cells are added around the ring. Pairs farther
 apart than twice the sum of their half-diagonals keep the centroid, which
 changes that tube's moment by 0.13 points at most; at a reach of 1 a positive
-eigenvalue comes back, and at 0.75 the system is indefinite again.
+eigenvalue comes back, and at 0.75 the system is indefinite again. Below a
+susceptibility of 1 the centroid stands for every pair: the positive eigenvalues
+reach 0.27 at most, on short thin tubes, so $\chi$ times them stays far from 1,
+and a meshed cylinder of 110 cells at $\chi = 0.5$ solves in 0.8 s instead of
+4.4 s. On a thin tube the field moves by up to 16 % at some points where $\chi$
+crosses 1, the two schemes' difference on a coarse mesh.
 
 ### Volume averaging (Newell)
 
