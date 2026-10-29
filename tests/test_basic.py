@@ -401,7 +401,9 @@ def test_a_magnet_without_susceptibility_is_fixed_everywhere(solver):
     elif solver == "face charge":
         solved = apply_face_charge(model, level=1)
     else:
-        fem = pytest.importorskip("magpylib_material_response.fem")
-        solved = fem.fem_solve(model, order=2)
+        pytest.importorskip("ngsolve")
+        from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+
+        solved = fem_solve(model, order=2)
     reference = apply_face_charge(model, level=2).getB((0, 0, 0.02))[2]
     np.testing.assert_allclose(solved.getB((0, 0, 0.02))[2], reference, rtol=0.05)
