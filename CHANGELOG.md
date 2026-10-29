@@ -104,7 +104,8 @@ and this project adheres to
   ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
 - A magnet without a susceptibility, on itself or a parent, is fixed in
   `apply_demag`, `mesh_study` and `fem_solve`, as in `apply_face_charge`. They
-  raised "No susceptibility defined in any parent collection", naming no object
+  raised "No susceptibility defined in any parent collection", naming no object;
+  a model in which no magnet has one now warns that nothing responds
   ([#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
 
 ### Removed
