@@ -31,7 +31,11 @@ from magpylib_material_response.face_charge._bodies import (
     contact_tol,
     near_tol,
 )
-from magpylib_material_response.face_charge._mesh import graded_triangles, rounding
+from magpylib_material_response.face_charge._mesh import (
+    TooFine,
+    graded_triangles,
+    rounding,
+)
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
@@ -99,25 +103,33 @@ class TriBody(Part):
         self.fine = None  # triangles whose load takes a finer rule
         self.contacts = []  # lines (point, direction, normal) to grade toward
         self.split = None  # the triangles and shells of a bisection, to mesh
+        self.too_fine = None  # the triangles there would be, when too many to cut
 
-    def mesh(self):
+    def mesh(self, limit=None):
         """The triangles graded toward the sharp edges, or as bisected since;
         the self block waits for ``assemble``, so that the unknowns can be
-        counted first."""
+        counted first. Above ``limit`` triangles, none: ``n_dofs`` then counts
+        the triangles there would be, about."""
+        self.too_fine = None
         if self.split is not None:
             (self.T, self.shell), self.split = self.split, None
         else:
-            T = [
-                graded_triangles(
-                    self.vertices,
-                    self.faces[self.shells == k],
-                    LAYER * self.thickness[k],
-                    self.m,
-                    GRADING,
-                    contacts=self.contacts,
-                )
-                for k in range(self.shells.max() + 1)
-            ]
+            try:
+                T = [
+                    graded_triangles(
+                        self.vertices,
+                        self.faces[self.shells == k],
+                        LAYER * self.thickness[k],
+                        self.m,
+                        GRADING,
+                        contacts=self.contacts,
+                        limit=limit,
+                    )
+                    for k in range(self.shells.max() + 1)
+                ]
+            except TooFine as error:
+                self.too_fine, self.T = error.count, None
+                return
             self.T = np.concatenate(T)
             self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
         self.fr = frames(self.T)
@@ -143,7 +155,7 @@ class TriBody(Part):
 
     @property
     def n_dofs(self):
-        return 3 * len(self.T)
+        return 3 * (len(self.T) if self.too_fine is None else self.too_fine)
 
     def basis(self, P, idx=slice(None)):
         """``(1, u, v)`` at points ``P`` (F, q, 3) of the triangles ``idx``."""
