@@ -43,6 +43,14 @@ class ChargeSheet(magpy.misc.CustomSource):
         The surface element each face belongs to, for drawing only:
         ``style.mesh.grid`` draws the edges between elements. A solved cuboid's
         rectangular panels are two faces each. By default each face is one.
+    color_level : float, optional
+        The charge in A/m at which the colours are full, for drawing only. By
+        default the charge 95 % of the sheet's area stays below;
+        :func:`apply_face_charge` gives the sheets it solves one level, so that
+        their colours compare.
+    mean_polarization : array-like, shape (3,), optional
+        What :attr:`mean_polarization` gives, in T, in place of the sheet's own:
+        :func:`apply_face_charge` sets it on parts solved as one.
     position, orientation, style, **kwargs
         As for any magpylib source. ``style`` is a TriangularMesh's:
         ``style.magnetization.color`` colours the charge and ``style.mesh.grid``
@@ -61,9 +69,15 @@ class ChargeSheet(magpy.misc.CustomSource):
         position=(0, 0, 0),
         orientation=None,
         style=None,
+        *,
+        color_level=None,
+        mean_polarization=None,
         **kwargs,
     ):
         self._set(vertices, faces, charge_densities, panels)
+        self.color_level = color_level
+        if mean_polarization is not None:
+            self._mean = np.asarray(mean_polarization, float).reshape(3)
         super().__init__(
             position=position, orientation=orientation, style=style, **kwargs
         )
@@ -106,6 +120,22 @@ class ChargeSheet(magpy.misc.CustomSource):
     @charge_densities.setter
     def charge_densities(self, value):
         self._set(self._vertices, self._faces, value, self._panels)
+
+    @property
+    def panels(self):
+        """The surface element (m,) each face belongs to, or None where each
+        face is one."""
+        return self._panels
+
+    @property
+    def color_level(self):
+        """The charge in A/m at which the colours are full, or None for the
+        charge 95 % of the sheet's area stays below."""
+        return self._saturation
+
+    @color_level.setter
+    def color_level(self, value):
+        self._saturation = None if value is None else float(value)
 
     @property
     def triangles(self):

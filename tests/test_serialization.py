@@ -345,3 +345,16 @@ def test_roundtrip_face_charge_solution():
     _assert_field_equal(back, solved, rtol=0, atol=0)
     assert back.children[0].style.color == "grey"
     assert back.face_charge_info == solved.face_charge_info
+    # what the solve set for drawing and for the saturation check
+    sheet, original = back.children[0], solved.children[0]
+    assert sheet.color_level == original.color_level is not None
+    np.testing.assert_array_equal(sheet.panels, original.panels)
+    # as apply_face_charge gives parts solved as one
+    joined = type(sheet)(
+        sheet.vertices,
+        sheet.faces,
+        sheet.charge_densities,
+        mean_polarization=(0, 0, 0.5),
+    )
+    back = from_json(to_json(joined))[0]
+    np.testing.assert_array_equal(back.mean_polarization, (0, 0, 0.5))

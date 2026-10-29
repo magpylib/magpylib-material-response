@@ -198,8 +198,10 @@ def _serialize_recursive(obj, parent="warn"):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
         dd["faces"] = {"value": obj.faces.tolist()}
         dd["charge_densities"] = {"value": obj.charge_densities.tolist(), "unit": "A/m"}
-        if obj._panels is not None:
-            dd["panels"] = {"value": np.asarray(obj._panels).tolist()}
+        if obj.panels is not None:
+            dd["panels"] = {"value": np.asarray(obj.panels).tolist()}
+        if obj.color_level is not None:
+            dd["color_level"] = {"value": obj.color_level, "unit": "A/m"}
         if obj._mean is not None:  # of parts solved as one: not its own surface's
             dd["mean_polarization"] = {"value": obj._mean.tolist(), "unit": "T"}
     elif isinstance(obj, magpy.current.Circle):
@@ -291,6 +293,12 @@ def _deserialize_recursive(inp):
         kw["charge_densities"] = inp["charge_densities"]["value"]
         if "panels" in inp:
             kw["panels"] = inp["panels"]["value"]
+        if "color_level" in inp:
+            _check_unit("Color level", inp["color_level"], "A/m")
+            kw["color_level"] = inp["color_level"]["value"]
+        if "mean_polarization" in inp:
+            _check_unit("Mean polarization", inp["mean_polarization"], "T")
+            kw["mean_polarization"] = inp["mean_polarization"]["value"]
     elif constr is magpy.current.Circle:
         _check_unit("Diameter", inp["diameter"], "m")
         kw["diameter"] = inp["diameter"]["value"]
@@ -300,9 +308,6 @@ def _deserialize_recursive(inp):
             kw["pixel"] = inp["pixel"]["value"]
 
     obj = constr(**kw)
-    if inp.get("mean_polarization") is not None:
-        _check_unit("Mean polarization", inp["mean_polarization"], "T")
-        obj._mean = np.asarray(inp["mean_polarization"]["value"], float)
 
     if inp.get("susceptibility") is not None:
         obj.susceptibility = inp["susceptibility"]["value"]
