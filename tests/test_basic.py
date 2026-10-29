@@ -7,12 +7,13 @@ import numpy as np
 import pytest
 
 import magpylib_material_response
+from magpylib_material_response import demag
 from magpylib_material_response.demag import (
     apply_demag,
     get_susceptibilities,
 )
 from magpylib_material_response.face_charge import apply_face_charge
-from magpylib_material_response.meshing import mesh_Cuboid, mesh_uniform
+from magpylib_material_response.meshing import mesh_Cuboid, mesh_Cylinder, mesh_uniform
 
 
 def test_version():
@@ -334,6 +335,24 @@ def test_H_ext_is_checked_before_the_solve(solver, h_ext, kind, match):
     else:
         with pytest.raises(kind, match=match):
             solve(h_ext)
+
+
+@pytest.mark.parametrize(("chi", "averaged"), [(0.5, False), (1000, True)])
+def test_segment_cells_are_averaged_from_a_susceptibility_of_one(
+    monkeypatch, chi, averaged
+):
+    """#100's cell average made a small meshed cylinder 5 times slower to
+    solve, at any susceptibility; point matching goes wrong only once chi
+    times its positive eigenvalues, at most 0.16, nears 1."""
+    cylinder = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(1e-3, 1e-3))
+
+    def solve():
+        solved = apply_demag(mesh_Cylinder(cylinder, 40), susceptibility=chi)
+        return np.array([c.polarization for c in solved.sources_all])
+
+    J = solve()
+    monkeypatch.setattr(demag, "_segment_averages", lambda *_: None)
+    assert np.array_equal(J, solve()) is not averaged
 
 
 def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():

@@ -418,11 +418,13 @@ def _check_interaction(interaction, magnets_list, atol=QUAT_ATOL):
         raise ValueError(msg)
 
 
-def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL):
+def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL, chi=None):
     """Run :func:`analyze_collection` on a list of magnet objects, with logging.
 
     Under the Newell rule every cuboid stays in a geometry cluster, whatever the
-    group size, because each pair needs both prisms' shapes.
+    group size, because each pair needs both prisms' shapes. Close
+    cylinder-segment cells are averaged unless ``chi``, the cells' (n, 3, 3)
+    susceptibilities, stays below ``SEGMENT_AVERAGE_FROM_CHI`` in their cluster.
     """
     min_cells = 1 if interaction == "newell" else MIN_CLUSTER_CELLS
     positions, clusters = analyze_collection(magnets_list, atol, min_cells)
@@ -434,10 +436,16 @@ def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL):
         n_generic=counts.get("generic", 0),
     )
     for cl in clusters:
-        if cl["kind"] == "generic":
-            averaged = _segment_averages(magnets_list, cl["indices"])
-            if averaged is not None:
-                cl["averaged"] = averaged
+        if cl["kind"] != "generic":
+            continue
+        if chi is not None and (
+            np.linalg.norm(chi[cl["indices"]], 2, axis=(1, 2)).max()
+            < SEGMENT_AVERAGE_FROM_CHI
+        ):
+            continue  # point matching's positive eigenvalues are harmless here
+        averaged = _segment_averages(magnets_list, cl["indices"])
+        if averaged is not None:
+            cl["averaged"] = averaged
     return positions, clusters
 
 
@@ -610,6 +618,12 @@ def _point_block_T(srcs_b, pos_a):
 #: points at 1, 2 and 3 cells across, 1.5 to 0.7 points; at 1 a positive
 #: eigenvalue comes back with 3 across, and at 0.75 the system is indefinite.
 SEGMENT_AVERAGE_REACH = 2.0
+#: Cells of a cluster whose susceptibility stays below this skip the average:
+#: point matching's positive eigenvalues, which turn the system indefinite
+#: only once chi times them reaches 1, are at most 0.16 on that tube with 3
+#: cells across (none on solid cylinders). A meshed cylinder of 110 cells at
+#: chi = 0.5 solves in 0.8 s, not 4.4 s, as before #100.
+SEGMENT_AVERAGE_FROM_CHI = 1.0
 #: Gauss points per direction (radius, angle, height) of a cell average: 3
 #: instead of 2 moves that tube's moment by 0.5 points, 4 % of its error.
 SEGMENT_AVERAGE_POINTS = 2
@@ -1577,7 +1591,7 @@ def apply_demag(
 
         # ── demag operator under the chosen rule ────────────────────────────
         _check_interaction(interaction, magnets_list)
-        positions, clusters = _analyze_collection(magnets_list, interaction)
+        positions, clusters = _analyze_collection(magnets_list, interaction, chi=chi)
         auto = solver == "auto"
         if auto:
             solver, share = _auto_solver(clusters)
