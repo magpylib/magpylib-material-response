@@ -306,38 +306,39 @@ def get_H_ext(*sources):
     `H_ext` is a uniform applied field given as mu_0 * H in tesla. A source's own
     value takes priority; otherwise it is searched up the parent tree, and it is
     zero if no parent sets it. A value that is not three finite numbers raises,
-    and one stronger than ``H_EXT_WARN`` warns: it is most likely in A/m."""
-    H_exts = []
+    and one stronger than ``H_EXT_WARN`` warns: it is most likely in A/m. Each
+    object that sets it is checked once, however many cells it holds."""
+    owners = []
     for src in sources:
-        h_ext = getattr(src, "H_ext", None)
-        if h_ext is None:
-            if src.parent is None:
-                H_exts.append((0.0, 0.0, 0.0))
-            else:
-                H_exts.extend(get_H_ext(src.parent))
-        else:
-            H_exts.append(_checked_H_ext(h_ext, src))
-    return H_exts
+        owner = src
+        while owner is not None and getattr(owner, "H_ext", None) is None:
+            owner = owner.parent
+        owners.append(owner)
+    values = {}
+    for owner in owners:
+        if owner is not None and id(owner) not in values:
+            values[id(owner)] = _checked_H_ext(owner)
+    return [(0.0, 0.0, 0.0) if o is None else values[id(o)] for o in owners]
 
 
-def _checked_H_ext(h_ext, src):
-    """`src`'s `h_ext` as three floats, or an error that says what is expected."""
+def _checked_H_ext(owner):
+    """`owner.H_ext` as three floats, or an error that says what is expected."""
     try:
-        value = np.asarray(h_ext, dtype=float)
+        value = np.asarray(owner.H_ext, dtype=float)
     except (TypeError, ValueError):
         value = None
     if value is None or value.shape != (3,) or not np.isfinite(value).all():
         msg = (
-            f"H_ext of {src!r} must be three finite numbers, mu0 * H in tesla, "
-            f"such as (0, 0, 0.01); got {h_ext!r}."
+            f"H_ext of {owner!r} must be three finite numbers, mu0 * H in tesla, "
+            f"such as (0, 0, 0.01); got {owner.H_ext!r}."
         )
         raise ValueError(msg)
     strength = np.linalg.norm(value)
     if strength > H_EXT_WARN:
         warnings.warn(
-            f"H_ext of {src!r} is {strength:.3g} T. H_ext is mu0 * H in tesla, "
+            f"H_ext of {owner!r} is {strength:.3g} T. H_ext is mu0 * H in tesla, "
             "not H in A/m: multiply a field in A/m by magpylib.mu_0.",
-            stacklevel=3,
+            stacklevel=4,  # the call to the solver
         )
     return tuple(value)
 
