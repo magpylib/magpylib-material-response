@@ -104,9 +104,65 @@ jobs:
       - name: Test package
         run: .venv/bin/python -m pytest -ra
 
+  lowest:
+    name: At the lowest pins
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      # our own pins at their floors, the extras' too; what they pull in at its
+      # newest, as an install would take it
+      - name: Install package at its lowest pins
+        run: |
+          uv venv
+          uv pip install --resolution lowest-direct ".[tetgen,fem]" "pytest>=9"
+
+      # a floor that a dependency has since raised is no longer tested here,
+      # only claimed: name it
+      - name: Check that each floor is what was installed
+        run: |
+          .venv/bin/python - <<'EOF'
+          import re
+          import sys
+          import tomllib
+          from importlib.metadata import version
+
+          project = tomllib.load(open("pyproject.toml", "rb"))["project"]
+          pins = project["dependencies"] + [
+              pin for extra in ("tetgen", "fem")
+              for pin in project["optional-dependencies"][extra]
+          ]
+          def parts(v):
+              release = re.match(r"\d+(\.\d+)*", v).group()  # 6.0 == 6.0.0
+              return (*map(int, release.split(".")), 0, 0, 0)[:4]
+          off = []
+          for pin in pins:
+              found = re.fullmatch(r"([\w.-]+)(?:\[[^]]*\])?>=([\d.]+)", pin.replace(" ", ""))
+              if found:
+                  name, floor = found.groups()
+                  print(f"{name} >= {floor}: {version(name)}")
+                  if parts(version(name)) != parts(floor):
+                      off.append(f"{name}: pinned >= {floor}, the lowest that installs is {version(name)}")
+          sys.exit("\n".join(off) or None)
+          EOF
+
+      - name: Test package
+        run: .venv/bin/python -m pytest -ra
+
   pass:
     if: always()
-    needs: [lint, checks, bare]
+    needs: [lint, checks, bare, lowest]
     runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
