@@ -102,7 +102,8 @@ and this project adheres to
   solves by `apply_face_charge` in 0.28 GB instead of 4.0 GB, by `apply_demag`
   in 0.26 GB instead of 2.0 GB, both 2 to 4 times faster. Face charge no longer
   evaluates its drive in chunks of its own
-  ([#108](https://github.com/magpylib/magpylib-material-response/issues/108)).
+  ([#108](https://github.com/magpylib/magpylib-material-response/issues/108),
+  [#117](https://github.com/magpylib/magpylib-material-response/pull/117)).
 
 ### Removed
 
