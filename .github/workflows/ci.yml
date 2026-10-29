@@ -131,8 +131,8 @@ jobs:
       # a floor that a dependency has since raised is no longer tested here,
       # only claimed: name it
       - name: Check that each floor is what was installed
-        shell: .venv/bin/python {0}
         run: |
+          .venv/bin/python - <<'EOF'
           import re
           import sys
           import tomllib
@@ -155,6 +155,7 @@ jobs:
                   if parts(version(name)) != parts(floor):
                       off.append(f"{name}: pinned >= {floor}, the lowest that installs is {version(name)}")
           sys.exit("\n".join(off) or None)
+          EOF
 
       - name: Test package
         run: .venv/bin/python -m pytest -ra
