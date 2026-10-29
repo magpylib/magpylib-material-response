@@ -559,15 +559,20 @@ def _interfaces(bodies):
         b.shells if isinstance(b, TriBody) else np.zeros(len(T), int)
         for b, T in zip(bodies, surfaces, strict=True)
     ]
+    # pairs whose boxes meet, the rest skipped: 100 cubes apart took 1.1 s
+    lo = np.array([T.reshape(-1, 3).min(0) for T in surfaces])
+    hi = np.array([T.reshape(-1, 3).max(0) for T in surfaces])
+    gap = max(contact_tol(b) for b in bodies)
+    meet = ((lo[:, None] <= hi[None] + gap) & (lo[None] <= hi[:, None] + gap)).all(2)
     found = {}  # (ia, ib): (on, crossing, shell met), a's panels against b
-    for ia, a in enumerate(bodies):
-        for ib, b in enumerate(bodies):
-            if (ia == ib and shells[ia] == 1) or not _same_material(a, b):
-                continue
-            found[ia, ib] = _on_surface(
-                *polygons[ia], surfaces[ib], contact_tol(a, b),
-                own[ia] if ia == ib else None, walls[ib],
-            )  # fmt: skip
+    for ia, ib in zip(*np.nonzero(meet), strict=True):
+        a, b = bodies[ia], bodies[ib]
+        if (ia == ib and shells[ia] == 1) or not _same_material(a, b):
+            continue
+        found[ia, ib] = _on_surface(
+            *polygons[ia], surfaces[ib], contact_tol(a, b),
+            own[ia] if ia == ib else None, walls[ib],
+        )  # fmt: skip
     shared = [np.zeros(len(P), bool) for P, _ in polygons]
     for (ia, ib), (on, crossing, met) in found.items():
         if crossing.any() or found.get((ib, ia), (None, np.zeros(1, bool)))[1].any():
@@ -638,25 +643,33 @@ def _on_surface(corners, normal, surface, tol, own=None, walls=None):
     near = np.flatnonzero(((points >= lo) & (points <= hi)).all(2).any(1))
     n = np.cross(surface[:, 1] - surface[:, 0], surface[:, 2] - surface[:, 0])
     length = np.linalg.norm(n, axis=1)
-    for t in np.flatnonzero(length > 0):  # one of no area has no plane
-        nt = n[t] / length[t]
-        facing = near[normal[near] @ nt < -1 + 1e-6]
+    tri = np.flatnonzero(length > 0)  # one of no area has no plane
+    nt = n[tri] / length[tri, None]
+    # every panel against every triangle facing it at once, not triangle by
+    # triangle: 64 touching cubes took 0.6 s so; in blocks of bounded memory
+    rows = max(1, 4_000_000 // max(len(tri), 1))
+    for r in range(0, len(near), rows):
+        block = near[r : r + rows]
+        facing = normal[block] @ nt.T < -1 + 1e-6
         if own is not None:
-            facing = facing[own[facing] != walls[t]]
-        if not facing.size:
-            continue
-        x = points[facing]
-        flat = np.abs((x - surface[t, 0]) @ nt) <= tol
-        # the distance inside each edge, outward normals in the plane
-        inside = np.full(x.shape[:2], np.inf)
-        for k in range(3):
-            a, b = surface[t, k], surface[t, (k + 1) % 3]
-            m = np.cross(b - a, nt)
-            inside = np.minimum(inside, -((x - a) @ (m / np.linalg.norm(m))))
-        on[facing] |= flat & (inside >= -tol)
-        deep[facing] |= flat & (inside > tol)
-        hit = flat[:, -1] & (inside[:, -1] >= -tol)
-        met[facing[hit]] = walls[t]
+            facing &= own[block][:, None] != walls[tri][None]
+        i, j = np.nonzero(facing)
+        for c in range(0, len(i), 200_000):
+            p, t = block[i[c : c + 200_000]], j[c : c + 200_000]
+            x, T, u = points[p], surface[tri[t]], nt[t]
+            flat = np.abs(np.einsum("mkd,md->mk", x - T[:, None, 0], u)) <= tol
+            # the distance inside each edge, outward normals in the plane
+            inside = np.full(x.shape[:2], np.inf)
+            for k in range(3):
+                m = np.cross(T[:, (k + 1) % 3] - T[:, k], u)
+                m /= np.linalg.norm(m, axis=1, keepdims=True)
+                inside = np.minimum(
+                    inside, -np.einsum("mkd,md->mk", x - T[:, None, k], m)
+                )
+            np.logical_or.at(on, p, flat & (inside >= -tol))
+            np.logical_or.at(deep, p, flat & (inside > tol))
+            hit = flat[:, -1] & (inside[:, -1] >= -tol)
+            met[p[hit]] = walls[tri[t[hit]]]
     whole = on.all(1)
     return whole, deep.any(1) & ~whole, met
 

@@ -331,6 +331,33 @@ def test_touching_shells_of_one_mesh_solve_as_two_meshes():
     assert _relative(*fields) < 1e-4
 
 
+def test_a_part_inside_parts_of_its_material_keeps_no_faces():
+    """A block of 3 x 3 x 3 touching cubes: the centre one shares all its
+    faces, so its sheet has none, draws nothing and reports the block's
+    polarization. Building that empty sheet crashed."""
+
+    def cube(a, at=(0, 0, 0)):
+        return magpy.magnet.Cuboid(
+            dimension=(a,) * 3, polarization=(0, 0, 0), position=at
+        )
+
+    a, steps = 0.002, (-1, 0, 1)
+    block = [
+        cube(a, (a * i, a * j, a * k)) for i in steps for j in steps for k in steps
+    ]
+    models = [magpy.Collection(*block), magpy.Collection(cube(3 * a))]
+    solved = []
+    for model, level in zip(models, (1, 4), strict=True):
+        model.susceptibility, model.H_ext = 1000, (0.002, 0, 0.01)
+        solved.append(apply_face_charge(model, level=level))
+    centre, whole = solved[0].children[13], solved[1].children[0]
+    assert len(centre.faces) == 0
+    assert centre.get_trace() == []
+    assert _relative(centre.mean_polarization, whole.mean_polarization) < 0.01
+    sensors = [(0.006, 0.002, 0.001), (0, 0, 0.007), (-0.005, 0.004, -0.003)]
+    assert _relative(*(s.getB(sensors) for s in solved)) < 0.01
+
+
 @pytest.mark.parametrize(
     ("mesh", "gap", "rtol"),
     [(False, 1e-8, 1e-4), (True, 1e-7, 2e-3)],

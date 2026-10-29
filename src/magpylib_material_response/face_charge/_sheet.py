@@ -236,7 +236,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         a, b = P[F].reshape(-1, 3), P[np.roll(F, -1, axis=1)].reshape(-1, 3)
         d = b - a  # edge k of face k // 3, from its corner k % 3 to the next
         length = np.linalg.norm(d, axis=1)
-        tol = 1e-8 * (np.ptp(P, axis=0).max() or 1.0)
+        tol = 1e-8 * ((np.ptp(P, axis=0).max() if len(P) else 0.0) or 1.0)
         near = cKDTree(P).query_ball_point((a + b) / 2, length / 2 + tol)
         edge = np.repeat(np.arange(len(near)), [len(c) for c in near])
         vertex = np.fromiter(itertools.chain.from_iterable(near), int, len(edge))
@@ -292,6 +292,8 @@ class ChargeSheet(magpy.misc.CustomSource):
             line_dash,
         )
 
+        if not self._faces.size:  # a part inside others, all its faces shared
+            return []
         P = self._V.reshape(-1, 3)
         i, j, k = np.arange(len(P)).reshape(-1, 3).T
         q = self._smoothed()
@@ -354,7 +356,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         inv, w = group[: self._q.size], self._frames[5][face[: self._q.size]]
         total, weight = np.bincount(inv, w * self._q.ravel()), np.bincount(inv, w)
         # a group of points on edges alone has no weight here
-        return np.divide(total, weight, out=np.zeros_like(total), where=weight > 0)[inv]
+        return np.divide(total, weight, out=np.zeros(len(total)), where=weight > 0)[inv]
 
     def _edges(self):
         """Vertex pairs (k, 2) of the edges between surface elements: an edge
@@ -378,7 +380,8 @@ class ChargeSheet(magpy.misc.CustomSource):
         (m, 3), in A/m; coincident corners become one vertex."""
         T = np.asarray(triangles, float).reshape(-1, 3, 3)
         P = T.reshape(-1, 3)
-        span = np.ptp(P, axis=0).max() or 1.0
+        # none for a part inside parts of its material, all its faces shared
+        span = (np.ptp(P, axis=0).max() if len(P) else 0.0) or 1.0
         key = np.round(P / (1e-9 * span)).astype(np.int64)
         _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
         return cls(P[first], inv.reshape(-1, 3), charge_densities, **kwargs)

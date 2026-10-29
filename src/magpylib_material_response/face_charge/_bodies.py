@@ -364,7 +364,8 @@ def cross_block(a, bs):
     reach = []
     for b in bs:
         Rab, cb = _relative(a, b)
-        aligned = np.allclose(np.abs(Rab), np.round(np.abs(Rab)), atol=1e-9)
+        turn = np.abs(Rab)  # not np.allclose: 9,900 pairs of 100 cubes took 0.2 s
+        aligned = np.abs(turn - np.round(turn)).max() <= 1e-9
         reach.append(np.full(b.panels.N, (contact_tol if aligned else near_tol)(a, b)))
         pts, w, S, T = b.galerkin.gauss_points(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
