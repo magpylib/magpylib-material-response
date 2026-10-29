@@ -22,16 +22,17 @@ and this project adheres to
   within 0.25 %. The reference data of the docs and the tests are now its
   results, which `scripts/fem_references.py` recomputes, in place of exports
   from a commercial code that no one could rerun. `compare` puts a `mesh_study`
-  and a `fem_study` side by side, per observer: both values, both error bars,
-  and whether they agree. In the repository, `validation/` holds 19 cases, 16
-  with a stored reference; every PR checks the method of moments against them
-  and is timed against its base branch in a comment, and every night all methods
-  climb their settings against references made again, their records kept on a
-  `benchmarks` branch, and must beat magpylib alone, the model without its
-  material response. It found a mesh NGSolve could not assemble, which
-  `fem_solve` now makes again at another grading. Two docs pages: checking a
-  result with finite elements, and a magnet in a steel tube, where the method of
-  moments converges inside but behind the shield needs far more cells
+  and a `fem_study` side by side, per observer, positions or magpylib sensors
+  read in their own frames: both values, both error bars, and whether they
+  agree. In the repository, `validation/` holds 19 cases, 16 with a stored
+  reference; every PR checks the method of moments against them and is timed
+  against its base branch in a comment, and every night all methods climb their
+  settings against references made again, their records kept on a `benchmarks`
+  branch, and must beat magpylib alone, the model without its material response.
+  It found a mesh NGSolve could not assemble, which `fem_solve` now makes again
+  at another grading. Two docs pages: checking a result with finite elements,
+  and a magnet in a steel tube, where the method of moments converges inside but
+  behind the shield needs far more cells
   ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
   [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
   [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
@@ -101,6 +102,10 @@ and this project adheres to
   magpylib 6.0 already required scipy 1.17: the 1.12 stated here could not be
   installed. CI tests the package at its lowest pins
   ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
+- A magnet without a susceptibility, on itself or a parent, is fixed in
+  `apply_demag`, `mesh_study` and `fem_solve`, as in `apply_face_charge`. They
+  raised "No susceptibility defined in any parent collection", naming no object
+  ([#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
 
 ### Removed
 
@@ -137,12 +142,15 @@ and this project adheres to
   longer swings with the cells across its wall. On curved cells point matching
   gave the system positive eigenvalues: a tube with a 1 mm wall at χ = 1000 came
   out −10 %, −68 % and +2 % from its moment with 1, 2 and 3 cells across.
-  Segment cells close together now take each other's field averaged over the
-  cell, which keeps every eigenvalue negative: −12 %, −11 % and −11 %, and
-  closer as cells are added around the ring. Solves with segment cells take 2 to
-  3 times longer
+  Segment cells close together, from a susceptibility of 1, now take each
+  other's field averaged over the cell, which keeps every eigenvalue negative:
+  −12 %, −11 % and −11 %, and closer as cells are added around the ring. Such
+  solves take 2 to 7 times longer, the most on small meshes; below a
+  susceptibility of 1, where point matching cannot turn the system indefinite,
+  cells are matched at their centroids as before
   ([#92](https://github.com/magpylib/magpylib-material-response/issues/92),
-  [#100](https://github.com/magpylib/magpylib-material-response/pull/100)).
+  [#100](https://github.com/magpylib/magpylib-material-response/pull/100),
+  [#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
 - `H_ext` is checked before a solve, by `apply_demag`, `apply_face_charge` and
   `fem_solve` alike: anything but three finite numbers, in any layout, raises an
   error that says what is expected, and fields above 10 T warn once, at the
@@ -151,6 +159,11 @@ and this project adheres to
   `apply_face_charge`; 1e5 A/m gave 36,000 T beside a soft cube, and the Earth's
   40 A/m was taken as 40 T, silently
   ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
+- `mesh_all`, `mesh_uniform` and `mesh_study` keep the applied field and the
+  susceptibility that a meshed sub-collection inherits from the model around it.
+  The copy they mesh has no parent, so these were lost and the part did not
+  respond, silently, where `apply_face_charge` and `fem_solve` read them
+  ([#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
 
 ## [0.6.0] - 2026-10-23
 
