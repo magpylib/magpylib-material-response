@@ -122,8 +122,9 @@ the axis from 1.1 % to 0.2 %. Outside, the field is what the tube lets through,
 % and 64 % off. Cells along the tube decide it, more than cells around or
 across: the flux turns into the wall near the magnet, within a few cells. Cells
 of one size fine enough there would number in the thousands, and curved cells
-cost more than cuboids. For the field a shield lets through, take the
-finite-element value.
+cost more than cuboids. For the field a shield lets through, take face charge
+with `refine=1`, within 1.0 % of the finite-element value outside this tube
+([face charge](../face_charge.md)), or finite elements.
 
 ```{code-cell} ipython3
 :tags: [hide-input]

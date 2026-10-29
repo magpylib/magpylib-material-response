@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import time
 
 import magpylib as magpy
@@ -10,7 +13,10 @@ import pytest
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge import (
+    ChargeSheet,
+    apply_face_charge,
+)
 from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
 from magpylib_material_response.face_charge._mesh import (
@@ -962,6 +968,43 @@ def test_threads_take_the_callers_numpy_error_settings():
 
     with np.errstate(divide="raise"), pytest.raises(FloatingPointError):
         run(divide, range(8))
+
+
+#: a parent fills its pool, forks, and its child solves: in a process of its
+#: own, as forking beside this suite's other threads hung the fork itself on
+#: Linux with Python 3.11
+FORK_AFTER_A_SOLVE = """
+import os, sys, time
+from magpylib_material_response.face_charge import _parallel
+_parallel.threads = lambda: 4
+_parallel.run(time.sleep, [1e-3] * 8, work=10**7)
+pid = os.fork()
+if pid == 0:
+    try:
+        _parallel.run(time.sleep, [1e-3] * 8, work=10**7)
+    finally:
+        os._exit(0)
+deadline = time.monotonic() + 20
+while not os.waitpid(pid, os.WNOHANG)[0]:
+    if time.monotonic() > deadline:
+        os.kill(pid, 9)
+        sys.exit("the forked child hung")
+    time.sleep(0.05)
+"""
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="no fork here")
+def test_a_forked_child_runs_on_threads_of_its_own():
+    """A child forked after a solve, as a multiprocessing.Pool on Linux does,
+    inherited the pool but none of its threads, and waited forever."""
+    done = subprocess.run(
+        [sys.executable, "-c", FORK_AFTER_A_SOLVE],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
 
 
 @pytest.mark.parametrize(

@@ -49,7 +49,6 @@ fem = ["ngsolve>=6.2.2608"]
 [project.urls]
 Homepage = "https://github.com/magpylib/magpylib-material-response"
 "Bug Tracker" = "https://github.com/magpylib/magpylib-material-response/issues"
-Discussions = "https://github.com/magpylib/magpylib-material-response/discussions"
 Changelog = "https://github.com/magpylib/magpylib-material-response/releases"
 
 

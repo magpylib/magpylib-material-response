@@ -96,6 +96,8 @@ myst_enable_extensions = [
     "substitution",
     "tasklist",
 ]
+# so that links to a page's sections by their titles resolve
+myst_heading_anchors = 3
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),

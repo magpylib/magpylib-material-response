@@ -30,7 +30,7 @@ non-parallel, and would lose the lower bound, so there is none.
 Two evaluation strategies apply the chosen rule, so ``solver="direct"`` and
 ``solver="iterative"`` solve the same system:
 
-- ``"direct"``   materialises the dense ``T`` and calls ``np.linalg.solve``;
+- ``"direct"``   materialises the dense ``T`` and calls ``scipy.linalg.solve``;
 - ``"iterative"`` applies ``T`` matrix-free in GMRES — FFT convolution for
   uniform-grid clusters (:mod:`magpylib_material_response.demag_fft`), dense
   or row-sum-bounded sparse blocks for everything else.
@@ -158,21 +158,21 @@ def _has_path(src):
 def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
     Priority is given at the source level, however if value is not found, it is searched
-    up the parent tree, if available. Raises an error if no value is found when reached
-    the top level of the tree."""
+    up the parent tree, if available. A magnet with none, on itself or any
+    parent, is fixed: 0, as in apply_face_charge. When no magnet has one, a
+    warning says so: a susceptibility forgotten, or set on a parent the magnets
+    were meshed away from, would otherwise leave every part fixed silently."""
     n = len(sources)
 
     if susceptibility is None:
         # Get susceptibilities from source attributes
-        susceptibilities = []
-        for src in sources:
-            src_susceptibility = getattr(src, "susceptibility", None)
-            if src_susceptibility is None:
-                if src.parent is None:
-                    msg = "No susceptibility defined in any parent collection"
-                    raise ValueError(msg)
-                src_susceptibility = _get_susceptibility_from_hierarchy(src.parent)
-            susceptibilities.append(src_susceptibility)
+        susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
+        if n and not any(_has_susceptibility(src) for src in sources):
+            warnings.warn(
+                "No magnet has a susceptibility, on itself or a parent collection: "
+                "every one is fixed, and nothing responds.",
+                stacklevel=_outside_this_package(),
+            )
 
         susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
     else:
@@ -293,16 +293,25 @@ def _subtract_susceptibility_product(T, chi):
     return T
 
 
+def _has_susceptibility(source):
+    """Whether `source` or one of its parents sets a susceptibility."""
+    while source is not None:
+        if getattr(source, "susceptibility", None) is not None:
+            return True
+        source = source.parent
+    return False
+
+
 def _get_susceptibility_from_hierarchy(source):
     """Helper function to get susceptibility value from source or its parent hierarchy.
-    Returns the raw susceptibility value (scalar or 3-tuple), not the reshaped array."""
-    susceptibility = getattr(source, "susceptibility", None)
-    if susceptibility is not None:
-        return susceptibility
-    if source.parent is None:
-        msg = "No susceptibility defined in any parent collection"
-        raise ValueError(msg)
-    return _get_susceptibility_from_hierarchy(source.parent)
+    Returns the raw susceptibility value (scalar or 3-tuple), not the reshaped
+    array; 0 when neither the source nor a parent sets one: a fixed magnet."""
+    while source is not None:
+        susceptibility = getattr(source, "susceptibility", None)
+        if susceptibility is not None:
+            return susceptibility
+        source = source.parent
+    return 0.0
 
 
 def get_H_ext(*sources):
@@ -426,11 +435,13 @@ def _check_interaction(interaction, magnets_list, atol=QUAT_ATOL):
         raise ValueError(msg)
 
 
-def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL):
+def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL, chi=None):
     """Run :func:`analyze_collection` on a list of magnet objects, with logging.
 
     Under the Newell rule every cuboid stays in a geometry cluster, whatever the
-    group size, because each pair needs both prisms' shapes.
+    group size, because each pair needs both prisms' shapes. Close
+    cylinder-segment cells are averaged unless ``chi``, the cells' (n, 3, 3)
+    susceptibilities, stays below ``SEGMENT_AVERAGE_FROM_CHI`` in their cluster.
     """
     min_cells = 1 if interaction == "newell" else MIN_CLUSTER_CELLS
     positions, clusters = analyze_collection(magnets_list, atol, min_cells)
@@ -442,10 +453,16 @@ def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL):
         n_generic=counts.get("generic", 0),
     )
     for cl in clusters:
-        if cl["kind"] == "generic":
-            averaged = _segment_averages(magnets_list, cl["indices"])
-            if averaged is not None:
-                cl["averaged"] = averaged
+        if cl["kind"] != "generic":
+            continue
+        if chi is not None and (
+            np.linalg.norm(chi[cl["indices"]], 2, axis=(1, 2)).max()
+            < SEGMENT_AVERAGE_FROM_CHI
+        ):
+            continue  # point matching's positive eigenvalues are harmless here
+        averaged = _segment_averages(magnets_list, cl["indices"])
+        if averaged is not None:
+            cl["averaged"] = averaged
     return positions, clusters
 
 
@@ -618,6 +635,15 @@ def _point_block_T(srcs_b, pos_a):
 #: points at 1, 2 and 3 cells across, 1.5 to 0.7 points; at 1 a positive
 #: eigenvalue comes back with 3 across, and at 0.75 the system is indefinite.
 SEGMENT_AVERAGE_REACH = 2.0
+#: Cells of a cluster whose susceptibility stays below this skip the average:
+#: point matching's positive eigenvalues, which turn the system indefinite
+#: only once chi times them reaches 1, are 0.16 on that tube with 3 cells
+#: across and up to 0.27 on shorter ones with more (none on solid cylinders).
+#: A meshed cylinder of 110 cells at chi = 0.5 solves in 0.8 s, not 4.4 s, as
+#: before #100. On a thin tube the field moves by up to 16 % where the switch
+#: is crossed, the two schemes' difference; point matching was the closer to
+#: FEM of the two at chi = 0.9.
+SEGMENT_AVERAGE_FROM_CHI = 1.0
 #: Gauss points per direction (radius, angle, height) of a cell average: 3
 #: instead of 2 moves that tube's moment by 0.5 points, 4 % of its error.
 SEGMENT_AVERAGE_POINTS = 2
@@ -1427,7 +1453,8 @@ def apply_demag(
         all cells, or one entry (scalar or 3-vector) per cell. A 3-vector gives an
         anisotropic susceptibility along the cell's own x, y and z axes, which turn
         with its orientation like its polarization. If not defined, values are
-        searched at object level or parent level if needed.
+        searched at object level or parent level if needed; a cell with none
+        there either is fixed, as in ``apply_face_charge``.
 
     inplace: bool
         If False, applies demagnetization on a copy of the input collection and returns
@@ -1584,7 +1611,7 @@ def apply_demag(
 
         # ── demag operator under the chosen rule ────────────────────────────
         _check_interaction(interaction, magnets_list)
-        positions, clusters = _analyze_collection(magnets_list, interaction)
+        positions, clusters = _analyze_collection(magnets_list, interaction, chi=chi)
         auto = solver == "auto"
         if auto:
             solver, share = _auto_solver(clusters)

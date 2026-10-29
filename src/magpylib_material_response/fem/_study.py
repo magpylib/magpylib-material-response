@@ -12,7 +12,7 @@ from magpylib_material_response.convergence import (
     _sizes,
     _warn_no_estimate,
 )
-from magpylib_material_response.fem._solve import Model
+from magpylib_material_response.fem._solve import Model, _are_sensors
 
 
 @dataclass(frozen=True)
@@ -85,10 +85,12 @@ def fem_study(
     ----------
     collection : magpylib.Collection
         The model, as :func:`fem_solve` takes it.
-    quantity : array_like or callable
-        Positions (..., 3) in m at which the flux density B is compared; the
-        mesh is refined there. Or a function of a :class:`FemSolution`
-        returning the quantity of interest, such as ``lambda s: s.moment``.
+    quantity : array_like, Sensor or callable
+        Positions (..., 3) in m, or magpylib sensors read in their own frames
+        as :func:`~magpylib_material_response.convergence.mesh_study` reads
+        them, at which the flux density B is compared; the mesh is refined
+        there. Or a function of a :class:`FemSolution` returning the quantity
+        of interest, such as ``lambda s: s.moment``.
     orders : sequence of int, default (2, 3, 4)
         Polynomial orders, increasing. Three or more give an error estimate,
         two only a warning.
@@ -108,7 +110,7 @@ def fem_study(
     geometrically toward the edges (Babuška and Guo 1996), until the finest
     layer limits it. The estimate takes that difference, the last change, as
     the error of the highest order too, times the factor of safety
-    ``SAFETY_FACTOR`` of :mod:`~magpylib_material_response.convergence`: an
+    ``SAFETY_FACTOR`` of ``magpylib_material_response.convergence``: an
     overestimate while the error still falls. It extrapolates nothing, because
     the rate slows as the layers start to limit: on a cube at orders 3, 4, 5
     the last ratio of changes, 0.09, would put the remaining error of the
@@ -136,6 +138,13 @@ def fem_study(
         _warn_no_estimate("orders", 2, "a higher order", stacklevel=2)
     if callable(quantity):
         evaluate, observers = quantity, None
+    elif _are_sensors(quantity):
+        observers = quantity  # read in the sensors' frames, as mesh_study does
+
+        def evaluate(solution):
+            field = np.asarray(solution.getB(quantity), dtype=float)
+            return field.reshape(1, 3) if field.ndim == 1 else field
+
     else:
         # one row per observer, so that errors are per observer, a lone one too
         observers = np.asarray(quantity, dtype=float).reshape(-1, 3)

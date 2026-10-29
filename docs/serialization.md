@@ -22,11 +22,12 @@ can be run later without repeating the simulation.
 `from_json` reconstructs the objects from that string. Supported types are
 `magnet.Cuboid`, `magnet.Cylinder`, `magnet.CylinderSegment`, `magnet.Sphere`,
 `magnet.Tetrahedron`, `magnet.TriangularMesh`, `current.Polyline`,
-`current.Circle`, `Sensor`, the `ChargeSheet` of `apply_face_charge`, and
-arbitrarily nested `Collection` objects — in particular, demagnetized
-tetrahedral meshes from `mesh_TriangularMesh` and face-charge solutions can be
-persisted. All geometry (position, orientation, paths), magnetic polarizations
-and susceptibilities are preserved exactly.
+`current.Circle`, `current.TriangleStrip`, `current.TriangleSheet`, `Sensor`,
+the `ChargeSheet` of `apply_face_charge`, and arbitrarily nested `Collection`
+objects — in particular, demagnetized tetrahedral meshes from
+`mesh_TriangularMesh` and face-charge solutions can be persisted. All geometry
+(position, orientation, paths), magnetic polarizations and susceptibilities are
+preserved exactly.
 
 ## Define sources, mesh and apply demagnetization
 

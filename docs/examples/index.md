@@ -20,7 +20,7 @@ Executable examples, in suggested reading order:
   methods disagree, and whose error bar is too short.
 - [A magnet in a steel tube](shield_tube.md) — a tube meshed into cylinder
   segments: inside it the method of moments converges, behind the shield it
-  takes finite elements.
+  takes face charge or finite elements.
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
   `TriangularMesh` magnet with TetGen, checked against the exact solution for a
   magnetized sphere.

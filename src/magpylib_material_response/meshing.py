@@ -36,6 +36,21 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     return coll
 
 
+def _detached_copy(obj, **kwargs):
+    """A copy of `obj`, which has no parent: the applied field and the
+    susceptibility `obj` inherits from its parents are set on the copy, or it
+    would lose them."""
+    copied = obj.copy(**kwargs)
+    for name in ("H_ext", "susceptibility"):
+        if getattr(obj, name, None) is None:
+            parent = obj.parent
+            while parent is not None and getattr(parent, name, None) is None:
+                parent = parent.parent
+            if parent is not None:
+                setattr(copied, name, copy.deepcopy(getattr(parent, name)))
+    return copied
+
+
 def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
     """
     Split Magpylib cuboid up into small cuboid cells
@@ -693,7 +708,7 @@ def mesh_TriangularMesh(
     except ImportError as exc:
         msg = (
             "mesh_TriangularMesh requires the 'tetgen' package, which is an optional "
-            "dependency. Install it with: pip install magpylib-material-response[tetgen]"
+            'dependency. Install it with: pip install "magpylib-material-response[tetgen]"'
         )
         raise ImportError(msg) from exc
 
@@ -795,7 +810,7 @@ def mesh_all(
     )
     allowed = (*supported, BaseCurrent)
     if not inplace:
-        obj = obj.copy(**kwargs)
+        obj = _detached_copy(obj, **kwargs)
     children = [obj]
     if isinstance(obj, magpy.Collection):
         children = list(obj.sources_all)
@@ -945,7 +960,7 @@ def mesh_uniform(obj, cells_across, inplace=False, max_cells=1_000_000, **kwargs
         )
         raise ValueError(msg)
     if not inplace:
-        obj = obj.copy(**kwargs)
+        obj = _detached_copy(obj, **kwargs)
     for child in parts(obj):
         parent = child.parent
         kw = kwargs if parent is None else {}

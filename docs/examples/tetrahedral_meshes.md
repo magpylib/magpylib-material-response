@@ -25,7 +25,7 @@ which drives [TetGen](https://tetgen.org) under the hood. TetGen is an optional
 dependency:
 
 ```bash
-pip install magpylib-material-response[tetgen]
+pip install "magpylib-material-response[tetgen]"
 ```
 
 Each tetrahedron acts on the others through magpylib's closed-form `Tetrahedron`
