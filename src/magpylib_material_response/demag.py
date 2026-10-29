@@ -55,6 +55,7 @@ own axes (#50), so it enters the solve as one 3x3 tensor per cell,
 from __future__ import annotations
 
 import itertools
+import warnings
 from collections import Counter
 
 import magpylib as magpy
@@ -82,6 +83,11 @@ from magpylib_material_response.newell import (
     self_demag_factors,
 )
 from magpylib_material_response.utils import timelog
+
+#: An applied field ``H_ext`` stronger than this, in tesla, is warned about: it
+#: is most likely H in A/m, magpylib's unit for H, where mu0 * H in T is meant.
+#: 1e5 A/m taken as tesla gives fields of tens of thousands of tesla, silently.
+H_EXT_WARN = 100.0
 
 #: A pair block with more dense entries than this may be stored sparse, with a
 #: rigorous row-sum error budget, when that pays (``SPARSIFY_MIN_DROP``).
@@ -299,7 +305,8 @@ def get_H_ext(*sources):
 
     `H_ext` is a uniform applied field given as mu_0 * H in tesla. A source's own
     value takes priority; otherwise it is searched up the parent tree, and it is
-    zero if no parent sets it."""
+    zero if no parent sets it. A value that is not three finite numbers raises,
+    and one stronger than ``H_EXT_WARN`` warns: it is most likely in A/m."""
     H_exts = []
     for src in sources:
         h_ext = getattr(src, "H_ext", None)
@@ -309,8 +316,30 @@ def get_H_ext(*sources):
             else:
                 H_exts.extend(get_H_ext(src.parent))
         else:
-            H_exts.append(h_ext)
+            H_exts.append(_checked_H_ext(h_ext, src))
     return H_exts
+
+
+def _checked_H_ext(h_ext, src):
+    """`src`'s `h_ext` as three floats, or an error that says what is expected."""
+    try:
+        value = np.asarray(h_ext, dtype=float)
+    except (TypeError, ValueError):
+        value = None
+    if value is None or value.shape != (3,) or not np.isfinite(value).all():
+        msg = (
+            f"H_ext of {src!r} must be three finite numbers, mu0 * H in tesla, "
+            f"such as (0, 0, 0.01); got {h_ext!r}."
+        )
+        raise ValueError(msg)
+    strength = np.linalg.norm(value)
+    if strength > H_EXT_WARN:
+        warnings.warn(
+            f"H_ext of {src!r} is {strength:.3g} T. H_ext is mu0 * H in tesla, "
+            "not H in A/m: multiply a field in A/m by magpylib.mu_0.",
+            stacklevel=3,
+        )
+    return tuple(value)
 
 
 # ══════════════════════════════════════════════════════════════════════════

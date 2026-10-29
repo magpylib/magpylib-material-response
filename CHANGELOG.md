@@ -137,6 +137,14 @@ and this project adheres to
   3 times longer
   ([#92](https://github.com/magpylib/magpylib-material-response/issues/92),
   [#100](https://github.com/magpylib/magpylib-material-response/pull/100)).
+- `H_ext` is checked before a solve, by `apply_demag`, `apply_face_charge` and
+  `fem_solve` alike: anything but three finite numbers raises an error that says
+  what is expected, and a field above 100 T warns that it is most likely H in
+  A/m, not μ0·H in tesla. A scalar failed in `apply_demag` with a reshape error
+  and was taken in `apply_face_charge`; 1e5 A/m gave 36,000 T, silently. The
+  package requires scipy 1.17, as magpylib 6.0 already did: the 1.12 it stated
+  could not be installed
+  ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
 
 ## [0.6.0] - 2026-10-23
 

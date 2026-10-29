@@ -11,6 +11,7 @@ from magpylib_material_response.demag import (
     apply_demag,
     get_susceptibilities,
 )
+from magpylib_material_response.face_charge import apply_face_charge
 from magpylib_material_response.meshing import mesh_Cuboid
 
 
@@ -286,6 +287,34 @@ def test_copy_keeps_the_parents_material_attributes():
     apply_demag(in_place, inplace=True)
     assert copied[2] > 0.01
     np.testing.assert_allclose(copied, in_place.sources_all[0].polarization)
+
+
+@pytest.mark.parametrize("solver", ["demag", "face charge"])
+@pytest.mark.parametrize(
+    ("h_ext", "kind", "match"),
+    [
+        (0.1, ValueError, "three finite numbers"),
+        ((0, 0.1), ValueError, "three finite numbers"),
+        ((0, 0, np.nan), ValueError, "three finite numbers"),
+        ((0, 0, 1e5), UserWarning, "not H in A/m"),
+    ],
+    ids=["scalar", "two numbers", "nan", "A/m"],
+)
+def test_H_ext_is_checked_before_the_solve(solver, h_ext, kind, match):
+    """A scalar failed in apply_demag with a reshape error and passed in
+    apply_face_charge; 1e5 A/m taken as tesla gave tens of thousands of tesla."""
+    soft = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    soft.susceptibility = 1000
+    model = magpy.Collection(
+        mesh_Cuboid(soft, (2, 2, 2)) if solver == "demag" else soft
+    )
+    model.H_ext = h_ext
+    check = pytest.warns if issubclass(kind, Warning) else pytest.raises
+    with check(kind, match=match):
+        if solver == "demag":
+            apply_demag(model)
+        else:
+            apply_face_charge(model, level=1)
 
 
 def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():
