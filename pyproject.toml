@@ -38,7 +38,7 @@ dependencies = [
   # had told NumPy to ignore. 2.0.0 gave np.unique(..., axis=0) a 2-D inverse
   # (85 tests fail); 2.0.1 took it back
   "numpy>=2.0.1",
-  "scipy>=1.17",
+  "scipy>=1.17.1",  # as magpylib 6.1
 ]
 
 [project.optional-dependencies]
