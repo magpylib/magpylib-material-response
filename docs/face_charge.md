@@ -57,7 +57,8 @@ parts solved together share it, so their colours compare.
   also make a thin part converge early: take `level=2`. A 0.5 mm plate under a
   magnet is within 0.03 % of level 3 there, in 0.5 s instead of 1.7. A solve
   that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB system
-  and 4.8 GB while it is solved, is refused before it is assembled, a triangle
+  that peaks at about twice that while one large part is assembled and solved
+  (6.6 GB at 19,452 unknowns), is refused before it is assembled, a triangle
   mesh's from a count of its cells before they are cut; without a `level`, the
   highest level up to 3 that fits is taken instead, with a warning. A thin wall
   that shields a field, such as a tube around a magnet, needs `refine=1`
@@ -71,9 +72,11 @@ parts solved together share it, so their colours compare.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, and `getJ` gives 0. For B inside a part, such as
   the flux in a yoke, mesh it and use `apply_demag`.
-- **What it leaves to `apply_demag`:** saturation, an anisotropic susceptibility
-  and one varying inside a part, all of which bring back charge inside the part,
-  and objects moving along paths. `apply_face_charge` raises for these.
+- **What it leaves to `apply_demag`:** an anisotropic susceptibility and one
+  varying inside a part, which bring back charge inside the part;
+  `apply_face_charge` raises for these. Neither models saturation yet (#81):
+  check `mean_polarization` (below). Objects moving along paths are refused by
+  both.
 
 ## Triangle meshes and CAD exports
 
@@ -99,8 +102,8 @@ solved = apply_face_charge(magpy.Collection(part, coil), level=2)
 ![The validation's CAD part in a 10 mT field along a direction no symmetry helps with, and the U-core as one closed mesh with its coil, each solved at level 2 and drawn by show() with its graded triangles.](_static/images/face_charge_triangles.png)
 
 - **How well:** the validation's CAD part, a plate with filleted corners and a
-  round hole, reaches 0.70 % of its finite-element reference at level 1 in 0.20
-  s, 0.16 % at level 2 in 0.50 s, and the reference's own 0.07 % from level 3,
+  round hole, reaches 0.69 % of its finite-element reference at level 1 in 0.20
+  s, 0.15 % at level 2 in 0.50 s, and the reference's own 0.07 % from level 3,
   in 1.0 s. The U-core as one closed mesh is within its reference's 0.25 % from
   level 2.
 - **Cuboids stay cuboids:** a box given as triangles needs twice the unknowns of
@@ -142,10 +145,13 @@ references and the exact field of a sphere, on one M4 Pro:
 | Part                                   | Error, time                                                | `apply_demag` at best |
 | -------------------------------------- | ---------------------------------------------------------- | --------------------- |
 | Soft cylinder, 1 mm off its surface    | 0.41 % in 0.12 s at level 2, 0.12 % in 0.3 s at level 3    | 2.4 %                 |
-| Soft sphere, 1 mm off its surface      | 0.20 % in 0.09 s at level 1, 0.12 % in 0.4 s at level 3    |                       |
+| Soft sphere, 1 mm off its surface      | 1.4 % in 0.09 s at level 1, 0.35 % in 0.5 s at level 3 ¹   |                       |
 | Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.85 % in 4.8 s with `refine=1` | 395 %                 |
 | Steel tube around a magnet, outside it | 5.6 % in 8.9 s at level 3, 1.0 % in 21 s with `refine=1`   | 41 %                  |
 | Soft rod 1 mm across, 20 mm long       | 0.07 % in 2.7 s at level 2, the default here               |                       |
+
+¹ In the worst of 2,000 directions, against the exact field; 0.19 and 0.05 % on
+its axes.
 
 - **Thin walls that shield** converge slowly with the level: outside the tube
   the field is what is left of the magnet's after the tube takes most of it, and
@@ -158,11 +164,12 @@ references and the exact field of a sphere, on one M4 Pro:
 
 ## Against finite elements
 
-The repository's validation suite (`validation/`) solves 12 of its cases with
-face charge, at levels 1 to 5, against stored finite-element references. The
-time each method needs to bring the worst group of sensors within 1 % and 0.1 %
-of the reference, solve and `getB` together, one run each on an Apple M4 Pro;
-finite elements are `fem_solve` at orders 2 to 5:
+The repository's validation suite (`validation/`) solves 15 of its cases with
+face charge, at levels 1 to 5, against stored finite-element references; the
+three curved ones are in the table above, the others below. The time each method
+needs to bring the worst group of sensors within 1 % and 0.1 % of the reference,
+solve and `getB` together, one run each on an Apple M4 Pro; finite elements are
+`fem_solve` at orders 2 to 5:
 
 | Case                         | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
 | ---------------------------- | -----------------: | ---------: | -------------------: | -----------: |
@@ -213,8 +220,9 @@ brings 5.6 % down to 1.0 %.
 
 A sheet's `mean_polarization` is the average polarization of the part it
 encloses. While it stays below the knee of the material's B–H curve, the linear
-solve holds. Above it, saturation takes over: mesh the part and use
-`apply_demag` with a B–H iteration.
+solve holds. Above it, saturation takes over, which neither `apply_face_charge`
+nor `apply_demag` models yet (#81): the result then overstates the part's
+polarization.
 
 ## How it works
 
@@ -223,10 +231,11 @@ With `M = M0 + chi H` and `div B = 0`, a uniform isotropic `chi` gives
 `sigma = M.n`, which solves
 
 $$
-(1/\chi + 1/2)\,\sigma - K'\sigma = H_{ext}\cdot n + M_0\cdot n / \chi ,
+(1/\chi + 1/2)\,\sigma - K'\sigma = H_0\cdot n + M_0\cdot n / \chi ,
 $$
 
-with `K'` the adjoint double-layer operator of the surface, which depends on the
+with `H_0` the applied field (the attribute `H_ext` is `mu0 H_0`, in tesla) and
+`K'` the adjoint double-layer operator of the surface, which depends on the
 shape only. The faces are cut into panels graded toward the edges, where a soft
 part's charge is singular. Each panel carries a charge linear across it, with
 fields in closed form, and the equation is solved in its Galerkin form. Touching

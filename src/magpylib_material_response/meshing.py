@@ -693,7 +693,7 @@ def mesh_TriangularMesh(
     except ImportError as exc:
         msg = (
             "mesh_TriangularMesh requires the 'tetgen' package, which is an optional "
-            "dependency. Install it with: pip install magpylib-material-response[tetgen]"
+            'dependency. Install it with: pip install "magpylib-material-response[tetgen]"'
         )
         raise ImportError(msg) from exc
 

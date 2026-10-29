@@ -21,7 +21,10 @@ response**: mesh the magnets into cells, give them a susceptibility, and
 `apply_demag` computes the self-consistent polarization of every cell — the
 demagnetization of the magnets themselves and the magnetization of soft parts
 nearby. All quantities are SI (m, T). [How it works](how_it_works.md) shows what
-happens inside, with 3D views.
+happens inside, with 3D views. Parts with a linear, uniform susceptibility, such
+as soft iron below saturation, need no mesh at all:
+[face charge](face_charge.md) solves them on their surface, more accurately in
+the same time.
 
 ```{code-cell} ipython3
 import magpylib as magpy
