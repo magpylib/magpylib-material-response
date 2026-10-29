@@ -680,7 +680,8 @@ def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher, on_parent):
     cells = 64 if mesher is mesh_all else 4
     inner = model(on_parent)
     B = apply_demag(mesher(inner, cells)).getB((0, 0, 0.006))
-    assert inner.parent is not None and len(inner.children) == 1  # left as it was
+    assert inner.parent is not None  # left as it was
+    assert len(inner.children) == 1
     assert B[2] > 1e-3
     np.testing.assert_allclose(
         B, apply_demag(mesher(model(None), cells)).getB((0, 0, 0.006))
