@@ -875,7 +875,7 @@ def test_too_many_unknowns_raise_before_assembly():
         vertices=V, faces=ConvexHull(V).simplices, polarization=(0, 0, 0)
     )
     plate.susceptibility = 100
-    with pytest.raises(ValueError, match="Even level 1 needs about"):
+    with pytest.raises(ValueError, match="Even level 1 needs at least"):
         apply_face_charge(magpy.Collection(plate))
 
 

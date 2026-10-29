@@ -305,31 +305,6 @@ def _split_cells(cells, h, tol):
     return out
 
 
-class TooFine(ValueError):
-    """The cells would make more than the triangles allowed: ``count`` of them."""
-
-    def __init__(self, count):
-        super().__init__(f"about {count:,} triangles")
-        self.count = count
-
-
-def _split_count(cells, h):
-    """About how many triangles ``_split_cells`` makes of ``cells``, without
-    cutting them: whole cells across each of the two directions, two triangles
-    to a cell, or a fan round a cell left whole."""
-    count = 0
-    for poly, normal in cells:
-        sides = np.roll(poly, -1, axis=0) - poly
-        u = sides[np.argmax(np.linalg.norm(sides, axis=1))]
-        u = u / np.linalg.norm(u)
-        k = 1
-        for w in (u, np.cross(normal, u)):
-            proj = poly @ w
-            k *= max(1, int(np.ceil((proj.max() - proj.min()) / h - 1e-3)))
-        count += 2 * k if k > 1 or len(poly) <= 4 else len(poly)
-    return count
-
-
 def _on_sharp(p, q, segs, tol):
     """True if the segment ``p - q`` lies along one of the sharp segments."""
     if segs.size == 0:
@@ -395,15 +370,20 @@ def _cut_along(polys, lines, coarse, tol):
     return polys
 
 
-def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=(), limit=None):
+def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=()):
     """The closed mesh ``V``, ``F`` cut into triangles (T, 3, 3) graded toward
     its sharp edges, and toward the ``contacts``, lines ``(point, direction,
     normal)`` where a touching part's faces end: ``m`` layers of power ``g``
     over ``ell`` on each side of such an edge or line, the rest in cells of the
-    last layer's size.
+    last layer's size."""
+    return cut_cells(*graded_cells(V, F, ell, m, g, angle, corner, contacts))
 
-    Raises :class:`TooFine` before cutting the cells if they would make more
-    than ``limit`` triangles: a 10 x 10 x 0.05 mm plate, its cells a fraction of
+
+def graded_cells(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=()):
+    """The convex cells of :func:`graded_triangles` before they are cut to the
+    last layer's size, and what :func:`cut_cells` takes with them: ``(cells,
+    size, tol, ell)``. Counted first (:func:`fewest_triangles`), a part that
+    cannot fit is not cut: a 10 x 10 x 0.05 mm plate, its cells a fraction of
     its thickness, did not end (#106)."""
     V = np.asarray(V, float)
     F = np.asarray(F, int)
@@ -472,9 +452,23 @@ def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=(), limi
                         )
                     ]
         cells += [(c, normal) for c in local if len(c) >= 3]
-    h = ell * (1 - ((m - 1) / m) ** g)
-    if limit is not None and (count := _split_count(cells, h)) > limit:
-        raise TooFine(count)
+    return cells, ell * (1 - ((m - 1) / m) ** g), tol, ell
+
+
+def fewest_triangles(cells, h):
+    """A count :func:`cut_cells` makes at least as many triangles as, without
+    cutting: one to a cell at least, and the cell's area over that of the
+    largest piece it is cut into, ``h`` a side but for the rounding of the
+    number of pieces."""
+    total = 0.0
+    for poly, normal in cells:
+        area = abs(np.cross(poly, np.roll(poly, -1, axis=0)).sum(0) @ normal) / 2
+        total += max(1.0, area / (1.002 * h) ** 2)
+    return int(total)
+
+
+def cut_cells(cells, h, tol, ell):
+    """The cells cut to ``h`` and each fanned into triangles (T, 3, 3)."""
     cells = _split_cells(cells, h, tol)
     triangles = []
     for c, _ in cells:

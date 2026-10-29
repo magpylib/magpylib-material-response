@@ -32,8 +32,9 @@ from magpylib_material_response.face_charge._bodies import (
     near_tol,
 )
 from magpylib_material_response.face_charge._mesh import (
-    TooFine,
-    graded_triangles,
+    cut_cells,
+    fewest_triangles,
+    graded_cells,
     rounding,
 )
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
@@ -103,33 +104,33 @@ class TriBody(Part):
         self.fine = None  # triangles whose load takes a finer rule
         self.contacts = []  # lines (point, direction, normal) to grade toward
         self.split = None  # the triangles and shells of a bisection, to mesh
-        self.too_fine = None  # the triangles there would be, when too many to cut
+        self.too_fine = None  # the fewest triangles there would be, if too many
 
     def mesh(self, limit=None):
         """The triangles graded toward the sharp edges, or as bisected since;
         the self block waits for ``assemble``, so that the unknowns can be
-        counted first. Above ``limit`` triangles, none: ``n_dofs`` then counts
-        the triangles there would be, about."""
+        counted first. If they would be more than ``limit`` for certain, none:
+        ``n_dofs`` then counts the fewest there would be."""
         self.too_fine = None
         if self.split is not None:
             (self.T, self.shell), self.split = self.split, None
         else:
-            try:
-                T = [
-                    graded_triangles(
-                        self.vertices,
-                        self.faces[self.shells == k],
-                        LAYER * self.thickness[k],
-                        self.m,
-                        GRADING,
-                        contacts=self.contacts,
-                        limit=limit,
-                    )
-                    for k in range(self.shells.max() + 1)
-                ]
-            except TooFine as error:
-                self.too_fine, self.T = error.count, None
+            graded = [  # every shell counted before any is cut
+                graded_cells(
+                    self.vertices,
+                    self.faces[self.shells == k],
+                    LAYER * self.thickness[k],
+                    self.m,
+                    GRADING,
+                    contacts=self.contacts,
+                )
+                for k in range(self.shells.max() + 1)
+            ]
+            fewest = sum(fewest_triangles(cells, h) for cells, h, _, _ in graded)
+            if limit is not None and fewest > limit:
+                self.too_fine, self.T = fewest, None
                 return
+            T = [cut_cells(*shell) for shell in graded]
             self.T = np.concatenate(T)
             self.shell = np.repeat(np.arange(len(T)), [len(t) for t in T])
         self.fr = frames(self.T)

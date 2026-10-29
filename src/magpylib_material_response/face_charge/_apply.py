@@ -169,21 +169,20 @@ def apply_face_charge(
         add_contact_lines(bodies, outlines)
         add_triangle_contact_lines(bodies, outlines)
         for body in bodies:
-            # well over the cap, a triangle body is counted but not cut: a
-            # count near it, about, is not refused before the exact one
-            body.mesh(limit=2 * max_unknowns // 3)
+            # a triangle body that cannot fit is counted, not cut
+            body.mesh(limit=max_unknowns // 3)
         return bodies
 
     with timelog("Face-charge meshing", min_log_time=min_log_time):
         bodies = meshed(level)
-        first, about = sum(b.n_dofs for b in bodies), _about(bodies)
+        first, least = sum(b.n_dofs for b in bodies), _at_least(bodies)
         # by default, the highest level that fits
         while not chosen and level > 1 and sum(b.n_dofs for b in bodies) > max_unknowns:
             level -= 1
             bodies = meshed(level)
         if level < 3 and not chosen and sum(b.n_dofs for b in bodies) <= max_unknowns:
             warnings.warn(
-                f"Level 3 would need {about}{first:,} unknowns, more than max_unknowns="
+                f"Level 3 would need {least}{first:,} unknowns, more than max_unknowns="
                 f"{max_unknowns:,}; solved at level {level} "
                 f"({sum(b.n_dofs for b in bodies):,}). Pass level= to choose it.",
                 stacklevel=2,
@@ -234,7 +233,7 @@ def apply_face_charge(
             lower = "Lower the level, raise" if level > 1 else "Raise"
             msg = (
                 f"{f'level={level}' if chosen else 'Even level 1'} needs "
-                f"{_about(bodies)}{unknowns:,} unknowns, more than "
+                f"{_at_least(bodies)}{unknowns:,} unknowns, more than "
                 f"max_unknowns={max_unknowns:,}: the dense system would take about "
                 f"{8 * unknowns**2 / 1e9:.1f} GB. {lower} max_unknowns, or mesh the "
                 "parts for apply_demag."
@@ -318,9 +317,9 @@ def apply_face_charge(
     return out
 
 
-def _about(bodies):
-    """The word "about" where a body's unknowns are counted, not cut."""
-    return "about " if any(getattr(b, "too_fine", None) for b in bodies) else ""
+def _at_least(bodies):
+    """The words "at least" where a body's unknowns are counted, not cut."""
+    return "at least " if any(getattr(b, "too_fine", None) for b in bodies) else ""
 
 
 def _split(collection):
