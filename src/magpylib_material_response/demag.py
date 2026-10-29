@@ -55,8 +55,11 @@ own axes (#50), so it enters the solve as one 3x3 tensor per cell,
 from __future__ import annotations
 
 import itertools
+import os
+import sys
 import warnings
 from collections import Counter
+from pathlib import Path
 
 import magpylib as magpy
 import numpy as np
@@ -86,8 +89,10 @@ from magpylib_material_response.utils import timelog
 
 #: An applied field ``H_ext`` stronger than this, in tesla, is warned about: it
 #: is most likely H in A/m, magpylib's unit for H, where mu0 * H in T is meant.
-#: 1e5 A/m taken as tesla gives fields of tens of thousands of tesla, silently.
-H_EXT_WARN = 100.0
+#: 1e5 A/m taken as tesla gives fields of tens of thousands of tesla, silently,
+#: and the Earth's 40 A/m gives 40 T. Iron saturates near 2 T: a linear
+#: susceptibility means little this far above it anyway.
+H_EXT_WARN = 10.0
 
 #: A pair block with more dense entries than this may be stored sparse, with a
 #: rigorous row-sum error budget, when that pays (``SPARSIFY_MIN_DROP``).
@@ -305,42 +310,82 @@ def get_H_ext(*sources):
 
     `H_ext` is a uniform applied field given as mu_0 * H in tesla. A source's own
     value takes priority; otherwise it is searched up the parent tree, and it is
-    zero if no parent sets it. A value that is not three finite numbers raises,
-    and one stronger than ``H_EXT_WARN`` warns: it is most likely in A/m. Each
-    object that sets it is checked once, however many cells it holds."""
+    zero if no parent sets it. A value that is not three finite numbers, in any
+    layout, raises, and values stronger than ``H_EXT_WARN`` warn once: they are
+    most likely in A/m."""
     owners = []
     for src in sources:
         owner = src
         while owner is not None and getattr(owner, "H_ext", None) is None:
             owner = owner.parent
         owners.append(owner)
-    values = {}
-    for owner in owners:
-        if owner is not None and id(owner) not in values:
-            values[id(owner)] = _checked_H_ext(owner)
-    return [(0.0, 0.0, 0.0) if o is None else values[id(o)] for o in owners]
+    unique = list({id(o): o for o in owners if o is not None}.values())
+    if not unique:
+        return [(0.0, 0.0, 0.0)] * len(owners)
+    values = _checked_H_exts(unique)
+    strength = np.linalg.norm(values, axis=1)
+    strong = np.flatnonzero(strength > H_EXT_WARN)
+    if strong.size:
+        first = unique[strong[0]]
+        name = getattr(first.style, "label", None) or type(first).__name__
+        if strong.size > 1:
+            name = f"{strong.size} objects, such as {name},"
+        warnings.warn(
+            f"H_ext of {name} reaches {strength.max():.3g} T. H_ext is mu0 * H in tesla, "
+            "not H in A/m: multiply a field in A/m by magpylib.mu_0.",
+            stacklevel=_outside_this_package(),
+        )
+    by_id = dict(zip(map(id, unique), values.tolist(), strict=True))
+    return [(0.0, 0.0, 0.0) if o is None else by_id[id(o)] for o in owners]
+
+
+def _checked_H_exts(owners):
+    """The owners' `H_ext` as an (n, 3) float array, or an error naming the
+    first that is not three finite numbers."""
+    try:
+        values = np.asarray([owner.H_ext for owner in owners])
+    except ValueError:  # values of different layouts
+        values = None
+    if (
+        values is not None
+        and values.dtype.kind in "biuf"
+        and values.size == 3 * len(owners)
+    ):
+        values = values.reshape(len(owners), 3).astype(float)
+        if np.isfinite(values).all():
+            return values
+    return np.array([_checked_H_ext(owner) for owner in owners])
 
 
 def _checked_H_ext(owner):
     """`owner.H_ext` as three floats, or an error that says what is expected."""
     try:
-        value = np.asarray(owner.H_ext, dtype=float)
-    except (TypeError, ValueError):
+        value = np.asarray(owner.H_ext)
+    except ValueError:
         value = None
-    if value is None or value.shape != (3,) or not np.isfinite(value).all():
+    if (
+        value is None
+        or value.dtype.kind not in "biuf"
+        or value.size != 3
+        or not np.isfinite(value).all()
+    ):
         msg = (
             f"H_ext of {owner!r} must be three finite numbers, mu0 * H in tesla, "
             f"such as (0, 0, 0.01); got {owner.H_ext!r}."
         )
         raise ValueError(msg)
-    strength = np.linalg.norm(value)
-    if strength > H_EXT_WARN:
-        warnings.warn(
-            f"H_ext of {owner!r} is {strength:.3g} T. H_ext is mu0 * H in tesla, "
-            "not H in A/m: multiply a field in A/m by magpylib.mu_0.",
-            stacklevel=4,  # the call to the solver
-        )
-    return tuple(value)
+    return value.reshape(3).astype(float)
+
+
+def _outside_this_package():
+    """The `stacklevel` of the first frame outside this package, for a warning
+    raised just above: the user's call, however deep the package's own calls
+    run (``fem_solve``, ``mesh_study``)."""
+    package = str(Path(__file__).absolute().parent) + os.sep
+    frame, level = sys._getframe(2), 2  # pylint: disable=protected-access
+    while frame is not None and frame.f_code.co_filename.startswith(package):
+        frame, level = frame.f_back, level + 1
+    return level
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -127,7 +127,34 @@ jobs:
         run: |
           uv venv
           uv pip install --resolution lowest-direct ".[tetgen,fem]" "pytest>=9"
-          uv pip list | grep -i -E "^(magpylib|numpy|scipy|loguru|tetgen|ngsolve) "
+
+      # a floor that a dependency has since raised is no longer tested here,
+      # only claimed: name it
+      - name: Check that each floor is what was installed
+        shell: .venv/bin/python {0}
+        run: |
+          import re
+          import sys
+          import tomllib
+          from importlib.metadata import version
+
+          project = tomllib.load(open("pyproject.toml", "rb"))["project"]
+          pins = project["dependencies"] + [
+              pin for extra in ("tetgen", "fem")
+              for pin in project["optional-dependencies"][extra]
+          ]
+          def parts(v):
+              release = re.match(r"\d+(\.\d+)*", v).group()  # 6.0 == 6.0.0
+              return (*map(int, release.split(".")), 0, 0, 0)[:4]
+          off = []
+          for pin in pins:
+              found = re.fullmatch(r"([\w.-]+)(?:\[[^]]*\])?>=([\d.]+)", pin.replace(" ", ""))
+              if found:
+                  name, floor = found.groups()
+                  print(f"{name} >= {floor}: {version(name)}")
+                  if parts(version(name)) != parts(floor):
+                      off.append(f"{name}: pinned >= {floor}, the lowest that installs is {version(name)}")
+          sys.exit("\n".join(off) or None)
 
       - name: Test package
         run: .venv/bin/python -m pytest -ra
