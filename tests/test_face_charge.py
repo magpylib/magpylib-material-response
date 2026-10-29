@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import signal
 import time
+import warnings
 
 import magpylib as magpy
 import numpy as np
@@ -10,7 +13,11 @@ import pytest
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
+from magpylib_material_response.face_charge import (
+    ChargeSheet,
+    _parallel,
+    apply_face_charge,
+)
 from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
 from magpylib_material_response.face_charge._mesh import (
@@ -962,6 +969,29 @@ def test_threads_take_the_callers_numpy_error_settings():
 
     with np.errstate(divide="raise"), pytest.raises(FloatingPointError):
         run(divide, range(8))
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="no fork here")
+def test_a_forked_child_runs_on_threads_of_its_own(monkeypatch):
+    """A child forked after a solve, as a multiprocessing.Pool on Linux does,
+    inherited the pool but none of its threads, and waited forever."""
+    monkeypatch.setattr(_parallel, "threads", lambda: 4)
+    run(time.sleep, [1e-3] * 8, work=10**7)  # the parent's pool
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)  # fork beside threads
+        pid = os.fork()
+    if pid == 0:
+        try:
+            run(time.sleep, [1e-3] * 8, work=10**7)
+        finally:
+            os._exit(0)
+    deadline = time.monotonic() + 20
+    while not os.waitpid(pid, os.WNOHANG)[0]:
+        if time.monotonic() > deadline:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+            pytest.fail("the forked child hung")
+        time.sleep(0.05)
 
 
 @pytest.mark.parametrize(
