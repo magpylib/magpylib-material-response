@@ -50,17 +50,18 @@ and this project adheres to
   refinement rounds and time, and the unknowns are logged before the solve. All
   bodies form one dense system, factorized in single precision and refined to
   double's accuracy: `max_unknowns`, 20,000 (3.2 GB, 4.8 GB while solved) by
-  default, refuses a larger one before it is assembled; without a `level`, the
-  highest level up to 3 that fits is taken. It runs on magpylib's
-  `defaults.threads` threads where magpylib has that setting, otherwise on up
-  to 8. Parts of one material that touch are solved as one, and parts a gap
-  below their panels apart are graded toward each other. `to_json` saves a
-  solved collection
+  default, refuses a larger one before it is assembled, a triangle mesh's before
+  it is cut; without a `level`, the highest level up to 3 that fits is taken. It
+  runs on magpylib's `defaults.threads` threads where magpylib has that setting,
+  otherwise on up to 8. Parts of one material that touch are solved as one, and
+  parts a gap below their panels apart are graded toward each other. `to_json`
+  saves a solved collection
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110),
   [#113](https://github.com/magpylib/magpylib-material-response/pull/113),
-  [#114](https://github.com/magpylib/magpylib-material-response/pull/114)).
+  [#114](https://github.com/magpylib/magpylib-material-response/pull/114),
+  [#115](https://github.com/magpylib/magpylib-material-response/pull/115)).
 
 ### Changed
 

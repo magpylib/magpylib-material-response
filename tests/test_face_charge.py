@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -11,7 +13,10 @@ from scipy.spatial.transform import Rotation as R
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
 from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
-from magpylib_material_response.face_charge._mesh import graded_triangles
+from magpylib_material_response.face_charge._mesh import (
+    _merge_coplanar,
+    graded_triangles,
+)
 from magpylib_material_response.face_charge._parallel import run
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import (
@@ -170,6 +175,32 @@ def test_graded_triangles_cover_the_mesh_toward_its_edges():
     )
     with pytest.raises(ValueError, match="closed mesh"):
         graded_triangles(V, F[:-1], ell=0.005, m=2, g=2.5)
+
+
+@pytest.mark.parametrize(
+    ("left_out", "polygons"),
+    [
+        (lambda x, y: x >= 0.5 and y >= 0.5, 2),
+        (lambda x, y: 0.3 <= x < 0.6 and 0.4 <= y < 0.7, 4),
+    ],
+    ids=["L-shaped", "a square hole"],
+)
+def test_finely_cut_faces_merge_in_time(left_out, polygons):
+    """#106: a flat face that is not convex, cut into about 10,000 triangles
+    as a fine export, merges into the rectangles its outline gives. The L
+    took 13.7 s, merged triangle by triangle from the start after each merge,
+    now 0.4 s."""
+    k = 80
+    xs = np.linspace(0, 1, k + 1)
+    V = np.array([(x, y, 0.0) for x in xs for y in xs])
+    at = np.arange((k + 1) ** 2).reshape(k + 1, k + 1)
+    cells = [(i, j) for i in range(k) for j in range(k) if not left_out(i / k, j / k)]
+    F = [at[i : i + 2, j : j + 2].ravel()[[0, 2, 3, 0, 3, 1]] for i, j in cells]
+    start = time.perf_counter()
+    merged = _merge_coplanar(V, np.reshape(F, (-1, 3)), 1e-12)
+    assert time.perf_counter() - start < 5
+    assert len(merged) == polygons
+    assert all(len(poly) == 4 for poly, _ in merged)
 
 
 def test_cube_as_triangles_converges_as_the_cuboid():
@@ -836,6 +867,16 @@ def test_too_many_unknowns_raise_before_assembly():
     assert (info["level"], info["rounds"]) == (2, 0)
     assert 0 < info["unknowns"] <= 300
     assert info["seconds"] > 0
+    # a thin plate as a triangle mesh is refused from a count of its cells,
+    # before cutting them, which did not end (#106)
+    V = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
+    V = V * (0.005, 0.005, 2.5e-5)
+    plate = magpy.magnet.TriangularMesh(
+        vertices=V, faces=ConvexHull(V).simplices, polarization=(0, 0, 0)
+    )
+    plate.susceptibility = 100
+    with pytest.raises(ValueError, match="Even level 1 needs at least"):
+        apply_face_charge(magpy.Collection(plate))
 
 
 def test_threads_take_the_callers_numpy_error_settings():

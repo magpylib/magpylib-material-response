@@ -116,9 +116,10 @@ class Body(Part):
         self.panels = self.galerkin = self.G = None
         self.fine = None  # panels whose load takes a finer rule
 
-    def mesh(self):
+    def mesh(self, limit=None):  # noqa: ARG002  # pylint: disable=unused-argument
         """Mesh the faces; the self block waits for ``assemble``, so that the
-        unknowns can be counted first."""
+        unknowns can be counted first. Rectangles take no time to cut, so
+        ``limit``, a triangle body's, is not needed."""
         layer = LAYER * np.min(self.half)
         graded = {}  # faces with the same lines along an axis share its edges
 

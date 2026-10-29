@@ -57,10 +57,11 @@ parts solved together share it, so their colours compare.
   also make a thin part converge early: take `level=2`. A 0.5 mm plate under a
   magnet is within 0.03 % of level 3 there, in 0.5 s instead of 1.7. A solve
   that would need more than `max_unknowns`, 20,000 by default, a 3.2 GB system
-  and 4.8 GB while it is solved, is refused before it is assembled; without a
-  `level`, the highest level up to 3 that fits is taken instead, with a warning.
-  A thin wall that shields a field, such as a tube around a magnet, needs
-  `refine=1` (below).
+  and 4.8 GB while it is solved, is refused before it is assembled, a triangle
+  mesh's from a count of its cells before they are cut; without a `level`, the
+  highest level up to 3 that fits is taken instead, with a warning. A thin wall
+  that shields a field, such as a tube around a magnet, needs `refine=1`
+  (below).
 - **Magnets on a part:** a magnet without susceptibility resting on a solved
   part, or close above it, converges like the rest when it is a cuboid aligned
   with the part: the mesh follows its footprint and the field near it is

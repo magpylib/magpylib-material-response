@@ -15,6 +15,9 @@ From the study on ``explore/face-charge`` (``triangles/refine.py``,
 
 from __future__ import annotations
 
+import heapq
+import itertools
+
 import numpy as np
 
 
@@ -195,43 +198,58 @@ def _drop_collinear(V, loop, tol):
 
 def _merge_greedy(V, F, n, tol):
     """Neighbouring triangles of one flat region merged while the union stays
-    convex."""
-    polys = [[list(f), n[t]] for t, f in enumerate(F)]  # vertex index loops
-    refused = set()  # pairs of loops whose union is not convex
-    merged = True
-    while merged:
-        merged = False
-        edge_at = {}
-        for pi, (loop, _) in enumerate(polys):
-            for i, u in enumerate(loop):
-                edge_at[u, loop[(i + 1) % len(loop)]] = pi
-        for (u, v), pi in edge_at.items():
-            pj = edge_at.get((v, u))
-            if pj is None or pj == pi:
-                continue
-            (la, na), (lb, nb) = polys[pi], polys[pj]
-            if na @ nb < 1 - 1e-9:
-                continue
-            key = (tuple(la), tuple(lb))
-            if key in refused:
-                continue
-            # splice: la runs u -> v, lb runs v -> u
-            ia, ib = la.index(u), lb.index(v)
-            loop = (la[ia + 1 :] + la[: ia + 1])[:-1] + (lb[ib + 1 :] + lb[: ib + 1])[
-                :-1
-            ]
-            if len(set(loop)) < len(loop):  # the two share more than this edge
-                refused.add(key)
-                continue
-            loop = _drop_collinear(V, loop, tol)
-            if not _convex(V[loop], na, tol):  # collinear vertices dropped above
-                refused.add(key)
-                continue
-            polys[pi] = [loop, na]
-            del polys[pj]
-            merged = True
-            break
-    return [(V[loop], normal) for loop, normal in polys]
+    convex: the first pair that merges, scanning the polygons in order and each
+    one's edges round it, and again from the start after every merge, so that
+    the result does not depend on the order merges are found in.
+
+    Without starting over: a pair that does not merge is tried again only once
+    one of the two has changed, so the edges to try wait in a queue in that
+    scan order, and a merge queues the new polygon's edges and its neighbours'
+    toward it. An L-shaped face cut into 9,600 triangles took 13.7 s (#106)."""
+    loops = {p: list(f) for p, f in enumerate(F)}  # vertex loops, by scan rank
+    normal = dict(enumerate(n))
+    owner = {(u, f[(i + 1) % 3]): p for p, f in enumerate(F) for i, u in enumerate(f)}
+    version = dict.fromkeys(loops, 0)
+    queue = [(p, i, 0) for p in loops for i in range(3)]  # sorted: a heap
+
+    def push(p):  # every edge of polygon p, as it now is
+        for i in range(len(loops[p])):
+            heapq.heappush(queue, (p, i, version[p]))
+
+    while queue:
+        pi, i, seen = heapq.heappop(queue)
+        if pi not in loops or seen != version[pi]:
+            continue  # merged away, or changed: queued anew
+        la = loops[pi]
+        u, v = la[i], la[(i + 1) % len(la)]
+        pj = owner.get((v, u))
+        if pj is None or pj == pi or normal[pi] @ normal[pj] < 1 - 1e-9:
+            continue
+        lb = loops[pj]
+        # splice: la runs u -> v, lb runs v -> u
+        ia, ib = i, lb.index(v)
+        loop = (la[ia + 1 :] + la[: ia + 1])[:-1] + (lb[ib + 1 :] + lb[: ib + 1])[:-1]
+        if len(set(loop)) < len(loop):  # the two share more than this edge
+            continue
+        loop = _drop_collinear(V, loop, tol)
+        if not _convex(V[loop], normal[pi], tol):  # collinear vertices dropped above
+            continue
+        for w, x in itertools.pairwise([*la, la[0]]):
+            del owner[w, x]
+        for w, x in itertools.pairwise([*lb, lb[0]]):
+            del owner[w, x]
+        del loops[pj]
+        loops[pi], version[pi] = loop, version[pi] + 1
+        for w, x in itertools.pairwise([*loop, loop[0]]):
+            owner[w, x] = pi
+        push(pi)
+        # the neighbours' edges toward it: their pair with it is new
+        for w, x in itertools.pairwise([*loop, loop[0]]):
+            q = owner.get((x, w))
+            if q is not None and q != pi:
+                lq = loops[q]
+                heapq.heappush(queue, (q, lq.index(x), version[q]))
+    return [(V[loop], normal[p]) for p, loop in sorted(loops.items())]
 
 
 def _cut_poly(poly, a, w, d, tol):
@@ -273,14 +291,15 @@ def _split_cells(cells, h, tol):
                 # a whole number of cells to well above rounding: a face as wide
                 # as two cells, as between a box's layers, stays two
                 k = int(np.ceil((hi - lo) / h - 1e-3))
-                parts = [piece]
+                # the cuts rise along w: each crosses only what is left above
+                # the last, not every part cut off below it (#106)
+                below, rest = [], piece
                 for cut in lo + (hi - lo) * np.arange(1, k) / k:
-                    parts = [
-                        q
-                        for part in parts
-                        for q in _cut_poly(part, piece[0], w, cut, tol)
-                    ]
-                cut_up += parts
+                    parts = _cut_poly(rest, piece[0], w, cut, tol)
+                    if len(parts) == 2:
+                        rest = parts[0]
+                        below.append(parts[1])
+                cut_up += [rest, *below[::-1]]
             pieces = cut_up
         out += [(p, normal) for p in pieces]
     return out
@@ -357,6 +376,15 @@ def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=()):
     normal)`` where a touching part's faces end: ``m`` layers of power ``g``
     over ``ell`` on each side of such an edge or line, the rest in cells of the
     last layer's size."""
+    return cut_cells(*graded_cells(V, F, ell, m, g, angle, corner, contacts))
+
+
+def graded_cells(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=()):
+    """The convex cells of :func:`graded_triangles` before they are cut to the
+    last layer's size, and what :func:`cut_cells` takes with them: ``(cells,
+    size, tol, ell)``. Counted first (:func:`fewest_triangles`), a part that
+    cannot fit is not cut: a 10 x 10 x 0.05 mm plate, its cells a fraction of
+    its thickness, did not end (#106)."""
     V = np.asarray(V, float)
     F = np.asarray(F, int)
     span = np.max(np.ptp(V[np.unique(F)], axis=0))  # this shell's
@@ -424,7 +452,24 @@ def graded_triangles(V, F, ell, m, g, angle=20.0, corner=30.0, contacts=()):
                         )
                     ]
         cells += [(c, normal) for c in local if len(c) >= 3]
-    cells = _split_cells(cells, ell * (1 - ((m - 1) / m) ** g), tol)
+    return cells, ell * (1 - ((m - 1) / m) ** g), tol, ell
+
+
+def fewest_triangles(cells, h):
+    """A count :func:`cut_cells` makes at least as many triangles as, without
+    cutting: one to a cell at least, and the cell's area over that of the
+    largest piece it is cut into, ``h`` a side but for the rounding of the
+    number of pieces."""
+    total = 0.0
+    for poly, normal in cells:
+        area = abs(np.cross(poly, np.roll(poly, -1, axis=0)).sum(0) @ normal) / 2
+        total += max(1.0, area / (1.002 * h) ** 2)
+    return int(total)
+
+
+def cut_cells(cells, h, tol, ell):
+    """The cells cut to ``h`` and each fanned into triangles (T, 3, 3)."""
+    cells = _split_cells(cells, h, tol)
     triangles = []
     for c, _ in cells:
         if len(c) <= 4:
