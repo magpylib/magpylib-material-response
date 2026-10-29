@@ -11,6 +11,7 @@ from magpylib_material_response.demag import (
     apply_demag,
     get_susceptibilities,
 )
+from magpylib_material_response.face_charge import apply_face_charge
 from magpylib_material_response.meshing import mesh_Cuboid
 
 
@@ -286,6 +287,53 @@ def test_copy_keeps_the_parents_material_attributes():
     apply_demag(in_place, inplace=True)
     assert copied[2] > 0.01
     np.testing.assert_allclose(copied, in_place.sources_all[0].polarization)
+
+
+@pytest.mark.parametrize("solver", ["demag", "face charge"])
+@pytest.mark.parametrize(
+    ("h_ext", "kind", "match"),
+    [
+        (0.1, ValueError, "three finite numbers"),
+        ((0, 0.1), ValueError, "three finite numbers"),
+        ((0, 0, np.nan), ValueError, "three finite numbers"),
+        (("0", "0", "0.01"), ValueError, "three finite numbers"),
+        ((0, 0, 40), UserWarning, "not H in A/m"),
+        (np.array([[0, 0, 0.01]]), None, None),
+    ],
+    ids=["scalar", "two numbers", "nan", "text", "A/m", "a row"],
+)
+def test_H_ext_is_checked_before_the_solve(solver, h_ext, kind, match):
+    """On every part of two cubes. A scalar failed in apply_demag with a
+    reshape error and passed in apply_face_charge; the Earth's 40 A/m taken as
+    tesla gave 40 T unremarked. A row, as getB gives for one point in a list,
+    is three numbers too. One warning, at the line that called the solver."""
+
+    def solve(value):
+        model = magpy.Collection()
+        for x in (0, 0.02):
+            soft = magpy.magnet.Cuboid(
+                dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(x, 0, 0)
+            )
+            soft.susceptibility = 1000
+            model.add(mesh_Cuboid(soft, (2, 2, 2)) if solver == "demag" else soft)
+        for part in model.sources_all:
+            part.H_ext = value
+        if solver == "demag":
+            return apply_demag(model)
+        return apply_face_charge(model, level=1)
+
+    if kind is None:
+        np.testing.assert_allclose(
+            solve(h_ext).getB((0.01, 0, 0.01)),
+            solve((0, 0, 0.01)).getB((0.01, 0, 0.01)),
+        )
+    elif issubclass(kind, Warning):
+        with pytest.warns(kind, match=match) as caught:
+            solve(h_ext)
+        assert [w.filename for w in caught if match in str(w.message)] == [__file__]
+    else:
+        with pytest.raises(kind, match=match):
+            solve(h_ext)
 
 
 def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():

@@ -265,6 +265,10 @@ def move_grid_along_polyline(verts: np.ndarray, grid: np.ndarray) -> np.ndarray:
         Array of polyline vertices, where n is the number of vertices and d is the dimension.
     grid : np.ndarray, shape (m, d)
         Array of grid points to move along the polyline, where m is the number of points.
+        The grid is the cross-section placed at the first vertex ``verts[0]``,
+        in absolute coordinates, not relative to it: for a polyline that does
+        not start at the origin, shift a cross-section drawn around the origin
+        along with it, as ``grid + verts[0]``.
 
     Returns
     -------

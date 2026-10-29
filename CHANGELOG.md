@@ -95,6 +95,12 @@ and this project adheres to
   of a triangle mesh runs on chunks of points: a 792-face tube voxelized into
   3,000 cells needed over 3 GB and now takes 1.6 GB
   ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
+- **Requires NumPy 2.0.1 and scipy 1.17.** NumPy 1.x shares its error state
+  between threads: face charge, which runs on threads, warned of divisions it
+  had told NumPy to ignore. NumPy 2.0.0's `np.unique` broke `apply_demag`.
+  magpylib 6.0 already required scipy 1.17: the 1.12 stated here could not be
+  installed. CI tests the package at its lowest pins
+  ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
 - Requires the magpylib release with
   [magpylib#1059](https://github.com/magpylib/magpylib/pull/1059), which
   computes fields in chunks, on threads. A drive of many current segments no
@@ -146,6 +152,14 @@ and this project adheres to
   3 times longer
   ([#92](https://github.com/magpylib/magpylib-material-response/issues/92),
   [#100](https://github.com/magpylib/magpylib-material-response/pull/100)).
+- `H_ext` is checked before a solve, by `apply_demag`, `apply_face_charge` and
+  `fem_solve` alike: anything but three finite numbers, in any layout, raises an
+  error that says what is expected, and fields above 10 T warn once, at the
+  caller's line, that they are most likely H in A/m, not μ0·H in tesla. A scalar
+  failed in `apply_demag` with a reshape error and was taken in
+  `apply_face_charge`; 1e5 A/m gave 36,000 T beside a soft cube, and the Earth's
+  40 A/m was taken as 40 T, silently
+  ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
 
 ## [0.6.0] - 2026-10-23
 
