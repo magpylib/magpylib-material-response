@@ -864,8 +864,8 @@ def fem_solve(
         The model, as :func:`~magpylib_material_response.demag.apply_demag`
         takes it before meshing: Cuboid, Cylinder, CylinderSegment, Sphere,
         Tetrahedron and TriangularMesh magnets with their polarization (the
-        remanence) and susceptibility, isotropic or along their own axes, in a
-        uniform applied field ``H_ext`` (mu0 H in T) and the field of current
+        remanence) and susceptibility, isotropic or along their own axes (none
+        on a magnet or its parents: fixed), in a uniform applied field ``H_ext`` (mu0 H in T) and the field of current
         sources, which are not meshed. The magnets must not overlap; a current
         must not run through a magnet or through a hole in one.
     order : int, default 3

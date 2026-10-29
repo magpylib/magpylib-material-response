@@ -158,21 +158,13 @@ def _has_path(src):
 def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
     Priority is given at the source level, however if value is not found, it is searched
-    up the parent tree, if available. Raises an error if no value is found when reached
-    the top level of the tree."""
+    up the parent tree, if available. A magnet with none, on itself or any
+    parent, is fixed: 0, as in apply_face_charge."""
     n = len(sources)
 
     if susceptibility is None:
         # Get susceptibilities from source attributes
-        susceptibilities = []
-        for src in sources:
-            src_susceptibility = getattr(src, "susceptibility", None)
-            if src_susceptibility is None:
-                if src.parent is None:
-                    msg = "No susceptibility defined in any parent collection"
-                    raise ValueError(msg)
-                src_susceptibility = _get_susceptibility_from_hierarchy(src.parent)
-            susceptibilities.append(src_susceptibility)
+        susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
 
         susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
     else:
@@ -295,14 +287,14 @@ def _subtract_susceptibility_product(T, chi):
 
 def _get_susceptibility_from_hierarchy(source):
     """Helper function to get susceptibility value from source or its parent hierarchy.
-    Returns the raw susceptibility value (scalar or 3-tuple), not the reshaped array."""
-    susceptibility = getattr(source, "susceptibility", None)
-    if susceptibility is not None:
-        return susceptibility
-    if source.parent is None:
-        msg = "No susceptibility defined in any parent collection"
-        raise ValueError(msg)
-    return _get_susceptibility_from_hierarchy(source.parent)
+    Returns the raw susceptibility value (scalar or 3-tuple), not the reshaped
+    array; 0 when neither the source nor a parent sets one: a fixed magnet."""
+    while source is not None:
+        susceptibility = getattr(source, "susceptibility", None)
+        if susceptibility is not None:
+            return susceptibility
+        source = source.parent
+    return 0.0
 
 
 def get_H_ext(*sources):
@@ -1427,7 +1419,8 @@ def apply_demag(
         all cells, or one entry (scalar or 3-vector) per cell. A 3-vector gives an
         anisotropic susceptibility along the cell's own x, y and z axes, which turn
         with its orientation like its polarization. If not defined, values are
-        searched at object level or parent level if needed.
+        searched at object level or parent level if needed; a cell with none
+        there either is fixed, as in ``apply_face_charge``.
 
     inplace: bool
         If False, applies demagnetization on a copy of the input collection and returns
