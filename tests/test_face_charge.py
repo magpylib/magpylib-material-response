@@ -301,6 +301,39 @@ def test_touching_parts_of_one_material_solve_as_one():
     assert _relative(*fields) < 0.015
 
 
+@pytest.mark.parametrize(
+    ("mesh", "gap", "rtol"),
+    [(False, 1e-8, 1e-4), (True, 1e-7, 2e-3)],
+    ids=["cuboids", "meshes"],
+)
+def test_a_gap_below_the_panels_moves_the_field_as_little(mesh, gap, rtol):
+    """#105, #112: across a gap far below the panels the two faces' charges
+    nearly cancel. Graded toward each other's outline and coupled by the
+    exact contact term, they move off touching as little as the gap does:
+    6.5e-3 for the cuboids and 2.4e-2 for the meshes, before."""
+
+    def cube(a, at):
+        if not mesh:
+            return magpy.magnet.Cuboid(
+                dimension=(a,) * 3, polarization=(0, 0, 0), position=at
+            )
+        V = np.array([[x, y, z] for x in (-a, a) for y in (-a, a) for z in (-a, a)]) / 2
+        part = magpy.magnet.TriangularMesh(
+            vertices=V, faces=ConvexHull(V).simplices, polarization=(0, 0, 0)
+        )
+        part.position = at
+        return part
+
+    sensors = [(0, 0.02, 0), (0.0075, 0, 0.012), (0, 0, -0.0105), (0.006, 0.006, 0.006)]
+    fields = []
+    for z in (0.008, 0.008 + gap):
+        coll = magpy.Collection(cube(0.01, (0, 0, 0)), cube(0.006, (0.001, 0.0015, z)))
+        coll.susceptibility = 100.0
+        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
+        fields.append(apply_face_charge(coll, level=2).getB(sensors))
+    assert _relative(*fields) < rtol
+
+
 def _cube_with_a_sliver(edge, turn=None, dtype=float):
     """The cube mesh with a triangle split at the midpoint of one of its edges,
     a cube edge or a face's diagonal, and the sliver an STL repair leaves in

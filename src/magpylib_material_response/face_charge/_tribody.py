@@ -25,7 +25,12 @@ from scipy.spatial import (  # pylint: disable=no-name-in-module
     cKDTree,
 )
 
-from magpylib_material_response.face_charge._bodies import Body, Part, contact_tol
+from magpylib_material_response.face_charge._bodies import (
+    Body,
+    Part,
+    contact_tol,
+    near_tol,
+)
 from magpylib_material_response.face_charge._mesh import graded_triangles, rounding
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
@@ -304,14 +309,18 @@ class TriBody(Part):
         c = self.centre
         return normal_field_far(X - c, self.T - c, (self.fr[0] - c, *self.fr[1:]))
 
-    def test_flux(self, y, tol=0.0):
+    def test_flux(self, y, tol=0.0, ny=None):
         """(3F, P): the flux of a unit charge at each point ``y`` (its frame)
         through each test function; none from points within ``tol`` of a
-        triangle's plane, where a contact takes over."""
+        triangle's plane on a face parallel to it (normals ``ny``), where a
+        contact takes over."""
         flux = -self.far_field(y) / FOUR_PI  # (3, P, F)
         n = self.fr[1]
         w = y @ n.T - np.sum(self.T[:, 0] * n, axis=1)[None]
-        flux[:, np.abs(w) < tol] = 0.0
+        near = np.abs(w) < tol
+        if ny is not None:  # a face across, not one standing on it
+            near &= np.abs(ny @ n.T) > 1 - 1e-9  # as coplanar_pairs
+        flux[:, near] = 0.0
         return flux.transpose(2, 0, 1).reshape(self.n_dofs, len(y))
 
     def coefficients_at_corners(self, c):
@@ -503,19 +512,20 @@ def add_triangle_contact_lines(bodies, outlines=()):
         ):
             if ib == ia or not (isinstance(a, TriBody) or isinstance(b, TriBody)):
                 continue
-            tol = contact_tol(a, b)
+            near = near_tol(a, b)  # near ones too: see NEAR
             (lo_a, hi_a), (lo_b, hi_b) = boxes[ia], boxes[ib]
-            if np.any(lo_a > hi_b + tol) or np.any(lo_b > hi_a + tol):
+            if np.any(lo_a > hi_b + near) or np.any(lo_b > hi_a + near):
                 continue
             if isinstance(a, TriBody):
-                _grade_mesh(a, surfaces[ia], Tb, tol)
+                _grade_mesh(a, surfaces[ia], Tb, contact_tol(a, b), near)
             elif isinstance(a, Body):
-                _grade_cuboid(a, Tb, tol)
+                _grade_cuboid(a, Tb, near)
 
 
-def _grade_mesh(a, Ta, Tb, tol):
-    """Lines in a's face planes where b's coplanar faces end: the edges of
-    b's triangles in that plane that only one of them has."""
+def _grade_mesh(a, Ta, Tb, tol, near):
+    """Lines in a's face planes where b's faces in them, or parallel within
+    ``near``, end: the edges of b's triangles there that only one of them
+    has, laid into a's plane. ``tol`` is what touches."""
     normals = np.cross(Ta[:, 1] - Ta[:, 0], Ta[:, 2] - Ta[:, 0])
     length = np.linalg.norm(normals, axis=1)
     has_area = length > 0  # one of no area, as STL repairs leave, has no plane
@@ -527,10 +537,10 @@ def _grade_mesh(a, Ta, Tb, tol):
         if key in seen:
             continue
         seen.add(key)
-        flat = Tb[_in_plane(Tb, point, normal, tol)]
+        flat = Tb[_in_plane(Tb, point, normal, near)]
         mine = Ta[_in_plane(Ta, point, normal, tol)].reshape(-1, 3)
         if len(flat):  # only where b's faces overlap a's in that plane
-            lo, hi = mine.min(0) - tol, mine.max(0) + tol
+            lo, hi = mine.min(0) - near, mine.max(0) + near
             flat = flat[(flat.min(1) <= hi).all(1) & (flat.max(1) >= lo).all(1)]
         if not flat.size:
             continue
@@ -548,9 +558,9 @@ def _grade_mesh(a, Ta, Tb, tol):
             t = q - p
             if np.linalg.norm(t) == 0:
                 continue
-            # into a's frame
-            a.contacts.append(
-                ((p - a.position) @ a.R, (t / np.linalg.norm(t)) @ a.R, normal @ a.R)
+            on = p - ((p - point) @ normal) * normal  # into a's plane, across a gap
+            a.contacts.append(  # and a's frame
+                ((on - a.position) @ a.R, (t / np.linalg.norm(t)) @ a.R, normal @ a.R)
             )
 
 

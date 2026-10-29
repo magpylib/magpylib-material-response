@@ -44,11 +44,28 @@ LAYER = 2.0  # graded layer length, in half the body's smallest side
 # grade the mesh, and coplanar panels couple exactly. Lines closer than this
 # are one line. Coordinates from float32 CAD data are good to about 1e-7.
 CONTACT = 1e-6
+# parts closer than this, in the larger's largest half-side, are graded toward
+# each other's outline as touching ones are, though not joined: across a gap
+# far below their panels their charges nearly cancel, and panels that do not
+# face each other leak. Four pieces 30 um from a plate's side were 29 % off at
+# level 2, 2.9 % graded, the gap's own effect; from 1 mm on it changes nothing
+NEAR = 1e-2
+# faces of two parts closer than this, in the larger's largest half-side, to
+# parallel ones couple by the exact contact term (coupling_block), as touching
+# ones: a 6 mm mesh cube 1e-7 m above a 10 mm one moved 2.5 % off touching by
+# quadrature, 2e-4 so; 1e-3 left 1e-6 m worse, 2.2e-3 against 1.6e-3
+PLANE = 1e-4
 # systems from this size on are factorized in single precision and refined, for
 # a single-precision copy beside them, half their size again; smaller ones solve
 # in milliseconds anyway
 MIXED = 2_000
 REFINEMENTS = 30  # at most, as dsgesv
+
+
+def near_tol(*parts):
+    """Parts closer than this are graded toward each other: ``NEAR`` of the
+    largest part's size, at least what touches."""
+    return max(contact_tol(*parts), *(NEAR * np.max(p.half) for p in parts))
 
 
 def contact_tol(*parts):
@@ -190,10 +207,11 @@ class Body(Part):
         )
         return np.stack([np.ones(len(x)), s, t], 1)
 
-    def test_flux(self, y, tol=0.0):
+    def test_flux(self, y, tol=0.0, ny=None):
         """(n_dofs, P): the flux of a unit charge at each point ``y`` (this
         body's frame) through each test function; none from points within
-        ``tol`` of a panel's plane, where a contact takes over."""
+        ``tol`` of a panel's plane on a face parallel to it (normals ``ny``),
+        where a contact takes over."""
         p = self.panels
         out = np.zeros((p.N, 3, len(y)))
         step = max(1, CHUNK // max(len(y), 1))
@@ -211,7 +229,10 @@ class Body(Part):
                     p.q1[tc][:, None],
                     p.q2[tc][:, None],
                 )  # (3 test densities, tc, P)
-                w3[:, :, np.abs(y[:, k] - p.w0[ta[0]]) < tol] = 0.0
+                near = np.abs(y[:, k] - p.w0[ta[0]]) < tol
+                if ny is not None:  # a face across, not one standing on it
+                    near &= np.abs(ny[:, k]) > 1 - 1e-9  # as coplanar_pairs
+                w3[:, :, near] = 0.0
                 out[tc] = -sign * w3.transpose(1, 0, 2)
         return out.reshape(self.n_dofs, len(y))
 
@@ -259,8 +280,8 @@ class Outline(NamedTuple):
 
 def add_contact_lines(bodies, outlines=()):
     """Grade the face of each body that another body, or a fixed cuboid
-    (``outlines``), rests on toward that one's footprint: the charge jumps
-    there, and so does a touching magnet's field.
+    (``outlines``), rests on, or nearly (``NEAR``), toward that one's
+    footprint: the charge jumps there, and so does a touching magnet's field.
 
     Only that face: through the others the lines would cut whole strips of
     panels where nothing happens, and the assembly grows with the square of
@@ -272,10 +293,10 @@ def add_contact_lines(bodies, outlines=()):
         b for b in bodies if isinstance(b, Body)
     ]  # triangle meshes are not graded
     for a in bodies:
-        tol = CONTACT * np.max(a.half)
         for b in (*bodies, *outlines):
             if b is a:
                 continue
+            tol = near_tol(a, b)
             Rab, cb = _relative(a, b)
             corners = cb + (signs * b.half) @ Rab.T
             lo, hi = corners.min(0), corners.max(0)
@@ -463,9 +484,13 @@ def coupling_block(a, b):
     faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):
         return cross_block(a, [b])
-    tol = contact_tol(a, b)
+    # faces closer than this to parallel ones take the exact contact term: the
+    # source's points, a gap far below their spacing away, cannot resolve the
+    # flux through the test panels, which jumps across them as the gap closes
+    tol = max(contact_tol(a, b), PLANE * max(np.max(a.half), np.max(b.half)))
     points, weights = b.sources()
     y = (points - a.position) @ a.R  # b's points in a's frame
+    ny = np.repeat(b.panel_polygons()[1], len(points) // (b.n_dofs // 3), axis=0) @ a.R
     G = contact_block(a, b, tol)
     per_panel = len(y) // (b.n_dofs // 3)  # points of one source panel
     panels = max(1, CHUNK // (max(a.n_dofs, 1) * 8 * per_panel * threads()))
@@ -473,7 +498,7 @@ def coupling_block(a, b):
     def chunk(p0):  # whole source panels: their own columns of G
         rows = slice(p0 * per_panel, (p0 + panels) * per_panel)
         cols = slice(3 * p0, 3 * (p0 + panels))
-        flux = a.test_flux(y[rows], tol)  # (a.n_dofs, points)
+        flux = a.test_flux(y[rows], tol, ny[rows])  # (a.n_dofs, points)
         G[:, cols] += (weights[rows, cols].T @ flux.T).T
 
     run(chunk, range(0, b.n_dofs // 3, panels), work=a.n_dofs * len(y))
