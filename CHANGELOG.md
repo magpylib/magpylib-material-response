@@ -59,7 +59,8 @@ and this project adheres to
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110),
-  [#113](https://github.com/magpylib/magpylib-material-response/pull/113)).
+  [#113](https://github.com/magpylib/magpylib-material-response/pull/113),
+  [#114](https://github.com/magpylib/magpylib-material-response/pull/114)).
 
 ### Changed
 
