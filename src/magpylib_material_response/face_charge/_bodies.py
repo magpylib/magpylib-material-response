@@ -44,13 +44,13 @@ LAYER = 2.0  # graded layer length, in half the body's smallest side
 # grade the mesh, and coplanar panels couple exactly. Lines closer than this
 # are one line. Coordinates from float32 CAD data are good to about 1e-7.
 CONTACT = 1e-6
-# parts closer than this, in the larger's largest half-side, are graded toward
+# parts closer than this, in the smaller's largest half-side, are graded toward
 # each other's outline as touching ones are, though not joined: across a gap
 # far below their panels their charges nearly cancel, and panels that do not
 # face each other leak. Four pieces 30 um from a plate's side were 29 % off at
 # level 2, 2.9 % graded, the gap's own effect; from 1 mm on it changes nothing
 NEAR = 1e-2
-# faces of two parts closer than this, in the larger's largest half-side, to
+# faces of two parts closer than this, in the smaller's largest half-side, to
 # parallel ones couple by the exact contact term (coupling_block), as touching
 # ones: a 6 mm mesh cube 1e-7 m above a 10 mm one moved 2.5 % off touching by
 # quadrature, 2e-4 so; 1e-3 left 1e-6 m worse, 2.2e-3 against 1.6e-3
@@ -64,8 +64,15 @@ REFINEMENTS = 30  # at most, as dsgesv
 
 def near_tol(*parts):
     """Parts closer than this are graded toward each other: ``NEAR`` of the
-    largest part's size, at least what touches."""
-    return max(contact_tol(*parts), *(NEAR * np.max(p.half) for p in parts))
+    smallest part's size, a gap below its panels, at least what touches."""
+    return max(contact_tol(*parts), NEAR * min(np.max(p.half) for p in parts))
+
+
+def plane_tol(*parts):
+    """Faces closer than this to parallel ones of another part couple by the
+    exact contact term: ``PLANE`` of the smallest part's size, at least what
+    touches."""
+    return max(contact_tol(*parts), PLANE * min(np.max(p.half) for p in parts))
 
 
 def contact_tol(*parts):
@@ -342,14 +349,23 @@ def _clip(poly, x0, x1, y0, y1):
     return poly
 
 
-def cross_block(a, bs, tol=CONTACT):
+def cross_block(a, bs):
     """``G_ab`` of each cuboid b of ``bs``, side by side (a.n_dofs x the sum of
     their n_dofs): the flux of b's charge through a's test functions. All of
     them in one go, so that many small bodies take as few calls as two large."""
     pa = a.panels
     y, wts, normal_b, center_b, corners_b, blocks = [], [], [], [], [], []
+    # each b panel's reach: within it of a's face plane, the contact term.
+    # Aligned cuboids are graded onto each other and their Gauss points resolve
+    # a gap, better than the contact term: four pieces 1 um from a plate's side
+    # 0.13 % so, 1.28 % by it. A turned one's panels cannot meet a's, and leak
+    # across a gap below them: 3 % for a cube turned 30 degrees 1e-6 m above a
+    # plate, 4.6e-4 by the contact term out to NEAR, as the gap's own effect
+    reach = []
     for b in bs:
         Rab, cb = _relative(a, b)
+        aligned = np.allclose(np.abs(Rab), np.round(np.abs(Rab)), atol=1e-9)
+        reach.append(np.full(b.panels.N, (contact_tol if aligned else near_tol)(a, b)))
         pts, w, S, T = b.galerkin.gauss_points(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
         wts.append(w)
@@ -359,12 +375,11 @@ def cross_block(a, bs, tol=CONTACT):
         blocks.append((b, Rab, cb))
     y, wts = np.concatenate(y, 1), np.concatenate(wts, 1)
     normal_b, center_b = np.concatenate(normal_b), np.concatenate(center_b)
-    corners_b = np.concatenate(corners_b)
+    corners_b, reach = np.concatenate(corners_b), np.concatenate(reach)
     lo_b, hi_b = corners_b.min(1), corners_b.max(1)
     n_gauss, Nb = wts.shape
     phi = np.stack([np.ones(n_gauss), S, T], 1)
     G = np.zeros((pa.N, 3, Nb, 3))
-    scale = np.max(a.half)
     jobs = []
     for fa in range(6):
         ta = np.flatnonzero(pa.face == fa)
@@ -372,7 +387,7 @@ def cross_block(a, bs, tol=CONTACT):
         # b's panels lying in this face plane are handled exactly, below; of
         # them, those overlapping the face get a contact term
         coplanar = (np.abs(normal_b[:, ka]) > 1 - 1e-9) & (
-            np.abs(center_b[:, ka] - w0) < tol * scale
+            np.abs(center_b[:, ka] - w0) < reach
         )
         touching = (
             coplanar
@@ -487,12 +502,12 @@ def coupling_block(a, b):
     # faces closer than this to parallel ones take the exact contact term: the
     # source's points, a gap far below their spacing away, cannot resolve the
     # flux through the test panels, which jumps across them as the gap closes
-    tol = max(contact_tol(a, b), PLANE * max(np.max(a.half), np.max(b.half)))
+    tol = plane_tol(a, b)
     points, weights = b.sources()
     y = (points - a.position) @ a.R  # b's points in a's frame
-    ny = np.repeat(b.panel_polygons()[1], len(points) // (b.n_dofs // 3), axis=0) @ a.R
-    G = contact_block(a, b, tol)
     per_panel = len(y) // (b.n_dofs // 3)  # points of one source panel
+    G, normals = contact_block(a, b, tol)
+    ny = np.repeat(normals, per_panel, axis=0) @ a.R
     panels = max(1, CHUNK // (max(a.n_dofs, 1) * 8 * per_panel * threads()))
 
     def chunk(p0):  # whole source panels: their own columns of G

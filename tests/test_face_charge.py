@@ -301,6 +301,36 @@ def test_touching_parts_of_one_material_solve_as_one():
     assert _relative(*fields) < 0.015
 
 
+def test_touching_shells_of_one_mesh_solve_as_two_meshes():
+    """A multi-body export: two touching boxes in one mesh. Graded and joined
+    as two meshes are; 28 % apart before."""
+
+    def box(a, z):
+        V = np.array([[x, y, w] for x in (-a, a) for y in (-a, a) for w in (-a, a)])
+        V = V / 2 + (0, 0, z)
+        return V, ConvexHull(V).simplices
+
+    (V1, F1), (V2, F2) = box(0.01, 0), box(0.006, 0.008)
+    one = magpy.magnet.TriangularMesh(
+        vertices=np.vstack([V1, V2]),
+        faces=np.vstack([F1, F2 + len(V1)]),
+        polarization=(0, 0, 0),
+        check_disconnected=False,
+    )
+    two = [
+        magpy.magnet.TriangularMesh(vertices=V, faces=F, polarization=(0, 0, 0))
+        for V, F in ((V1, F1), (V2, F2))
+    ]
+    fields = []
+    for parts in ([one], two):
+        coll = magpy.Collection(*parts)
+        coll.susceptibility, coll.H_ext = 100.0, (0.004, 0, 0.008)
+        fields.append(
+            apply_face_charge(coll, level=2).getB([(0, 0, 0.012), (0.009, 0, 0.004)])
+        )
+    assert _relative(*fields) < 1e-4
+
+
 @pytest.mark.parametrize(
     ("mesh", "gap", "rtol"),
     [(False, 1e-8, 1e-4), (True, 1e-7, 2e-3)],

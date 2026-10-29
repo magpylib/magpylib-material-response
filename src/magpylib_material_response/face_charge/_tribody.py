@@ -520,6 +520,12 @@ def add_triangle_contact_lines(bodies, outlines=()):
                 _grade_mesh(a, surfaces[ia], Tb, contact_tol(a, b), near)
             elif isinstance(a, Body):
                 _grade_cuboid(a, Tb, near)
+    # a mesh's shells against each other, as two meshes: a multi-body export
+    for a, T in zip(bodies, surfaces, strict=True):
+        if isinstance(a, TriBody) and a.shells.max() > 0:
+            for k in range(a.shells.max() + 1):
+                mine = a.shells == k
+                _grade_mesh(a, T[mine], T[~mine], contact_tol(a), near_tol(a))
 
 
 def _grade_mesh(a, Ta, Tb, tol, near):

@@ -274,6 +274,7 @@ def apply_face_charge(
                 body.bisect(marked if kept is None else kept[marked])
                 body.mesh()
                 body.fine = near_panels(body, boxes)
+    _joined_means(sheets, bodies, joined)
     logger.info(
         "Face charge: average polarization up to {J:.3g} T; above the material's knee, saturation matters",
         J=max(np.linalg.norm(s.mean_polarization) for s in sheets),
@@ -535,7 +536,10 @@ def _interfaces(bodies):
     field and that the solve barely fixes, which leaks where their panels
     differ (#112). Returns, per body, its panels lying wholly on the other
     part with the opposite normal, and each closed shell's group: shells such
-    faces join hold no net charge together rather than each."""
+    faces join hold no net charge together rather than each. Shells of one
+    mesh join as two meshes do. A pair is not joined where a panel crosses
+    the other's outline, as a turned cuboid's footprint: half of it would
+    keep a charge with nothing left to cancel it."""
     shells = [b.shell.max() + 1 if isinstance(b, TriBody) else 1 for b in bodies]
     first = np.cumsum([0, *shells])
     parent = np.arange(first[-1])
@@ -545,77 +549,116 @@ def _interfaces(bodies):
             s = parent[s]
         return s
 
+    polygons = [b.panel_polygons() for b in bodies]
+    own = [
+        b.shell if isinstance(b, TriBody) else np.zeros(len(P), int)
+        for b, (P, _) in zip(bodies, polygons, strict=True)
+    ]
     surfaces = [_triangles(b) for b in bodies]
-    shared = []
+    walls = [
+        b.shells if isinstance(b, TriBody) else np.zeros(len(T), int)
+        for b, T in zip(bodies, surfaces, strict=True)
+    ]
+    found = {}  # (ia, ib): (on, crossing, shell met), a's panels against b
     for ia, a in enumerate(bodies):
-        corners, normal, shell = _panel_geometry(a)
-        on_other = np.zeros(len(corners), bool)
         for ib, b in enumerate(bodies):
-            if ib == ia or not _same_material(a, b):
+            if (ia == ib and shells[ia] == 1) or not _same_material(a, b):
                 continue
-            on, where = _on_surface(corners, normal, surfaces[ib], contact_tol(a, b))
-            on_other |= on
-            other = (
-                b.shells[where[on]]
-                if isinstance(b, TriBody)
-                else np.zeros(on.sum(), int)
-            )
-            for sa, sb in zip(first[ia] + shell[on], first[ib] + other, strict=True):
-                parent[root(sa)] = root(sb)
-        shared.append(on_other)
+            found[ia, ib] = _on_surface(
+                *polygons[ia], surfaces[ib], contact_tol(a, b),
+                own[ia] if ia == ib else None, walls[ib],
+            )  # fmt: skip
+    shared = [np.zeros(len(P), bool) for P, _ in polygons]
+    for (ia, ib), (on, crossing, met) in found.items():
+        if crossing.any() or found.get((ib, ia), (None, np.zeros(1, bool)))[1].any():
+            continue
+        shared[ia] |= on
+        for sa, sb in zip(first[ia] + own[ia][on], first[ib] + met[on], strict=True):
+            parent[root(sa)] = root(sb)
     roots = np.array([root(s) for s in range(first[-1])])
     return shared, np.unique(roots, return_inverse=True)[1].ravel()
 
 
+def _joined_means(sheets, bodies, joined):
+    """Each sheet of parts solved as one leaves out the faces they share, so
+    its own moment and volume are an open surface's: give it the mean
+    polarization of the solid they make, in its own frame."""
+    first = np.cumsum([0] + [b.border().reshape(b.n_dofs, -1).shape[1] for b in bodies])
+    group = joined[1]
+    cluster = np.arange(len(bodies))
+    for ia in range(len(bodies)):  # parts sharing a group, together
+        for ib in range(ia):
+            if np.intersect1d(
+                group[first[ia] : first[ia + 1]], group[first[ib] : first[ib + 1]]
+            ).size:
+                cluster[cluster == cluster[ia]] = cluster[ib]
+    for c in np.unique(cluster):
+        members = np.flatnonzero(cluster == c)
+        if len(members) < 2:
+            continue
+        moment, volume = np.zeros(3), 0.0
+        for k in members:
+            sheet, R = sheets[k], sheets[k].orientation.as_matrix()
+            T, q, area = sheet._V, sheet._q, sheet._frames[5]
+            local = np.einsum("f,fk,fkd->d", area / 12, q, T) + np.einsum(
+                "f,f,fd->d", area / 12, q.sum(1), T.sum(1)
+            )
+            moment += R @ local + sheet.position * (area @ q.sum(1) / 3)
+            G = T @ R.T + sheet.position
+            volume += np.einsum("fd,fd->", G[:, 0], np.cross(G[:, 1], G[:, 2])) / 6
+        for k in members:
+            R = sheets[k].orientation.as_matrix()
+            sheets[k]._mean = R.T @ (magpy.mu_0 * moment / abs(volume))
+
+
 def _same_material(a, b):
-    """One susceptibility and one remanence, in global axes."""
+    """One susceptibility, one remanence in global axes, and one applied
+    field: the per-part H_ext of a sub-collection changes M across them."""
     if not np.isclose(a.chi, b.chi, rtol=1e-9, atol=0.0):
         return False
     ja, jb = (np.zeros(3) if p.J0 is None else p.R @ p.J0 for p in (a, b))
-    return np.allclose(ja, jb, rtol=1e-9, atol=1e-12)
+    scale = max(np.abs([*ja, *jb]).max(), 1e-300)
+    return np.allclose(ja, jb, rtol=0, atol=1e-9 * scale) and np.allclose(
+        a.applied, b.applied, rtol=1e-9, atol=1e-12
+    )
 
 
-def _panel_geometry(body):
-    """Each panel's corners (P, k, 3) and outward normal (P, 3), global, and
-    its closed shell."""
-    if isinstance(body, TriBody):
-        corners = body.to_global(body.T.reshape(-1, 3)).reshape(-1, 3, 3)
-        return corners, body.fr[1] @ body.R.T, body.shell
-    p = body.panels
-    corners = body.to_global(p.corners().reshape(-1, 3)).reshape(-1, 4, 3)
-    return corners, p.normal @ body.R.T, np.zeros(p.N, int)
-
-
-def _on_surface(corners, normal, surface, tol):
-    """Per panel, whether its corners and centre all lie on ``surface``'s
-    triangles (n, 3, 3) facing the other way, within ``tol``; and a triangle
-    its centre lies on."""
+def _on_surface(corners, normal, surface, tol, own=None, walls=None):
+    """Of panels (corners (P, k, 3), outward normals, global) against a
+    surface's triangles (n, 3, 3) facing them, within ``tol``: which lie on it
+    wholly, corners and centre; which cross its outline, a point inside by
+    more than ``tol`` while another is off; and the ``walls`` entry (its
+    shell) of a triangle each centre lies on. With ``own``, the panels'
+    shells, a triangle of a panel's own shell is not tried."""
     points = np.concatenate([corners, corners.mean(1, keepdims=True)], axis=1)
     on = np.zeros(points.shape[:2], bool)
-    where = np.zeros(len(points), int)
+    deep = np.zeros(points.shape[:2], bool)
+    met = np.zeros(len(points), int)
     lo, hi = surface.reshape(-1, 3).min(0) - tol, surface.reshape(-1, 3).max(0) + tol
-    near = np.flatnonzero(((points >= lo) & (points <= hi)).all((1, 2)))
-    if not near.size:
-        return on.all(1), where
-    a, b, c = surface[:, 0], surface[:, 1], surface[:, 2]
-    n = np.cross(b - a, c - a)
-    n /= np.linalg.norm(n, axis=1)[:, None]
-    for t in range(len(surface)):
-        facing = near[normal[near] @ n[t] < -1 + 1e-6]
+    near = np.flatnonzero(((points >= lo) & (points <= hi)).all(2).any(1))
+    n = np.cross(surface[:, 1] - surface[:, 0], surface[:, 2] - surface[:, 0])
+    length = np.linalg.norm(n, axis=1)
+    for t in np.flatnonzero(length > 0):  # one of no area has no plane
+        nt = n[t] / length[t]
+        facing = near[normal[near] @ nt < -1 + 1e-6]
+        if own is not None:
+            facing = facing[own[facing] != walls[t]]
         if not facing.size:
             continue
-        x = points[facing] - a[t]
-        flat = np.abs(x @ n[t]) <= tol
-        # barycentric, inside within tol of each edge
-        e1, e2 = b[t] - a[t], c[t] - a[t]
-        g = np.linalg.inv(np.array([[e1 @ e1, e1 @ e2], [e1 @ e2, e2 @ e2]]))
-        u, v = np.einsum("ij,fpj->ifp", g, np.stack([x @ e1, x @ e2], axis=-1))
-        size = np.sqrt(np.linalg.norm(np.cross(e1, e2)))
-        slack = tol / size
-        inside = flat & (u >= -slack) & (v >= -slack) & (u + v <= 1 + slack)
-        on[facing] |= inside
-        where[facing[inside[:, -1]]] = t
-    return on.all(1), where
+        x = points[facing]
+        flat = np.abs((x - surface[t, 0]) @ nt) <= tol
+        # the distance inside each edge, outward normals in the plane
+        inside = np.full(x.shape[:2], np.inf)
+        for k in range(3):
+            a, b = surface[t, k], surface[t, (k + 1) % 3]
+            m = np.cross(b - a, nt)
+            inside = np.minimum(inside, -((x - a) @ (m / np.linalg.norm(m))))
+        on[facing] |= flat & (inside >= -tol)
+        deep[facing] |= flat & (inside > tol)
+        hit = flat[:, -1] & (inside[:, -1] >= -tol)
+        met[facing[hit]] = walls[t]
+    whole = on.all(1)
+    return whole, deep.any(1) & ~whole, met
 
 
 def _global_triangles(src_or_body):

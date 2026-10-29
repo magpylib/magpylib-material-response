@@ -132,6 +132,7 @@ class ChargeSheet(magpy.misc.CustomSource):
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._saturation = None  # set by apply_face_charge, for all it solves
+        self._mean = None  # set by apply_face_charge on parts solved as one
         self._V = P[F]
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
@@ -154,8 +155,12 @@ class ChargeSheet(magpy.misc.CustomSource):
         the moment of its charge (the integral of ``sigma r``) over its volume.
 
         A first pass for saturation: the linear solve holds while this stays
-        below the knee of the material's B-H curve.
+        below the knee of the material's B-H curve. Of parts of one material
+        that touch, solved as one, each sheet leaves out the faces they share,
+        and gives the polarization of the solid they make.
         """
+        if self._mean is not None:
+            return self._mean.copy()
         T, q = self._V, self._q
         area = self._frames[5]
         # a linear charge times the linear r, integrated exactly over each face
