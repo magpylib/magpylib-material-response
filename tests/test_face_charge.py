@@ -7,15 +7,17 @@ import time
 import magpylib as magpy
 import numpy as np
 import pytest
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import ChargeSheet, apply_face_charge
 from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
 from magpylib_material_response.face_charge._mesh import (
+    _convex,
     _merge_coplanar,
     graded_triangles,
+    rounding,
 )
 from magpylib_material_response.face_charge._parallel import run
 from magpylib_material_response.face_charge._sheet import saturation
@@ -177,6 +179,7 @@ def test_graded_triangles_cover_the_mesh_toward_its_edges():
         graded_triangles(V, F[:-1], ell=0.005, m=2, g=2.5)
 
 
+@pytest.mark.parametrize("irregular", [False, True], ids=["grid", "irregular"])
 @pytest.mark.parametrize(
     ("left_out", "polygons"),
     [
@@ -185,22 +188,96 @@ def test_graded_triangles_cover_the_mesh_toward_its_edges():
     ],
     ids=["L-shaped", "a square hole"],
 )
-def test_finely_cut_faces_merge_in_time(left_out, polygons):
+def test_finely_cut_faces_become_the_rectangles_of_their_outline(
+    left_out, polygons, irregular
+):
     """#106: a flat face that is not convex, cut into about 10,000 triangles
-    as a fine export, merges into the rectangles its outline gives. The L
-    took 13.7 s, merged triangle by triangle from the start after each merge,
-    now 0.4 s."""
-    k = 80
-    xs = np.linspace(0, 1, k + 1)
-    V = np.array([(x, y, 0.0) for x in xs for y in xs])
-    at = np.arange((k + 1) ** 2).reshape(k + 1, k + 1)
-    cells = [(i, j) for i in range(k) for j in range(k) if not left_out(i / k, j / k)]
-    F = [at[i : i + 2, j : j + 2].ravel()[[0, 2, 3, 0, 3, 1]] for i, j in cells]
+    as a fine export, becomes the rectangles its outline gives, in time, and
+    the same ones cut irregularly, as an FEM surface mesh: merged, its
+    triangles left 5 times the cells. The L took 13.7 s, merged triangle by
+    triangle from the start after each merge."""
+    V, F = _grid_face(80, left_out, irregular)
     start = time.perf_counter()
-    merged = _merge_coplanar(V, np.reshape(F, (-1, 3)), 1e-12)
+    merged = _merge_coplanar(V, F, 1e-12)
     assert time.perf_counter() - start < 5
     assert len(merged) == polygons
     assert all(len(poly) == 4 for poly, _ in merged)
+
+
+def _grid_face(k, left_out, irregular):
+    """A unit square face cut into k x k squares, those ``left_out`` left out;
+    irregularly, the diagonals either way and the vertices inside moved."""
+    rng = np.random.default_rng(1)
+    xs = np.linspace(0, 1, k + 1)
+    P = np.array([(x, y) for x in xs for y in xs])
+    at = np.arange((k + 1) ** 2).reshape(k + 1, k + 1)
+    cells = [(i, j) for i in range(k) for j in range(k) if not left_out(i / k, j / k)]
+    turns = rng.random(len(cells)) < 0.5 if irregular else np.zeros(len(cells), bool)
+    F = np.reshape(
+        [
+            at[i : i + 2, j : j + 2].ravel()[
+                [0, 2, 1, 2, 3, 1] if turn else [0, 2, 3, 0, 3, 1]
+            ]
+            for (i, j), turn in zip(cells, turns, strict=True)
+        ],
+        (-1, 3),
+    )
+    if irregular:
+        edges = {(u, v) for f in F for u, v in zip(f, np.roll(f, -1), strict=True)}
+        inside = np.ones(len(P), bool)
+        inside[[u for u, v in edges if (v, u) not in edges]] = False
+        P[inside] += rng.uniform(-0.3, 0.3, (inside.sum(), 2)) / k
+    return np.c_[P, np.zeros(len(P))], F
+
+
+def _face_with_round_holes(sides):
+    """A 30 mm square face with 3 x 3 holes of ``sides`` sides, cut as an FEM
+    surface mesh: Delaunay on its outline, each triangle split at its centre."""
+    a = np.pi / sides + 2 * np.pi * np.arange(sides) / sides
+    centres = [(x, y) for x in (-10, 0, 10) for y in (-10, 0, 10)]
+    B = np.concatenate(
+        [[(-15, -15), (15, -15), (15, 15), (-15, 15)]]
+        + [np.c_[x + 3 * np.cos(a), y + 3 * np.sin(a)] for x, y in centres]
+    )
+    P, F = list(B), []
+    for simplex in Delaunay(B).simplices:
+        if min(np.hypot(*(B[simplex].mean(0) - c)) for c in centres) < 3:
+            continue  # in a hole
+        d1, d2 = B[simplex[1]] - B[simplex[0]], B[simplex[2]] - B[simplex[0]]
+        t = simplex if d1[0] * d2[1] - d1[1] * d2[0] > 0 else simplex[[0, 2, 1]]
+        F += [(t[0], t[1], len(P)), (t[1], t[2], len(P)), (t[2], t[0], len(P))]
+        P.append(B[t].mean(0))
+    return np.c_[np.array(P), np.zeros(len(P))] * 1e-3, np.array(F)
+
+
+@pytest.mark.parametrize(
+    ("face", "scale"),
+    [
+        (
+            lambda: _grid_face(
+                24, lambda x, y: not (0.33 <= x < 0.67 or 0.33 <= y < 0.67), True
+            ),
+            0.03,
+        ),
+        (lambda: _face_with_round_holes(12), 1.0),
+    ],
+    ids=["a plus", "nine round holes"],
+)
+def test_float32_faces_are_cut_whole(face, scale):
+    """A face cut irregularly, in float32 as an STL export, turned out of the
+    axes: rounding left the cuts from its outline without end (a plus) or
+    losing 0.5 % of the face (round holes)."""
+    V, F = face()
+    turn = R.from_euler("xyz", (0.3, 0.7, 1.1)).as_matrix()
+    V = (scale * V @ turn.T + (0.05, -0.08, 0.02)).astype(np.float32).astype(float)
+    tol = max(1e-9 * np.ptp(V), 4 * rounding(V))
+    merged = _merge_coplanar(V, F, tol)
+    assert all(_convex(poly, normal, tol) for poly, normal in merged)
+    area = np.linalg.norm(
+        np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]), axis=1
+    )
+    covered = sum(np.cross(P, np.roll(P, -1, 0)).sum(0) @ n / 2 for P, n in merged)
+    np.testing.assert_allclose(covered, area.sum() / 2, rtol=1e-6)
 
 
 def test_cube_as_triangles_converges_as_the_cuboid():

@@ -83,7 +83,9 @@ Each triangle carries a charge linear across it, and the mesh is graded toward
 its sharp edges, where neighbouring triangles turn by more than 20°: layers over
 half the part's thickness, its smallest width in any direction, as the cuboid
 panels' layers. The flat faces are merged first, so that the export's long
-diagonals do not cross the layers.
+diagonals do not cross the layers; a flat face with vertices inside it, as an
+FEM surface mesh has, is rebuilt from its outline alone, so it costs the same
+however it was cut.
 
 ```python
 part = magpy.magnet.TriangularMesh.from_pyvista(
