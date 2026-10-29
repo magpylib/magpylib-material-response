@@ -200,6 +200,8 @@ def _serialize_recursive(obj, parent="warn"):
         dd["charge_densities"] = {"value": obj.charge_densities.tolist(), "unit": "A/m"}
         if obj._panels is not None:
             dd["panels"] = {"value": np.asarray(obj._panels).tolist()}
+        if obj._mean is not None:  # of parts solved as one: not its own surface's
+            dd["mean_polarization"] = {"value": obj._mean.tolist(), "unit": "T"}
     elif isinstance(obj, magpy.current.Circle):
         dd["diameter"] = {"value": np.asarray(obj.diameter).tolist(), "unit": "m"}
     elif isinstance(obj, magpy.Sensor):
@@ -298,6 +300,9 @@ def _deserialize_recursive(inp):
             kw["pixel"] = inp["pixel"]["value"]
 
     obj = constr(**kw)
+    if inp.get("mean_polarization") is not None:
+        _check_unit("Mean polarization", inp["mean_polarization"], "T")
+        obj._mean = np.asarray(inp["mean_polarization"]["value"], float)
 
     if inp.get("susceptibility") is not None:
         obj.susceptibility = inp["susceptibility"]["value"]

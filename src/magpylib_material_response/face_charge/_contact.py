@@ -95,7 +95,8 @@ def _flat(hits):
 
 def contact_block(a, b, tol):
     """The exact part of ``G_ab`` (a.n_dofs x b.n_dofs) where panels of b lie
-    in the planes of a's and overlap them."""
+    in the planes of a's and overlap them, and b's panel normals (global),
+    which the caller needs too."""
     Pa, Na = a.panel_polygons()
     Pb, Nb = b.panel_polygons()
     G = np.zeros((a.n_dofs, b.n_dofs))
@@ -112,4 +113,4 @@ def contact_block(a, b, tol):
         X = Pa[i][0] + xy @ frame
         psi, phi = a.basis_global(i, X), b.basis_global(j, X)  # (points, 3)
         G[3 * i : 3 * i + 3, 3 * j : 3 * j + 3] -= 0.5 * psi.T @ (phi * w[:, None])
-    return G
+    return G, Nb

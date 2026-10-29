@@ -48,9 +48,9 @@
   "FaceCharge": {
    "setting": 2,
    "errors": {
-    "30 mm above the poles": 0.0009324
+    "30 mm above the poles": 0.0009325
    },
-   "unknowns": 1320
+   "unknowns": 1128
   }
  },
  "soft_magnets": {

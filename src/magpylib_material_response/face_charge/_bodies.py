@@ -44,11 +44,35 @@ LAYER = 2.0  # graded layer length, in half the body's smallest side
 # grade the mesh, and coplanar panels couple exactly. Lines closer than this
 # are one line. Coordinates from float32 CAD data are good to about 1e-7.
 CONTACT = 1e-6
+# parts closer than this, in the smaller's largest half-side, are graded toward
+# each other's outline as touching ones are, though not joined: across a gap
+# far below their panels their charges nearly cancel, and panels that do not
+# face each other leak. Four pieces 30 um from a plate's side were 29 % off at
+# level 2, 2.9 % graded, the gap's own effect; from 1 mm on it changes nothing
+NEAR = 1e-2
+# faces of two parts closer than this, in the smaller's largest half-side, to
+# parallel ones couple by the exact contact term (coupling_block), as touching
+# ones: a 6 mm mesh cube 1e-7 m above a 10 mm one moved 2.5 % off touching by
+# quadrature, 2e-4 so; 1e-3 left 1e-6 m worse, 2.2e-3 against 1.6e-3
+PLANE = 1e-4
 # systems from this size on are factorized in single precision and refined, for
 # a single-precision copy beside them, half their size again; smaller ones solve
 # in milliseconds anyway
 MIXED = 2_000
 REFINEMENTS = 30  # at most, as dsgesv
+
+
+def near_tol(*parts):
+    """Parts closer than this are graded toward each other: ``NEAR`` of the
+    smallest part's size, a gap below its panels, at least what touches."""
+    return max(contact_tol(*parts), NEAR * min(np.max(p.half) for p in parts))
+
+
+def plane_tol(*parts):
+    """Faces closer than this to parallel ones of another part couple by the
+    exact contact term: ``PLANE`` of the smallest part's size, at least what
+    touches."""
+    return max(contact_tol(*parts), PLANE * min(np.max(p.half) for p in parts))
 
 
 def contact_tol(*parts):
@@ -190,10 +214,11 @@ class Body(Part):
         )
         return np.stack([np.ones(len(x)), s, t], 1)
 
-    def test_flux(self, y, tol=0.0):
+    def test_flux(self, y, tol=0.0, ny=None):
         """(n_dofs, P): the flux of a unit charge at each point ``y`` (this
         body's frame) through each test function; none from points within
-        ``tol`` of a panel's plane, where a contact takes over."""
+        ``tol`` of a panel's plane on a face parallel to it (normals ``ny``),
+        where a contact takes over."""
         p = self.panels
         out = np.zeros((p.N, 3, len(y)))
         step = max(1, CHUNK // max(len(y), 1))
@@ -211,7 +236,10 @@ class Body(Part):
                     p.q1[tc][:, None],
                     p.q2[tc][:, None],
                 )  # (3 test densities, tc, P)
-                w3[:, :, np.abs(y[:, k] - p.w0[ta[0]]) < tol] = 0.0
+                near = np.abs(y[:, k] - p.w0[ta[0]]) < tol
+                if ny is not None:  # a face across, not one standing on it
+                    near &= np.abs(ny[:, k]) > 1 - 1e-9  # as coplanar_pairs
+                w3[:, :, near] = 0.0
                 out[tc] = -sign * w3.transpose(1, 0, 2)
         return out.reshape(self.n_dofs, len(y))
 
@@ -259,8 +287,8 @@ class Outline(NamedTuple):
 
 def add_contact_lines(bodies, outlines=()):
     """Grade the face of each body that another body, or a fixed cuboid
-    (``outlines``), rests on toward that one's footprint: the charge jumps
-    there, and so does a touching magnet's field.
+    (``outlines``), rests on, or nearly (``NEAR``), toward that one's
+    footprint: the charge jumps there, and so does a touching magnet's field.
 
     Only that face: through the others the lines would cut whole strips of
     panels where nothing happens, and the assembly grows with the square of
@@ -272,10 +300,10 @@ def add_contact_lines(bodies, outlines=()):
         b for b in bodies if isinstance(b, Body)
     ]  # triangle meshes are not graded
     for a in bodies:
-        tol = CONTACT * np.max(a.half)
         for b in (*bodies, *outlines):
             if b is a:
                 continue
+            tol = near_tol(a, b)
             Rab, cb = _relative(a, b)
             corners = cb + (signs * b.half) @ Rab.T
             lo, hi = corners.min(0), corners.max(0)
@@ -321,14 +349,24 @@ def _clip(poly, x0, x1, y0, y1):
     return poly
 
 
-def cross_block(a, bs, tol=CONTACT):
+def cross_block(a, bs):
     """``G_ab`` of each cuboid b of ``bs``, side by side (a.n_dofs x the sum of
     their n_dofs): the flux of b's charge through a's test functions. All of
     them in one go, so that many small bodies take as few calls as two large."""
     pa = a.panels
     y, wts, normal_b, center_b, corners_b, blocks = [], [], [], [], [], []
+    # each b panel's reach: within it of a's face plane, the contact term.
+    # Aligned cuboids are graded onto each other and their Gauss points resolve
+    # a gap, better than the contact term: four pieces 1 um from a plate's side
+    # 0.13 % so, 1.28 % by it. A turned one's panels cannot meet a's, and leak
+    # across a gap below them: 3 % for a cube turned 30 degrees 1e-6 m above a
+    # plate, 4.6e-4 by the contact term out to NEAR, as the gap's own effect
+    reach = []
     for b in bs:
         Rab, cb = _relative(a, b)
+        turn = np.abs(Rab)  # not np.allclose: 9,900 pairs of 100 cubes took 0.2 s
+        aligned = np.abs(turn - np.round(turn)).max() <= 1e-9
+        reach.append(np.full(b.panels.N, (contact_tol if aligned else near_tol)(a, b)))
         pts, w, S, T = b.galerkin.gauss_points(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
         wts.append(w)
@@ -338,12 +376,11 @@ def cross_block(a, bs, tol=CONTACT):
         blocks.append((b, Rab, cb))
     y, wts = np.concatenate(y, 1), np.concatenate(wts, 1)
     normal_b, center_b = np.concatenate(normal_b), np.concatenate(center_b)
-    corners_b = np.concatenate(corners_b)
+    corners_b, reach = np.concatenate(corners_b), np.concatenate(reach)
     lo_b, hi_b = corners_b.min(1), corners_b.max(1)
     n_gauss, Nb = wts.shape
     phi = np.stack([np.ones(n_gauss), S, T], 1)
     G = np.zeros((pa.N, 3, Nb, 3))
-    scale = np.max(a.half)
     jobs = []
     for fa in range(6):
         ta = np.flatnonzero(pa.face == fa)
@@ -351,7 +388,7 @@ def cross_block(a, bs, tol=CONTACT):
         # b's panels lying in this face plane are handled exactly, below; of
         # them, those overlapping the face get a contact term
         coplanar = (np.abs(normal_b[:, ka]) > 1 - 1e-9) & (
-            np.abs(center_b[:, ka] - w0) < tol * scale
+            np.abs(center_b[:, ka] - w0) < reach
         )
         touching = (
             coplanar
@@ -463,39 +500,50 @@ def coupling_block(a, b):
     faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):
         return cross_block(a, [b])
-    tol = contact_tol(a, b)
+    # faces closer than this to parallel ones take the exact contact term: the
+    # source's points, a gap far below their spacing away, cannot resolve the
+    # flux through the test panels, which jumps across them as the gap closes
+    tol = plane_tol(a, b)
     points, weights = b.sources()
     y = (points - a.position) @ a.R  # b's points in a's frame
-    G = contact_block(a, b, tol)
     per_panel = len(y) // (b.n_dofs // 3)  # points of one source panel
+    G, normals = contact_block(a, b, tol)
+    ny = np.repeat(normals, per_panel, axis=0) @ a.R
     panels = max(1, CHUNK // (max(a.n_dofs, 1) * 8 * per_panel * threads()))
 
     def chunk(p0):  # whole source panels: their own columns of G
         rows = slice(p0 * per_panel, (p0 + panels) * per_panel)
         cols = slice(3 * p0, 3 * (p0 + panels))
-        flux = a.test_flux(y[rows], tol)  # (a.n_dofs, points)
+        flux = a.test_flux(y[rows], tol, ny[rows])  # (a.n_dofs, points)
         G[:, cols] += (weights[rows, cols].T @ flux.T).T
 
     run(chunk, range(0, b.n_dofs // 3, panels), work=a.n_dofs * len(y))
     return G
 
 
-def solve_system(bodies, external):
+def solve_system(bodies, external, joined=None):
     """Solve the coupled bodies.
 
     ``external`` maps global points ``(n, 3)`` to the field of the fixed sources
     there, H in A/m, global; each body adds its own uniform applied field.
-    Returns the charge coefficients of each body.
+    ``joined``, from where parts of one material touch: per body the panels
+    that carry no charge, and the group of each closed shell, whose members
+    hold no net charge together. Returns the charge coefficients of each body.
     """
     n_bodies = len(bodies)
     offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
     n = offsets[-1]
-    # a net-charge row each: a cuboid's, or each closed shell of a mesh's
+    # a net-charge row each: a cuboid's, or each closed shell of a mesh's, or
+    # each group of them that touching faces of one material join
     borders = [b.border().reshape(b.n_dofs, -1) for b in bodies]
-    fixes = n + np.cumsum([0] + [e.shape[1] for e in borders])
+    first = np.cumsum([0] + [e.shape[1] for e in borders])
+    group = np.arange(first[-1]) if joined is None else joined[1]
+    total = np.zeros(group.max() + 1)
+    for ia, border in enumerate(borders):
+        np.add.at(total, group[first[ia] : first[ia + 1]], border.sum(0))
     # column-major, which the in-place factorization below needs
-    A = np.zeros((fixes[-1], fixes[-1]), order="F")
-    rhs = np.zeros(fixes[-1])
+    A = np.zeros((n + len(total), n + len(total)), order="F")
+    rhs = np.zeros(n + len(total))
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
         # each self block is assembled here and freed once copied, so that only
@@ -504,9 +552,9 @@ def solve_system(bodies, external):
         np.negative(a.G, out=A[rows, rows])
         a.G = None
         a.add_mass(A[rows, rows], 1 / a.chi + 0.5)
-        border, fix = borders[ia], slice(fixes[ia], fixes[ia + 1])
-        A[rows, fix] = border
-        A[fix, rows] = (border / border.sum(0)).T
+        for col, g in enumerate(group[first[ia] : first[ia + 1]]):
+            A[rows, n + g] += borders[ia][:, col]  # two shells may join
+            A[n + g, rows] += borders[ia][:, col] / total[g]
 
         def field(x, a=a):
             return (external(a.to_global(x)) + a.applied) @ a.R
@@ -536,6 +584,15 @@ def solve_system(bodies, external):
                 coupling_block(a, bodies[ib]),
                 out=A[rows, offsets[ib] : offsets[ib + 1]],
             )
+    if joined is not None:  # the shared panels' unknowns: none
+        for ia, shared in enumerate(joined[0]):
+            dofs = (
+                offsets[ia]
+                + (3 * np.flatnonzero(shared)[:, None] + np.arange(3)).ravel()
+            )
+            A[dofs, :] = 0.0
+            A[dofs, dofs] = 1.0
+            rhs[dofs] = 0.0
     x = _solve(A, rhs)
     return [x[offsets[k] : offsets[k + 1]] for k in range(n_bodies)]
 

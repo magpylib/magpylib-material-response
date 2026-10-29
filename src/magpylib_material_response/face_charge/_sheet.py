@@ -132,6 +132,7 @@ class ChargeSheet(magpy.misc.CustomSource):
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._saturation = None  # set by apply_face_charge, for all it solves
+        self._mean = None  # set by apply_face_charge on parts solved as one
         self._V = P[F]
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
@@ -154,8 +155,12 @@ class ChargeSheet(magpy.misc.CustomSource):
         the moment of its charge (the integral of ``sigma r``) over its volume.
 
         A first pass for saturation: the linear solve holds while this stays
-        below the knee of the material's B-H curve.
+        below the knee of the material's B-H curve. Of parts of one material
+        that touch, solved as one, each sheet leaves out the faces they share,
+        and gives the polarization of the solid they make.
         """
+        if self._mean is not None:
+            return self._mean.copy()
         T, q = self._V, self._q
         area = self._frames[5]
         # a linear charge times the linear r, integrated exactly over each face
@@ -231,7 +236,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         a, b = P[F].reshape(-1, 3), P[np.roll(F, -1, axis=1)].reshape(-1, 3)
         d = b - a  # edge k of face k // 3, from its corner k % 3 to the next
         length = np.linalg.norm(d, axis=1)
-        tol = 1e-8 * (np.ptp(P, axis=0).max() or 1.0)
+        tol = 1e-8 * ((np.ptp(P, axis=0).max() if len(P) else 0.0) or 1.0)
         near = cKDTree(P).query_ball_point((a + b) / 2, length / 2 + tol)
         edge = np.repeat(np.arange(len(near)), [len(c) for c in near])
         vertex = np.fromiter(itertools.chain.from_iterable(near), int, len(edge))
@@ -287,6 +292,8 @@ class ChargeSheet(magpy.misc.CustomSource):
             line_dash,
         )
 
+        if not self._faces.size:  # a part inside others, all its faces shared
+            return []
         P = self._V.reshape(-1, 3)
         i, j, k = np.arange(len(P)).reshape(-1, 3).T
         q = self._smoothed()
@@ -349,7 +356,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         inv, w = group[: self._q.size], self._frames[5][face[: self._q.size]]
         total, weight = np.bincount(inv, w * self._q.ravel()), np.bincount(inv, w)
         # a group of points on edges alone has no weight here
-        return np.divide(total, weight, out=np.zeros_like(total), where=weight > 0)[inv]
+        return np.divide(total, weight, out=np.zeros(len(total)), where=weight > 0)[inv]
 
     def _edges(self):
         """Vertex pairs (k, 2) of the edges between surface elements: an edge
@@ -373,26 +380,28 @@ class ChargeSheet(magpy.misc.CustomSource):
         (m, 3), in A/m; coincident corners become one vertex."""
         T = np.asarray(triangles, float).reshape(-1, 3, 3)
         P = T.reshape(-1, 3)
-        span = np.ptp(P, axis=0).max() or 1.0
+        # none for a part inside parts of its material, all its faces shared
+        span = (np.ptp(P, axis=0).max() if len(P) else 0.0) or 1.0
         key = np.round(P / (1e-9 * span)).astype(np.int64)
         _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
         return cls(P[first], inv.reshape(-1, 3), charge_densities, **kwargs)
 
     @classmethod
-    def _from_body(cls, body, c, **kwargs):
+    def _from_body(cls, body, c, keep=None, **kwargs):
         """The sheet of a solved body: each rectangular panel, whose charge is
-        ``c0 + c1 s + c2 t`` across it, as two faces carrying it."""
+        ``c0 + c1 s + c2 t`` across it, as two faces carrying it; only the
+        panels ``keep`` marks, if given."""
         p = body.panels
-        c = np.asarray(c, float).reshape(p.N, 3)
-        corners = p.corners()
+        idx = np.arange(p.N) if keep is None else np.flatnonzero(keep)
+        c = np.asarray(c, float).reshape(p.N, 3)[idx]
+        corners, normal = p.corners()[idx], p.normal[idx]
         s, t = np.array([-1, 1, 1, -1]), np.array([-1, -1, 1, 1])
         qc = c[:, :1] + c[:, 1:2] * s + c[:, 2:3] * t  # (N, 4) at the corners
         V = np.concatenate([corners[:, [0, 1, 2]], corners[:, [0, 2, 3]]])
         q = np.concatenate([qc[:, [0, 1, 2]], qc[:, [0, 2, 3]]])
         n = np.cross(V[:, 1] - V[:, 0], V[:, 2] - V[:, 0])
-        inward = np.einsum("fd,fd->f", n, np.concatenate([p.normal, p.normal])) < 0
+        inward = np.einsum("fd,fd->f", n, np.concatenate([normal, normal])) < 0
         V[inward], q[inward] = V[inward][:, [0, 2, 1]], q[inward][:, [0, 2, 1]]
-        idx = np.arange(p.N)
         return cls.from_triangles(
             V,
             q,

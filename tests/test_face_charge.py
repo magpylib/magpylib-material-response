@@ -250,6 +250,147 @@ def test_triangle_mesh_touching_a_cuboid_solves_as_two_cuboids(turn, offset):
         apply_face_charge(magpy.Collection(part, disc), level=1)
 
 
+def _bars(as_mesh):
+    """#112's soft bars of one material: wide, a short narrow bridge touching
+    each on part of its face, wide again; as three cuboids or one closed mesh."""
+    t, slabs = 0.008, [(-0.04, 0.0, 0.02), (0.0, 0.005, 0.01), (0.005, 0.045, 0.02)]
+    if not as_mesh:
+        return [
+            magpy.magnet.Cuboid(
+                dimension=(x1 - x0, 2 * h, t),
+                position=((x0 + x1) / 2, 0, -t / 2),
+                polarization=(0, 0, 0),
+            )
+            for x0, x1, h in slabs
+        ]
+    outline = [(-0.04, -0.02), (0, -0.02), (0, -0.01), (0.005, -0.01), (0.005, -0.02)]
+    outline += [(0.045, -0.02), (0.045, 0.02), (0.005, 0.02), (0.005, 0.01)]
+    outline += [(0, 0.01), (0, 0.02), (-0.04, 0.02)]
+    caps = [[0, 1, 2, 9, 10, 11], [2, 3, 8, 9], [5, 6, 7, 8, 3, 4]]  # convex, fanned
+    n = len(outline)
+    V = [(x, y, z) for z in (-t, 0.0) for x, y in outline]
+    F = [(k, (k + 1) % n, n + (k + 1) % n) for k in range(n)]
+    F += [(k, n + (k + 1) % n, n + k) for k in range(n)]
+    for cap in caps:
+        F += [(cap[0], cap[q + 1], cap[q]) for q in range(1, len(cap) - 1)]
+        F += [(n + cap[0], n + cap[q], n + cap[q + 1]) for q in range(1, len(cap) - 1)]
+    mesh = magpy.magnet.TriangularMesh(
+        vertices=V, faces=F, polarization=(0, 0, 0), reorient_faces=True
+    )
+    return [mesh]
+
+
+def test_touching_parts_of_one_material_solve_as_one():
+    """#112: across a face where parts of one material touch, nothing changes,
+    so it carries no charge. Both parts' charges there, which had to cancel,
+    leaked on a partial contact: 16 % at level 2 against the same solid as one
+    mesh."""
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 1.0, 0),
+        dimension=(0.005,) * 3,
+        position=(-0.001, 0.01, 0.0035),
+    )
+    line = [(x, 0.008, 0.0025) for x in np.linspace(-0.02, 0.02, 21)]
+    fields = []
+    for as_mesh in (False, True):
+        coll = magpy.Collection(*_bars(as_mesh), magnet.copy())
+        for part in coll.sources_all[:-1]:
+            part.susceptibility = 999.0
+        coll.sources_all[-1].susceptibility = 0.0
+        fields.append(apply_face_charge(coll, level=2).getB(line))
+    assert _relative(*fields) < 0.015
+
+
+def test_touching_shells_of_one_mesh_solve_as_two_meshes():
+    """A multi-body export: two touching boxes in one mesh. Graded and joined
+    as two meshes are; 28 % apart before."""
+
+    def box(a, z):
+        V = np.array([[x, y, w] for x in (-a, a) for y in (-a, a) for w in (-a, a)])
+        V = V / 2 + (0, 0, z)
+        return V, ConvexHull(V).simplices
+
+    (V1, F1), (V2, F2) = box(0.01, 0), box(0.006, 0.008)
+    one = magpy.magnet.TriangularMesh(
+        vertices=np.vstack([V1, V2]),
+        faces=np.vstack([F1, F2 + len(V1)]),
+        polarization=(0, 0, 0),
+        check_disconnected=False,
+    )
+    two = [
+        magpy.magnet.TriangularMesh(vertices=V, faces=F, polarization=(0, 0, 0))
+        for V, F in ((V1, F1), (V2, F2))
+    ]
+    fields = []
+    for parts in ([one], two):
+        coll = magpy.Collection(*parts)
+        coll.susceptibility, coll.H_ext = 100.0, (0.004, 0, 0.008)
+        fields.append(
+            apply_face_charge(coll, level=2).getB([(0, 0, 0.012), (0.009, 0, 0.004)])
+        )
+    assert _relative(*fields) < 1e-4
+
+
+def test_a_part_inside_parts_of_its_material_keeps_no_faces():
+    """A block of 3 x 3 x 3 touching cubes: the centre one shares all its
+    faces, so its sheet has none, draws nothing and reports the block's
+    polarization. Building that empty sheet crashed."""
+
+    def cube(a, at=(0, 0, 0)):
+        return magpy.magnet.Cuboid(
+            dimension=(a,) * 3, polarization=(0, 0, 0), position=at
+        )
+
+    a, steps = 0.002, (-1, 0, 1)
+    block = [
+        cube(a, (a * i, a * j, a * k)) for i in steps for j in steps for k in steps
+    ]
+    models = [magpy.Collection(*block), magpy.Collection(cube(3 * a))]
+    solved = []
+    for model, level in zip(models, (1, 4), strict=True):
+        model.susceptibility, model.H_ext = 1000, (0.002, 0, 0.01)
+        solved.append(apply_face_charge(model, level=level))
+    centre, whole = solved[0].children[13], solved[1].children[0]
+    assert len(centre.faces) == 0
+    assert centre.get_trace() == []
+    assert _relative(centre.mean_polarization, whole.mean_polarization) < 0.01
+    sensors = [(0.006, 0.002, 0.001), (0, 0, 0.007), (-0.005, 0.004, -0.003)]
+    assert _relative(*(s.getB(sensors) for s in solved)) < 0.01
+
+
+@pytest.mark.parametrize(
+    ("mesh", "gap", "rtol"),
+    [(False, 1e-8, 1e-4), (True, 1e-7, 2e-3)],
+    ids=["cuboids", "meshes"],
+)
+def test_a_gap_below_the_panels_moves_the_field_as_little(mesh, gap, rtol):
+    """#105, #112: across a gap far below the panels the two faces' charges
+    nearly cancel. Graded toward each other's outline and coupled by the
+    exact contact term, they move off touching as little as the gap does:
+    6.5e-3 for the cuboids and 2.4e-2 for the meshes, before."""
+
+    def cube(a, at):
+        if not mesh:
+            return magpy.magnet.Cuboid(
+                dimension=(a,) * 3, polarization=(0, 0, 0), position=at
+            )
+        V = np.array([[x, y, z] for x in (-a, a) for y in (-a, a) for z in (-a, a)]) / 2
+        part = magpy.magnet.TriangularMesh(
+            vertices=V, faces=ConvexHull(V).simplices, polarization=(0, 0, 0)
+        )
+        part.position = at
+        return part
+
+    sensors = [(0, 0.02, 0), (0.0075, 0, 0.012), (0, 0, -0.0105), (0.006, 0.006, 0.006)]
+    fields = []
+    for z in (0.008, 0.008 + gap):
+        coll = magpy.Collection(cube(0.01, (0, 0, 0)), cube(0.006, (0.001, 0.0015, z)))
+        coll.susceptibility = 100.0
+        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
+        fields.append(apply_face_charge(coll, level=2).getB(sensors))
+    assert _relative(*fields) < rtol
+
+
 def _cube_with_a_sliver(edge, turn=None, dtype=float):
     """The cube mesh with a triangle split at the midpoint of one of its edges,
     a cube edge or a face's diagonal, and the sliver an STL repair leaves in
