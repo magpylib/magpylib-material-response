@@ -168,9 +168,20 @@ def _merge_coplanar(V, F, tol):
             # shape: merged, its irregular triangles left 5 times the cells
             normal = area[faces].sum(0)
             normal /= np.linalg.norm(normal)
-            loops = [_drop_collinear(V, loop, tol) for loop in loops]
-            out += _cut_at_reflex(V, loops, normal, tol)
-            continue
+            loops = [_drop_flattest(V, loop, tol) for loop in loops]
+            try:
+                pieces = _cut_at_reflex(V, loops, normal, tol)
+            except ValueError:
+                pieces = []
+            # convex and covering the face, or merged as before: float32
+            # rounding can leave a cut that is neither
+            covered = sum(_area(P, normal) for P, _ in pieces)
+            whole = np.linalg.norm(area[faces], axis=1).sum() / 2
+            if abs(covered - whole) <= 1e-6 * whole and all(
+                _convex(P, normal, tol) for P, _ in pieces
+            ):
+                out += pieces
+                continue
         out += _merge_greedy(V, F[faces], n[faces], tol)
     return out
 
@@ -237,6 +248,10 @@ def _cut_at_reflex(V, loops, normal, tol):
     hole joins the hole to the loop it meets, so that the next cuts split it.
     Each cut takes away a corner turning in and makes none, so an L-shaped
     face becomes two rectangles however the export cut it."""
+    loops = [loop for loop in loops if len(loop) >= 3]
+    if not loops:
+        msg = "no outline left"
+        raise ValueError(msg)
     e1 = V[loops[0][1]] - V[loops[0][0]]
     e1 /= np.linalg.norm(e1)
     axes = np.array([e1, np.cross(normal, e1)]).T
@@ -245,7 +260,7 @@ def _cut_at_reflex(V, loops, normal, tol):
     def flat(P):
         return (np.asarray(P) - origin) @ axes
 
-    pending = [[[V[i] for i in loop] for loop in loops if len(loop) >= 3]]
+    pending = [[[V[i] for i in loop] for loop in loops]]
     pieces = []
     for _ in range(4 * sum(len(loop) for loop in loops) + 8):
         if not pending:
@@ -262,7 +277,7 @@ def _cut_at_reflex(V, loops, normal, tol):
     out = []
     for piece in pieces:
         P = np.array(piece)
-        keep = _drop_collinear(P, list(range(len(P))), tol)
+        keep = _drop_flattest(P, range(len(P)), tol)
         if len(keep) >= 3:
             P = P[keep]
             k = int(np.lexsort(P[:, ::-1].T)[0])  # from its least corner
@@ -278,10 +293,12 @@ def _reflex_cut(region, flat, tol):
     for a, q in enumerate(Q):
         e_in = q - np.roll(q, 1, axis=0)
         e_out = np.roll(q, -1, axis=0) - q
-        size = np.linalg.norm(e_in, axis=1) * np.linalg.norm(e_out, axis=1)
         turn = e_in[:, 0] * e_out[:, 1] - e_in[:, 1] * e_out[:, 0]
+        # turning in by more than ``tol``, its height over the line through its
+        # neighbours: a corner float32 rounding bends is straight
+        chord = np.linalg.norm(e_in + e_out, axis=1)
         corners += [
-            (tuple(region[a][i]), a, i) for i in np.flatnonzero(turn < -1e-9 * size)
+            (tuple(region[a][i]), a, i) for i in np.flatnonzero(turn < -tol * chord)
         ]
     if not corners:
         return None
@@ -307,7 +324,8 @@ def _reflex_cut(region, flat, tol):
             k = np.flatnonzero(ok)[np.argmin(t[ok])]
             hits.append((t[k], k, s[k]))
     if not hits:
-        return None
+        msg = "a cut from a corner turning in meets no outline"
+        raise ValueError(msg)
     _, k, s = min(hits, key=lambda h: h[0])
     b, j = owner[k], index[k]
     loop_b = list(region[b])
@@ -369,6 +387,31 @@ def _inside(point, q):
     with np.errstate(divide="ignore", invalid="ignore"):
         x = a[:, 0] + (point[1] - a[:, 1]) * (b[:, 0] - a[:, 0]) / (b[:, 1] - a[:, 1])
     return bool(np.count_nonzero(up & (x > point[0])) % 2)
+
+
+def _drop_flattest(V, loop, tol):
+    """As :func:`_drop_collinear`, but one vertex at a time, the flattest
+    first: two vertices a hair apart, each within ``tol`` of the line through
+    its neighbours because of the other, are not both dropped, with the
+    triangle between them (float32 faces lost 1 % of their area so)."""
+    loop = list(loop)
+    while len(loop) >= 3:
+        pts = V[loop]
+        prev = np.roll(pts, 1, axis=0)
+        chord = np.roll(pts, -1, axis=0) - prev
+        height = np.linalg.norm(np.cross(pts - prev, chord), axis=1) / np.maximum(
+            np.linalg.norm(chord, axis=1), np.finfo(float).tiny
+        )
+        k = int(np.argmin(height))
+        if height[k] > tol:
+            break
+        del loop[k]
+    return loop
+
+
+def _area(P, normal):
+    """The area of the planar polygon ``P`` (k, 3), wound round ``normal``."""
+    return np.cross(P, np.roll(P, -1, axis=0)).sum(0) @ normal / 2
 
 
 def _merge_greedy(V, F, n, tol):
