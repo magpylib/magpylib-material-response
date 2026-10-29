@@ -117,10 +117,11 @@ def _merge_coplanar(V, F, tol):
 
     Neighbouring coplanar triangles make a flat region; a region whose
     outline is one convex loop, such as a box's face however finely the export
-    cut it, is that loop. Another region is merged triangle by triangle while
-    the union stays convex: a merge restarts the scan, so that the result does
-    not depend on the order merges are found in; a pair found not to merge is
-    not tried again while neither of the two changes."""
+    cut it, is that loop. A region with vertices inside it, as an FEM surface
+    mesh has, is cut from its outline alone (:func:`_cut_at_reflex`), the same
+    however the export cut it. Another, all its vertices on its outline, is
+    merged triangle by triangle while the union stays convex
+    (:func:`_merge_greedy`)."""
     area = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
     n = area / np.linalg.norm(area, axis=1)[:, None]
     # neighbours across each edge, joined where their normals agree
@@ -161,6 +162,15 @@ def _merge_coplanar(V, F, tol):
             if _convex(V[loop], normal, tol):
                 out.append((V[loop], normal))
                 continue
+        loops = _loops(F[faces])
+        if loops is not None and set(F[faces].ravel()) - set().union(*loops):
+            # vertices inside the face, as an FEM surface mesh has, carry no
+            # shape: merged, its irregular triangles left 5 times the cells
+            normal = area[faces].sum(0)
+            normal /= np.linalg.norm(normal)
+            loops = [_drop_collinear(V, loop, tol) for loop in loops]
+            out += _cut_at_reflex(V, loops, normal, tol)
+            continue
         out += _merge_greedy(V, F[faces], n[faces], tol)
     return out
 
@@ -194,6 +204,171 @@ def _drop_collinear(V, loop, tol):
         np.linalg.norm(chord, axis=1), np.finfo(float).tiny
     )
     return [w for w, h in zip(loop, height > tol, strict=True) if h]
+
+
+def _loops(F):
+    """Every boundary loop of the triangles ``F``, wound as they are, the
+    triangles on their left; None where two loops meet at a vertex."""
+    edges = {(u, v) for a, b, c in F for u, v in ((a, b), (b, c), (c, a))}
+    rim = [(u, v) for u, v in edges if (v, u) not in edges]
+    nxt = dict(rim)
+    if len(nxt) != len(rim) or set(nxt) != set(nxt.values()):
+        return None
+    loops, seen = [], set()
+    for start in sorted(nxt):
+        if start in seen:
+            continue
+        loop, u = [], start
+        while u not in seen:
+            seen.add(u)
+            loop.append(u)
+            u = nxt[u]
+        if u != start:
+            return None
+        loops.append(loop)
+    return loops
+
+
+def _cut_at_reflex(V, loops, normal, tol):
+    """A flat region given by its outline alone, ``loops`` of vertex indices
+    with the region on their left round ``normal``, cut into convex polygons:
+    at a corner turning into the region, along the extension of one of its
+    two edges, the shorter way, to where it meets the outline. A cut from a
+    hole joins the hole to the loop it meets, so that the next cuts split it.
+    Each cut takes away a corner turning in and makes none, so an L-shaped
+    face becomes two rectangles however the export cut it."""
+    e1 = V[loops[0][1]] - V[loops[0][0]]
+    e1 /= np.linalg.norm(e1)
+    axes = np.array([e1, np.cross(normal, e1)]).T
+    origin = V[loops[0][0]]
+
+    def flat(P):
+        return (np.asarray(P) - origin) @ axes
+
+    pending = [[[V[i] for i in loop] for loop in loops if len(loop) >= 3]]
+    pieces = []
+    for _ in range(4 * sum(len(loop) for loop in loops) + 8):
+        if not pending:
+            break
+        region = pending.pop()
+        cut = _reflex_cut(region, flat, tol)
+        if cut is None:  # no corner turns in: one convex loop
+            pieces.append(region[0])
+        else:
+            pending += _regroup(cut, flat)
+    else:
+        msg = "a flat face could not be cut into convex polygons: repair the mesh"
+        raise ValueError(msg)
+    out = []
+    for piece in pieces:
+        P = np.array(piece)
+        keep = _drop_collinear(P, list(range(len(P))), tol)
+        if len(keep) >= 3:
+            P = P[keep]
+            k = int(np.lexsort(P[:, ::-1].T)[0])  # from its least corner
+            out.append((np.roll(P, -k, axis=0), normal))
+    return out
+
+
+def _reflex_cut(region, flat, tol):
+    """``region``'s loops, of points, after one cut from its least corner
+    that turns into it; None if none does."""
+    Q = [flat(loop) for loop in region]
+    corners = []  # turning in: by their point, then loop and place
+    for a, q in enumerate(Q):
+        e_in = q - np.roll(q, 1, axis=0)
+        e_out = np.roll(q, -1, axis=0) - q
+        size = np.linalg.norm(e_in, axis=1) * np.linalg.norm(e_out, axis=1)
+        turn = e_in[:, 0] * e_out[:, 1] - e_in[:, 1] * e_out[:, 0]
+        corners += [
+            (tuple(region[a][i]), a, i) for i in np.flatnonzero(turn < -1e-9 * size)
+        ]
+    if not corners:
+        return None
+    _, a, i = min(corners)
+    e_in = Q[a][i] - Q[a][i - 1]
+    e_out = Q[a][(i + 1) % len(Q[a])] - Q[a][i]
+    # every edge of every loop, from A to B, the region on its left
+    A = np.concatenate(Q)
+    B = np.concatenate([np.roll(q, -1, axis=0) for q in Q])
+    owner = np.concatenate([np.full(len(q), b) for b, q in enumerate(Q)])
+    index = np.concatenate([np.arange(len(q)) for q in Q])
+    E = B - A
+    r = Q[a][i]
+    hits = []
+    for d in (e_in / np.linalg.norm(e_in), -e_out / np.linalg.norm(e_out)):
+        den = d[0] * E[:, 1] - d[1] * E[:, 0]  # > 0: the ray leaves across it
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = ((A - r)[:, 0] * E[:, 1] - (A - r)[:, 1] * E[:, 0]) / den
+            s = ((A - r)[:, 0] * d[1] - (A - r)[:, 1] * d[0]) / den
+        slack = tol / np.maximum(np.linalg.norm(E, axis=1), tol)
+        ok = (den > 1e-12) & (t > tol) & (s >= -slack) & (s <= 1 + slack)
+        if ok.any():
+            k = np.flatnonzero(ok)[np.argmin(t[ok])]
+            hits.append((t[k], k, s[k]))
+    if not hits:
+        return None
+    _, k, s = min(hits, key=lambda h: h[0])
+    b, j = owner[k], index[k]
+    loop_b = list(region[b])
+    length = np.linalg.norm(E[k])
+    if s * length <= tol:
+        x = j
+    elif (1 - s) * length <= tol:
+        x = (j + 1) % len(loop_b)
+    else:  # a new corner on that edge
+        p, q = loop_b[j], loop_b[(j + 1) % len(loop_b)]
+        loop_b.insert(j + 1, p + s * (q - p))
+        x = j + 1
+        if a == b and x <= i:  # the corner moved along
+            i += 1
+    loops = [list(loop) for loop in region]
+    loops[b] = loop_b
+    if a == b:  # split in two, both keep the corner and the point met
+        loop = loops[a]
+        lo, hi = (i, x) if i < x else (x, i)
+        parts = [loop[lo : hi + 1], loop[hi:] + loop[: lo + 1]]
+        rest = [lp for c, lp in enumerate(loops) if c != a]
+        return parts + rest
+    # joined: round a from the corner, across, round b, and back
+    la, lb = loops[a], loops[b]
+    joined = la[i:] + la[: i + 1] + lb[x:] + lb[: x + 1]
+    return [joined] + [lp for c, lp in enumerate(loops) if c not in (a, b)]
+
+
+def _regroup(loops, flat):
+    """Loops into regions: each loop wound round the normal with the loops
+    wound the other way, the holes, that lie inside it."""
+    Q = [flat(loop) for loop in loops]
+    area = [
+        float(np.sum(q[:, 0] * np.roll(q[:, 1], -1) - np.roll(q[:, 0], -1) * q[:, 1]))
+        / 2
+        for q in Q
+    ]
+    outer = [c for c, A in enumerate(area) if A > 0]
+    regions = {c: [loops[c]] for c in outer}
+    for c, A in enumerate(area):
+        if A >= 0:
+            continue
+        q = Q[c]
+        e = np.argmax(np.linalg.norm(np.roll(q, -1, axis=0) - q, axis=1))
+        point = (q[e] + q[(e + 1) % len(q)]) / 2  # a point of the hole's rim
+        # the smallest loop around it; the largest if rounding says none
+        inside = [o for o in outer if _inside(point, Q[o])] or [
+            max(outer, key=lambda o: area[o])
+        ]
+        regions[min(inside, key=lambda o: area[o])].append(loops[c])
+    return list(regions.values())
+
+
+def _inside(point, q):
+    """True if the 2D ``point`` lies inside the loop ``q``: crossings to its
+    right, odd."""
+    a, b = q, np.roll(q, -1, axis=0)
+    up = (a[:, 1] <= point[1]) != (b[:, 1] <= point[1])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        x = a[:, 0] + (point[1] - a[:, 1]) * (b[:, 0] - a[:, 0]) / (b[:, 1] - a[:, 1])
+    return bool(np.count_nonzero(up & (x > point[0])) % 2)
 
 
 def _merge_greedy(V, F, n, tol):

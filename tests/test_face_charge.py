@@ -177,6 +177,7 @@ def test_graded_triangles_cover_the_mesh_toward_its_edges():
         graded_triangles(V, F[:-1], ell=0.005, m=2, g=2.5)
 
 
+@pytest.mark.parametrize("irregular", [False, True], ids=["grid", "irregular"])
 @pytest.mark.parametrize(
     ("left_out", "polygons"),
     [
@@ -185,19 +186,36 @@ def test_graded_triangles_cover_the_mesh_toward_its_edges():
     ],
     ids=["L-shaped", "a square hole"],
 )
-def test_finely_cut_faces_merge_in_time(left_out, polygons):
+def test_finely_cut_faces_become_the_rectangles_of_their_outline(
+    left_out, polygons, irregular
+):
     """#106: a flat face that is not convex, cut into about 10,000 triangles
-    as a fine export, merges into the rectangles its outline gives. The L
-    took 13.7 s, merged triangle by triangle from the start after each merge,
-    now 0.4 s."""
-    k = 80
+    as a fine export, becomes the rectangles its outline gives, in time, and
+    the same ones cut irregularly, as an FEM surface mesh: merged, its
+    triangles left 5 times the cells. The L took 13.7 s, merged triangle by
+    triangle from the start after each merge."""
+    k, rng = 80, np.random.default_rng(1)
     xs = np.linspace(0, 1, k + 1)
-    V = np.array([(x, y, 0.0) for x in xs for y in xs])
+    P = np.array([(x, y) for x in xs for y in xs])
     at = np.arange((k + 1) ** 2).reshape(k + 1, k + 1)
     cells = [(i, j) for i in range(k) for j in range(k) if not left_out(i / k, j / k)]
-    F = [at[i : i + 2, j : j + 2].ravel()[[0, 2, 3, 0, 3, 1]] for i, j in cells]
+    turns = rng.random(len(cells)) < 0.5 if irregular else np.zeros(len(cells), bool)
+    F = np.reshape(
+        [
+            at[i : i + 2, j : j + 2].ravel()[
+                [0, 2, 1, 2, 3, 1] if turn else [0, 2, 3, 0, 3, 1]
+            ]
+            for (i, j), turn in zip(cells, turns, strict=True)
+        ],
+        (-1, 3),
+    )
+    if irregular:  # the diagonals either way, the vertices inside moved
+        edges = {(u, v) for f in F for u, v in zip(f, np.roll(f, -1), strict=True)}
+        inside = np.ones(len(P), bool)
+        inside[[u for u, v in edges if (v, u) not in edges]] = False
+        P[inside] += rng.uniform(-0.3, 0.3, (inside.sum(), 2)) / k
     start = time.perf_counter()
-    merged = _merge_coplanar(V, np.reshape(F, (-1, 3)), 1e-12)
+    merged = _merge_coplanar(np.c_[P, np.zeros(len(P))], F, 1e-12)
     assert time.perf_counter() - start < 5
     assert len(merged) == polygons
     assert all(len(poly) == 4 for poly, _ in merged)
