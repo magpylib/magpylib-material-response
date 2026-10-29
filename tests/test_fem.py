@@ -145,6 +145,27 @@ def test_every_shape_solves(make):
     assert np.all(study.values[:, 2] > 0)
 
 
+def test_sensors_are_read_in_their_own_frames():
+    """As magpylib and mesh_study read them: fem_solve, FemSolution.getB and
+    fem_study took positions only, and failed on a sensor."""
+    model = magpy.Collection(
+        _cube(),
+        magpy.magnet.Cuboid(
+            dimension=(1, 1, 1), polarization=(0, 0, 1), position=(2, 0, 0)
+        ),
+    )
+    sensor = magpy.Sensor(pixel=[(0, 0, 0), (0.2, 0, 0)], position=(1, 0, 1.2))
+    sensor.rotate_from_angax(30, "z")
+    solution = fem_solve(model, 1, observers=sensor, edge_layers=0)
+    at_pixels = solution.getB(sensor.orientation.apply(sensor.pixel) + sensor.position)
+    np.testing.assert_allclose(
+        solution.getB(sensor), sensor.orientation.inv().apply(at_pixels), atol=1e-15
+    )
+    with pytest.warns(UserWarning, match="Two orders give no error estimate"):
+        study = fem_study(model, sensor, (1, 2), edge_layers=0)
+    np.testing.assert_allclose(study.values[-1], study.solution.getB(sensor))
+
+
 def test_edge_layers_match_across_faces(monkeypatch):
     """On this cuboid, an observer above it made NGSolve's edge layers leave a
     prism's square face against two triangles, which no assembly accepts
