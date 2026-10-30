@@ -128,8 +128,8 @@ def test_timing_flags_memory(then, now, cell, flagged):
 
 
 def test_every_timed_case_has_a_picture():
-    names = {CASES[c].reference or c for c in STORED}
-    assert not [n for n in names if not (timing.PICTURES / f"{n}.png").exists()]
+    names = [f"{c}-{m}.png" for c, by_method in STORED.items() for m in by_method]
+    assert not [n for n in names if not (timing.PICTURES / n).exists()]
 
 
 def test_timing_comment_shows_memory(tmp_path, monkeypatch):
@@ -157,4 +157,4 @@ def test_timing_comment_shows_memory(tmp_path, monkeypatch):
     assert f"Over 1 MB more memory, or failed: {small}; {broken}." in comment
     assert "**failed**" in comment
     assert timing.TAGS["FaceCharge"] in comment
-    assert "served/gmres_stops.png" in timing.compare(tmp_path, "served")
+    assert "served/gmres_stops-FaceCharge.png" in timing.compare(tmp_path, "served")

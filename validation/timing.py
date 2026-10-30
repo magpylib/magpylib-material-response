@@ -39,7 +39,7 @@ FLOOR = 0.05
 MORE_MEMORY = 100e6
 #: a case's memory is given up on after this many seconds; it solves in seconds
 PEAK_TIMEOUT = 600
-#: each case's picture, drawn by scripts/case_pictures.py
+#: each case's picture under each method, drawn by scripts/case_pictures.py
 PICTURES = Path(__file__).parent / "pictures"
 #: each method's tag in the comment, away from the red and green of the changes
 TAGS = {
@@ -175,7 +175,7 @@ def _case_cells(key, pictures):
     tag = f'<img src="{badge}" alt="{method}">'
     if pictures is None:
         return f"{name} | {tag}"
-    picture = f"{pictures}/{CASES[name].reference or name}.png"
+    picture = f"{pictures}/{name}-{method}.png"
     return f'<img src="{picture}" width="64" alt=""> {name} | {tag}'
 
 
