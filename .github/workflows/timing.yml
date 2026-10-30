@@ -56,15 +56,18 @@ jobs:
             https://raw.githubusercontent.com/${{ github.repository }}/${{
             github.event.pull_request.head.sha }}/validation/pictures
         run: |
+          # absolute: from a relative path, Python warns of an unexpected prefix
+          base="$GITHUB_WORKSPACE/base-env/bin/python"
+          head="$GITHUB_WORKSPACE/head-env/bin/python"
           for round in 1 2 3; do
-            ../base-env/bin/python -m validation.timing record "../timing/base-$round.json" \
+            "$base" -m validation.timing record "../timing/base-$round.json" \
               || echo "The base could not solve this PR's cases."
-            ../head-env/bin/python -m validation.timing record "../timing/head-$round.json"
+            "$head" -m validation.timing record "../timing/head-$round.json"
           done
-          ../base-env/bin/python -m validation.timing memory ../timing/memory-base.json \
+          "$base" -m validation.timing memory ../timing/memory-base.json \
             || echo "The base could not solve this PR's cases."
-          ../head-env/bin/python -m validation.timing memory ../timing/memory-head.json
-          ../head-env/bin/python -m validation.timing compare ../timing --pictures "$PICTURES" > ../timing.md
+          "$head" -m validation.timing memory ../timing/memory-head.json
+          "$head" -m validation.timing compare ../timing --pictures "$PICTURES" > ../timing.md
           cat ../timing.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment on the PR
