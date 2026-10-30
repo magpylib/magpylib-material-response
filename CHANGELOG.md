@@ -58,7 +58,8 @@ and this project adheres to
   `defaults.threads` threads where magpylib has that setting, otherwise on up
   to 8. Parts of one material that touch are solved as one, and parts a gap
   below their panels apart are graded toward each other. `to_json` saves a
-  solved collection, with the colour level its sheets share (`color_level`)
+  solved collection, with the colour level its sheets share
+  (`style.charge.level`)
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110),

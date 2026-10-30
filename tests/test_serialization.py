@@ -347,7 +347,7 @@ def test_roundtrip_face_charge_solution():
     assert back.face_charge_info == solved.face_charge_info
     # what the solve set for drawing and for the saturation check
     sheet, original = back.children[0], solved.children[0]
-    assert sheet.color_level == original.color_level is not None
+    assert sheet.style.charge.level == original.style.charge.level is not None
     np.testing.assert_array_equal(sheet.panels, original.panels)
     # as apply_face_charge gives parts solved as one
     joined = type(sheet)(
