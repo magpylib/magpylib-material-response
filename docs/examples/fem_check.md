@@ -137,7 +137,7 @@ material model.
 
 ## The validation suite
 
-The repository's `validation/` folder holds 19 cases: the models of these pages
+The repository's `validation/` folder holds 20 cases: the models of these pages
 and others that are hard for the method of moments, nearly all with a stored
 finite-element reference at their sensors. A test holds the method of moments to
 its stored accuracy on every pull request, and every night all methods climb

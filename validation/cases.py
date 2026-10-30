@@ -208,6 +208,28 @@ def _ucore():
     return magpy.Collection(core, coil), groups
 
 
+def _wound_core():
+    """A soft core (chi = 999) inside a coil of many segments, 48 loops of 50
+    at 10 A, the coil of issue #108. Its field at the load points takes millions
+    of kernel rows, so this is the case that runs magpylib's chunks and threads.
+    Sensors on a line 10 mm above the core."""
+    core = _soft((40 * MM, 40 * MM, 60 * MM), "core, χ = 999", 999)
+    phi = np.linspace(0, 2 * np.pi, 51)
+    coil = magpy.Collection(
+        *(
+            magpy.current.Polyline(
+                current=10,
+                vertices=np.c_[r * np.cos(phi), r * np.sin(phi), np.full_like(phi, z)],
+            )
+            for r in np.linspace(30 * MM, 36 * MM, 4)
+            for z in np.linspace(-10 * MM, 10 * MM, 12)
+        ),
+        style_label="coil, 48 loops of 50 segments, 10 A",
+    )
+    groups = {"10 mm above the core": _line((-50, 0, 40), (50, 0, 40), 101)}
+    return magpy.Collection(core, coil), groups
+
+
 # ── typical models ────────────────────────────────────────────────────────────
 
 
@@ -512,6 +534,9 @@ CASES = {
         Case("cuboids", "Three cuboids turned (case A)", "first", _cuboids),
         Case("plate", "Magnet on a soft plate", "first", _plate),
         Case("ucore", "U-core driven by a coil (case F)", "first", _ucore),
+        Case(
+            "wound_core", "Soft core in a coil of many segments", "first", _wound_core
+        ),
         Case(
             "soft_magnets", "Magnet and a soft cube (case B)", "typical", _soft_magnets
         ),
