@@ -39,6 +39,16 @@ FLOOR = 0.05
 MORE_MEMORY = 100e6
 #: a case's memory is given up on after this many seconds; it solves in seconds
 PEAK_TIMEOUT = 600
+#: each case's picture, drawn by scripts/case_pictures.py
+PICTURES = Path(__file__).parent / "pictures"
+#: each method's tag in the comment, away from the red and green of the changes
+TAGS = {
+    "magpylib": "6b6a65",
+    "MoM": "2a78d6",
+    "FaceCharge": "6250d6",
+    "FaceChargeRefined": "c2410c",
+    "FEM": "0e7490",
+}
 
 
 def _pr_check():
@@ -152,9 +162,21 @@ def _memory_cell(then, now):
     return f"{dot} {_bytes(then)} → {bold}{_bytes(now)}{bold}", flag
 
 
-def compare(folder):
+def _case_cells(key, pictures):
+    """The cells of a case: its picture if `pictures` says where they are served,
+    its name, and its method as a coloured tag."""
+    name, method = key.split(", ")
+    badge = f"https://img.shields.io/badge/-{method}-{TAGS[method]}?style=flat-square"
+    tag = f'<img src="{badge}" alt="{method}">'
+    if pictures is None:
+        return f"{name} | {tag}"
+    picture = f"{pictures}/{CASES[name].reference or name}.png"
+    return f'<img src="{picture}" width="64" alt=""> {name} | {tag}'
+
+
+def compare(folder, pictures=None):
     """Markdown: each case's time and peak memory on the base and here, slowest
-    change first."""
+    change first. `pictures` is the address the case pictures are served from."""
     base, head = _rounds(folder, "base"), _rounds(folder, "head")
     peaks_then, peaks_now = _peaks(folder, "base"), _peaks(folder, "head")
     title = f"{MARKER}\n### Time and memory against the base branch\n\n"
@@ -162,6 +184,7 @@ def compare(folder):
         return f"{title}The base could not run."
     rows, flagged, more_memory, total = [], 0, [], [0.0, 0.0]
     for key in head[0]["times"]:
+        case = _case_cells(key, pictures)
         cell, grew = ("", False)
         if key in peaks_now:
             cell, grew = _memory_cell(peaks_then.get(key), peaks_now[key])
@@ -170,11 +193,11 @@ def compare(folder):
         then, then_spread = _least(base, key)
         now, now_spread = _least(head, key)
         if now is None:
-            rows.append((float("inf"), f"| {key} | | failed here | | | {cell} |"))
+            rows.append((float("inf"), f"| {case} | | failed here | | | {cell} |"))
             continue
         if then is None:
             rows.append(
-                (0.0, f"| {key} | not on the base | {_time(now)} | | | {cell} |")
+                (0.0, f"| {case} | not on the base | {_time(now)} | | | {cell} |")
             )
             continue
         total[0] += then
@@ -185,7 +208,7 @@ def compare(folder):
         flagged += flag
         spread = max(then_spread, now_spread)
         bold = "**" if flag else ""
-        cells = [key, _time(then), _time(now), f"{dot} {bold}{ratio:.2f}x{bold}"]
+        cells = [case, _time(then), _time(now), f"{dot} {bold}{ratio:.2f}x{bold}"]
         rows.append((ratio, f"| {' | '.join(cells)} | {100 * spread:.0f} % | {cell} |"))
     rows.sort(key=lambda row: -row[0])
     summary = (
@@ -204,8 +227,8 @@ def compare(folder):
         )
     table = "\n".join(
         [
-            "| case | base | this PR | ratio | spread between rounds | peak memory |",
-            "|---|---|---|---|---|---|",
+            "| case | method | base | this PR | ratio | spread between rounds | peak memory |",
+            "|---|---|---|---|---|---|---|",
             *(row for _, row in rows),
         ]
     )
@@ -229,7 +252,9 @@ def main(argv=None):
     one = sub.add_parser("peak")
     one.add_argument("name")
     one.add_argument("method_name")
-    sub.add_parser("compare").add_argument("folder", type=Path)
+    comparing = sub.add_parser("compare")
+    comparing.add_argument("folder", type=Path)
+    comparing.add_argument("--pictures")
     args = parser.parse_args(argv)
     if args.command == "record":
         record(args.path)
@@ -238,7 +263,7 @@ def main(argv=None):
     elif args.command == "peak":
         peak(args.name, args.method_name)
     else:
-        print(compare(args.folder))
+        print(compare(args.folder, args.pictures))
 
 
 if __name__ == "__main__":

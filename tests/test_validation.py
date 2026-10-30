@@ -127,6 +127,11 @@ def test_timing_flags_memory(then, now, cell, flagged):
     assert timing._memory_cell(then, now) == (cell, flagged)
 
 
+def test_every_timed_case_has_a_picture():
+    names = {CASES[c].reference or c for c in STORED}
+    assert not [n for n in names if not (timing.PICTURES / f"{n}.png").exists()]
+
+
 def test_timing_comment_shows_memory(tmp_path, monkeypatch):
     pytest.importorskip("resource")  # not on Windows
     monkeypatch.setattr(timing, "MORE_MEMORY", 1e6)
@@ -151,3 +156,5 @@ def test_timing_comment_shows_memory(tmp_path, monkeypatch):
     comment = timing.compare(tmp_path)
     assert f"Over 1 MB more memory, or failed: {small}; {broken}." in comment
     assert "**failed**" in comment
+    assert timing.TAGS["FaceCharge"] in comment
+    assert "served/gmres_stops.png" in timing.compare(tmp_path, "served")

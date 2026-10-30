@@ -50,6 +50,11 @@ jobs:
 
       - name: Three rounds each, alternating, then peak memory
         working-directory: head
+        env:
+          # at this PR's commit, so that a new case has its picture
+          PICTURES:
+            https://raw.githubusercontent.com/${{ github.repository }}/${{
+            github.event.pull_request.head.sha }}/validation/pictures
         run: |
           for round in 1 2 3; do
             ../base-env/bin/python -m validation.timing record "../timing/base-$round.json" \
@@ -59,7 +64,7 @@ jobs:
           ../base-env/bin/python -m validation.timing memory ../timing/memory-base.json \
             || echo "The base could not solve this PR's cases."
           ../head-env/bin/python -m validation.timing memory ../timing/memory-head.json
-          ../head-env/bin/python -m validation.timing compare ../timing > ../timing.md
+          ../head-env/bin/python -m validation.timing compare ../timing --pictures "$PICTURES" > ../timing.md
           cat ../timing.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment on the PR
