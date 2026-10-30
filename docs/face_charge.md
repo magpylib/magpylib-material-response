@@ -29,13 +29,13 @@ B = solved.getB((0, 0, 0.0035))
 
 The result is a copy of the collection in which the plate is a `ChargeSheet`, an
 ordinary magpylib source: `getB`, observer paths, `show()` and `to_json` work as
-for any other; magpylib-studio does not draw it yet. A cuboid whose
-susceptibility is exactly 0 is not solved and stays as it was. `show()` colours
-the solved charge in the magnet colours, positive charge being a north pole;
-`style.mesh.grid.show` draws the panels. The colour is full at the charge that
-95 % of the surface stays below, not at the singular peak in a corner, and the
-parts solved together share it, so their colours compare: it is each sheet's
-`style.charge.level`, which `to_json` keeps.
+for any other, and magpylib-studio after 0.9 draws it in a `SceneWidget`, beside
+field lines. A cuboid whose susceptibility is exactly 0 is not solved and stays
+as it was. `show()` colours the solved charge in the magnet colours, positive
+charge being a north pole; `style.mesh.grid.show` draws the panels. The colour
+is full at the charge that 95 % of the surface stays below, not at the singular
+peak in a corner, and the parts solved together share it, so their colours
+compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
 
 ![The plate under the magnet: the plate turns north (red) under the magnet's south face and south (green) where the flux returns, on its rim and sides; level 3 with its panels drawn, and level 5.](_static/images/face_charge_plate.png)
 
