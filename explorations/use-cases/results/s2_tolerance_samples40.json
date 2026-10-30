@@ -1,0 +1,27 @@
+{
+ "samples": 40,
+ "target": 10000,
+ "a_magnet_fixed": {
+  "unknowns": 1518,
+  "per_sample_s": 0.07547720512520754,
+  "per_sample_source_field_s": 0.007717971677629975,
+  "today_10k_s": 754.7720512520755,
+  "Bz_mean_mT": 111.97489268114421,
+  "Bz_std_mT": 30.567285914070577,
+  "kept_factorization_10k_s": 77.3619770272926
+ },
+ "c_magnet_recoil": {
+  "unknowns": 2166,
+  "per_sample_s": 0.13928797282860614,
+  "per_sample_source_field_s": 0.0,
+  "today_10k_s": 1392.8797282860614,
+  "Bz_mean_mT": 111.47879311555964,
+  "Bz_std_mT": 30.193119357106415
+ },
+ "b_sensor_only": {
+  "solve_s": 0.07451666699489579,
+  "getB_10k_poses_s": 0.1899323749821633,
+  "Bz_std_mT": 22.507393417014672
+ },
+ "peak_rss_gb": 1.2
+}

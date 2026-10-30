@@ -1,0 +1,13 @@
+{
+ "level": 2,
+ "sets": 20,
+ "unknowns": 1320,
+ "today_s": 2.9353145000059158,
+ "per_set_s": 0.14209489384811605,
+ "per_set_source_field_s": 0.0070491664882865734,
+ "kept_factorization_s": 0.29276675311120925,
+ "by_sums_s": 0.29184212497784756,
+ "sums_vs_solves_worst_rel": 2.0031397185676247e-14,
+ "Bz_peak_mT": 0.44177438437951205,
+ "peak_rss_gb": 0.34
+}

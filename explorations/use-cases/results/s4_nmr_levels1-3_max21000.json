@@ -1,0 +1,57 @@
+{
+ "wall_s": 56.01122462499188,
+ "rows": [
+  {
+   "level": 1,
+   "A": {
+    "Bz_centre_mT": 50.96765371018733,
+    "variation_ppm": 80.84195451071443,
+    "unknowns": 5232,
+    "seconds": 3.057577625004342
+   },
+   "B": {
+    "Bz_centre_mT": 48.791954316948605,
+    "variation_ppm": 90.35327085783172,
+    "unknowns": 4416,
+    "seconds": 1.517838625004515
+   },
+   "B_minus_A_ppm": 9.511316347117287,
+   "B_minus_A_centre_mT": -2.175699393238723
+  },
+  {
+   "level": 2,
+   "A": {
+    "Bz_centre_mT": 50.886717384266746,
+    "variation_ppm": 90.87392924988312,
+    "unknowns": 11448,
+    "seconds": 8.462373042013496
+   },
+   "B": {
+    "Bz_centre_mT": 48.66248405323508,
+    "variation_ppm": 88.40372574887385,
+    "unknowns": 10032,
+    "seconds": 7.236719332984649
+   },
+   "B_minus_A_ppm": -2.470203501009266,
+   "B_minus_A_centre_mT": -2.2242333310316624
+  },
+  {
+   "level": 3,
+   "A": {
+    "Bz_centre_mT": 50.87094204676067,
+    "variation_ppm": 89.86526440591167,
+    "unknowns": 20640,
+    "seconds": 19.726033709011972
+   },
+   "B": {
+    "Bz_centre_mT": 48.636719777895095,
+    "variation_ppm": 84.29436816071055,
+    "unknowns": 18600,
+    "seconds": 15.975004374980927
+   },
+   "B_minus_A_ppm": -5.570896245201126,
+   "B_minus_A_centre_mT": -2.2342222688655724
+  }
+ ],
+ "peak_rss_gb": 6.72
+}
