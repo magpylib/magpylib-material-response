@@ -135,13 +135,13 @@ def test_every_timed_case_has_a_picture():
 def test_timing_comment_shows_memory(tmp_path, monkeypatch):
     pytest.importorskip("resource")  # not on Windows
     monkeypatch.setattr(timing, "MORE_MEMORY", 1e6)
-    small, broken = "gmres_stops, FaceCharge", "no_such_case, MoM"
+    small, broken = "gmres_stops, FaceCharge", "gmres_stops, magpylib"
     monkeypatch.setattr(
         timing,
         "_pr_check",
         lambda: [
             (small, "gmres_stops", "FaceCharge", 2),
-            (broken, "no_such_case", "MoM", 1),
+            (broken, "gmres_stops", "magpylib", 0),  # not in the PR check
         ],
     )
     timing.memory(tmp_path / "memory-head.json")
