@@ -1,9 +1,11 @@
-"""Time the PR check against the base branch: the same cases at the same
-settings, solved by this environment's package and by the base's.
+"""Time the PR check and measure its peak memory against the base branch: the
+same cases at the same settings, solved by this environment's package and by
+the base's.
 
-    python -m validation.timing record out/head-1.json     # one round
+    python -m validation.timing record out/head-1.json       # one round
     python -m validation.timing memory out/memory-head.json  # peak memory, per case
-    python -m validation.timing compare out              # base against head
+    python -m validation.timing peak plate MoM               # one case's, in bytes
+    python -m validation.timing compare out                  # base against head
 
 The rounds alternate between the two environments, and each case's time is the
 least over its rounds, the one a shared runner disturbed least. Peak memory
@@ -32,25 +34,26 @@ MARKER = "<!-- validation timing -->"
 SLOWER = 1.2
 #: cases faster than this are not flagged: their time is mostly noise
 FLOOR = 0.05
-#: more peak memory than this, and by more than MEMORY_FLOOR bytes, a case is
-#: flagged: the same case moved by up to 40 MB between runs
-MORE_MEMORY = 1.2
-MEMORY_FLOOR = 50e6
+#: more peak memory than this, in bytes, a case is flagged: the same case moved
+#: by up to 66 MB between runs on a laptop and 27 MB on a CI runner
+MORE_MEMORY = 100e6
+#: a case's memory is given up on after this many seconds; it solves in seconds
+PEAK_TIMEOUT = 600
 
 
 def _pr_check():
-    """Each PR-check case this package can solve: its name, method, setting."""
+    """Each PR-check case this package can solve: its key among the results, its
+    name, method and setting."""
     for name, by_method in json.loads(PR_CHECK.read_text()).items():
         for method_name, entry in by_method.items():
             if METHODS[method_name].can_solve(CASES[name]):
-                yield name, method_name, entry["setting"]
+                yield f"{name}, {method_name}", name, method_name, entry["setting"]
 
 
 def record(path):
     """Solve the PR check once and write each case's phase times."""
     times = {}
-    for name, method_name, setting in _pr_check():
-        key = f"{name}, {method_name}"
+    for key, name, method_name, setting in _pr_check():
         try:
             times[key] = run(CASES[name], METHODS[method_name], setting)["seconds"]
         except Exception as error:  # noqa: BLE001  # the base may lack what a case needs
@@ -60,39 +63,43 @@ def record(path):
     Path(path).write_text(json.dumps(data, indent=1) + "\n")
 
 
-def peak(name, method_name, setting):
+def peak(name, method_name):
     """Solve one case and print the peak memory of this process, in bytes."""
     import resource  # noqa: PLC0415  # not on Windows; CI measures on Linux
 
+    setting = json.loads(PR_CHECK.read_text())[name][method_name]["setting"]
     run(CASES[name], METHODS[method_name], setting)
     used = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     print(used if sys.platform == "darwin" else used * 1024)
 
 
-def memory(path):
-    """Write each case's peak memory, solved in a process of its own, or None
-    where it failed. This process solves nothing: on Linux a child's peak
-    starts from its parent's."""
-    peaks = {}
-    for name, method_name, setting in _pr_check():
+def _peak_elsewhere(name, method_name):
+    """A case's peak memory, solved in a process of its own; None if that failed,
+    with the reason in the log."""
+    command = [sys.executable, "-m", "validation.timing", "peak", name, method_name]
+    try:
         done = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "validation.timing",
-                "peak",
-                name,
-                method_name,
-                str(setting),
-            ],
+            command,
             capture_output=True,
             text=True,
-            check=False,
+            check=True,
+            cwd=Path(__file__).parents[1],
+            timeout=PEAK_TIMEOUT,
         )
-        solved = done.returncode == 0
-        peaks[f"{name}, {method_name}"] = (
-            int(done.stdout.split()[-1]) if solved else None
-        )
+        return int(done.stdout.split()[-1])
+    except (subprocess.SubprocessError, ValueError, IndexError) as error:
+        print(f"{name}, {method_name}: {error}", file=sys.stderr)
+        print(getattr(error, "stderr", "") or "", file=sys.stderr)
+        return None
+
+
+def memory(path):
+    """Write each case's peak memory, or None where it failed. Nothing is solved
+    in this process: on Linux a child's peak starts from its parent's."""
+    peaks = {
+        key: _peak_elsewhere(name, method_name)
+        for key, name, method_name, _ in _pr_check()
+    }
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(json.dumps(peaks, indent=1) + "\n")
 
@@ -128,10 +135,13 @@ def _peaks(folder, side):
 
 
 def _memory_cell(then, now):
-    """The cell of a case's peak memory, and whether it is flagged."""
-    if then is None or now is None:
-        return "", False
-    flag = now > MORE_MEMORY * then and now - then > MEMORY_FLOOR
+    """The cell of a case's peak memory, and whether it is flagged. `then` is
+    None where the base has no number, `now` where this PR's solve failed."""
+    if now is None:
+        return "**failed**", True
+    if then is None:
+        return _bytes(now), False
+    flag = now - then > MORE_MEMORY
     bold = "**" if flag else ""
     return f"{_bytes(then)} → {bold}{_bytes(now)}{bold}", flag
 
@@ -141,18 +151,25 @@ def compare(folder):
     change first."""
     base, head = _rounds(folder, "base"), _rounds(folder, "head")
     peaks_then, peaks_now = _peaks(folder, "base"), _peaks(folder, "head")
-    title = f"{MARKER}\n### Timing against the base branch\n\n"
+    title = f"{MARKER}\n### Time and memory against the base branch\n\n"
     if not base:
         return f"{title}The base could not run."
-    rows, flagged, more_memory, total = [], 0, 0, [0.0, 0.0]
+    rows, flagged, more_memory, total = [], 0, [], [0.0, 0.0]
     for key in head[0]["times"]:
+        cell, grew = ("", False)
+        if key in peaks_now:
+            cell, grew = _memory_cell(peaks_then.get(key), peaks_now[key])
+        if grew:
+            more_memory.append(key)
         then, then_spread = _least(base, key)
         now, now_spread = _least(head, key)
         if now is None:
-            rows.append((float("inf"), f"| {key} | | failed here | | | |"))
+            rows.append((float("inf"), f"| {key} | | failed here | | | {cell} |"))
             continue
         if then is None:
-            rows.append((0.0, f"| {key} | not on the base | {_time(now)} | | | |"))
+            rows.append(
+                (0.0, f"| {key} | not on the base | {_time(now)} | | | {cell} |")
+            )
             continue
         total[0] += then
         total[1] += now
@@ -162,8 +179,6 @@ def compare(folder):
         spread = max(then_spread, now_spread)
         bold = "**" if flag else ""
         cells = [key, _time(then), _time(now), f"{bold}{ratio:.2f}x{bold}"]
-        cell, grew = _memory_cell(peaks_then.get(key), peaks_now.get(key))
-        more_memory += grew
         rows.append((ratio, f"| {' | '.join(cells)} | {100 * spread:.0f} % | {cell} |"))
     rows.sort(key=lambda row: -row[0])
     summary = (
@@ -177,7 +192,8 @@ def compare(folder):
         summary += f" {flagged} case(s) more than {SLOWER}x slower, in bold."
     if more_memory:
         summary += (
-            f" {more_memory} case(s) with more than {MORE_MEMORY}x the memory, in bold."
+            f" Over {MORE_MEMORY / 1e6:.0f} MB more memory, or failed: "
+            f"{'; '.join(more_memory)}."
         )
     table = "\n".join(
         [
@@ -189,7 +205,7 @@ def compare(folder):
     versions = f"Base {base[0]['version']}, this PR {head[0]['version']}."
     return (
         f"{title}{summary}\n\n{table}\n\n{versions} "
-        "For information only: nothing fails on time yet."
+        "For information only: nothing fails on time or memory yet."
     )
 
 
@@ -201,7 +217,6 @@ def main(argv=None):
     one = sub.add_parser("peak")
     one.add_argument("name")
     one.add_argument("method_name")
-    one.add_argument("setting", type=int)
     sub.add_parser("compare").add_argument("folder", type=Path)
     args = parser.parse_args(argv)
     if args.command == "record":
@@ -209,7 +224,7 @@ def main(argv=None):
     elif args.command == "memory":
         memory(args.path)
     elif args.command == "peak":
-        peak(args.name, args.method_name, args.setting)
+        peak(args.name, args.method_name)
     else:
         print(compare(args.folder))
 

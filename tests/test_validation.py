@@ -116,12 +116,38 @@ def test_select_by_feature():
 @pytest.mark.parametrize(
     ("then", "now", "cell", "flagged"),
     [
-        (200e6, 210e6, "200 MB → 210 MB", False),
-        (200e6, 245e6, "200 MB → 245 MB", False),  # 1.2x, but within the noise
-        (400e6, 500e6, "400 MB → **500 MB**", True),
+        (200e6, 290e6, "200 MB → 290 MB", False),  # within the noise
+        (1158e6, 1380e6, "1.16 GB → **1.38 GB**", True),
         (3.99e9, 280e6, "3.99 GB → 280 MB", False),
-        (None, 280e6, "", False),  # the base could not solve it
+        (None, 280e6, "280 MB", False),  # not on the base
+        (200e6, None, "**failed**", True),
     ],
 )
 def test_timing_flags_memory(then, now, cell, flagged):
     assert timing._memory_cell(then, now) == (cell, flagged)
+
+
+def test_timing_comment_shows_memory(tmp_path, monkeypatch):
+    pytest.importorskip("resource")  # not on Windows
+    monkeypatch.setattr(timing, "MORE_MEMORY", 1e6)
+    small, broken = "gmres_stops, FaceCharge", "no_such_case, MoM"
+    monkeypatch.setattr(
+        timing,
+        "_pr_check",
+        lambda: [
+            (small, "gmres_stops", "FaceCharge", 2),
+            (broken, "no_such_case", "MoM", 1),
+        ],
+    )
+    timing.memory(tmp_path / "memory-head.json")
+    peaks = json.loads((tmp_path / "memory-head.json").read_text())
+    assert 1e7 < peaks[small] < 1e10  # in bytes
+    assert peaks[broken] is None
+
+    (tmp_path / "memory-base.json").write_text(json.dumps({small: peaks[small] // 2}))
+    round_ = {"version": "1", "times": {key: {"solve": 1.0} for key in peaks}}
+    for name in ("base-1.json", "head-1.json"):
+        (tmp_path / name).write_text(json.dumps(round_))
+    comment = timing.compare(tmp_path)
+    assert f"Over 1 MB more memory, or failed: {small}; {broken}." in comment
+    assert "**failed**" in comment
