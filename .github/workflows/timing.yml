@@ -1,9 +1,9 @@
 name: Timing
 
 # The PR check's cases solved by the base branch's package and by this PR's, in
-# alternating rounds on one runner, posted as a comment on the PR. For
-# information only: a time blocks nothing until the spread between rounds is
-# known.
+# alternating rounds on one runner, with each case's peak memory, posted as a
+# comment on the PR. For information only: a number blocks nothing until the
+# spread between rounds is known.
 
 on:
   pull_request:
@@ -48,7 +48,7 @@ jobs:
           uv pip install --python head-env/bin/python ./head
           uv pip install --python base-env/bin/python ./base
 
-      - name: Three rounds each, alternating
+      - name: Three rounds each, alternating, then peak memory
         working-directory: head
         run: |
           for round in 1 2 3; do
@@ -56,6 +56,9 @@ jobs:
               || echo "The base could not solve this PR's cases."
             ../head-env/bin/python -m validation.timing record "../timing/head-$round.json"
           done
+          ../base-env/bin/python -m validation.timing memory ../timing/memory-base.json \
+            || echo "The base could not solve this PR's cases."
+          ../head-env/bin/python -m validation.timing memory ../timing/memory-head.json
           ../head-env/bin/python -m validation.timing compare ../timing > ../timing.md
           cat ../timing.md >> "$GITHUB_STEP_SUMMARY"
 

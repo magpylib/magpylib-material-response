@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from validation import references, report
+from validation import references, report, timing
 from validation.cases import CASES, select
 from validation.methods import METHODS
 from validation.run import PR_CHECK, refusal, run
@@ -111,3 +111,17 @@ def test_select_by_feature():
     ]
     with pytest.raises(ValueError, match="No case has"):
         select(features=["Tetrahedra"])
+
+
+@pytest.mark.parametrize(
+    ("then", "now", "cell", "flagged"),
+    [
+        (200e6, 210e6, "200 MB → 210 MB", False),
+        (200e6, 245e6, "200 MB → 245 MB", False),  # 1.2x, but within the noise
+        (400e6, 500e6, "400 MB → **500 MB**", True),
+        (3.99e9, 280e6, "3.99 GB → 280 MB", False),
+        (None, 280e6, "", False),  # the base could not solve it
+    ],
+)
+def test_timing_flags_memory(then, now, cell, flagged):
+    assert timing._memory_cell(then, now) == (cell, flagged)
