@@ -10,6 +10,8 @@ import time
 import magpylib as magpy
 import numpy as np
 import pytest
+from magpylib.graphics.backend import colors_from_colorscale
+from matplotlib.colors import to_rgb
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
@@ -797,7 +799,8 @@ def test_show_colours_the_charge_and_draws_panel_edges():
     q = sheet._smoothed()
     full = sheet.style.charge.level
     assert full < np.abs(q).max()  # not the singular corner's
-    np.testing.assert_allclose(mesh.intensity, np.clip(q, -full, full))
+    v = np.clip(q, -full, full)
+    np.testing.assert_allclose(mesh.intensity, (v - v.min()) / np.ptp(v))
     F = sheet.faces
     triangle_edges = len(
         np.unique(
@@ -824,9 +827,34 @@ def test_parts_solved_together_share_one_colour_scale():
     # where parts touch, the faces carry large charges, out of sight and
     # nearly cancelled by the other side's: they do not set the scale
     assert near.style.charge.level < saturation([near, far]) / 2
-    fig = magpy.show(solved, backend="plotly", return_fig=True)
-    for mesh in (t for t in fig.data if t.type == "mesh3d"):
-        assert np.abs(mesh.intensity).max() <= near.style.charge.level
+
+
+@pytest.mark.parametrize(
+    "charge",
+    [(-4, 1, 2), (1, 2, 4), (-4, -2, -1), (-8, 0, 8), (2, 2, 2), (0, 0, 0)],
+    ids=["both signs", "north", "south", "clipped", "constant", "none"],
+)
+def test_the_colour_at_each_corner_follows_the_charge_and_the_level(charge):
+    triangle = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    sheet = ChargeSheet(
+        triangle,
+        [(0, 1, 2)],
+        [charge],
+        style_charge_level=4,
+        style_magnetization_color_north="#ff0000",
+        style_magnetization_color_middle="#808080",
+        style_magnetization_color_south="#00ff00",
+    )
+    fig = magpy.show(sheet, backend="plotly", return_fig=True)
+    mesh = next(t for t in fig.data if t.type == "mesh3d")
+    middle = np.array(to_rgb("#808080"))
+    # plotly, pyvista and studio read it by its own range, a backend may as it is
+    for limits in ({}, {"cmin": 0, "cmax": 1}):
+        drawn = colors_from_colorscale(mesh.intensity, mesh.colorscale, **limits)
+        for q, color in zip(charge, drawn, strict=True):
+            end = np.array(to_rgb("#ff0000" if q > 0 else "#00ff00"))
+            expected = middle + min(abs(q) / 4, 1) * (end - middle)
+            np.testing.assert_allclose(to_rgb(color), expected, atol=2 / 255)
 
 
 def _cuboid(**kwargs):
