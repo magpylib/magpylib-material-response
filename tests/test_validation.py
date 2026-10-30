@@ -116,11 +116,11 @@ def test_select_by_feature():
 @pytest.mark.parametrize(
     ("then", "now", "cell", "flagged"),
     [
-        (200e6, 290e6, "200 MB → 290 MB", False),  # within the noise
-        (1158e6, 1380e6, "1.16 GB → **1.38 GB**", True),
-        (3.99e9, 280e6, "3.99 GB → 280 MB", False),
+        (200e6, 290e6, "⚪ 200 MB → 290 MB", False),  # within the noise
+        (1158e6, 1380e6, "🔴 1.16 GB → **1.38 GB**", True),
+        (3.99e9, 280e6, "🟢 3.99 GB → 280 MB", False),
         (None, 280e6, "280 MB", False),  # not on the base
-        (200e6, None, "**failed**", True),
+        (200e6, None, "🔴 **failed**", True),
     ],
 )
 def test_timing_flags_memory(then, now, cell, flagged):

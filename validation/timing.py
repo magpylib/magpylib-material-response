@@ -125,6 +125,11 @@ def _time(seconds):
     return f"{seconds * 1e3:.0f} ms" if seconds < 1 else f"{seconds:.2f} s"
 
 
+def _dot(worse, better):
+    """The mark of a change: GitHub's tables keep no colours of their own."""
+    return "🔴" if worse else "🟢" if better else "⚪"
+
+
 def _bytes(size):
     return f"{size / 1e6:.0f} MB" if size < 1e9 else f"{size / 1e9:.2f} GB"
 
@@ -138,12 +143,13 @@ def _memory_cell(then, now):
     """The cell of a case's peak memory, and whether it is flagged. `then` is
     None where the base has no number, `now` where this PR's solve failed."""
     if now is None:
-        return "**failed**", True
+        return "🔴 **failed**", True
     if then is None:
         return _bytes(now), False
     flag = now - then > MORE_MEMORY
     bold = "**" if flag else ""
-    return f"{_bytes(then)} → {bold}{_bytes(now)}{bold}", flag
+    dot = _dot(flag, then - now > MORE_MEMORY)
+    return f"{dot} {_bytes(then)} → {bold}{_bytes(now)}{bold}", flag
 
 
 def compare(folder):
@@ -175,10 +181,11 @@ def compare(folder):
         total[1] += now
         ratio = now / then
         flag = ratio > SLOWER and then > FLOOR
+        dot = _dot(flag, ratio < 1 / SLOWER and then > FLOOR)
         flagged += flag
         spread = max(then_spread, now_spread)
         bold = "**" if flag else ""
-        cells = [key, _time(then), _time(now), f"{bold}{ratio:.2f}x{bold}"]
+        cells = [key, _time(then), _time(now), f"{dot} {bold}{ratio:.2f}x{bold}"]
         rows.append((ratio, f"| {' | '.join(cells)} | {100 * spread:.0f} % | {cell} |"))
     rows.sort(key=lambda row: -row[0])
     summary = (
@@ -202,9 +209,14 @@ def compare(folder):
             *(row for _, row in rows),
         ]
     )
+    legend = (
+        f"🔴 worse, 🟢 better, ⚪ within {SLOWER}x of the time "
+        f"(cases under {_time(FLOOR)} are not judged) or {MORE_MEMORY / 1e6:.0f} MB "
+        "of the memory."
+    )
     versions = f"Base {base[0]['version']}, this PR {head[0]['version']}."
     return (
-        f"{title}{summary}\n\n{table}\n\n{versions} "
+        f"{title}{summary}\n\n{table}\n\n{legend}\n\n{versions} "
         "For information only: nothing fails on time or memory yet."
     )
 
