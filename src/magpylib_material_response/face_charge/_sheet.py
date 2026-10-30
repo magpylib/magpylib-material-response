@@ -7,6 +7,7 @@ import itertools
 
 import magpylib as magpy
 import numpy as np
+from magpylib._src.defaults.property_tree import Nested, Number, PropertyNode
 from magpylib._src.exceptions import MagpylibBadUserInput
 from magpylib._src.style import TriangularMeshStyle
 from scipy.spatial import cKDTree  # pylint: disable=no-name-in-module
@@ -17,6 +18,25 @@ from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import charge_field, frames
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
+
+
+class ChargeColor(PropertyNode):
+    """How a sheet's charge is coloured.
+
+    Parameters
+    ----------
+    level : float, default=None
+        The charge in A/m at which the colours are full. By default the charge
+        95 % of the sheet's area stays below.
+    """
+
+    level = Number(minimum=0, doc="Charge in A/m at which the colours are full.")
+
+
+class ChargeSheetStyle(TriangularMeshStyle):
+    """A TriangularMesh's style, and how the charge is coloured (``charge``)."""
+
+    charge = Nested(ChargeColor, doc="Charge colour properties.")
 
 
 class ChargeSheet(magpy.misc.CustomSource):
@@ -43,13 +63,19 @@ class ChargeSheet(magpy.misc.CustomSource):
         The surface element each face belongs to, for drawing only:
         ``style.mesh.grid`` draws the edges between elements. A solved cuboid's
         rectangular panels are two faces each. By default each face is one.
+    mean_polarization : array-like, shape (3,), optional
+        What :attr:`mean_polarization` gives, in T, in place of the sheet's own:
+        :func:`apply_face_charge` sets it on parts solved as one.
     position, orientation, style, **kwargs
         As for any magpylib source. ``style`` is a TriangularMesh's:
         ``style.magnetization.color`` colours the charge and ``style.mesh.grid``
-        draws the edges.
+        draws the edges. ``style.charge.level`` is the charge in A/m at which
+        the colours are full, by default the charge 95 % of the sheet's area
+        stays below; :func:`apply_face_charge` gives the sheets it solves one
+        level, so that their colours compare.
     """
 
-    _style_class = TriangularMeshStyle
+    _style_class = ChargeSheetStyle
     _style_family = ("magnet", "triangularmesh")
 
     def __init__(
@@ -61,9 +87,13 @@ class ChargeSheet(magpy.misc.CustomSource):
         position=(0, 0, 0),
         orientation=None,
         style=None,
+        *,
+        mean_polarization=None,
         **kwargs,
     ):
         self._set(vertices, faces, charge_densities, panels)
+        if mean_polarization is not None:
+            self._mean = np.asarray(mean_polarization, float).reshape(3)
         super().__init__(
             position=position, orientation=orientation, style=style, **kwargs
         )
@@ -108,6 +138,12 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._set(self._vertices, self._faces, value, self._panels)
 
     @property
+    def panels(self):
+        """The surface element (m,) each face belongs to, or None where each
+        face is one."""
+        return self._panels
+
+    @property
     def triangles(self):
         """Corners of each face (m, 3, 3) in m, in the source's own frame."""
         return self._V
@@ -131,7 +167,6 @@ class ChargeSheet(magpy.misc.CustomSource):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
-        self._saturation = None  # set by apply_face_charge, for all it solves
         self._mean = None  # set by apply_face_charge on parts solved as one
         self._V = P[F]
         self._frames = frames(self._V)
@@ -284,9 +319,10 @@ class ChargeSheet(magpy.misc.CustomSource):
         the corners that share its vertex and its face's plane. It still jumps
         across the body's edges, where it truly does. The colour is full at the
         charge that 95 % of the area stays below, not at the peak, which sits
-        in a singular corner; the sheets of one :func:`apply_face_charge` share
-        that level, taken from the faces not pressed against another part, so
-        their colours compare. Fields use the charge as solved.
+        in a singular corner, or at ``style.charge.level``; the sheets of one
+        :func:`apply_face_charge` share that level, taken from the faces not
+        pressed against another part, so their colours compare. Fields use the
+        charge as solved.
         """
         from magpylib._src.display.traces_utility import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
             line_dash,
@@ -297,11 +333,11 @@ class ChargeSheet(magpy.misc.CustomSource):
         P = self._V.reshape(-1, 3)
         i, j, k = np.arange(len(P)).reshape(-1, 3).T
         q = self._smoothed()
-        full = self._saturation
+        style = self.style
+        full = style.charge.level
         if full is None:
             full = saturation([self])
         v = np.clip(q, -full, full)
-        style = self.style
         mesh = {
             "type": "mesh3d",
             "x": P[:, 0],

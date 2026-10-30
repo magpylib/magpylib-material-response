@@ -287,7 +287,7 @@ def apply_face_charge(
         [_hidden(s, b, bodies, outlines) for s, b in zip(sheets, bodies, strict=True)],
     )
     for sheet in sheets:
-        sheet._saturation = full
+        sheet.style.charge.level = full
 
     # each solved cuboid's copy gives way to its sheet, in the same place among
     # its parent's children
