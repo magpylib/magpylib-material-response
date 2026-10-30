@@ -82,3 +82,24 @@ Peak 6.72 GB.
   the variation along the axis is about 90 ppm. The issue does not say where its
   +-5 mm lies, so the two may not measure the same thing.
 
+
+## P1. Tolerance Monte Carlo with a kept factorization (`p1_tolerance_kept.py`, `kept.py`)
+
+s2 (a) again: the plate solved once (0.09 s, 1,518
+unknowns), its LU kept (8 ms), then each sample a new load
+(the magnet at 18,896 points), a back-substitution and a read at its
+own sensor pose. Today each sample is a solve: 75 ms.
+
+| mode | magpylib | samples | ms per sample | total s |
+| --- | --- | --- | --- | --- |
+| loop | 1059 | 10,000 | 8.14 | 83.1 |
+| path | 1059 | 10,000 | 1.74 | 19.1 |
+| loop | main | 10,000 | 8.18 | 83.6 |
+| path | main | 10,000 | 5.86 | 60.5 |
+
+- "loop" takes one sample a call, as a loop over a kept solver would; "path" takes
+  all at once along magnet and sensor paths, as a solver that accepts paths could.
+  "1059" is magpylib with #1059's threads, its source first on PYTHONPATH.
+- Against apply_face_charge on 20 samples the kept solver is off
+  by at most 0.7 nT, on Bz of
+  66 to 173 mT.

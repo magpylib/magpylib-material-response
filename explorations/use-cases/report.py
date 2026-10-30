@@ -112,6 +112,38 @@ Peak {d['peak_rss_gb']} GB.
 """
 
 
+def p1(runs):
+    today = load("s2_")["a_magnet_fixed"]
+    rows = "\n".join(
+        f"| {r['mode']} | {r['magpylib']} | {r['samples']:,} | {r['per_sample_ms']:.2f} "
+        f"| {r['total_s']:.1f} |"
+        for r in runs
+    )
+    r = runs[0]
+    return f"""## P1. Tolerance Monte Carlo with a kept factorization (`p1_tolerance_kept.py`, `kept.py`)
+
+s2 (a) again: the plate solved once ({r['first_solve_s']:.2f} s, {r['unknowns']:,}
+unknowns), its LU kept ({r['factor_s'] * 1e3:.0f} ms), then each sample a new load
+(the magnet at {r['load_points']:,} points), a back-substitution and a read at its
+own sensor pose. Today each sample is a solve: {today['per_sample_s'] * 1e3:.0f} ms.
+
+| mode | magpylib | samples | ms per sample | total s |
+| --- | --- | --- | --- | --- |
+{rows}
+
+- "loop" takes one sample a call, as a loop over a kept solver would; "path" takes
+  all at once along magnet and sensor paths, as a solver that accepts paths could.
+  "1059" is magpylib with #1059's threads, its source first on PYTHONPATH.
+- Against apply_face_charge on {r['checked_samples']} samples the kept solver is off
+  by at most {max(x['check_max_abs_error_T'] for x in runs) * 1e9:.1f} nT, on Bz of
+  {min(x['check_Bz_range_T'][0] for x in runs) * 1e3:.0f} to {max(x['check_Bz_range_T'][1] for x in runs) * 1e3:.0f} mT.
+"""
+
+
+def load_all(prefix):
+    return [json.loads(f.read_text()) for f in sorted(RESULTS.glob(f"{prefix}*.json"))]
+
+
 parts = ["# Use cases against today's API\n",
          "Each script times a real use case with the package as it is on main, and notes "
          "what had to be written by hand. Results are in `results/`; a script skips a "
@@ -119,5 +151,8 @@ parts = ["# Use cases against today's API\n",
 for prefix, fmt in (("s1_", s1), ("s2_", s2), ("s3_", s3), ("s4_", s4)):
     d = load(prefix)
     parts.append(fmt(d) if d else f"## {prefix} not run yet\n")
+runs = [r for r in load_all("p1_") if r["samples"] >= 1000]
+if runs:
+    parts.append(p1(sorted(runs, key=lambda r: (r["samples"], r["magpylib"], r["mode"]))))
 (HERE / "PROGRESS.md").write_text("\n".join(parts))
 print("wrote PROGRESS.md")
