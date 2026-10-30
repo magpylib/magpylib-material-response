@@ -162,6 +162,11 @@ def _memory_cell(then, now):
     return f"{dot} {_bytes(then)} → {bold}{_bytes(now)}{bold}", flag
 
 
+def _whole(cell):
+    """`cell` kept on one line: a narrow table would part a mark from its number."""
+    return cell.replace(" ", "\u00a0")
+
+
 def _case_cells(key, pictures):
     """The cells of a case: its picture if `pictures` says where they are served,
     its name, and its method as a coloured tag."""
@@ -188,6 +193,7 @@ def compare(folder, pictures=None):
         cell, grew = ("", False)
         if key in peaks_now:
             cell, grew = _memory_cell(peaks_then.get(key), peaks_now[key])
+            cell = _whole(cell)
         if grew:
             more_memory.append(key)
         then, then_spread = _least(base, key)
@@ -208,7 +214,12 @@ def compare(folder, pictures=None):
         flagged += flag
         spread = max(then_spread, now_spread)
         bold = "**" if flag else ""
-        cells = [case, _time(then), _time(now), f"{dot} {bold}{ratio:.2f}x{bold}"]
+        cells = [
+            case,
+            _whole(_time(then)),
+            _whole(_time(now)),
+            _whole(f"{dot} {bold}{ratio:.2f}x{bold}"),
+        ]
         rows.append((ratio, f"| {' | '.join(cells)} | {100 * spread:.0f} % | {cell} |"))
     rows.sort(key=lambda row: -row[0])
     summary = (
@@ -227,7 +238,7 @@ def compare(folder, pictures=None):
         )
     table = "\n".join(
         [
-            "| case | method | base | this PR | ratio | spread between rounds | peak memory |",
+            "| case | method | base | this PR | ratio | spread | peak memory |",
             "|---|---|---|---|---|---|---|",
             *(row for _, row in rows),
         ]
@@ -235,7 +246,7 @@ def compare(folder, pictures=None):
     legend = (
         f"🔴 worse, 🟢 better, ⚪ within {SLOWER}x of the time "
         f"(cases under {_time(FLOOR)} are not judged) or {MORE_MEMORY / 1e6:.0f} MB "
-        "of the memory."
+        "of the memory. Spread: between the rounds."
     )
     versions = f"Base {base[0]['version']}, this PR {head[0]['version']}."
     return (
