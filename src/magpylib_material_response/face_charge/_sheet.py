@@ -349,13 +349,12 @@ class ChargeSheet(magpy.misc.CustomSource):
             "color": style.color,
         }
         if style.magnetization.show:
-            # the range is pinned to include zero, the colour scale's middle
-            lo, hi = v.min(initial=0.0), v.max(initial=0.0)
+            # from 0 to 1 exactly, as a magnet's: backends place it on the scale
+            # by its own range
+            lo, hi = v.min(), v.max()
             mesh |= {
-                "intensity": v,
+                "intensity": (v - lo) / (hi - lo or 1),
                 "colorscale": _colorscale(lo, hi, style.magnetization.color, full),
-                "cmin": lo,
-                "cmax": hi,
                 "showscale": False,
             }
         traces = [{**mesh, **kwargs}]
@@ -489,8 +488,7 @@ def saturation(sheets, hidden=None):
 def _colorscale(lo, hi, colors, full=None):
     """The magnet ``colors`` (north, middle, south) over the range ``[lo, hi]``:
     the middle colour at zero, the north (south) colour at ``full``, by default
-    the largest value of either sign. Built for the range, as pyvista takes no
-    colour limits; a tuple, as pyvista caches it."""
+    the largest value of either sign. A tuple, as pyvista caches it."""
     from matplotlib.colors import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
         to_hex,
         to_rgb,

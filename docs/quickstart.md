@@ -118,3 +118,6 @@ which side the answer lies on (see the [method page](method.md)).
   (optional [TetGen](https://tetgen.pyvista.org/) dependency, see the
   [tetrahedral example](examples/tetrahedral_meshes.md)),
 - `mesh_all` — walk a `Collection` and mesh every supported child.
+
+A mesh is a `Collection` with `sealed = True`: magpylib-studio from 0.8 shows it
+as one object. Its cells stay ordinary magnets in Python.
