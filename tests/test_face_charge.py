@@ -19,6 +19,8 @@ from magpylib_material_response.face_charge import (
     ChargeSheet,
     _bodies,
     _panels,
+    _parallel,
+    _sheet,
     apply_face_charge,
 )
 from magpylib_material_response.face_charge._apply import _closed_surface
@@ -38,6 +40,8 @@ from magpylib_material_response.face_charge._rectangle import (
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import (
     charge_field,
+    charge_field_far,
+    far_points,
     frames,
     normal_field,
     normal_field_far,
@@ -143,6 +147,62 @@ def test_normal_fields_are_the_fields_normal_part():
     pairs = normal_field(near, V[one], tuple(a[one] for a in fr), pairs=True)
     assert np.allclose(pairs, normal_field(near, V, fr)[:, np.arange(len(near)), one])
     assert all(np.isfinite(normal_field(V[:, k], V, fr)).all() for k in range(3))
+
+
+def _solved_bars():
+    bars = [
+        magpy.magnet.Cuboid(
+            dimension=(0.01, 0.004, 0.002),
+            position=(0, 0.006 * i, 0),
+            polarization=(0, 0, 0),
+        )
+        for i in range(3)
+    ]
+    coll = magpy.Collection(*bars)
+    coll.susceptibility, coll.H_ext = 999.0, (0.002, 0.001, 0.01)
+    return apply_face_charge(coll, level=1)
+
+
+def test_field_far_from_a_solved_model_falls_as_a_dipole():
+    """Their closed-form terms cancel far away, and summed over panels whose net
+    charge is zero the error grew with distance: 14 % at 100 times the size."""
+    solved = _solved_bars()
+    away = np.array([0.6, 0.48, 0.64])
+    dipole = 1e12 * solved.getH(away * 1e4)
+    for distance in (1e1, 1e2, 1e3):
+        ratio = distance**3 * solved.getH(away * distance) / dipole
+        np.testing.assert_allclose(ratio, 1.0, rtol=2e-2 / distance)
+
+
+def test_far_charge_field_holds_where_the_closed_form_does():
+    """Each density alone, those of no net charge too, at 16 sides, where both
+    are accurate: the new field against one known right, not against itself."""
+    rng = np.random.default_rng(3)
+    V = rng.normal(size=(30, 3, 3))
+    fr = frames(V)
+    side = np.linalg.norm(V - V[:, [1, 2, 0]], axis=2).max(1)
+    away = rng.normal(size=(10, 3))
+    away /= np.linalg.norm(away, axis=1)[:, None]
+    for k in range(len(V)):
+        one = tuple(f[[k]] for f in fr)
+        X = fr[0][k] + 16 * side[k] * away
+        for density in np.eye(3):
+            closed = charge_field(X, V[[k]], one, density[None])
+            far = charge_field_far(X, *far_points(V[[k]], one, density[None]))
+            assert np.abs(far - closed).max() < 1e-5 * np.abs(closed).max()
+
+
+def test_field_of_near_and_far_observers_together_is_each_on_its_own(monkeypatch):
+    """Each observer chooses for a whole sheet, so neither the others in the call
+    nor running each on a thread of its own changes what it sees."""
+    solved = _solved_bars()
+    X = np.array([[0.0, 0.0, 0.003], [0.0, 0.0, 0.4], [5.0, 0.0, 0.0], [0.0, 0.9, 0.1]])
+    alone = np.vstack([solved.getH(x) for x in X])
+    np.testing.assert_allclose(solved.getH(X), alone, rtol=1e-12)
+    monkeypatch.setattr(magpy.defaults, "threads", 3)
+    monkeypatch.setattr(_parallel, "MIN_WORK", 0)
+    monkeypatch.setattr(_sheet, "CHUNK", 1)
+    np.testing.assert_allclose(solved.getH(X), alone, rtol=1e-12)
 
 
 @pytest.mark.parametrize(

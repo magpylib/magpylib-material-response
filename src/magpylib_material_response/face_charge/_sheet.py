@@ -15,9 +15,18 @@ from scipy.spatial.transform import Rotation
 
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
-from magpylib_material_response.face_charge._triangle import charge_field, frames
+from magpylib_material_response.face_charge._triangle import (
+    charge_field,
+    charge_field_far,
+    far_points,
+    frames,
+)
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
+# an observer this many of a sheet's longest triangle sides past all of it takes
+# `charge_field_far`. Each observer chooses for the whole sheet, so a near one costs
+# nothing: choosing per pair made fields 2 mm above six bars 1.3 times as slow
+FAR_SIDES = 64.0
 
 
 class ChargeColor(PropertyNode):
@@ -46,7 +55,8 @@ class ChargeSheet(magpy.misc.CustomSource):
     charge at each face's corners, given per corner rather than per vertex
     because a solved charge jumps from one face to the next. The charge is the
     magnetic surface charge density ``sigma = M.n`` in A/m. Its field is in
-    closed form. The source gives H everywhere and ``B = mu0 H`` outside the
+    closed form, or from six points on each face for observers far from the
+    sheet. The source gives H everywhere and ``B = mu0 H`` outside the
     body; inside a magnetized body B also holds the magnetization, which the
     surface charge does not carry.
 
@@ -174,6 +184,12 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._V = P[F]
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
+        self._center, self._far_from, self._far_rule = np.zeros(3), np.inf, None
+        if len(F):
+            self._center = cen.mean(0)
+            side = np.linalg.norm(self._V - self._V[:, [1, 2, 0]], axis=2).max()
+            reach = np.linalg.norm(self._V - self._center, axis=2).max()
+            self._far_from = reach + FAR_SIDES * side
         d = self._V - cen[:, None]
         A = np.stack(
             [
@@ -302,12 +318,28 @@ class ChargeSheet(magpy.misc.CustomSource):
             return out  # the source carries no magnetization of its own
         step = max(1, CHUNK // (max(len(self._V), 1) * threads()))
 
-        def chunk(a):  # each its own observers
-            out[a : a + step] = (
-                charge_field(X[a : a + step], self._V, self._frames, self._c) / FOUR_PI
-            )
+        def near(rows):
+            out[rows] = charge_field(X[rows], self._V, self._frames, self._c) / FOUR_PI
 
-        run(chunk, range(0, len(X), step), work=len(X) * len(self._V))
+        def away(rows):
+            out[rows] = charge_field_far(X[rows], *self._far_rule) / FOUR_PI
+
+        with np.errstate(over="ignore"):  # past 1e154 m: inf, and so far
+            far = np.linalg.norm(X - self._center, axis=1) >= self._far_from
+        if far.any():
+            if self._far_rule is None:
+                self._far_rule = far_points(self._V, self._frames, self._c)
+            jobs = [
+                (kernel, rows[a : a + step])
+                for kernel, rows in (
+                    (near, np.flatnonzero(~far)),
+                    (away, np.flatnonzero(far)),
+                )
+                for a in range(0, len(rows), step)
+            ]
+        else:
+            jobs = [(near, slice(a, a + step)) for a in range(0, len(X), step)]
+        run(lambda job: job[0](job[1]), jobs, work=len(X) * len(self._V))
         return out if field == "H" else magpy.mu_0 * out
 
     # ── display ───────────────────────────────────────────────────────────
