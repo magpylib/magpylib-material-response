@@ -159,20 +159,14 @@ def get_susceptibilities(sources, susceptibility=None):
     """Return a list of length (len(sources)) with susceptibility values
     Priority is given at the source level, however if value is not found, it is searched
     up the parent tree, if available. A magnet with none, on itself or any
-    parent, is fixed: 0, as in apply_face_charge. When no magnet has one, a
-    warning says so: a susceptibility forgotten, or set on a parent the magnets
-    were meshed away from, would otherwise leave every part fixed silently."""
+    parent, is fixed: 0, as in apply_face_charge, and
+    :func:`_report_fixed_magnets` says so."""
     n = len(sources)
 
     if susceptibility is None:
         # Get susceptibilities from source attributes
         susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
-        if n and not any(_has_susceptibility(src) for src in sources):
-            warnings.warn(
-                "No magnet has a susceptibility, on itself or a parent collection: "
-                "every one is fixed, and nothing responds.",
-                stacklevel=_outside_this_package(),
-            )
+        _report_fixed_magnets(sources)
 
         susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
     else:
@@ -386,6 +380,27 @@ def _checked_H_ext(owner):
     return value.reshape(3).astype(float)
 
 
+def _report_fixed_magnets(magnets):
+    """Warn when no magnet has a susceptibility: forgotten, or set on a parent
+    the magnets were meshed away from, it would leave every part fixed silently.
+    Some without one are the way to give a model its drive magnets, so those only
+    go to the log."""
+    fixed = sum(not _has_susceptibility(src) for src in magnets)
+    if fixed and fixed == len(magnets):
+        warnings.warn(
+            "No magnet has a susceptibility, on itself or a parent collection: "
+            "every one is fixed, and nothing responds.",
+            stacklevel=_outside_this_package(),
+        )
+    elif fixed:
+        logger.info(
+            "{fixed} of {n} magnets have no susceptibility, on themselves or a "
+            "parent collection: they are fixed",
+            fixed=fixed,
+            n=len(magnets),
+        )
+
+
 def _outside_this_package():
     """The `stacklevel` of the first frame outside this package, for a warning
     raised just above: the user's call, however deep the package's own calls
@@ -440,8 +455,8 @@ def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL, chi=None):
 
     Under the Newell rule every cuboid stays in a geometry cluster, whatever the
     group size, because each pair needs both prisms' shapes. Close
-    cylinder-segment cells are averaged unless ``chi``, the cells' (n, 3, 3)
-    susceptibilities, stays below ``SEGMENT_AVERAGE_FROM_CHI`` in their cluster.
+    cylinder-segment cells are averaged, unless ``chi``, the cells' (n, 3, 3)
+    susceptibilities, stays below ``SEGMENT_AVERAGE_FROM_CHI`` in both of a pair.
     """
     min_cells = 1 if interaction == "newell" else MIN_CLUSTER_CELLS
     positions, clusters = analyze_collection(magnets_list, atol, min_cells)
@@ -455,12 +470,15 @@ def _analyze_collection(magnets_list, interaction, atol=QUAT_ATOL, chi=None):
     for cl in clusters:
         if cl["kind"] != "generic":
             continue
-        if chi is not None and (
-            np.linalg.norm(chi[cl["indices"]], 2, axis=(1, 2)).max()
-            < SEGMENT_AVERAGE_FROM_CHI
-        ):
+        strong = np.ones(len(cl["indices"]), dtype=bool)
+        if chi is not None:
+            strong = (
+                np.linalg.norm(chi[cl["indices"]], 2, axis=(1, 2))
+                >= SEGMENT_AVERAGE_FROM_CHI
+            )
+        if not strong.any():
             continue  # point matching's positive eigenvalues are harmless here
-        averaged = _segment_averages(magnets_list, cl["indices"])
+        averaged = _segment_averages(magnets_list, cl["indices"], strong)
         if averaged is not None:
             cl["averaged"] = averaged
     return positions, clusters
@@ -635,10 +653,11 @@ def _point_block_T(srcs_b, pos_a):
 #: points at 1, 2 and 3 cells across, 1.5 to 0.7 points; at 1 a positive
 #: eigenvalue comes back with 3 across, and at 0.75 the system is indefinite.
 SEGMENT_AVERAGE_REACH = 2.0
-#: Cells of a cluster whose susceptibility stays below this skip the average:
-#: point matching's positive eigenvalues, which turn the system indefinite
-#: only once chi times them reaches 1, are 0.16 on that tube with 3 cells
-#: across and up to 0.27 on shorter ones with more (none on solid cylinders).
+#: Pairs whose two susceptibilities stay below this skip the average, whatever
+#: other cells the model holds: point matching's positive eigenvalues, which
+#: turn the system indefinite only once chi times them reaches 1, are 0.16 on
+#: that tube with 3 cells across and up to 0.27 on shorter ones with more (none
+#: on solid cylinders).
 #: A meshed cylinder of 110 cells at chi = 0.5 solves in 0.8 s, not 4.4 s, as
 #: before #100. On a thin tube the field moves by up to 16 % where the switch
 #: is crossed, the two schemes' difference; point matching was the closer to
@@ -675,10 +694,11 @@ def _segment_quadrature(segments):
     return points, weights
 
 
-def _segment_averages(magnets_list, indices):
+def _segment_averages(magnets_list, indices, strong):
     """The T blocks between cylinder-segment cells within
-    ``SEGMENT_AVERAGE_REACH`` of each other, averaged over the observer cell,
-    or ``None`` when there are none.
+    ``SEGMENT_AVERAGE_REACH`` of each other, at least one of them ``strong``
+    (one flag per index), averaged over the observer cell, or ``None`` when
+    there are none.
 
     Returns ``(rows, cols, blocks)``: observer and source positions within
     ``indices``, and the ``(m, k)`` blocks, symmetrized by reciprocity
@@ -702,7 +722,10 @@ def _segment_averages(magnets_list, indices):
     keep = np.linalg.norm(centroids[i] - centroids[j], axis=1) < (
         SEGMENT_AVERAGE_REACH * (rho[i] + rho[j])
     )
+    keep &= strong[local[i]] | strong[local[j]]
     i, j = i[keep], j[keep]
+    if len(i) == 0:
+        return None
 
     with timelog(f"Cell averages of {len(i):,} cylinder-segment pairs"):
         points, weights = _segment_quadrature(segments)
@@ -1359,18 +1382,26 @@ def demag_tensor(
     *,
     min_log_time=None,
     interaction="point",
+    susceptibility=None,
 ):
     """
     Compute the demagnetization tensor T for n sources.
 
     Every pair follows ``interaction``, the same rule as in
     :func:`apply_demag`: the field at each cell's centre (``"point"``, the
-    default) or averaged over each cell (``"newell"``).
+    default) or averaged over each cell (``"newell"``). Under ``"point"``, close
+    cylinder-segment cells are averaged from a susceptibility of 1, as
+    ``apply_demag`` does, so this is the T it solves with.
 
     Parameters
     ----------
     src_list: sequence of magpylib magnet sources
         Each source is treated as a magnetic cell.
+
+    susceptibility: scalar, 3-vector, or array_like, shape (n,) or (n, 3)
+        As in :func:`apply_demag`: it decides which close cylinder-segment cells
+        are averaged, and T holds no other trace of it. With none given and none
+        on the cells or their parents, all of them are.
 
     min_log_time:
         Minimum logging time in seconds. If computation time is below this value, step
@@ -1401,12 +1432,108 @@ def demag_tensor(
     n = len(src_list)
     if n == 0:
         return np.zeros((3, 0, 0, 3))
-    positions, clusters = _analyze_collection(list(src_list), interaction)
+    chi = None
+    if susceptibility is not None or any(_has_susceptibility(s) for s in src_list):
+        chi = _cell_susceptibilities(
+            get_susceptibilities(src_list, susceptibility),
+            [src.orientation for src in src_list],
+        )
+    positions, clusters = _analyze_collection(list(src_list), interaction, chi=chi)
     T2 = _assemble_T_dense(
         list(src_list), positions, clusters, interaction, min_log_time=min_log_time
     )
     # T2[(m, j), (k, i)] -> T[k, i, j, m], pre-mu_0.
     return T2.reshape((3, n, 3, n)).transpose((2, 3, 1, 0)) / magpy.mu_0
+
+
+def _solve_cells(
+    magnets_list,
+    chi,
+    rhs,
+    interaction,
+    solver,
+    solver_tol,
+    max_iter,
+    min_log_time,
+):
+    """The polarizations solving ``(I - chi T) J = rhs``, shape as ``rhs``."""
+    n = len(magnets_list)
+    # ── demag operator under the chosen rule ────────────────────────────
+    positions, clusters = _analyze_collection(magnets_list, interaction, chi=chi)
+    auto = solver == "auto"
+    if auto:
+        solver, share = _auto_solver(clusters)
+        logger.info(
+            "solver='auto' chose {solver}: FFT covers {share:.0%} of the interactions",
+            share=share,
+            solver=solver,
+        )
+    T = None
+    if solver == "direct":
+        T = _assemble_T_dense(
+            magnets_list,
+            positions,
+            clusters,
+            interaction,
+            min_log_time=min_log_time,
+        )
+
+    with timelog("Solving of linear system", min_log_time=min_log_time):
+        if solver == "direct":
+            pol_new = _solve_direct(T, chi, rhs)
+        else:
+            tol = solver_tol * AUTO_TOL_FACTOR if auto else solver_tol
+            ops = _build_operator(
+                magnets_list,
+                positions,
+                clusters,
+                chi,
+                tol,
+                min_log_time,
+                interaction,
+            )
+            matvec = _build_matvec(n, chi, ops)
+            T_self = _self_blocks(n, clusters, interaction, ops)
+            gmres_failure = None
+            try:
+                pol_new = _solve_iterative(
+                    n=n,
+                    chi=chi,
+                    rhs=rhs.ravel(),
+                    rhs_shape=rhs.shape,
+                    matvec=matvec,
+                    T_self=T_self,
+                    solver_tol=tol,
+                    max_iter=max_iter,
+                )
+            except RuntimeError as err:
+                if not auto:
+                    raise
+                if 72 * n * n > DENSE_BLOCK_MAX_BYTES:
+                    msg = (
+                        f"{err} solver='auto' ran GMRES to solver_tol / "
+                        f"{1 / AUTO_TOL_FACTOR:g}, and the direct solver would "
+                        f"need {72 * n * n / 1e9:.1f} GB."
+                    )
+                    raise RuntimeError(msg) from err
+                # Leave the except block first: its traceback holds the
+                # GMRES frames, and with them the operator.
+                gmres_failure = str(err)
+            if gmres_failure is not None:
+                logger.warning(
+                    "solver='auto': {err} Falling back to the direct solver.",
+                    err=gmres_failure,
+                )
+                ops = matvec = None  # free the operator before the dense T
+                T = _assemble_T_dense(
+                    magnets_list,
+                    positions,
+                    clusters,
+                    interaction,
+                    min_log_time=min_log_time,
+                )
+                pol_new = _solve_direct(T, chi, rhs)
+    return pol_new
 
 
 def apply_demag(
@@ -1598,7 +1725,7 @@ def apply_demag(
 
         pol_total = pol_magnets
 
-        if currents_list:
+        if currents_list and chi.any():
             with timelog(
                 "Add current sources contributions", min_log_time=min_log_time
             ):
@@ -1609,83 +1736,20 @@ def apply_demag(
 
         rhs = pol_total + _apply_susceptibility(chi, H_ext)  # shape (3n, 1)
 
-        # ── demag operator under the chosen rule ────────────────────────────
         _check_interaction(interaction, magnets_list)
-        positions, clusters = _analyze_collection(magnets_list, interaction, chi=chi)
-        auto = solver == "auto"
-        if auto:
-            solver, share = _auto_solver(clusters)
-            logger.info(
-                "solver='auto' chose {solver}: FFT covers {share:.0%} of the "
-                "interactions",
-                share=share,
-                solver=solver,
-            )
-        T = None
-        if solver == "direct":
-            T = _assemble_T_dense(
+        # a shortcut, not only time: GMRES would give rhs only to its tolerance
+        pol_new = rhs
+        if chi.any():
+            pol_new = _solve_cells(
                 magnets_list,
-                positions,
-                clusters,
+                chi,
+                rhs,
                 interaction,
-                min_log_time=min_log_time,
+                solver,
+                solver_tol,
+                max_iter,
+                min_log_time,
             )
-
-        with timelog("Solving of linear system", min_log_time=min_log_time):
-            if solver == "direct":
-                pol_new = _solve_direct(T, chi, rhs)
-            else:
-                tol = solver_tol * AUTO_TOL_FACTOR if auto else solver_tol
-                ops = _build_operator(
-                    magnets_list,
-                    positions,
-                    clusters,
-                    chi,
-                    tol,
-                    min_log_time,
-                    interaction,
-                )
-                matvec = _build_matvec(n, chi, ops)
-                T_self = _self_blocks(n, clusters, interaction, ops)
-                gmres_failure = None
-                try:
-                    pol_new = _solve_iterative(
-                        n=n,
-                        chi=chi,
-                        rhs=rhs.ravel(),
-                        rhs_shape=rhs.shape,
-                        matvec=matvec,
-                        T_self=T_self,
-                        solver_tol=tol,
-                        max_iter=max_iter,
-                    )
-                except RuntimeError as err:
-                    if not auto:
-                        raise
-                    if 72 * n * n > DENSE_BLOCK_MAX_BYTES:
-                        msg = (
-                            f"{err} solver='auto' ran GMRES to solver_tol / "
-                            f"{1 / AUTO_TOL_FACTOR:g}, and the direct solver would "
-                            f"need {72 * n * n / 1e9:.1f} GB."
-                        )
-                        raise RuntimeError(msg) from err
-                    # Leave the except block first: its traceback holds the
-                    # GMRES frames, and with them the operator.
-                    gmres_failure = str(err)
-                if gmres_failure is not None:
-                    logger.warning(
-                        "solver='auto': {err} Falling back to the direct solver.",
-                        err=gmres_failure,
-                    )
-                    ops = matvec = None  # free the operator before the dense T
-                    T = _assemble_T_dense(
-                        magnets_list,
-                        positions,
-                        clusters,
-                        interaction,
-                        min_log_time=min_log_time,
-                    )
-                    pol_new = _solve_direct(T, chi, rhs)
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
 

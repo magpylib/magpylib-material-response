@@ -811,6 +811,14 @@ def test_show_colours_the_charge_and_draws_panel_edges():
     assert len(edges.x) // 3 == triangle_edges - len(F) // 2  # no panel's diagonal
 
 
+@pytest.mark.parametrize("name", ["vertices", "faces", "charge_densities"])
+def test_new_data_drops_the_colour_level_of_its_solve(name):
+    triangle = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    sheet = ChargeSheet(triangle, [(0, 1, 2)], [(1, 2, 4)], style_charge_level=4)
+    setattr(sheet, name, getattr(sheet, name))
+    assert sheet.style.charge.level is None
+
+
 def test_parts_solved_together_share_one_colour_scale():
     # a magnet with a susceptibility, solved too, glued on an iron plate
     plate = magpy.magnet.Cuboid(dimension=(0.02, 0.02, 0.005), polarization=(0, 0, 0))

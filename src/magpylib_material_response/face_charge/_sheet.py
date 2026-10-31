@@ -115,6 +115,7 @@ class ChargeSheet(magpy.misc.CustomSource):
     @vertices.setter
     def vertices(self, value):
         self._set(value, self._faces, self._q, self._panels)
+        self.style.charge.level = None
 
     @property
     def faces(self):
@@ -124,6 +125,7 @@ class ChargeSheet(magpy.misc.CustomSource):
     @faces.setter
     def faces(self, value):
         self._set(self._vertices, value, self._q)  # new faces, so no panels
+        self.style.charge.level = None
 
     @property
     def charge_densities(self):
@@ -136,6 +138,7 @@ class ChargeSheet(magpy.misc.CustomSource):
     @charge_densities.setter
     def charge_densities(self, value):
         self._set(self._vertices, self._faces, value, self._panels)
+        self.style.charge.level = None  # the solve's, of the charge it had
 
     @property
     def panels(self):

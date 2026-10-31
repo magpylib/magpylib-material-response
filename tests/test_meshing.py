@@ -662,6 +662,20 @@ def test_H_ext_set_before_meshing_reaches_the_cells():
     np.testing.assert_allclose(J2, 2 * J)
 
 
+@pytest.mark.parametrize("name", ["H_ext", "susceptibility"])
+def test_a_mesh_inherits_as_its_magnet_did(name):
+    """Meshed on its own it has no parent, so it holds what the magnet inherited:
+    without it, the part did not respond, silently. In the magnet's place it
+    still inherits, so a later change above reaches the cells."""
+    value = (0, 0, 0.01) if name == "H_ext" else 100
+    cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    parent = magpy.Collection(cube)
+    setattr(parent, name, value)
+    assert getattr(mesh_Cuboid(cube, 8), name) == value
+    mesh_all(parent, 8, inplace=True)
+    assert not hasattr(parent.children[0], name)
+
+
 @pytest.mark.parametrize("mesher", [mesh_all, mesh_uniform])
 @pytest.mark.parametrize("on_parent", ["H_ext", "susceptibility"])
 def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher, on_parent):
