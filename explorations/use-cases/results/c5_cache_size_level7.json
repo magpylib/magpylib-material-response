@@ -1,0 +1,15 @@
+{
+ "level": 7,
+ "unknowns": 7488,
+ "plain_call_s": 1.179056957946159,
+ "first_cached_call_s": 1.3544434999930672,
+ "hit_call_s": 0.08657795801991597,
+ "lu_gb": 0.448561152,
+ "stats": {
+  "hits": 7,
+  "misses": 1,
+  "too_big": 0
+ },
+ "relative_error": 1.581743109333087e-14,
+ "peak_rss_gb": 1.79
+}

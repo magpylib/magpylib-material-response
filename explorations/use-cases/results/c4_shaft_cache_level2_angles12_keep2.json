@@ -1,0 +1,27 @@
+{
+ "level": 2,
+ "angles": 12,
+ "rows": [
+  {
+   "holder": false,
+   "unknowns": 2232,
+   "configurations": 48,
+   "plain_s": 7.369941957993433,
+   "cached_s": 2.5253335000015795,
+   "hits": 46,
+   "misses": 2,
+   "relative_error": 1.4821787008990772e-15
+  },
+  {
+   "holder": true,
+   "unknowns": 7008,
+   "configurations": 48,
+   "plain_s": 157.64324387500528,
+   "cached_s": 163.48557374998927,
+   "hits": 0,
+   "misses": 48,
+   "relative_error": 1.9909005041118172e-14
+  }
+ ],
+ "peak_rss_gb": 3.68
+}

@@ -1,0 +1,25 @@
+{
+ "samples": 10000,
+ "mode": "path",
+ "magpylib": "6.1.0, 8 threads",
+ "unknowns": 1518,
+ "load_points": 18896,
+ "nominal_load_rel_error": 0.0,
+ "checked_samples": 20,
+ "check_max_abs_error_T": 7.010688835018541e-10,
+ "check_Bz_range_T": [
+  0.06576031609315726,
+  0.1725185155594752
+ ],
+ "per_sample_ms": 1.7972340082982554,
+ "first_solve_s": 0.08478054194711149,
+ "factor_s": 0.008095750003121793,
+ "loads_s": 16.78817779099336,
+ "solves_s": 0.09469245903892443,
+ "read_s": 1.0894678329932503,
+ "samples_s": 17.972340082982555,
+ "total_s": 19.65806479100138,
+ "Bz_mean_mT": 108.17660070707366,
+ "Bz_std_mT": 34.071344376937574,
+ "peak_rss_gb": 2.26
+}

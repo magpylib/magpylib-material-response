@@ -140,6 +140,72 @@ own sensor pose. Today each sample is a solve: {today['per_sample_s'] * 1e3:.0f}
 """
 
 
+def caching():
+    """The cache's sections, from the c* results."""
+    today = load("c1_")
+    loop = load("c2_")
+    plate = sorted(load_all("c5_"), key=lambda r: r["level"])
+    shaft = {r["holder"]: r for r in load("c4_shaft_cache_level2_angles12_keep2")["rows"]}
+    drag = load("c6_")["rows"]
+    wrong = [load(f"c3_cache_correct_keep{k}") for k in (1, 2)]
+    frozen = load("c7_")
+    plate_rows = "\n".join(
+        f"| {r['level']} | {r['unknowns']:,} | {r['plain_call_s'] * 1e3:,.0f} | "
+        f"{r['first_cached_call_s'] * 1e3:,.0f} | {r['hit_call_s'] * 1e3:,.0f} | "
+        f"{r['plain_call_s'] / r['hit_call_s']:.1f} |"
+        for r in plate
+    )
+    drag_rows = "\n".join(
+        f"| {r['level']} | {r['unknowns']:,} | {r['plain_ms']:.0f} | {r['hit_ms']:.0f} |"
+        for r in drag
+    )
+    frozen_rows = "\n".join(
+        f"| {r['case']} | {r['x_mm']} | {r['gap_mm']} | {r['unknowns_here']:,} | "
+        f"{r['error_mT']:.5f} | {r['error_share_of_B'] * 100:.3f} | "
+        f"{r['move_changes_B_mT']:.2f} |"
+        for r in frozen["rows"]
+    )
+    worst = max(r["relative_error"] for d in wrong for r in d["rows"])
+    polar = frozen["solved_part_polarization"]
+    return f"""## C. A cache behind apply_face_charge (`cached.py`, `c1`-`c7`)
+
+On magpylib {today['magpylib']} and material-response 0.7.0. The cache swaps
+`solve_system` inside `apply_face_charge`, so a user's call stays as it is.
+
+- Monte Carlo, per call: {today['per_sample_ms']:.0f} ms today, {loop['per_sample_ms']:.0f} ms with the cache.
+- Wrong answers: none in {len(wrong[0]['rows'])} sequences, worst difference {worst:.0e},
+  keeping an LU at the first sighting and at the second.
+- Turning shaft, 48 configurations: {shaft[False]['plain_s']:.1f} s today, {shaft[False]['cached_s']:.1f} s.
+- Shaft inside its holder: {shaft[True]['plain_s']:.0f} s today, {shaft[True]['cached_s']:.0f} s. Each matrix comes
+  back once, so factoring it is wasted.
+
+The plate at rising levels, one call in ms:
+
+| level | unknowns | today | the call that factors | a hit | gain |
+| --- | --- | --- | --- | --- | --- |
+{plate_rows}
+
+A solve per frame of a magnet moving over the plate, ms (studio #96):
+
+| level | unknowns | today | a hit |
+| --- | --- | --- | --- |
+{drag_rows}
+
+### Why "rigid" is the wrong test for a path (`c7_frozen_layout.py`)
+
+Everything kept from a path's first step, against a full solve at each position.
+The plate never moves.
+
+| case | x (mm) | gap (mm) | unknowns of a full solve | error (mT) | of B (%) | the move changed B by (mT) |
+| --- | --- | --- | --- | --- | --- | --- |
+{frozen_rows}
+
+A solved part's polarization kept from the first step is off by
+{polar[-1]['kept_from_first_step_mT']:.0f} mT at {polar[-1]['Jz_T']} T; with one load per step, by
+{polar[-1]['per_step_mT']:.0e} mT.
+"""
+
+
 def load_all(prefix):
     return [json.loads(f.read_text()) for f in sorted(RESULTS.glob(f"{prefix}*.json"))]
 
@@ -154,5 +220,6 @@ for prefix, fmt in (("s1_", s1), ("s2_", s2), ("s3_", s3), ("s4_", s4)):
 runs = [r for r in load_all("p1_") if r["samples"] >= 1000]
 if runs:
     parts.append(p1(sorted(runs, key=lambda r: (r["samples"], r["magpylib"], r["mode"]))))
+parts.append(caching())
 (HERE / "PROGRESS.md").write_text("\n".join(parts))
 print("wrote PROGRESS.md")

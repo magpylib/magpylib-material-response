@@ -94,6 +94,8 @@ own sensor pose. Today each sample is a solve: 75 ms.
 | --- | --- | --- | --- | --- |
 | loop | 1059 | 10,000 | 8.14 | 83.1 |
 | path | 1059 | 10,000 | 1.74 | 19.1 |
+| path | 6.1.0, 1 threads | 10,000 | 6.13 | 65.4 |
+| path | 6.1.0, 8 threads | 10,000 | 1.80 | 19.7 |
 | loop | main | 10,000 | 8.18 | 83.6 |
 | path | main | 10,000 | 5.86 | 60.5 |
 
@@ -103,3 +105,66 @@ own sensor pose. Today each sample is a solve: 75 ms.
 - Against apply_face_charge on 20 samples the kept solver is off
   by at most 0.7 nT, on Bz of
   66 to 173 mT.
+
+## C. A cache behind apply_face_charge (`cached.py`, `c1`-`c7`)
+
+On magpylib 6.1.0 and material-response 0.7.0. The cache swaps
+`solve_system` inside `apply_face_charge`, so a user's call stays as it is.
+
+- Monte Carlo, per call: 76 ms today, 20 ms with the cache.
+- Wrong answers: none in 20 sequences, worst difference 4e-14,
+  keeping an LU at the first sighting and at the second.
+- Turning shaft, 48 configurations: 7.4 s today, 2.5 s.
+- Shaft inside its holder: 158 s today, 163 s. Each matrix comes
+  back once, so factoring it is wasted.
+
+The plate at rising levels, one call in ms:
+
+| level | unknowns | today | the call that factors | a hit | gain |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 2,520 | 141 | 154 | 30 | 4.7 |
+| 5 | 4,104 | 377 | 402 | 49 | 7.7 |
+| 6 | 5,670 | 691 | 751 | 66 | 10.5 |
+| 7 | 7,488 | 1,179 | 1,354 | 87 | 13.6 |
+| 8 | 9,558 | 1,832 | 2,260 | 118 | 15.5 |
+| 9 | 11,880 | 2,870 | 3,579 | 164 | 17.5 |
+| 10 | 14,454 | 4,224 | 5,732 | 212 | 19.9 |
+
+A solve per frame of a magnet moving over the plate, ms (studio #96):
+
+| level | unknowns | today | a hit |
+| --- | --- | --- | --- |
+| 2 | 768 | 46 | 12 |
+| 3 | 1,518 | 76 | 19 |
+| 4 | 2,520 | 141 | 30 |
+| 5 | 4,104 | 377 | 50 |
+
+### Why "rigid" is the wrong test for a path (`c7_frozen_layout.py`)
+
+Everything kept from a path's first step, against a full solve at each position.
+The plate never moves.
+
+| case | x (mm) | gap (mm) | unknowns of a full solve | error (mT) | of B (%) | the move changed B by (mT) |
+| --- | --- | --- | --- | --- | --- | --- |
+| slides, far: 1 mm off | 0 | 1.0 | 1,518 | 0.00000 | 0.000 | 0.00 |
+| slides, far: 1 mm off | 1 | 1.0 | 1,518 | 0.00000 | 0.000 | 4.24 |
+| slides, far: 1 mm off | 2 | 1.0 | 1,518 | 0.00001 | 0.000 | 12.04 |
+| slides, far: 1 mm off | 3 | 1.0 | 1,518 | 0.00002 | 0.000 | 38.31 |
+| slides, 0.1 mm off: only the load rule | 0 | 0.1 | 1,518 | 0.00000 | 0.000 | 0.00 |
+| slides, 0.1 mm off: only the load rule | 1 | 0.1 | 1,518 | 0.00000 | 0.000 | 6.26 |
+| slides, 0.1 mm off: only the load rule | 2 | 0.1 | 1,518 | 0.18233 | 0.621 | 8.22 |
+| slides, 0.1 mm off: only the load rule | 3 | 0.1 | 1,518 | 0.58610 | 1.989 | 23.21 |
+| slides, 0.01 mm off: its footprint grades the panels | 0 | 0.01 | 2,238 | 0.00000 | 0.000 | 0.00 |
+| slides, 0.01 mm off: its footprint grades the panels | 1 | 0.01 | 2,238 | 1.29692 | 5.365 | 6.86 |
+| slides, 0.01 mm off: its footprint grades the panels | 2 | 0.01 | 2,295 | 1.38395 | 4.620 | 9.16 |
+| slides, 0.01 mm off: its footprint grades the panels | 3 | 0.01 | 2,010 | 0.02421 | 0.099 | 20.64 |
+| comes down from 1 mm | 0 | 1.0 | 1,518 | 0.00000 | 0.000 | 0.00 |
+| comes down from 1 mm | 0 | 0.5 | 1,518 | 0.00000 | 0.000 | 5.07 |
+| comes down from 1 mm | 0 | 0.2 | 1,518 | 0.00000 | 0.000 | 3.09 |
+| comes down from 1 mm | 0 | 0.1 | 1,518 | 0.00000 | 0.000 | 1.03 |
+| comes down from 1 mm | 0 | 0.05 | 1,518 | 0.00000 | 0.000 | 0.52 |
+| comes down from 1 mm | 0 | 0.01 | 2,238 | 0.71142 | 2.956 | 0.41 |
+
+A solved part's polarization kept from the first step is off by
+220 mT at -1.0 T; with one load per step, by
+9e-14 mT.

@@ -1,0 +1,8 @@
+{
+ "samples": 200,
+ "magpylib": "6.1.0",
+ "material_response": "0.7.1.dev3+g070b0dce0",
+ "per_sample_ms": 76.34989917016355,
+ "Bz_mean_mT": 104.26090329652187,
+ "peak_rss_gb": 0.61
+}

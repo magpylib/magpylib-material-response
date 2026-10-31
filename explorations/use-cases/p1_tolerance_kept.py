@@ -7,10 +7,10 @@ per sample. Replaces s2's estimate with a measurement, two ways:
   pose, as a solver that accepts paths could run.
 
 First checks the kept solver against apply_face_charge sample by sample.
-Which magpylib runs is whatever imports first: main, or #1059's threads with
-its source first on PYTHONPATH.
+Which magpylib runs is whatever imports first. The older results ran on main
+and on #1059's branch; 6.1.0 has those threads, and threads limits them.
 
-    python p1_tolerance_kept.py [samples] [loop|path]
+    python p1_tolerance_kept.py [samples] [loop|path] [threads]
 """
 
 import sys
@@ -27,8 +27,10 @@ from magpylib_material_response.face_charge import apply_face_charge
 SAMPLES = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
 MODE = sys.argv[2] if len(sys.argv) > 2 else "path"
 CHECKED = 20
-MAGPYLIB = "1059" if hasattr(magpy.defaults, "threads") else "main"
-NAME = f"p1_tolerance_kept_{MODE}_{SAMPLES}_magpylib-{MAGPYLIB}"
+THREADS = int(sys.argv[3]) if len(sys.argv) > 3 else magpy.defaults.threads
+magpy.defaults.threads = THREADS
+MAGPYLIB = f"{magpy.__version__}, {THREADS} threads"
+NAME = f"p1_tolerance_kept_{MODE}_{SAMPLES}_magpylib-{magpy.__version__}_t{THREADS}"
 SENSOR = np.array([3, 0, 1.5]) * mm
 rng = np.random.default_rng(1)
 

@@ -1,0 +1,166 @@
+{
+ "rows": [
+  {
+   "case": "fixed source moves",
+   "calls": 4,
+   "hits": 2,
+   "expected": 2,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "fixed source comes very near, a new layout once",
+   "calls": 4,
+   "hits": 1,
+   "expected": 1,
+   "relative_error": 1.795070775514231e-14,
+   "ok": true
+  },
+  {
+   "case": "H_ext changes",
+   "calls": 4,
+   "hits": 2,
+   "expected": 2,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "the part's remanence changes",
+   "calls": 3,
+   "hits": 1,
+   "expected": 1,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "two parts move as one",
+   "calls": 4,
+   "hits": 2,
+   "expected": 2,
+   "relative_error": 6.813267283104649e-16,
+   "ok": true
+  },
+  {
+   "case": "two parts move as one, by many small turns",
+   "calls": 4,
+   "hits": 2,
+   "expected": 2,
+   "relative_error": 5.170122878905034e-16,
+   "ok": true
+  },
+  {
+   "case": "a turning cylinder and its magnet",
+   "calls": 4,
+   "hits": 2,
+   "expected": 2,
+   "relative_error": 1.7445367427798908e-14,
+   "ok": true
+  },
+  {
+   "case": "a mesh, a source moves",
+   "calls": 3,
+   "hits": 1,
+   "expected": 1,
+   "relative_error": 1.5967976823454127e-14,
+   "ok": true
+  },
+  {
+   "case": "two parts of one material touch, a source moves",
+   "calls": 3,
+   "hits": 1,
+   "expected": 1,
+   "relative_error": 2.2158547593651747e-16,
+   "ok": true
+  },
+  {
+   "case": "the same model again after another",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "parts move apart",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "a part turns against another",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "chi changes",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "one length changes",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "a recoil magnet moves",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "a magnet lands on a part, its footprint grades the panels",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "the parts swap places in the list",
+   "calls": 2,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "touching, then one material less",
+   "calls": 2,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "level changes",
+   "calls": 3,
+   "hits": 0,
+   "expected": 0,
+   "relative_error": 0.0,
+   "ok": true
+  },
+  {
+   "case": "refine rounds",
+   "calls": 3,
+   "hits": 1,
+   "expected": null,
+   "relative_error": 0.0,
+   "ok": true
+  }
+ ],
+ "all_ok": true,
+ "peak_rss_gb": 2.5
+}
