@@ -176,7 +176,7 @@ solve and `getB` together, one run each on an Apple M4 Pro; finite elements are
 | ---------------------------- | -----------------: | ---------: | -------------------: | -----------: |
 | Three cuboids, turned        |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
 | Magnet beside a soft cube    |             0.02 s |      2.3 s |               0.10 s |        2.3 s |
-| U-core driven by a coil      |             0.13 s |      8.5 s |                  – ¹ |          – ¹ |
+| U-core driven by a coil      |             0.07 s |      4.5 s |                  – ¹ |          – ¹ |
 | Flux concentrator            |             0.04 s |     0.83 s |               0.05 s |        3.3 s |
 | Halbach array on back iron   |             0.06 s |      1.5 s |               0.06 s |        6.3 s |
 | Iron cube in 10 mT           |             0.04 s |     0.52 s |               0.04 s |        2.0 s |

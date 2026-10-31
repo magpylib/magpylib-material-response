@@ -290,13 +290,14 @@ Measured on soft iron at $\chi = 1000$, out of 39 models:
 | a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
 | 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
 | voxelized sphere              | 1,304 | 100 % | 0.30 s, 0.3 GB | 0.20 s, 0.1 GB | iterative |
-| tetrahedra                    | 1,931 | 0     | 9.3 s, 1.1 GB  | 9.1 s, 1.1 GB  | direct    |
+| tetrahedra                    | 1,937 | 0     | 3.3 s, 0.9 GB  | 3.3 s, 1.0 GB  | direct    |
 | cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
 
 The rows with one cube, three cubes and the voxelized sphere are measured with
 the direct solver's current table chunks of 200,000 pairs; the others were
 measured with chunks of 2,000,000, and those holding grids now peak somewhat
-lower.
+lower. The row of tetrahedra is measured with magpylib 6.1, whose threads make
+it about 2.7 times faster; the others with magpylib 6.0.
 
 Under `"auto"` GMRES runs to `solver_tol / 100`, so the polarization stays
 within about `solver_tol` of the direct solve on a few thousand cells and within

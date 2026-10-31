@@ -30,8 +30,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  # trial: magpylib/magpylib#1059 (chunked, threaded fields) until its release
-  "magpylib @ git+https://github.com/magpylib/magpylib@c4781f78bc0cf93bbb7df78073ce5794b49c00c7",
+  "magpylib>=6.1",
   "loguru>=0.5.0",
   # NumPy's error state is per thread from 2.0; in 1.x it races between
   # threads, and face charge, which runs on threads, warned of divisions it
@@ -76,7 +75,6 @@ docs = [
 ]
 
 [tool.hatch]
-metadata.allow-direct-references = true
 version.source = "vcs"
 build.hooks.vcs.version-file = "src/magpylib_material_response/_version.py"
 

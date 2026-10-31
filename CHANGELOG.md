@@ -105,24 +105,24 @@ and this project adheres to
   of a triangle mesh runs on chunks of points: a 792-face tube voxelized into
   3,000 cells needed over 3 GB and now takes 1.6 GB
   ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
-- **Breaking:** requires NumPy 2.0.1 and scipy 1.17. NumPy 1.x shares its error
-  state between threads: face charge, which runs on threads, warned of divisions
-  it had told NumPy to ignore. NumPy 2.0.0's `np.unique` broke `apply_demag`.
-  magpylib 6.0 already required scipy 1.17: the 1.12 stated here could not be
-  installed. CI tests the package at its lowest pins
+- **Breaking:** requires magpylib 6.1, NumPy 2.0.1 and scipy 1.17.1, as magpylib
+  6.1 does. NumPy 1.x shares its error state between threads: face charge, which
+  runs on threads, warned of divisions it had told NumPy to ignore. NumPy
+  2.0.0's `np.unique` broke `apply_demag`. magpylib 6.0 already required scipy
+  1.17: the 1.12 stated here could not be installed. CI tests the package at its
+  lowest pins
   ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
 - A magnet without a susceptibility, on itself or a parent, is fixed in
   `apply_demag`, `mesh_study` and `fem_solve`, as in `apply_face_charge`. They
   raised "No susceptibility defined in any parent collection", naming no object;
   a model in which no magnet has one now warns that nothing responds
   ([#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
-- Requires the magpylib release with
-  [magpylib#1059](https://github.com/magpylib/magpylib/pull/1059), which
-  computes fields in chunks, on threads, and scipy 1.17.1, as it does. A drive
-  of many current segments no longer takes gigabytes: #108's coil of 2,400
-  segments around a soft core solves by `apply_face_charge` in 0.28 GB instead
-  of 4.0 GB, by `apply_demag` in 0.26 GB instead of 2.0 GB, both 2 to 4 times
-  faster. Face charge no longer evaluates its drive in chunks of its own
+- magpylib 6.1 computes fields in chunks, on threads
+  ([magpylib#1059](https://github.com/magpylib/magpylib/pull/1059)). A drive of
+  many current segments no longer takes gigabytes: #108's coil of 2,400 segments
+  around a soft core solves by `apply_face_charge` in 0.28 GB instead of 4.0 GB,
+  by `apply_demag` in 0.26 GB instead of 2.0 GB, both 2 to 4 times faster. Face
+  charge no longer evaluates its drive in chunks of its own
   ([#108](https://github.com/magpylib/magpylib-material-response/issues/108),
   [#117](https://github.com/magpylib/magpylib-material-response/pull/117)).
 
