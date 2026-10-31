@@ -6,59 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-10-31
+
+Two new ways to solve a model join `apply_demag`: face charge, which needs no
+volume mesh, and finite elements, an independent check of any result. This
+release requires magpylib 6.1. The entries marked **Breaking** are the ones that
+can change or stop existing code.
 
 ### Added
 
-- `magpylib_material_response.fem` in a new `fem` extra (NGSolve): `fem_solve`
-  and `fem_study` solve the model `apply_demag` takes by finite elements, on the
-  magnets' own shapes, and estimate the error by raising the element order, or
-  warn when the orders give none. An independent check of the method of moments:
-  with an exact open boundary and layers refined toward the edges, it puts a
-  cube's polarizability within 2e-5 of Helsing and Perfekt's in seconds.
-  Magnets, a uniform applied field and current sources: with currents the
-  magnets take the total potential, so a coil around soft iron costs no
-  accuracy, and on the U-core of the docs it agrees with an independent FEM
-  within 0.25 %. The reference data of the docs and the tests are now its
-  results, which `scripts/fem_references.py` recomputes: `get_dataset` returns
-  them for `"FEMdata_test_cuboids"` and `"FEMdata_test_softmag"`, labelled
-  "FEM", in place of exports from a commercial code that no one could rerun.
-  `compare` puts a `mesh_study` and a `fem_study` side by side, per observer,
-  positions or magpylib sensors read in their own frames: both values, both
-  error bars, and whether they agree. In the repository, `validation/` holds 20
-  cases, 17 with a stored reference; every PR checks the method of moments
-  against them and is timed against its base branch in a comment, and every
-  night all methods climb their settings against references made again, their
-  records kept on a `benchmarks` branch, and must beat magpylib alone, the model
-  without its material response. It found a mesh NGSolve could not assemble,
-  which `fem_solve` now makes again at another grading. Two docs pages: checking
-  a result with finite elements, and a magnet in a steel tube, where the method
-  of moments converges inside but behind the shield needs far more cells
-  ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
-  [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
-  [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
-  [#99](https://github.com/magpylib/magpylib-material-response/pull/99),
-  [#101](https://github.com/magpylib/magpylib-material-response/pull/101),
-  [#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
-- `face_charge.apply_face_charge` solves cuboids, cylinders, cylinder segments,
-  spheres, tetrahedra and closed triangle meshes, such as CAD exports, with a
-  uniform, isotropic susceptibility on their surfaces, without a volume mesh,
-  coupled to each other and to every other source; each solved part becomes a
-  `ChargeSheet`, an ordinary magpylib source. On the six documented examples it
-  lands within each reference's uncertainty, 0.64 % at worst. `refine` splits
-  the panels where the charge jumps most, and each sheet reports
-  `jump_indicator` and `mean_polarization`, hints for accuracy and saturation;
-  the solved collection's `face_charge_info` holds the unknowns, level,
-  refinement rounds and time, and the unknowns are logged before the solve. All
-  bodies form one dense system, factorized in single precision and refined to
-  double's accuracy: `max_unknowns`, 20,000 by default (3.2 GB, up to about
-  twice that while one large part is assembled and solved), refuses a larger one
-  before it is assembled, a triangle mesh's before it is cut; without a `level`,
-  the highest level up to 3 that fits is taken. It runs on magpylib's
-  `defaults.threads` threads. Parts of one material that touch are solved as
-  one, and parts a gap below their panels apart are graded toward each other.
-  `to_json` saves a solved collection, with the colour level its sheets share
-  (`style.charge.level`)
+- **Face charge solver**, `face_charge.apply_face_charge`: solves a model on the
+  surfaces of its parts, without a volume mesh. On the U-core of the docs it
+  reaches 1 % in 0.07 s, against 4.5 s for finite elements, and on the six
+  documented examples it lands within each reference's uncertainty, 0.64 % at
+  worst. It takes cuboids, cylinders, cylinder segments, spheres, tetrahedra and
+  closed triangle meshes such as CAD exports, each with a uniform, isotropic
+  susceptibility, coupled to each other and to every other source. Each solved
+  part becomes a `ChargeSheet`, an ordinary magpylib source that `to_json`
+  saves. `refine` adds panels where the charge jumps most, and a solve above
+  `max_unknowns`, 20,000 by default (3.2 GB), is refused before it starts
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),
   [#110](https://github.com/magpylib/magpylib-material-response/pull/110),
@@ -66,128 +32,112 @@ and this project adheres to
   [#114](https://github.com/magpylib/magpylib-material-response/pull/114),
   [#115](https://github.com/magpylib/magpylib-material-response/pull/115),
   [#116](https://github.com/magpylib/magpylib-material-response/pull/116),
-  [#123](https://github.com/magpylib/magpylib-material-response/pull/123)).
+  [#123](https://github.com/magpylib/magpylib-material-response/pull/123),
+  [#126](https://github.com/magpylib/magpylib-material-response/pull/126)).
+- **Finite elements**, `fem` module in a new `fem` extra (NGSolve): `fem_solve`
+  and `fem_study` solve the model `apply_demag` takes, with magnets, a uniform
+  applied field and current sources, and estimate the error by raising the
+  element order. `compare` puts a `mesh_study` and a `fem_study` side by side
+  for each observer: both values, both error bars, and whether they agree. The
+  reference data of the docs and tests now come from it, in place of exports
+  from a commercial code that no one could rerun; `get_dataset` labels them
+  "FEM" ([#90](https://github.com/magpylib/magpylib-material-response/pull/90),
+  [#93](https://github.com/magpylib/magpylib-material-response/pull/93),
+  [#95](https://github.com/magpylib/magpylib-material-response/pull/95),
+  [#99](https://github.com/magpylib/magpylib-material-response/pull/99)).
+- **Validation in the repository**, `validation/`: 20 cases, 17 with a stored
+  reference. Every PR checks the method of moments against them and reports time
+  and memory against its base branch. Every night all methods climb to finer
+  settings against references made again, and must beat magpylib alone, the
+  model without its material response
+  ([#99](https://github.com/magpylib/magpylib-material-response/pull/99),
+  [#101](https://github.com/magpylib/magpylib-material-response/pull/101),
+  [#125](https://github.com/magpylib/magpylib-material-response/pull/125)).
+- Documentation: pages on face charge, on checking a result with finite
+  elements, and on a magnet in a steel tube, where the method of moments
+  converges inside but needs far more cells behind the shield
+  ([#101](https://github.com/magpylib/magpylib-material-response/pull/101),
+  [#102](https://github.com/magpylib/magpylib-material-response/pull/102),
+  [#122](https://github.com/magpylib/magpylib-material-response/pull/122)).
 
 ### Changed
 
-- A mesh has `sealed = True`, kept by `copy`, `apply_demag` and `to_json`:
-  magpylib-studio shows it as one object rather than one per cell. It also draws
-  as the magnet it came from: opacity and magnetization style now reach the
-  cells, which drew opaque with their arrows
-  ([#127](https://github.com/magpylib/magpylib-material-response/pull/127)).
+- **Breaking:** requires magpylib 6.1, NumPy 2.0.1 and scipy 1.17.1. magpylib
+  6.1 computes fields in chunks, on threads: a coil of 2,400 segments around a
+  soft core now solves by `apply_face_charge` in 0.28 GB instead of 4.0 GB and
+  by `apply_demag` in 0.26 GB instead of 2.0 GB, both 2 to 4 times faster. CI
+  tests the package at its lowest pins
+  ([#108](https://github.com/magpylib/magpylib-material-response/issues/108),
+  [#117](https://github.com/magpylib/magpylib-material-response/pull/117),
+  [#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
 - **Breaking:** `voxelize` keeps the cells whose centre lies inside the object,
-  as its docstring said, and tunes the grid spacing so that these touching cells
-  hold the object's exact volume, and a magnet its moment, close to
-  `target_elems`. It kept only the cells lying wholly inside by default, which
-  left a sphere 31 % short of its volume at 1,000 cells, and its moment with it;
-  `strict_inside=True` still does that. Where no spacing near the target holds
-  the volume, it takes the count that does, as a flat body holds it only with
-  whole layers; failing that, the closest within 5 %, with a warning; beyond, it
-  refuses. It tries a lattice with a cell centred at the object's origin and one
-  with a cell corner there, which splits no cell along faces through the origin,
-  such as a cylinder segment's sides. A triangle mesh's lattice is anchored at
-  the middle of its box: off its own origin, the mesh lost cells, in both modes
+  as its docstring said, and tunes the grid spacing so that they hold the
+  object's exact volume, close to `target_elems`. It kept only the cells wholly
+  inside, which left a sphere of 1,000 cells 31 % short of its volume and
+  moment; `strict_inside=True` still does that. It warns when the volume can be
+  held only within 5 %, and refuses beyond that
   ([#96](https://github.com/magpylib/magpylib-material-response/pull/96),
   [#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
-- `apply_demag` runs cells on one lattice that do not fill a box, such as a
-  voxelized sphere, as one grid by FFT, with zero polarization in the holes,
-  when they fill at least an eighth of their box and are four cells deep. Such
-  bodies ran as many small boxes and a rim of loose cells, which FFT products
-  barely covered. A voxelized sphere of 4,529 cells at χ = 1000 took 8.7 s and
-  1.5 GB, and now takes 0.8 s and 84 MB; one of 1,304 cells took 0.76 s, and now
-  0.24 s. Grid clusters from `analyze_structure` give each cell's place in the
-  grid's box as `flat`, and only grids that fill their box keep `order`. The
-  direct solver gathers the blocks of grids in smaller chunks: a cube of 4,096
-  cells peaks at 1.4 GB instead of 2.1 GB, in the same time. A cell on another's
-  site, or positions noisy just above the lattice tolerance, made the structure
-  analysis fail or ask for terabytes; such cells now run loose. The inside test
-  of a triangle mesh runs on chunks of points: a 792-face tube voxelized into
-  3,000 cells needed over 3 GB and now takes 1.6 GB
-  ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
-- **Breaking:** requires magpylib 6.1, NumPy 2.0.1 and scipy 1.17.1, as magpylib
-  6.1 does. NumPy 1.x shares its error state between threads: face charge, which
-  runs on threads, warned of divisions it had told NumPy to ignore. NumPy
-  2.0.0's `np.unique` broke `apply_demag`. magpylib 6.0 already required scipy
-  1.17: the 1.12 stated here could not be installed. CI tests the package at its
-  lowest pins
-  ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
-- A magnet without a susceptibility, on itself or a parent, is fixed in
-  `apply_demag`, `mesh_study` and `fem_solve`, as in `apply_face_charge`. They
-  raised "No susceptibility defined in any parent collection", naming no object;
-  a model in which no magnet has one now warns that nothing responds, and skips
-  the solve; with only some fixed, the log says how many. A magnet meshed away
-  from its parent keeps the susceptibility and `H_ext` it inherited
+- A magnet without a susceptibility, on itself or a parent, stays fixed in
+  `apply_demag`, `mesh_study` and `fem_solve`, as in `apply_face_charge`,
+  instead of raising an error. A model in which no magnet has one warns that
+  nothing responds and skips the solve; when only some are fixed, the log says
+  how many
   ([#121](https://github.com/magpylib/magpylib-material-response/pull/121),
   [#128](https://github.com/magpylib/magpylib-material-response/pull/128)).
-- magpylib 6.1 computes fields in chunks, on threads
-  ([magpylib#1059](https://github.com/magpylib/magpylib/pull/1059)). A drive of
-  many current segments no longer takes gigabytes: #108's coil of 2,400 segments
-  around a soft core solves by `apply_face_charge` in 0.28 GB instead of 4.0 GB,
-  by `apply_demag` in 0.26 GB instead of 2.0 GB, both 2 to 4 times faster. Face
-  charge no longer evaluates its drive in chunks of its own
-  ([#108](https://github.com/magpylib/magpylib-material-response/issues/108),
-  [#117](https://github.com/magpylib/magpylib-material-response/pull/117)).
+- `apply_demag` runs bodies on one lattice that do not fill a box, such as a
+  voxelized sphere, as one FFT grid. A sphere of 4,529 cells at χ = 1000 took
+  8.7 s and 1.5 GB, and now takes 0.8 s and 84 MB. In the clusters of
+  `analyze_structure`, `flat` gives each cell's place in its grid's box, and
+  only grids that fill their box keep `order`
+  ([#97](https://github.com/magpylib/magpylib-material-response/pull/97)).
+- Meshers set `sealed = True`, so magpylib-studio shows a mesh as one object
+  rather than one per cell, and a mesh draws as the magnet it came from, with
+  its opacity and magnetization style
+  ([#127](https://github.com/magpylib/magpylib-material-response/pull/127)).
 
 ### Removed
 
 - **Breaking:** the `pairs_matching`, `max_dist` and `split` options of
-  `apply_demag` and `demag_tensor`, with their helpers `filter_distance` and
-  `match_pairs`. Each forced the old dense, directly solved path. On a cube
-  meshed into 2,744 cells the default path takes 0.2 s and 0.14 GB, where
-  `pairs_matching` took 10 s and `split=4` 8.5 s, both with over 3 GB, and
-  `max_dist` was 11 to 23 % off. The arguments after `inplace` and after
-  `src_list` are now keyword-only, so an old positional call raises instead of
-  shifting
+  `apply_demag` and `demag_tensor`, and the helpers `filter_distance` and
+  `match_pairs`. On a cube of 2,744 cells the default takes 0.2 s and 0.14 GB,
+  where `pairs_matching` took 10 s and over 3 GB and `max_dist` was 11 to 23 %
+  off. The arguments after `inplace` and after `src_list` are now keyword-only,
+  so an old positional call raises instead of shifting
   ([#87](https://github.com/magpylib/magpylib-material-response/pull/87)).
 
 ### Fixed
 
-- `to_json` saves magpylib's `current.TriangleStrip` and
-  `current.TriangleSheet`, and `mesh_study` warns when it gives no error
-  estimate, from two meshes or from meshes that do not change steadily, instead
-  of returning NaN silently
-  ([#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
-- `apply_demag`: a block between two bodies whose cells share no grid was always
-  stored sparse above 2 GB. At high susceptibility that kept nearly every entry,
-  in more memory than the dense block and far more while it was built, and the
-  memory warning missed it: a magnet on an iron plate meshed at 0.4 mm ran for
-  more than 12 minutes. The block now stays dense unless sparsifying pays, at
-  any size, and the warning shows: 2 minutes and 10 GB. Whether it pays is
-  judged on cells drawn at random across the body, not on its first slab, and
-  only from 90 % dropped, as the sparse product is single-threaded; from 60 %
-  when the blocks would pass 2 GB in all. A sparse block peaks at a third of the
-  memory while built, and a reverse block given by reciprocity is no longer
-  copied
-  ([#86](https://github.com/magpylib/magpylib-material-response/pull/86)).
+- A part no longer stops responding, without a word, when it is meshed: every
+  mesher keeps the susceptibility and applied field it inherits from the model
+  around it
+  ([#121](https://github.com/magpylib/magpylib-material-response/pull/121),
+  [#128](https://github.com/magpylib/magpylib-material-response/pull/128)).
 - `apply_demag`: a thin ring in cylinder-segment cells at high susceptibility no
-  longer swings with the cells across its wall. On curved cells point matching
-  gave the system positive eigenvalues: a tube with a 1 mm wall at χ = 1000 came
-  out −10 %, −68 % and +2 % from its moment with 1, 2 and 3 cells across.
-  Segment cells close together, from a susceptibility of 1, now take each
-  other's field averaged over the cell, which keeps every eigenvalue negative:
-  −12 %, −11 % and −11 %, and closer as cells are added around the ring. Such
-  solves take 2 to 7 times longer, the most on small meshes; below a
-  susceptibility of 1, where point matching cannot turn the system indefinite,
-  cells are matched at their centroids as before. Each pair decides by its own
-  two cells, and `demag_tensor` takes the same `susceptibility`, so it returns
-  the tensor `apply_demag` solves with
+  longer swings with the cells across its wall. A tube with a 1 mm wall at χ =
+  1000 came out −10 %, −68 % and +2 % from its moment with 1, 2 and 3 cells
+  across, and now −12 %, −11 % and −11 %, closer as cells are added around the
+  ring. Close pairs with a susceptibility from 1 take each other's field
+  averaged over the cell, which makes these solves 2 to 7 times slower.
+  `demag_tensor` takes `susceptibility`, so it returns the tensor `apply_demag`
+  solves with
   ([#92](https://github.com/magpylib/magpylib-material-response/issues/92),
   [#100](https://github.com/magpylib/magpylib-material-response/pull/100),
   [#121](https://github.com/magpylib/magpylib-material-response/pull/121),
   [#128](https://github.com/magpylib/magpylib-material-response/pull/128)).
-- `H_ext` is checked before a solve, by `apply_demag`, `apply_face_charge` and
-  `fem_solve` alike: anything but three finite numbers, in any layout, raises an
-  error that says what is expected, and fields above 10 T warn once, at the
-  caller's line, that they are most likely H in A/m, not μ0·H in tesla. A scalar
-  failed in `apply_demag` with a reshape error and was taken in
-  `apply_face_charge`; 1e5 A/m gave 36,000 T beside a soft cube, and the Earth's
-  40 A/m was taken as 40 T, silently
+- `H_ext` is checked before every solve: anything but three finite numbers
+  raises an error that says what is expected, and fields above 10 T warn that
+  they are most likely H in A/m, not μ0·H in tesla. The Earth's 40 A/m was taken
+  as 40 T, silently
   ([#119](https://github.com/magpylib/magpylib-material-response/pull/119)).
-- `mesh_all`, `mesh_uniform` and `mesh_study` keep the applied field and the
-  susceptibility that a meshed sub-collection inherits from the model around it.
-  The copy they mesh has no parent, so these were lost and the part did not
-  respond, silently, where `apply_face_charge` and `fem_solve` read them
-  ([#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
+- `apply_demag`: a large block between two bodies stays dense unless sparsifying
+  pays. A magnet on an iron plate meshed at 0.4 mm ran for more than 12 minutes,
+  and now takes 2 minutes and 10 GB, with a memory warning that shows
+  ([#86](https://github.com/magpylib/magpylib-material-response/pull/86)).
+- `to_json` saves magpylib's `current.TriangleStrip` and
+  `current.TriangleSheet`, and `mesh_study` warns when it gives no error
+  estimate instead of returning NaN silently
+  ([#110](https://github.com/magpylib/magpylib-material-response/pull/110)).
 
 ## [0.6.0] - 2026-10-23
 
@@ -489,7 +439,9 @@ and this project adheres to
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.6.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.7.0...HEAD
+[0.7.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.6.0...0.7.0
 [0.6.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.5.0...0.6.0
 [0.5.0]:
