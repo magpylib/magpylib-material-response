@@ -46,9 +46,6 @@ MARK = 0.5  # a refinement round splits panels above this share of the largest j
 # alone: 1 mm away, 1.4 and 0.35 % off in the worst direction with 320 and 1280
 # facets at levels 1 and 3, 0.19 and 0.05 % on its axes
 FACETS = 12
-POINTS_PER_CALL = (
-    5_000  # external-field points per magpylib call: a coil at many points takes GBs
-)
 
 
 def apply_face_charge(
@@ -203,22 +200,20 @@ def apply_face_charge(
         # continuous across a magnet's face, where a magnet touching a solved
         # part has its Gauss points; magpylib gives H there from inside the
         # magnet, which is (B - J) / mu0
-        H = np.zeros((len(points), 3))
-        if fixed:
-            for a in range(0, len(points), POINTS_PER_CALL):
-                chunk = points[a : a + POINTS_PER_CALL]
-                with np.errstate(invalid="ignore", divide="ignore"):
-                    B = magpy.getB(fixed, chunk, sumup=True)
-                    # close to a magnet's edge magpylib can give NaN; the field is
-                    # singular there but integrable: take it a little off, a step
-                    # 100 times longer each time it is still NaN
-                    for step in nudges:
-                        bad = ~np.isfinite(B).all(axis=1)
-                        if not bad.any():
-                            break
-                        B[bad] = magpy.getB(fixed, chunk[bad] + step, sumup=True)
-                H[a : a + POINTS_PER_CALL] = B / magpy.mu_0
-        return H
+        if not fixed:
+            return np.zeros((len(points), 3))
+        # one call: magpylib computes many segments at many points in chunks
+        with np.errstate(invalid="ignore", divide="ignore"):
+            B = magpy.getB(fixed, points, sumup=True)
+            # close to a magnet's edge magpylib can give NaN; the field is
+            # singular there but integrable: take it a little off, a step
+            # 100 times longer each time it is still NaN
+            for step in nudges:
+                bad = ~np.isfinite(B).all(axis=1)
+                if not bad.any():
+                    break
+                B[bad] = magpy.getB(fixed, points[bad] + step, sumup=True)
+        return B / magpy.mu_0
 
     for rnd in range(refine + 1):
         unknowns = sum(b.n_dofs for b in bodies)

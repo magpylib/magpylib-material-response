@@ -26,7 +26,7 @@ import magpylib_material_response
 
 from .cases import CASES
 from .methods import METHODS
-from .run import PR_CHECK, run
+from .run import PR_CHECK, run, versions
 
 #: the comment's first line, by which .github/workflows/timing.yml finds it again
 MARKER = "<!-- validation timing -->"
@@ -68,7 +68,11 @@ def record(path):
             times[key] = run(CASES[name], METHODS[method_name], setting)["seconds"]
         except Exception as error:  # noqa: BLE001  # the base may lack what a case needs
             times[key] = {"failed": f"{type(error).__name__}: {error}"[:200]}
-    data = {"version": magpylib_material_response.__version__, "times": times}
+    data = {
+        "version": magpylib_material_response.__version__,
+        "versions": versions(),
+        "times": times,
+    }
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(json.dumps(data, indent=1) + "\n")
 
@@ -129,6 +133,18 @@ def _least(rounds, key):
         totals.append(sum(seconds.values()))
     least = min(totals)
     return least, (max(totals) - least) / least if least > 0 else 0.0
+
+
+def _environment(data):
+    """The package's version and the magpylib it ran on, for the comment's end."""
+    version, threads = (
+        data["versions"]["magpylib"],
+        data["versions"]["magpylib_threads"],
+    )
+    return (
+        f"{data['version']} with magpylib {version} "
+        f"on {threads} thread{'s' if threads != 1 else ''}"
+    )
 
 
 def _time(seconds):
@@ -248,9 +264,12 @@ def compare(folder, pictures=None):
         f"(cases under {_time(FLOOR)} are not judged) or {MORE_MEMORY / 1e6:.0f} MB "
         "of the memory. Spread: between the rounds."
     )
-    versions = f"Base {base[0]['version']}, this PR {head[0]['version']}."
+    environments = (
+        f"Base {_environment(base[0])}; this PR {_environment(head[0])}; "
+        f"{head[0]['versions']['cpus']} CPUs."
+    )
     return (
-        f"{title}{summary}\n\n{table}\n\n{legend}\n\n{versions} "
+        f"{title}{summary}\n\n{table}\n\n{legend}\n\n{environments} "
         "For information only: nothing fails on time or memory yet."
     )
 

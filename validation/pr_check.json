@@ -53,6 +53,22 @@
    "unknowns": 1128
   }
  },
+ "wound_core": {
+  "MoM": {
+   "setting": 8,
+   "errors": {
+    "10 mm above the core": 0.01303
+   },
+   "unknowns": 2304
+  },
+  "FaceCharge": {
+   "setting": 3,
+   "errors": {
+    "10 mm above the core": 0.0004623
+   },
+   "unknowns": 648
+  }
+ },
  "soft_magnets": {
   "MoM": {
    "setting": 4,

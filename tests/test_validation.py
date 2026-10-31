@@ -150,7 +150,11 @@ def test_timing_comment_shows_memory(tmp_path, monkeypatch):
     assert peaks[broken] is None
 
     (tmp_path / "memory-base.json").write_text(json.dumps({small: peaks[small] // 2}))
-    round_ = {"version": "1", "times": {key: {"solve": 1.0} for key in peaks}}
+    round_ = {
+        "version": "1",
+        "versions": {"magpylib": "6", "magpylib_threads": 8, "cpus": 4},
+        "times": {key: {"solve": 1.0} for key in peaks},
+    }
     for name in ("base-1.json", "head-1.json"):
         (tmp_path / name).write_text(json.dumps(round_))
     comment = timing.compare(tmp_path)
