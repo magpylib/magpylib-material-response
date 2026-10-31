@@ -242,7 +242,7 @@ part's charge is singular. Each panel carries a charge linear across it, with
 fields in closed form, and the equation is solved in its Galerkin form. In large
 models, cuboid panels at least 3 panel sides apart take a few Gauss points
 instead, which moves answers by under 1e-6. Far from a solved part, its field
-takes three points on each triangle, as the closed form cancels there. Touching
+takes six points on each triangle, as the closed form cancels there. Touching
 parts are coupled exactly, even when their panels do not match. From 2,000
 unknowns on, the dense system is factorized in single precision and refined to
 double's accuracy, three times faster. Assembly and fields run on

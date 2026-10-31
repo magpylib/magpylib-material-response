@@ -19,6 +19,8 @@ from magpylib_material_response.face_charge import (
     ChargeSheet,
     _bodies,
     _panels,
+    _parallel,
+    _sheet,
     apply_face_charge,
 )
 from magpylib_material_response.face_charge._apply import _closed_surface
@@ -38,6 +40,8 @@ from magpylib_material_response.face_charge._rectangle import (
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import (
     charge_field,
+    charge_field_far,
+    far_points,
     frames,
     normal_field,
     normal_field_far,
@@ -170,14 +174,34 @@ def test_field_far_from_a_solved_model_falls_as_a_dipole():
         np.testing.assert_allclose(ratio, 1.0, rtol=2e-2 / distance)
 
 
+def test_far_charge_field_holds_where_the_closed_form_does():
+    """Each density alone, those of no net charge too, at 16 sides, where both
+    are accurate: the new field against one known right, not against itself."""
+    rng = np.random.default_rng(3)
+    V = rng.normal(size=(30, 3, 3))
+    fr = frames(V)
+    side = np.linalg.norm(V - V[:, [1, 2, 0]], axis=2).max(1)
+    away = rng.normal(size=(10, 3))
+    away /= np.linalg.norm(away, axis=1)[:, None]
+    for k in range(len(V)):
+        one = tuple(f[[k]] for f in fr)
+        X = fr[0][k] + 16 * side[k] * away
+        for density in np.eye(3):
+            closed = charge_field(X, V[[k]], one, density[None])
+            far = charge_field_far(X, *far_points(V[[k]], one, density[None]))
+            assert np.abs(far - closed).max() < 1e-5 * np.abs(closed).max()
+
+
 def test_field_of_near_and_far_observers_together_is_each_on_its_own(monkeypatch):
-    """Each pair chooses alone, so neither a near observer in the call nor the
-    number of threads changes what a far one sees."""
+    """Each observer chooses for a whole sheet, so neither the others in the call
+    nor running each on a thread of its own changes what it sees."""
     solved = _solved_bars()
     X = np.array([[0.0, 0.0, 0.003], [0.0, 0.0, 0.4], [5.0, 0.0, 0.0], [0.0, 0.9, 0.1]])
     alone = np.vstack([solved.getH(x) for x in X])
     np.testing.assert_allclose(solved.getH(X), alone, rtol=1e-12)
     monkeypatch.setattr(magpy.defaults, "threads", 3)
+    monkeypatch.setattr(_parallel, "MIN_WORK", 0)
+    monkeypatch.setattr(_sheet, "CHUNK", 1)
     np.testing.assert_allclose(solved.getH(X), alone, rtol=1e-12)
 
 

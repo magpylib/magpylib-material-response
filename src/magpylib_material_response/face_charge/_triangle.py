@@ -50,8 +50,23 @@ def frames(V):
 
 
 _EDGES = ((0, 1), (1, 2), (2, 0))
-# barycentric coordinates of the three points of :func:`charge_field_far`
-_FAR_POINTS = np.array([[4, 1, 1], [1, 4, 1], [1, 1, 4]]) / 6.0
+# the six points of :func:`charge_field_far`, exact to degree 4 (Dunavant 1985):
+# barycentric coordinates and weights. Three points, to degree 2, are 9e-4 off at
+# 128 sides on a triangle whose own charge sums to zero, the closed form 4e-6
+_FAR_A, _FAR_B = 0.816847572980459, 0.091576213509771
+_FAR_C, _FAR_D = 0.108103018168070, 0.445948490915965
+_FAR_POINTS = np.array(
+    [
+        [_FAR_A, _FAR_B, _FAR_B],
+        [_FAR_B, _FAR_A, _FAR_B],
+        [_FAR_B, _FAR_B, _FAR_A],
+        [_FAR_C, _FAR_D, _FAR_D],
+        [_FAR_D, _FAR_C, _FAR_D],
+        [_FAR_D, _FAR_D, _FAR_C],
+    ]
+)
+_FAR_WEIGHTS = np.array([0.109951743655322] * 3 + [0.223381589678011] * 3)
+_FAR_WEIGHTS /= _FAR_WEIGHTS.sum()
 
 
 def _r_plus_l(R, l, R02):
@@ -134,18 +149,27 @@ def charge_field(X, V, fr, c):
     return Fu @ e1 + Fv @ e2 + Fw @ n
 
 
-def charge_field_far(X, V, fr, c):
-    """:func:`charge_field` for observers far from the triangles, at three points on
-    each. Far away the closed form's terms cancel, and summed over triangles whose
-    net charge is zero its error grows with distance: 14 % at 100 times a model's
-    size, against 1e-10 here. From 128 sides, a triangle's error is 5e-7."""
+def far_points(V, fr, c):
+    """The points of :func:`charge_field_far` on each triangle (6, N, 3) and the
+    charge each stands for (6, N)."""
     centroid, _, e1, e2, s, area = fr
-    y = (_FAR_POINTS[:, None, None] @ V)[:, :, 0]  # (3, N, 3)
+    y = np.einsum("gk,nkd->gnd", _FAR_POINTS, V)
     u, v = _dot(y - centroid, e1), _dot(y - centroid, e2)
-    charge = (c[:, 0] + (c[:, 1] * u + c[:, 2] * v) / s) * area / 3
-    d = X[:, None, None] - y  # (M, 3, N, 3)
-    r2 = _dot(d, d)
-    return ((charge / (r2 * np.sqrt(r2)))[..., None] * d).sum((1, 2))
+    density = c[:, 0] + (c[:, 1] * u + c[:, 2] * v) / s
+    return y, _FAR_WEIGHTS[:, None] * density * area
+
+
+def charge_field_far(X, y, charge):
+    """:func:`charge_field` for observers far from the triangles, at the
+    :func:`far_points` on them. Far away the closed form's terms cancel, and summed
+    over triangles whose net charge is zero its error grows with distance: 14 % at
+    100 times a model's size, against 1e-10 here. From 64 sides, a triangle whose
+    own charge sums to zero is 6e-8 off; beyond about 1e102 the field is 0."""
+    d = [X[:, k, None, None] - y[..., k] for k in range(3)]
+    with np.errstate(over="ignore", invalid="ignore"):
+        r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+        scale = charge / (r2 * np.sqrt(r2))
+        return np.stack([(scale * dk).sum((1, 2)) for dk in d], axis=1)
 
 
 def normal_field(X, V, fr, pairs=False):
