@@ -16,6 +16,7 @@ from scipy.spatial.transform import Rotation
 from magpylib_material_response.demag import (
     _get_susceptibility_from_hierarchy,
     _has_path,
+    _report_fixed_magnets,
     get_H_ext,
 )
 from magpylib_material_response.face_charge._bodies import (
@@ -46,9 +47,6 @@ MARK = 0.5  # a refinement round splits panels above this share of the largest j
 # alone: 1 mm away, 1.4 and 0.35 % off in the worst direction with 320 and 1280
 # facets at levels 1 and 3, 0.19 and 0.05 % on its axes
 FACETS = 12
-POINTS_PER_CALL = (
-    5_000  # external-field points per magpylib call: a coil at many points takes GBs
-)
 
 
 def apply_face_charge(
@@ -109,7 +107,8 @@ def apply_face_charge(
         A copy of the collection in which each solved part is replaced by a
         :class:`ChargeSheet` carrying its solved surface charge, at the same
         place in the hierarchy and with its label; the other sources are
-        copied as they are. Like a collection solved by ``apply_demag``, its
+        copied as they are. A collection holding a sheet is no longer sealed:
+        magpylib-studio lists each sheet. Like a collection solved by ``apply_demag``, its
         field excludes the applied field ``H_ext``. Fields hold outside the
         solved parts: inside one, ``getB`` gives mu0 H, without the part's own
         magnetization, which depends on the field of every source at once; for
@@ -202,22 +201,20 @@ def apply_face_charge(
         # continuous across a magnet's face, where a magnet touching a solved
         # part has its Gauss points; magpylib gives H there from inside the
         # magnet, which is (B - J) / mu0
-        H = np.zeros((len(points), 3))
-        if fixed:
-            for a in range(0, len(points), POINTS_PER_CALL):
-                chunk = points[a : a + POINTS_PER_CALL]
-                with np.errstate(invalid="ignore", divide="ignore"):
-                    B = magpy.getB(fixed, chunk, sumup=True)
-                    # close to a magnet's edge magpylib can give NaN; the field is
-                    # singular there but integrable: take it a little off, a step
-                    # 100 times longer each time it is still NaN
-                    for step in nudges:
-                        bad = ~np.isfinite(B).all(axis=1)
-                        if not bad.any():
-                            break
-                        B[bad] = magpy.getB(fixed, chunk[bad] + step, sumup=True)
-                H[a : a + POINTS_PER_CALL] = B / magpy.mu_0
-        return H
+        if not fixed:
+            return np.zeros((len(points), 3))
+        # one call: magpylib computes many segments at many points in chunks
+        with np.errstate(invalid="ignore", divide="ignore"):
+            B = magpy.getB(fixed, points, sumup=True)
+            # close to a magnet's edge magpylib can give NaN; the field is
+            # singular there but integrable: take it a little off, a step
+            # 100 times longer each time it is still NaN
+            for step in nudges:
+                bad = ~np.isfinite(B).all(axis=1)
+                if not bad.any():
+                    break
+                B[bad] = magpy.getB(fixed, points[bad] + step, sumup=True)
+        return B / magpy.mu_0
 
     for rnd in range(refine + 1):
         unknowns = sum(b.n_dofs for b in bodies)
@@ -287,7 +284,7 @@ def apply_face_charge(
         [_hidden(s, b, bodies, outlines) for s, b in zip(sheets, bodies, strict=True)],
     )
     for sheet in sheets:
-        sheet._saturation = full
+        sheet.style.charge.level = full
 
     # each solved cuboid's copy gives way to its sheet, in the same place among
     # its parent's children
@@ -313,6 +310,12 @@ def apply_face_charge(
         children = [replace.get(id(child), child) for child in parent.children]
         parent.remove(*parent.children)
         parent.add(*children)
+        # a mesh no more, up to the top: its sheets stand on their own
+        above = parent
+        while above is not None:
+            if getattr(above, "sealed", False):
+                above.sealed = False
+            above = above.parent
     out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
     return out
 
@@ -327,6 +330,9 @@ def _split(collection):
     if any(_has_path(obj) for obj in (collection, *collection.sources_all)):
         msg = "apply_face_charge solves one configuration; objects moving along paths are not supported."
         raise NotImplementedError(msg)
+    _report_fixed_magnets(
+        [src for src in collection.sources_all if isinstance(src, BaseMagnet)]
+    )
     solved, fixed = [], []
     for src in collection.sources_all:
         if not isinstance(src, BaseMagnet):

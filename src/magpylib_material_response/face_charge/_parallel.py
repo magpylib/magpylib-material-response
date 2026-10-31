@@ -8,7 +8,6 @@ sized so that all of them together take the memory one took alone.
 from __future__ import annotations
 
 import os
-import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -36,22 +35,8 @@ if hasattr(os, "register_at_fork"):  # not on Windows
 
 
 def threads():
-    """The threads to run on: magpylib's ``defaults.threads`` where magpylib
-    has it, else counted as it counts them: the CPUs this process may use, up
-    to 8, and one in WebAssembly builds such as Pyodide, which cannot start
-    threads."""
-    count = getattr(magpy.defaults, "threads", None)
-    if count is None:
-        if sys.platform in ("emscripten", "wasi"):
-            return 1
-        if hasattr(os, "process_cpu_count"):  # Python 3.13+
-            count = os.process_cpu_count()
-        elif hasattr(os, "sched_getaffinity"):  # Linux
-            count = len(os.sched_getaffinity(0))
-        else:
-            count = os.cpu_count()
-        count = min(8, count or 1)
-    return max(1, int(count))
+    """The threads to run on: magpylib's ``defaults.threads``."""
+    return max(1, int(magpy.defaults.threads))
 
 
 def _mark(fn):

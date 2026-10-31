@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from validation import references, report
+from validation import references, report, timing
 from validation.cases import CASES, select
 from validation.methods import METHODS
 from validation.run import PR_CHECK, refusal, run
@@ -111,3 +111,54 @@ def test_select_by_feature():
     ]
     with pytest.raises(ValueError, match="No case has"):
         select(features=["Tetrahedra"])
+
+
+@pytest.mark.parametrize(
+    ("then", "now", "cell", "flagged"),
+    [
+        (200e6, 290e6, "⚪ 200 MB → 290 MB", False),  # within the noise
+        (1158e6, 1380e6, "🔴 1.16 GB → **1.38 GB**", True),
+        (3.99e9, 280e6, "🟢 3.99 GB → 280 MB", False),
+        (None, 280e6, "280 MB", False),  # not on the base
+        (200e6, None, "🔴 **failed**", True),
+    ],
+)
+def test_timing_flags_memory(then, now, cell, flagged):
+    assert timing._memory_cell(then, now) == (cell, flagged)
+
+
+def test_every_timed_case_has_a_picture():
+    names = [f"{c}-{m}.png" for c, by_method in STORED.items() for m in by_method]
+    assert not [n for n in names if not (timing.PICTURES / n).exists()]
+
+
+def test_timing_comment_shows_memory(tmp_path, monkeypatch):
+    pytest.importorskip("resource")  # not on Windows
+    monkeypatch.setattr(timing, "MORE_MEMORY", 1e6)
+    small, broken = "gmres_stops, FaceCharge", "gmres_stops, magpylib"
+    monkeypatch.setattr(
+        timing,
+        "_pr_check",
+        lambda: [
+            (small, "gmres_stops", "FaceCharge", 2),
+            (broken, "gmres_stops", "magpylib", 0),  # not in the PR check
+        ],
+    )
+    timing.memory(tmp_path / "memory-head.json")
+    peaks = json.loads((tmp_path / "memory-head.json").read_text())
+    assert 1e7 < peaks[small] < 1e10  # in bytes
+    assert peaks[broken] is None
+
+    (tmp_path / "memory-base.json").write_text(json.dumps({small: peaks[small] // 2}))
+    round_ = {
+        "version": "1",
+        "versions": {"magpylib": "6", "magpylib_threads": 8, "cpus": 4},
+        "times": {key: {"solve": 1.0} for key in peaks},
+    }
+    for name in ("base-1.json", "head-1.json"):
+        (tmp_path / name).write_text(json.dumps(round_))
+    comment = timing.compare(tmp_path)
+    assert f"Over 1 MB more memory, or failed: {small}; {broken}." in comment
+    assert "**failed**" in comment
+    assert timing.TAGS["FaceCharge"] in comment
+    assert "served/gmres_stops-FaceCharge.png" in timing.compare(tmp_path, "served")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from itertools import product
 
 import magpylib as magpy
@@ -360,3 +361,47 @@ def trimesh_from_model3d(shape, polarization, **make_kwargs):
         vertices=vertices,
         faces=faces,
     )
+
+
+def set_values(style):
+    """A style's nested dict with only what is set."""
+    out = {}
+    for key, given in style.items():
+        value = set_values(given) if isinstance(given, dict) else given
+        if value is not None and not (isinstance(value, dict) and not value):
+            out[key] = value
+    return out
+
+
+def inherited(obj, name):
+    """The attribute `name` of `obj`, or of its nearest parent that has it."""
+    value = getattr(obj, name, None)
+    parent = obj.parent
+    while value is None and parent is not None:
+        value = getattr(parent, name, None)
+        parent = parent.parent
+    return value
+
+
+def detached_copy(obj, **kwargs):
+    """A copy of `obj`, which has no parent: the applied field and the
+    susceptibility `obj` inherits from its parents are set on the copy, or it
+    would lose them."""
+    copied = obj.copy(**kwargs)
+    for name in ("H_ext", "susceptibility"):
+        if getattr(obj, name, None) is None:
+            value = inherited(obj, name)
+            if value is not None:
+                setattr(copied, name, copy.deepcopy(value))
+    return copied
+
+
+def take_place(meshed, part, parent):
+    """`meshed` in `part`'s place under `parent`, inheriting from it as `part`
+    did: what the mesher read from above stays above, and a later change there
+    still reaches the cells."""
+    for name in ("H_ext", "susceptibility"):
+        if getattr(part, name, None) is None and hasattr(meshed, name):
+            delattr(meshed, name)
+    part.parent = None
+    parent.add(meshed)

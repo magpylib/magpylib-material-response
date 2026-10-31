@@ -29,12 +29,13 @@ B = solved.getB((0, 0, 0.0035))
 
 The result is a copy of the collection in which the plate is a `ChargeSheet`, an
 ordinary magpylib source: `getB`, observer paths, `show()` and `to_json` work as
-for any other; magpylib-studio does not draw it yet. A cuboid whose
-susceptibility is exactly 0 is not solved and stays as it was. `show()` colours
-the solved charge in the magnet colours, positive charge being a north pole;
-`style.mesh.grid.show` draws the panels. The colour is full at the charge that
-95 % of the surface stays below, not at the singular peak in a corner, and the
-parts solved together share it, so their colours compare.
+for any other, and magpylib-studio after 0.9 draws it in a `SceneWidget`, beside
+field lines. A cuboid whose susceptibility is exactly 0 is not solved and stays
+as it was. `show()` colours the solved charge in the magnet colours, positive
+charge being a north pole; `style.mesh.grid.show` draws the panels. The colour
+is full at the charge that 95 % of the surface stays below, not at the singular
+peak in a corner, and the parts solved together share it, so their colours
+compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
 
 ![The plate under the magnet: the plate turns north (red) under the magnet's south face and south (green) where the flux returns, on its rim and sides; level 3 with its panels drawn, and level 5.](_static/images/face_charge_plate.png)
 
@@ -175,7 +176,7 @@ solve and `getB` together, one run each on an Apple M4 Pro; finite elements are
 | ---------------------------- | -----------------: | ---------: | -------------------: | -----------: |
 | Three cuboids, turned        |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
 | Magnet beside a soft cube    |             0.02 s |      2.3 s |               0.10 s |        2.3 s |
-| U-core driven by a coil      |             0.13 s |      8.5 s |                  – ¹ |          – ¹ |
+| U-core driven by a coil      |             0.07 s |      4.5 s |                  – ¹ |          – ¹ |
 | Flux concentrator            |             0.04 s |     0.83 s |               0.05 s |        3.3 s |
 | Halbach array on back iron   |             0.06 s |      1.5 s |               0.06 s |        6.3 s |
 | Iron cube in 10 mT           |             0.04 s |     0.52 s |               0.04 s |        2.0 s |

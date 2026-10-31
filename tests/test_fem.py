@@ -161,6 +161,9 @@ def test_sensors_are_read_in_their_own_frames():
     np.testing.assert_allclose(
         solution.getB(sensor), sensor.orientation.inv().apply(at_pixels), atol=1e-15
     )
+    np.testing.assert_array_equal(
+        solution.getB(magpy.Collection(sensor.copy())), solution.getB(sensor)
+    )
     with pytest.warns(UserWarning, match="Two orders give no error estimate"):
         study = fem_study(model, sensor, (1, 2), edge_layers=0)
     np.testing.assert_allclose(study.values[-1], study.solution.getB(sensor))

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
+import os
 import platform
 import sys
 from pathlib import Path
@@ -64,15 +65,24 @@ def run(case, method, setting):
         "known_failure": case.known_failures.get(method.name),
         "seconds": solved.seconds,
         "counts": solved.counts,
-        "versions": {
-            "magpylib_material_response": magpylib_material_response.__version__,
-            "magpylib": magpy.__version__,
-            "numpy": np.__version__,
-            "scipy": _version("scipy"),
-            "ngsolve": _version("ngsolve"),
-            "python": platform.python_version(),
-            "machine": f"{platform.system()} {platform.machine()}",
-        },
+        "versions": versions(),
+    }
+
+
+def versions():
+    """What a time depends on besides the code: the versions, and the threads
+    magpylib computes fields on (one before ``defaults.threads``) on this many
+    CPUs."""
+    return {
+        "magpylib_material_response": magpylib_material_response.__version__,
+        "magpylib": magpy.__version__,
+        "magpylib_threads": getattr(magpy.defaults, "threads", 1),
+        "cpus": os.cpu_count(),
+        "numpy": np.__version__,
+        "scipy": _version("scipy"),
+        "ngsolve": _version("ngsolve"),
+        "python": platform.python_version(),
+        "machine": f"{platform.system()} {platform.machine()}",
     }
 
 

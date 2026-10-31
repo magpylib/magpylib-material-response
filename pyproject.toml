@@ -30,14 +30,14 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "magpylib>=6.0",
+  "magpylib>=6.1",
   "loguru>=0.5.0",
   # NumPy's error state is per thread from 2.0; in 1.x it races between
   # threads, and face charge, which runs on threads, warned of divisions it
   # had told NumPy to ignore. 2.0.0 gave np.unique(..., axis=0) a 2-D inverse
   # (85 tests fail); 2.0.1 took it back
   "numpy>=2.0.1",
-  "scipy>=1.17",
+  "scipy>=1.17.1",  # as magpylib 6.1
 ]
 
 [project.optional-dependencies]
@@ -70,8 +70,8 @@ docs = [
   "plotly>=6.7",
   "magpylib-material-response[tetgen,fem]",
   # 3D views with field lines, saved into the pages; 0.7.1 draws unsolved soft
-  # parts in the neutral colour.
-  "magpylib-studio[widget]>=0.7.1",
+  # parts in the neutral colour, 0.8 a sealed mesh as one object.
+  "magpylib-studio[widget]>=0.8",
 ]
 
 [tool.hatch]
