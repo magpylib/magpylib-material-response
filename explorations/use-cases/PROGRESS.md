@@ -139,6 +139,18 @@ A solve per frame of a magnet moving over the plate, ms (studio #96):
 | 4 | 2,520 | 141 | 30 |
 | 5 | 4,104 | 377 | 50 |
 
+### From several threads (`c8_threads.py`)
+
+The same calls on 4 and 16 threads, against a serial run without the cache:
+
+- as first pushed, swapping `_bodies._solve` on a miss: 800 calls, 126 failed, 126 wrong, worst 2e-01;
+- with a lock and a thread-local instead: 800 calls, 0 failed, 63 wrong, worst 6e-02;
+- with a copy of the pivots per back-substitution too: 1,600 calls, 0 failed, 0 wrong, worst 8e-15.
+
+`scipy.linalg.lu_solve` changes the pivots during a call and puts them back, so
+threads sharing them solve with wrong ones, and can leave them wrong. Seen on
+scipy 1.15.3 to 1.18.1 with Accelerate.
+
 ### Why "rigid" is the wrong test for a path (`c7_frozen_layout.py`)
 
 Everything kept from a path's first step, against a full solve at each position.

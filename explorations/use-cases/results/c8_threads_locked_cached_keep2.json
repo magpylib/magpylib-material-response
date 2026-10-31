@@ -1,0 +1,263 @@
+{
+ "label": "locked",
+ "mode": "cached",
+ "keep_after": 2,
+ "rows": [
+  {
+   "workload": "one matrix, hits",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 12.772851050249301,
+   "stats": {
+    "hits": 78,
+    "misses": 2,
+    "factored": 1,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "one matrix, hits",
+   "workers": 4,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 18,
+   "worst_relative_error": 0.06120417491282904,
+   "errors": [],
+   "ms_per_call": 14.32829218756524,
+   "stats": {
+    "hits": 76,
+    "misses": 4,
+    "factored": 3,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "one matrix, hits",
+   "workers": 16,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 3,
+   "worst_relative_error": 0.05566417106350047,
+   "errors": [],
+   "ms_per_call": 68.5967098994297,
+   "stats": {
+    "hits": 64,
+    "misses": 16,
+    "factored": 15,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "two matrices in turn",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 13.725048437481746,
+   "stats": {
+    "hits": 76,
+    "misses": 4,
+    "factored": 2,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "two matrices in turn",
+   "workers": 4,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 11,
+   "worst_relative_error": 0.056797366586504985,
+   "errors": [],
+   "ms_per_call": 13.511937500152271,
+   "stats": {
+    "hits": 76,
+    "misses": 4,
+    "factored": 2,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "two matrices in turn",
+   "workers": 16,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 2,
+   "worst_relative_error": 0.05318239763358366,
+   "errors": [],
+   "ms_per_call": 72.35145521262893,
+   "stats": {
+    "hits": 63,
+    "misses": 17,
+    "factored": 15,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "eight matrices, evicting",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 34.30361927457852,
+   "stats": {
+    "hits": 27,
+    "misses": 53,
+    "factored": 45,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "eight matrices, evicting",
+   "workers": 4,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 60.54837499978021,
+   "stats": {
+    "hits": 26,
+    "misses": 54,
+    "factored": 46,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "eight matrices, evicting",
+   "workers": 16,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 120.79305781298899,
+   "stats": {
+    "hits": 25,
+    "misses": 55,
+    "factored": 47,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a new matrix each time",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 50.111676049709786,
+   "stats": {
+    "hits": 0,
+    "misses": 80,
+    "factored": 40,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a new matrix each time",
+   "workers": 4,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 89.6627869879012,
+   "stats": {
+    "hits": 0,
+    "misses": 80,
+    "factored": 40,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a new matrix each time",
+   "workers": 16,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 121.43013802487985,
+   "stats": {
+    "hits": 0,
+    "misses": 80,
+    "factored": 40,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a mesh and cuboids mixed",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 7.571325203465034e-15,
+   "errors": [],
+   "ms_per_call": 44.43150156221236,
+   "stats": {
+    "hits": 76,
+    "misses": 4,
+    "factored": 2,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a mesh and cuboids mixed",
+   "workers": 4,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 23,
+   "worst_relative_error": 0.057638055913064215,
+   "errors": [],
+   "ms_per_call": 51.140466137439944,
+   "stats": {
+    "hits": 73,
+    "misses": 7,
+    "factored": 5,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a mesh and cuboids mixed",
+   "workers": 16,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 6,
+   "worst_relative_error": 0.04006427022738404,
+   "errors": [],
+   "ms_per_call": 177.78450677506044,
+   "stats": {
+    "hits": 56,
+    "misses": 24,
+    "factored": 22,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  }
+ ],
+ "peak_rss_gb": 3.86
+}

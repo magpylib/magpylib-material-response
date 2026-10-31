@@ -2,116 +2,117 @@
  "samples": 1000,
  "magpylib": "6.1.0",
  "material_response": "0.7.1.dev3+g070b0dce0",
- "per_sample_ms": 20.092988041986246,
+ "per_sample_ms": 19.758371290983632,
  "checked": 50,
  "check_max_abs_error_T": 0.0,
  "stats": {
   "hits": 1149,
   "misses": 1,
+  "factored": 1,
   "too_big": 0
  },
  "Bz_mean_mT": 106.45538679341928,
  "where_ms_per_call_profiled": [
   [
-   20.85,
+   20.63,
    1,
    "apply_face_charge",
    "_apply.py",
    52
   ],
   [
-   8.53,
+   8.46,
    1,
    "load",
    "_panels.py",
    200
   ],
   [
-   8.53,
+   8.46,
    1,
    "load",
    "_bodies.py",
    171
   ],
   [
-   8.52,
+   8.45,
    2,
    "_load",
    "_panels.py",
    212
   ],
   [
-   7.82,
+   7.75,
    3,
    "getB",
    "field_BH.py",
    598
   ],
   [
-   7.22,
+   7.16,
    2,
    "external",
    "_apply.py",
    199
   ],
   [
-   6.58,
+   6.54,
    2,
    "_corner_groups",
    "_sheet.py",
    265
   ],
   [
-   4.07,
+   4.04,
    1,
    "saturation",
    "_sheet.py",
    469
   ],
   [
-   3.46,
+   3.44,
    1,
    "_panel_jumps",
    "_sheet.py",
    239
   ],
   [
-   3.3,
+   3.28,
    1,
    "_smoothed",
    "_sheet.py",
    390
   ],
   [
-   2.18,
+   2.16,
    1,
    "_sheet_of",
    "_apply.py",
    738
   ],
   [
-   2.18,
+   2.16,
    1,
    "_from_body",
    "_sheet.py",
    427
   ],
   [
-   1.93,
+   1.91,
    1,
    "from_triangles",
    "_sheet.py",
    415
   ],
   [
-   1.17,
+   1.16,
    1,
    "__init__",
    "_sheet.py",
    81
   ],
   [
-   1.04,
+   0.99,
    1,
    "lu_solve",
    "_decomp_lu.py",
@@ -146,26 +147,26 @@
    65
   ],
   [
-   0.75,
+   0.74,
    2,
    "gauss_points",
    "_panels.py",
    140
   ],
   [
-   0.74,
+   0.73,
    2,
    "_gauss_points",
    "_panels.py",
    151
   ],
   [
-   0.72,
+   0.71,
    1,
    "meshed",
    "_apply.py",
    163
   ]
  ],
- "peak_rss_gb": 0.57
+ "peak_rss_gb": 0.53
 }

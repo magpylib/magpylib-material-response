@@ -1,0 +1,284 @@
+{
+ "label": "as_is",
+ "mode": "cached",
+ "keep_after": 2,
+ "rows": [
+  {
+   "workload": "one matrix, hits",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 12.802553125220584,
+   "stats": {
+    "hits": 78,
+    "misses": 2,
+    "factored": 1,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "one matrix, hits",
+   "workers": 4,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 16,
+   "worst_relative_error": 0.06006883716687885,
+   "errors": [],
+   "ms_per_call": 13.668579174554907,
+   "stats": {
+    "hits": 76,
+    "misses": 4,
+    "factored": 3,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "one matrix, hits",
+   "workers": 16,
+   "calls": 80,
+   "failed": 15,
+   "wrong": 4,
+   "worst_relative_error": 0.054934377919826895,
+   "errors": [
+    "KeyError: 'lu'"
+   ],
+   "ms_per_call": 79.34878750020289,
+   "stats": {
+    "hits": 55,
+    "misses": 25,
+    "factored": 24,
+    "too_big": 0
+   },
+   "solve_left_patched": true
+  },
+  {
+   "workload": "two matrices in turn",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 13.765206775133265,
+   "stats": {
+    "hits": 76,
+    "misses": 4,
+    "factored": 2,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "two matrices in turn",
+   "workers": 4,
+   "calls": 80,
+   "failed": 2,
+   "wrong": 53,
+   "worst_relative_error": 0.12390686252678561,
+   "errors": [
+    "KeyError: 'lu'"
+   ],
+   "ms_per_call": 16.31907240007422,
+   "stats": {
+    "hits": 73,
+    "misses": 7,
+    "factored": 5,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "two matrices in turn",
+   "workers": 16,
+   "calls": 80,
+   "failed": 10,
+   "wrong": 11,
+   "worst_relative_error": 0.054679599544104326,
+   "errors": [
+    "KeyError: 'lu'"
+   ],
+   "ms_per_call": 76.49005833736737,
+   "stats": {
+    "hits": 57,
+    "misses": 23,
+    "factored": 21,
+    "too_big": 0
+   },
+   "solve_left_patched": true
+  },
+  {
+   "workload": "eight matrices, evicting",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 34.51015468745027,
+   "stats": {
+    "hits": 27,
+    "misses": 53,
+    "factored": 45,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "eight matrices, evicting",
+   "workers": 4,
+   "calls": 80,
+   "failed": 20,
+   "wrong": 13,
+   "worst_relative_error": 0.17167567044561627,
+   "errors": [
+    "KeyError: 'lu'",
+    "ValueError: operands could not be broadcast together with shapes (769,) (840,) (769,) "
+   ],
+   "ms_per_call": 60.555122912774095,
+   "stats": {
+    "hits": 23,
+    "misses": 57,
+    "factored": 49,
+    "too_big": 0
+   },
+   "solve_left_patched": true
+  },
+  {
+   "workload": "eight matrices, evicting",
+   "workers": 16,
+   "calls": 80,
+   "failed": 31,
+   "wrong": 6,
+   "worst_relative_error": 0.010477765295037932,
+   "errors": [
+    "KeyError: 'lu'",
+    "ValueError: operands could not be broadcast together with shapes (769,) (840,) (769,) "
+   ],
+   "ms_per_call": 95.00881562489667,
+   "stats": {
+    "hits": 20,
+    "misses": 60,
+    "factored": 52,
+    "too_big": 0
+   },
+   "solve_left_patched": true
+  },
+  {
+   "workload": "a new matrix each time",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [],
+   "ms_per_call": 43.17539999974542,
+   "stats": {
+    "hits": 0,
+    "misses": 80,
+    "factored": 40,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a new matrix each time",
+   "workers": 4,
+   "calls": 80,
+   "failed": 10,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [
+    "KeyError: 'lu'"
+   ],
+   "ms_per_call": 77.01938437530771,
+   "stats": {
+    "hits": 0,
+    "misses": 80,
+    "factored": 40,
+    "too_big": 0
+   },
+   "solve_left_patched": true
+  },
+  {
+   "workload": "a new matrix each time",
+   "workers": 16,
+   "calls": 80,
+   "failed": 17,
+   "wrong": 0,
+   "worst_relative_error": 0.0,
+   "errors": [
+    "KeyError: 'lu'"
+   ],
+   "ms_per_call": 99.5455640630098,
+   "stats": {
+    "hits": 0,
+    "misses": 80,
+    "factored": 40,
+    "too_big": 0
+   },
+   "solve_left_patched": true
+  },
+  {
+   "workload": "a mesh and cuboids mixed",
+   "workers": 1,
+   "calls": 80,
+   "failed": 0,
+   "wrong": 0,
+   "worst_relative_error": 7.571325203465034e-15,
+   "errors": [],
+   "ms_per_call": 43.46082604970434,
+   "stats": {
+    "hits": 76,
+    "misses": 4,
+    "factored": 2,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a mesh and cuboids mixed",
+   "workers": 4,
+   "calls": 80,
+   "failed": 2,
+   "wrong": 6,
+   "worst_relative_error": 0.05098798008120547,
+   "errors": [
+    "KeyError: 'lu'"
+   ],
+   "ms_per_call": 50.325458337465534,
+   "stats": {
+    "hits": 73,
+    "misses": 7,
+    "factored": 5,
+    "too_big": 0
+   },
+   "solve_left_patched": false
+  },
+  {
+   "workload": "a mesh and cuboids mixed",
+   "workers": 16,
+   "calls": 80,
+   "failed": 19,
+   "wrong": 17,
+   "worst_relative_error": 0.039252647678526,
+   "errors": [
+    "KeyError: 'lu'",
+    "ValueError: operands could not be broadcast together with shapes (769,) (3288,) (769,) "
+   ],
+   "ms_per_call": 167.6655234376085,
+   "stats": {
+    "hits": 55,
+    "misses": 25,
+    "factored": 23,
+    "too_big": 0
+   },
+   "solve_left_patched": true
+  }
+ ],
+ "peak_rss_gb": 3.87
+}

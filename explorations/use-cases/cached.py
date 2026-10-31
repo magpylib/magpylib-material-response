@@ -13,11 +13,16 @@ A matrix seen once may never come back, and a double LU takes longer than the
 mixed-precision solve and stays in memory, so it is factored only when its key
 comes back: KEEP_AFTER calls in all, then kept. Each lookup's hit costs a load
 and a back-substitution.
+
+Safe from a user's threads (c8_threads.py): what is kept is behind a lock, a
+thread's factorization goes through a thread-local rather than a swap of
+_bodies._solve, and each back-substitution takes its own copy of the pivots.
 """
 
 from __future__ import annotations
 
 import hashlib
+import threading
 from collections import OrderedDict
 
 import numpy as np
@@ -34,6 +39,9 @@ SEEN = 256  # matrices remembered by their key alone
 _kept = OrderedDict()
 _seen = OrderedDict()  # key: calls
 _solve_system = _bodies.solve_system
+_mixed_solve = _bodies._solve
+_lock = threading.Lock()
+_local = threading.local()
 stats = {"hits": 0, "misses": 0, "factored": 0, "too_big": 0}
 
 
@@ -66,39 +74,42 @@ def key_of(bodies, joined):
 def solve_system(bodies, external, joined=None):
     """As _bodies.solve_system, keeping the factorization between calls."""
     key = key_of(bodies, joined)
-    lu = _kept.get(key)
+    with _lock:
+        lu = _kept.get(key)
+        if lu is None:
+            stats["misses"] += 1
+            calls = _seen[key] = _seen.pop(key, 0) + 1
+            while len(_seen) > SEEN:
+                _seen.popitem(last=False)
+        else:
+            stats["hits"] += 1
+            _kept.move_to_end(key)
     offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
 
     if lu is None:
-        stats["misses"] += 1
-        calls = _seen[key] = _seen.pop(key, 0) + 1
-        while len(_seen) > SEEN:
-            _seen.popitem(last=False)
         if calls < KEEP_AFTER:
             return _solve_system(bodies, external, joined)
-        stats["factored"] += 1
         seen = {}
 
         def factor(A, b):
             seen["lu"] = scipy.linalg.lu_factor(A, overwrite_a=True, check_finite=False)
             return scipy.linalg.lu_solve(seen["lu"], b, check_finite=False)
 
-        solve, _bodies._solve = _bodies._solve, factor
+        _local.factor = factor
         try:
             coefs = _solve_system(bodies, external, joined)
         finally:
-            _bodies._solve = solve
-        bytes_ = seen["lu"][0].nbytes
-        if bytes_ > MAX_BYTES:
-            stats["too_big"] += 1
-            return coefs
-        _kept[key] = seen["lu"]
-        while sum(v[0].nbytes for v in _kept.values()) > MAX_BYTES:
-            _kept.popitem(last=False)
+            _local.factor = None
+        with _lock:
+            stats["factored"] += 1
+            if seen["lu"][0].nbytes > MAX_BYTES:
+                stats["too_big"] += 1
+                return coefs
+            _kept[key] = seen["lu"]
+            while sum(v[0].nbytes for v in _kept.values()) > MAX_BYTES:
+                _kept.popitem(last=False)
         return coefs
 
-    stats["hits"] += 1
-    _kept.move_to_end(key)
     rhs = np.zeros(len(lu[0]))
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
@@ -116,19 +127,29 @@ def solve_system(bodies, external, joined=None):
                 + (3 * np.flatnonzero(shared)[:, None] + np.arange(3)).ravel()
             )
             rhs[dofs] = 0.0
-    x = scipy.linalg.lu_solve(lu, rhs, check_finite=False)
+    # its own pivots: lu_solve changes them during the call and puts them back,
+    # so threads sharing them solve with wrong ones and can leave them wrong
+    x = scipy.linalg.lu_solve((lu[0], lu[1].copy()), rhs, check_finite=False)
     return [x[offsets[k] : offsets[k + 1]] for k in range(len(bodies))]
+
+
+def _dispatch(A, b):
+    factor = getattr(_local, "factor", None)
+    return factor(A, b) if factor is not None else _mixed_solve(A, b)
 
 
 def install():
     _apply.solve_system = solve_system
+    _bodies._solve = _dispatch
 
 
 def uninstall():
     _apply.solve_system = _solve_system
+    _bodies._solve = _mixed_solve
 
 
 def clear():
-    _kept.clear()
-    _seen.clear()
-    stats.update(hits=0, misses=0, factored=0, too_big=0)
+    with _lock:
+        _kept.clear()
+        _seen.clear()
+        stats.update(hits=0, misses=0, factored=0, too_big=0)
