@@ -167,12 +167,7 @@ def get_susceptibilities(sources, susceptibility=None):
     if susceptibility is None:
         # Get susceptibilities from source attributes
         susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
-        if n and not any(_has_susceptibility(src) for src in sources):
-            warnings.warn(
-                "No magnet has a susceptibility, on itself or a parent collection: "
-                "every one is fixed, and nothing responds.",
-                stacklevel=_outside_this_package(),
-            )
+        _warn_if_none_responds(sources)
 
         susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
     else:
@@ -384,6 +379,17 @@ def _checked_H_ext(owner):
         )
         raise ValueError(msg)
     return value.reshape(3).astype(float)
+
+
+def _warn_if_none_responds(magnets):
+    """Warn when no magnet has a susceptibility: forgotten, or set on a parent
+    the magnets were meshed away from, it would leave every part fixed silently."""
+    if len(magnets) and not any(_has_susceptibility(src) for src in magnets):
+        warnings.warn(
+            "No magnet has a susceptibility, on itself or a parent collection: "
+            "every one is fixed, and nothing responds.",
+            stacklevel=_outside_this_package(),
+        )
 
 
 def _outside_this_package():

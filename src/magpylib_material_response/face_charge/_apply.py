@@ -16,6 +16,7 @@ from scipy.spatial.transform import Rotation
 from magpylib_material_response.demag import (
     _get_susceptibility_from_hierarchy,
     _has_path,
+    _warn_if_none_responds,
     get_H_ext,
 )
 from magpylib_material_response.face_charge._bodies import (
@@ -329,6 +330,9 @@ def _split(collection):
     if any(_has_path(obj) for obj in (collection, *collection.sources_all)):
         msg = "apply_face_charge solves one configuration; objects moving along paths are not supported."
         raise NotImplementedError(msg)
+    _warn_if_none_responds(
+        [src for src in collection.sources_all if isinstance(src, BaseMagnet)]
+    )
     solved, fixed = [], []
     for src in collection.sources_all:
         if not isinstance(src, BaseMagnet):

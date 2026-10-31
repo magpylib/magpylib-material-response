@@ -12,10 +12,13 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.meshing_utils import (
+    detached_copy,
     get_volume,
+    inherited,
     mask_inside,
     near_cubic_divisions,
     set_values,
+    take_place,
 )
 
 
@@ -25,6 +28,10 @@ def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
         for cell in cells:
             cell.susceptibility = copy.deepcopy(susceptibility)
     coll = magpy.Collection(cells)
+    if susceptibility is None:  # from its parents, which the mesh does not have
+        susceptibility = inherited(obj, "susceptibility")
+        if susceptibility is not None:
+            coll.susceptibility = copy.deepcopy(susceptibility)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
     # A cell inherits its parent's colour and nothing else of its style, and a
@@ -40,27 +47,12 @@ def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
     coll.orientation = obj.orientation
     # The applied field is uniform over the object, so it belongs to the meshed
     # collection: the cells find it there, and a later change still reaches them.
-    h_ext = getattr(obj, "H_ext", None)
+    h_ext = inherited(obj, "H_ext")
     if h_ext is not None:
         coll.H_ext = copy.deepcopy(h_ext)
     if sealed:
         coll.sealed = True  # one object made of cells, to magpylib-studio
     return coll
-
-
-def _detached_copy(obj, **kwargs):
-    """A copy of `obj`, which has no parent: the applied field and the
-    susceptibility `obj` inherits from its parents are set on the copy, or it
-    would lose them."""
-    copied = obj.copy(**kwargs)
-    for name in ("H_ext", "susceptibility"):
-        if getattr(obj, name, None) is None:
-            parent = obj.parent
-            while parent is not None and getattr(parent, name, None) is None:
-                parent = parent.parent
-            if parent is not None:
-                setattr(copied, name, copy.deepcopy(getattr(parent, name)))
-    return copied
 
 
 def mesh_Cuboid(cuboid, target_elems, verbose=False, **kwargs):
@@ -823,7 +815,7 @@ def mesh_all(
     )
     allowed = (*supported, BaseCurrent)
     if not inplace:
-        obj = _detached_copy(obj, **kwargs)
+        obj = detached_copy(obj, **kwargs)
     children = [obj]
     if isinstance(obj, magpy.Collection):
         children = list(obj.sources_all)
@@ -858,9 +850,8 @@ def mesh_all(
         elif isinstance(child, magpy.magnet.TriangularMesh):
             child_meshed = mesh_TriangularMesh(child, targ_elems, **kw)
         if child_meshed is not None:
-            child.parent = None
             if parent is not None:
-                parent.add(child_meshed)
+                take_place(child_meshed, child, parent)
             if child is obj:
                 obj = child_meshed
     return obj
@@ -973,7 +964,7 @@ def mesh_uniform(obj, cells_across, inplace=False, max_cells=1_000_000, **kwargs
         )
         raise ValueError(msg)
     if not inplace:
-        obj = _detached_copy(obj, **kwargs)
+        obj = detached_copy(obj, **kwargs)
     for child in parts(obj):
         parent = child.parent
         kw = kwargs if parent is None else {}
@@ -986,9 +977,8 @@ def mesh_uniform(obj, cells_across, inplace=False, max_cells=1_000_000, **kwargs
                 else mesh_Cylinder
             )
             meshed = mesher(child, cells_of(child, size), **kw)
-        child.parent = None
         if parent is not None:
-            parent.add(meshed)
+            take_place(meshed, child, parent)
         if child is obj:
             obj = meshed
     return obj

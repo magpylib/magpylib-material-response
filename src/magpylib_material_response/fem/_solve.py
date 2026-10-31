@@ -108,10 +108,10 @@ SHELL_MAXH = 0.125
 
 def _are_sensors(observers):
     """Whether `observers` are magpylib sensors, one or several, not positions."""
-    if isinstance(observers, magpy.Sensor):
+    if isinstance(observers, (magpy.Sensor, magpy.Collection)):
         return True
     return isinstance(observers, (list, tuple)) and any(
-        isinstance(o, magpy.Sensor) for o in observers
+        isinstance(o, (magpy.Sensor, magpy.Collection)) for o in observers
     )
 
 

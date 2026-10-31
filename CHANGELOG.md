@@ -25,8 +25,8 @@ and this project adheres to
   "FEM", in place of exports from a commercial code that no one could rerun.
   `compare` puts a `mesh_study` and a `fem_study` side by side, per observer,
   positions or magpylib sensors read in their own frames: both values, both
-  error bars, and whether they agree. In the repository, `validation/` holds 19
-  cases, 16 with a stored reference; every PR checks the method of moments
+  error bars, and whether they agree. In the repository, `validation/` holds 20
+  cases, 17 with a stored reference; every PR checks the method of moments
   against them and is timed against its base branch in a comment, and every
   night all methods climb their settings against references made again, their
   records kept on a `benchmarks` branch, and must beat magpylib alone, the model
@@ -55,10 +55,9 @@ and this project adheres to
   twice that while one large part is assembled and solved), refuses a larger one
   before it is assembled, a triangle mesh's before it is cut; without a `level`,
   the highest level up to 3 that fits is taken. It runs on magpylib's
-  `defaults.threads` threads where magpylib has that setting, otherwise on up
-  to 8. Parts of one material that touch are solved as one, and parts a gap
-  below their panels apart are graded toward each other. `to_json` saves a
-  solved collection, with the colour level its sheets share
+  `defaults.threads` threads. Parts of one material that touch are solved as
+  one, and parts a gap below their panels apart are graded toward each other.
+  `to_json` saves a solved collection, with the colour level its sheets share
   (`style.charge.level`)
   ([#89](https://github.com/magpylib/magpylib-material-response/pull/89),
   [#104](https://github.com/magpylib/magpylib-material-response/pull/104),

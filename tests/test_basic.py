@@ -385,15 +385,22 @@ def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():
     assert moment(2) == pytest.approx(moment(1), rel=0.01)
 
 
-def test_a_model_with_no_susceptibility_anywhere_warns():
-    """A part meshed away from the collection that set its susceptibility is
-    fixed: said, as it is not what was meant. An explicit 0 stays silent."""
+@pytest.mark.parametrize(
+    "solve",
+    [
+        lambda plate: apply_demag(mesh_Cuboid(plate, 8)),
+        lambda plate: apply_face_charge(magpy.Collection(plate.copy()), level=1),
+    ],
+    ids=["demag", "face charge"],
+)
+def test_a_model_with_no_susceptibility_anywhere_warns(solve):
+    """Every part fixed is said, as it is not what was meant. An explicit 0
+    stays silent."""
     plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.01,) * 3)
-    magpy.Collection(plate).susceptibility = 1000
     with pytest.warns(UserWarning, match="No magnet has a susceptibility"):
-        apply_demag(mesh_Cuboid(plate, 8))
+        solve(plate)
     plate.susceptibility = 0
-    apply_demag(mesh_Cuboid(plate, 8))
+    solve(plate)
 
 
 @pytest.mark.parametrize("solver", ["demag", "face charge", "fem"])
