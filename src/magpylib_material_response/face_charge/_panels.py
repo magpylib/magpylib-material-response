@@ -27,7 +27,26 @@ import itertools
 import numpy as np
 
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
-from magpylib_material_response.face_charge._rectangle import rectangle_field
+from magpylib_material_response.face_charge._rectangle import (
+    rectangle_field,
+    rectangle_field_far2,
+    rectangle_field_far3,
+)
+
+# (distance / longer side of the two panels, Gauss points a side on the source
+# panel, field of the test panel), from the nearest: closer pairs take the exact
+# field at the body's own Gauss points. Six bars at level 4 solve in 4.5 s for 7.8
+# on one thread, 1.6 for 2.2 on eight, moved 2e-8; the next level moves them 1.2e-4.
+# Two points from 8 sides moved the validated sheet past its guard
+FAR_RULES = ((3.0, 3, rectangle_field_far3), (16.0, 2, rectangle_field_far2))
+# a job takes this many times CHUNK, and a far field call as much: threads queue
+# between NumPy's calls, so few large ones run faster, and the far fields hold few
+# arrays at a time. Six bars at level 5 solve on 8 threads in 3.9 s, 5.9 at 1, 4.2 at 16
+FAR_CHUNKS = 4
+# blocks of fewer pairs stay exact: their jobs are small, and on threads the extra
+# NumPy calls cost more than the far fields save: far at every size, a plate and 25
+# small cubes solve on eight threads in 0.96 s for 0.77
+FAR_PAIRS = 400_000
 
 
 def contract(w3, wts, phi):
@@ -35,6 +54,66 @@ def contract(w3, wts, phi):
     test fluxes at the Gauss points into the coupling of each pair of
     functions, by matrix products."""
     return np.matmul((w3 * wts).transpose(1, 0, 3, 2), phi)
+
+
+def flux_by_distance(G, pa, tc, cols, lo, hi, side, rules, sign):
+    """Fill ``G[tc, :, cols, :]``: the flux of source panels ``cols`` through the
+    test functions of panels ``tc``, all on one face of ``pa``.
+
+    ``lo, hi`` are the source panels' boxes in ``pa``'s frame and ``side`` their
+    longer sides. ``rules`` are ``(ratio, field, points, weights, functions)``, from
+    the nearest, ``points`` in ``pa``'s frame ``(gauss, panels, 3)``. Each pair
+    chooses by its own distance, box to box, so that the answer does not depend on
+    how the jobs are cut.
+    """
+    ia, ja, ka = pa.i[tc[0]], pa.j[tc[0]], pa.k[tc[0]]
+    w0 = pa.w0[tc[0]]
+    if len(rules) == 1:  # all at once: a list of pairs would cost 15-20 % more
+        _, field, points, weights, functions = rules[0]
+        yy = points[:, cols]  # (gauss, cols, 3)
+        w3 = field(
+            yy[None, ..., ia],
+            yy[None, ..., ja],
+            yy[None, ..., ka] - w0,
+            pa.p1[tc][:, None, None],
+            pa.p2[tc][:, None, None],
+            pa.q1[tc][:, None, None],
+            pa.q2[tc][:, None, None],
+        )  # (3 test densities, tc, gauss, cols)
+        G[np.ix_(tc, [0, 1, 2], cols, [0, 1, 2])] = sign * contract(
+            w3, weights[:, cols], functions
+        )
+        return
+    p1, p2, q1, q2 = (v[tc][:, None] for v in (pa.p1, pa.p2, pa.q1, pa.q2))
+    gap_p = np.maximum(lo[cols, ia] - p2, p1 - hi[cols, ia]).clip(0.0)
+    gap_q = np.maximum(lo[cols, ja] - q2, q1 - hi[cols, ja]).clip(0.0)
+    gap_w = np.maximum(lo[cols, ka] - w0, w0 - hi[cols, ka]).clip(0.0)
+    longer = np.maximum(p2 - p1, q2 - q1)
+    ratio2 = (gap_p**2 + gap_q**2 + gap_w**2) / np.maximum(longer, side[cols]) ** 2
+    bounds = [r for r, *_ in rules[1:]]
+    tier = np.searchsorted(np.square(bounds), ratio2, side="right")
+    for k, (_, field, points, weights, functions) in enumerate(rules):
+        t, c = np.nonzero(tier == k)
+        # a far field's call takes its points on both panels, an exact one's on one
+        size, evaluations = (
+            (FAR_CHUNKS * CHUNK, len(points) ** 2) if k else (CHUNK, len(points))
+        )
+        step = max(1, size // (evaluations * threads()))
+        for start in range(0, len(t), step):
+            tp, cp = tc[t[start : start + step]], cols[c[start : start + step]]
+            yy = points[:, cp]  # (gauss, pairs, 3)
+            w3 = field(
+                yy[..., ia],
+                yy[..., ja],
+                yy[..., ka] - w0,
+                pa.p1[tp],
+                pa.p2[tp],
+                pa.q1[tp],
+                pa.q2[tp],
+            )  # (3 test densities, gauss, pairs)
+            G[tp, :, cp, :] = sign * (
+                (w3 * weights[:, cp]).transpose(2, 0, 1) @ functions
+            )
 
 
 def graded_edges(a, lines, layer, m, g, tol=1e-9):
@@ -166,32 +245,25 @@ class Galerkin:
         G = np.zeros((p.N, 3, p.N, 3))
         pts, wts, S, T = self.gauss_points(self.nq)
         faces = [np.flatnonzero(p.face == f) for f in range(6)]
-
-        phi = np.stack([np.ones(len(S)), S, T], 1)
+        rules = [(0.0, rectangle_field, pts, wts, np.stack([np.ones(len(S)), S, T], 1))]
+        far = FAR_RULES if p.N * p.N >= FAR_PAIRS else ()
+        for ratio, nq, field in far:
+            x, w, s, t = self.gauss_points(nq)
+            rules.append((ratio, field, x, w, np.stack([np.ones(len(s)), s, t], 1)))
+        corners = p.corners()
+        lo, hi = corners.min(1), corners.max(1)
+        side = np.maximum(p.p2 - p.p1, p.q2 - p.q1)
 
         def block(job):  # test rows ``tc`` against source face fb
             fb, tc = job
-            ka, ia, ja, sa = p.k[tc[0]], p.i[tc[0]], p.j[tc[0]], p.sign[tc[0]]
-            sb = faces[fb]
-            y = pts[:, sb]  # (gauss, sb, 3)
-            w3 = rectangle_field(
-                y[None, ..., ia],
-                y[None, ..., ja],
-                y[None, ..., ka] - p.w0[tc][:, None, None],
-                p.p1[tc][:, None, None],
-                p.p2[tc][:, None, None],
-                p.q1[tc][:, None, None],
-                p.q2[tc][:, None, None],
-            )  # (3 test densities, tc, gauss, sb)
-            G[np.ix_(tc, [0, 1, 2], sb, [0, 1, 2])] = -sa * contract(
-                w3, wts[:, sb], phi
-            )
+            flux_by_distance(G, p, tc, faces[fb], lo, hi, side, rules, -p.sign[tc[0]])
 
         jobs = []
         for fa in range(6):
             for fb in range(6):
                 if fb != fa:
-                    step = max(1, CHUNK // (len(faces[fb]) * len(S) * threads()))
+                    size = FAR_CHUNKS * CHUNK if far else CHUNK
+                    step = max(1, size // (len(faces[fb]) * len(S) * threads()))
                     ta = faces[fa]
                     jobs += [(fb, ta[c : c + step]) for c in range(0, len(ta), step)]
         run(block, jobs, work=p.N * p.N * len(S))

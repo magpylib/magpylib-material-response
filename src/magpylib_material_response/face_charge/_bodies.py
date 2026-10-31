@@ -30,9 +30,12 @@ from magpylib_material_response.face_charge._contact import (
     polygon_rule as _polygon_rule,
 )
 from magpylib_material_response.face_charge._panels import (
+    FAR_CHUNKS,
+    FAR_PAIRS,
+    FAR_RULES,
     Galerkin,
     Panels,
-    contract,
+    flux_by_distance,
     graded_edges,
 )
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
@@ -356,6 +359,7 @@ def cross_block(a, bs):
     them in one go, so that many small bodies take as few calls as two large."""
     pa = a.panels
     y, wts, normal_b, center_b, corners_b, blocks = [], [], [], [], [], []
+    side_b = []
     # each b panel's reach: within it of a's face plane, the contact term.
     # Aligned cuboids are graded onto each other and their Gauss points resolve
     # a gap, better than the contact term: four pieces 1 um from a plate's side
@@ -371,6 +375,7 @@ def cross_block(a, bs):
         pts, w, S, T = b.galerkin.gauss_points(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
         wts.append(w)
+        side_b.append(np.maximum(b.panels.p2 - b.panels.p1, b.panels.q2 - b.panels.q1))
         normal_b.append(b.panels.normal @ Rab.T)
         center_b.append(b.panels.center @ Rab.T + cb)
         corners_b.append(b.panels.corners() @ Rab.T + cb)  # (Nb, 4, 3)
@@ -380,7 +385,24 @@ def cross_block(a, bs):
     corners_b, reach = np.concatenate(corners_b), np.concatenate(reach)
     lo_b, hi_b = corners_b.min(1), corners_b.max(1)
     n_gauss, Nb = wts.shape
-    phi = np.stack([np.ones(n_gauss), S, T], 1)
+    side_b = np.concatenate(side_b)
+    rules = [(0.0, rectangle_field, y, wts, np.stack([np.ones(n_gauss), S, T], 1))]
+    far = FAR_RULES if pa.N * Nb >= FAR_PAIRS else ()
+    for ratio, nq, field in far:
+        points, weights = [], []
+        for b, Rab, cb in blocks:
+            pts, w, S, T = b.galerkin.gauss_points(nq)
+            points.append(pts @ Rab.T + cb)
+            weights.append(w)
+        rules.append(
+            (
+                ratio,
+                field,
+                np.concatenate(points, 1),
+                np.concatenate(weights, 1),
+                np.stack([np.ones(len(S)), S, T], 1),
+            )
+        )
     G = np.zeros((pa.N, 3, Nb, 3))
     jobs = []
     for fa in range(6):
@@ -405,7 +427,8 @@ def cross_block(a, bs):
             step = max(
                 1,
                 min(
-                    CHUNK // (n_gauss * len(src) * threads()),
+                    (FAR_CHUNKS * CHUNK if far else CHUNK)
+                    // (n_gauss * len(src) * threads()),
                     -(-len(ta) * 6 // threads()),
                 ),
             )
@@ -435,19 +458,7 @@ def cross_block(a, bs):
                     )
                 first = last
             return
-        yy = y[:, cols]
-        w3 = rectangle_field(
-            yy[None, ..., ia],
-            yy[None, ..., ja],
-            yy[None, ..., ka] - w0,
-            pa.p1[tc][:, None, None],
-            pa.p2[tc][:, None, None],
-            pa.q1[tc][:, None, None],
-            pa.q2[tc][:, None, None],
-        )  # (3 test densities, tc, gauss, cols)
-        G[np.ix_(tc, [0, 1, 2], cols, [0, 1, 2])] = -sa * contract(
-            w3, wts[:, cols], phi
-        )
+        flux_by_distance(G, pa, tc, cols, lo_b, hi_b, side_b, rules, -sa)
 
     run(job, jobs, work=pa.N * Nb * n_gauss)
     return G.reshape(a.n_dofs, 3 * Nb)
