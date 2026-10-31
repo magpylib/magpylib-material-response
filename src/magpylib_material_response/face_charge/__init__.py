@@ -10,9 +10,10 @@ charge ``sigma = M.n`` on its faces, which solves
 with ``H0`` the applied field (``H_ext`` is ``mu0 H0``, in tesla) and ``K'``
 the adjoint double-layer operator of the surface, which depends on the shape
 only. The faces are cut into panels graded toward the edges, each
-carrying a charge linear across it, with closed-form panel fields; touching
-bodies are coupled exactly. A solved body becomes a :class:`ChargeSheet`, an
-ordinary magpylib source.
+carrying a charge linear across it, with closed-form panel fields, or Gauss
+points for cuboid panels far apart in large models; touching bodies are coupled
+exactly. A solved body becomes a :class:`ChargeSheet`, an ordinary magpylib
+source.
 
 An anisotropic susceptibility and one varying inside a body bring back volume
 charge; they stay with :func:`~magpylib_material_response.demag.apply_demag`.

@@ -81,7 +81,9 @@ def rectangle_field(P, Q, W, p1, p2, q1, q2):
 
 def _field_far(P, Q, W, p1, p2, q1, q2, nodes, weights):
     """``W / R^3`` at Gauss points on the rectangle, all in one array: threads take
-    turns between NumPy's calls, so few large calls run on more of them."""
+    turns between NumPy's calls, so few large calls run on more of them. Unlike
+    :func:`rectangle_field`, the bounds must broadcast to the shape of ``P``, not
+    against it: one rectangle for each observer."""
     hp, hq = 0.5 * (p2 - p1), 0.5 * (q2 - q1)
     s, w = nodes.reshape(-1, *[1] * P.ndim), weights.reshape(-1, *[1] * P.ndim)
     # the source point at +s * hp is -s * hp from the observer's offset

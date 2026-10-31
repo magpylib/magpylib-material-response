@@ -6,13 +6,14 @@ Body a's equation, tested with its own panel functions:
 
 ``G_ab`` is the flux of b's charge through a's test panels, computed like the
 self block: the closed-form weighted solid angle of the test panel, in a's
-frame, at b's Gauss points mapped into it. Where a face of b lies in a face
-plane of a (contact), that part is exact instead: no principal value, and the
-one-sided limit from a's inside gives -1/2 of the integral of the two charges
-over their overlap. The overlap of a test rectangle with b's panel (turned in
-the plane when b is) is clipped as a polygon and integrated exactly, so the two
-meshes need not match. Each body's equation is bordered by one row and column
-fixing its net charge to zero.
+frame, at b's Gauss points mapped into it. In large blocks, pairs far apart
+take Gauss points on both panels instead (``FAR_RULES``, ``FAR_PAIRS``). Where
+a face of b lies in a face plane of a (contact), that part is exact instead: no
+principal value, and the one-sided limit from a's inside gives -1/2 of the
+integral of the two charges over their overlap. The overlap of a test
+rectangle with b's panel (turned in the plane when b is) is clipped as a polygon
+and integrated exactly, so the two meshes need not match. Each body's equation
+is bordered by one row and column fixing its net charge to zero.
 """
 
 from __future__ import annotations
@@ -372,7 +373,7 @@ def cross_block(a, bs):
         turn = np.abs(Rab)  # not np.allclose: 9,900 pairs of 100 cubes took 0.2 s
         aligned = np.abs(turn - np.round(turn)).max() <= 1e-9
         reach.append(np.full(b.panels.N, (contact_tol if aligned else near_tol)(a, b)))
-        pts, w, S, T = b.galerkin.gauss_points(b.galerkin.nq)
+        pts, w, functions = b.galerkin.rule(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
         wts.append(w)
         side_b.append(np.maximum(b.panels.p2 - b.panels.p1, b.panels.q2 - b.panels.q1))
@@ -386,12 +387,12 @@ def cross_block(a, bs):
     lo_b, hi_b = corners_b.min(1), corners_b.max(1)
     n_gauss, Nb = wts.shape
     side_b = np.concatenate(side_b)
-    rules = [(0.0, rectangle_field, y, wts, np.stack([np.ones(n_gauss), S, T], 1))]
+    rules = [(0.0, rectangle_field, y, wts, functions)]
     far = FAR_RULES if pa.N * Nb >= FAR_PAIRS else ()
     for ratio, nq, field in far:
         points, weights = [], []
         for b, Rab, cb in blocks:
-            pts, w, S, T = b.galerkin.gauss_points(nq)
+            pts, w, functions = b.galerkin.rule(nq)
             points.append(pts @ Rab.T + cb)
             weights.append(w)
         rules.append(
@@ -400,7 +401,7 @@ def cross_block(a, bs):
                 field,
                 np.concatenate(points, 1),
                 np.concatenate(weights, 1),
-                np.stack([np.ones(len(S)), S, T], 1),
+                functions,
             )
         )
     G = np.zeros((pa.N, 3, Nb, 3))
@@ -507,7 +508,7 @@ def _add_contact(G, pa, pb, ta, j, corners, plane, Rab, cb):
 
 def coupling_block(a, b):
     """``G_ab``: the flux of b's charge through a's test functions. Between
-    two cuboids by their own exact scheme; otherwise by b's quadrature, which
+    two cuboids by :func:`cross_block`; otherwise by b's quadrature, which
     holds for bodies apart by about their panels' size or more, and where
     faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):

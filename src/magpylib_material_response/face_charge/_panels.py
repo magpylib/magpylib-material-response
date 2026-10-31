@@ -45,7 +45,9 @@ FAR_RULES = ((3.0, 3, rectangle_field_far3), (16.0, 2, rectangle_field_far2))
 FAR_CHUNKS = 4
 # blocks of fewer pairs stay exact: their jobs are small, and on threads the extra
 # NumPy calls cost more than the far fields save: far at every size, a plate and 25
-# small cubes solve on eight threads in 0.96 s for 0.77
+# small cubes solve on eight threads in 0.96 s for 0.77. A block is a body against
+# all the others, so a part added far away can tip two others over, or only a-b and
+# not b-a: the answer steps by what the far fields move it, 7e-7 at most
 FAR_PAIRS = 400_000
 
 
@@ -56,30 +58,37 @@ def contract(w3, wts, phi):
     return np.matmul((w3 * wts).transpose(1, 0, 3, 2), phi)
 
 
+def _flux(field, pa, tp, yy, axes, w0):
+    """``field`` of panels ``tp``, all on one face of ``pa``, at points ``yy``."""
+    ia, ja, ka = axes
+    return field(
+        yy[..., ia],
+        yy[..., ja],
+        yy[..., ka] - w0,
+        pa.p1[tp],
+        pa.p2[tp],
+        pa.q1[tp],
+        pa.q2[tp],
+    )
+
+
 def flux_by_distance(G, pa, tc, cols, lo, hi, side, rules, sign):
     """Fill ``G[tc, :, cols, :]``: the flux of source panels ``cols`` through the
     test functions of panels ``tc``, all on one face of ``pa``.
 
     ``lo, hi`` are the source panels' boxes in ``pa``'s frame and ``side`` their
     longer sides. ``rules`` are ``(ratio, field, points, weights, functions)``, from
-    the nearest, ``points`` in ``pa``'s frame ``(gauss, panels, 3)``. Each pair
-    chooses by its own distance, box to box, so that the answer does not depend on
-    how the jobs are cut.
+    the nearest, ``points`` in ``pa``'s frame ``(gauss, panels, 3)``. With far rules,
+    each pair chooses by its own distance, box to box, so that the answer does not
+    depend on how the jobs are cut.
     """
     ia, ja, ka = pa.i[tc[0]], pa.j[tc[0]], pa.k[tc[0]]
     w0 = pa.w0[tc[0]]
     if len(rules) == 1:  # all at once: a list of pairs would cost 15-20 % more
         _, field, points, weights, functions = rules[0]
-        yy = points[:, cols]  # (gauss, cols, 3)
-        w3 = field(
-            yy[None, ..., ia],
-            yy[None, ..., ja],
-            yy[None, ..., ka] - w0,
-            pa.p1[tc][:, None, None],
-            pa.p2[tc][:, None, None],
-            pa.q1[tc][:, None, None],
-            pa.q2[tc][:, None, None],
-        )  # (3 test densities, tc, gauss, cols)
+        yy = points[None, :, cols]  # (1, gauss, cols, 3)
+        w3 = _flux(field, pa, tc[:, None, None], yy, (ia, ja, ka), w0)
+        # (3 test densities, tc, gauss, cols)
         G[np.ix_(tc, [0, 1, 2], cols, [0, 1, 2])] = sign * contract(
             w3, weights[:, cols], functions
         )
@@ -102,15 +111,8 @@ def flux_by_distance(G, pa, tc, cols, lo, hi, side, rules, sign):
         for start in range(0, len(t), step):
             tp, cp = tc[t[start : start + step]], cols[c[start : start + step]]
             yy = points[:, cp]  # (gauss, pairs, 3)
-            w3 = field(
-                yy[..., ia],
-                yy[..., ja],
-                yy[..., ka] - w0,
-                pa.p1[tp],
-                pa.p2[tp],
-                pa.q1[tp],
-                pa.q2[tp],
-            )  # (3 test densities, gauss, pairs)
+            w3 = _flux(field, pa, tp, yy, (ia, ja, ka), w0)
+            # (3 test densities, gauss, pairs)
             G[tp, :, cp, :] = sign * (
                 (w3 * weights[:, cp]).transpose(2, 0, 1) @ functions
             )
@@ -239,20 +241,25 @@ class Galerkin:
         pts[:, idx, p.j] = self.qc + T[:, None] * self.hq
         return pts, weights[:, None] * p.area[None, :], S, T
 
+    def rule(self, nq):
+        """Gauss points, weights and the three functions at the points."""
+        pts, wts, S, T = self.gauss_points(nq)
+        return pts, wts, np.stack([np.ones(len(S)), S, T], 1)
+
     def assemble(self):
         """The flux matrix ``G`` (3N x 3N) between the panels of one body."""
         p = self.panels
         G = np.zeros((p.N, 3, p.N, 3))
-        pts, wts, S, T = self.gauss_points(self.nq)
+        n_gauss = self.nq**2
         faces = [np.flatnonzero(p.face == f) for f in range(6)]
-        rules = [(0.0, rectangle_field, pts, wts, np.stack([np.ones(len(S)), S, T], 1))]
         far = FAR_RULES if p.N * p.N >= FAR_PAIRS else ()
-        for ratio, nq, field in far:
-            x, w, s, t = self.gauss_points(nq)
-            rules.append((ratio, field, x, w, np.stack([np.ones(len(s)), s, t], 1)))
-        corners = p.corners()
-        lo, hi = corners.min(1), corners.max(1)
-        side = np.maximum(p.p2 - p.p1, p.q2 - p.q1)
+        rules = [(0.0, rectangle_field, *self.rule(self.nq))]
+        rules += [(ratio, field, *self.rule(nq)) for ratio, nq, field in far]
+        lo = hi = side = None  # only far rules read them
+        if far:
+            corners = p.corners()
+            lo, hi = corners.min(1), corners.max(1)
+            side = np.maximum(p.p2 - p.p1, p.q2 - p.q1)
 
         def block(job):  # test rows ``tc`` against source face fb
             fb, tc = job
@@ -263,10 +270,10 @@ class Galerkin:
             for fb in range(6):
                 if fb != fa:
                     size = FAR_CHUNKS * CHUNK if far else CHUNK
-                    step = max(1, size // (len(faces[fb]) * len(S) * threads()))
+                    step = max(1, size // (len(faces[fb]) * n_gauss * threads()))
                     ta = faces[fa]
                     jobs += [(fb, ta[c : c + step]) for c in range(0, len(ta), step)]
-        run(block, jobs, work=p.N * p.N * len(S))
+        run(block, jobs, work=p.N * p.N * n_gauss)
         return G.reshape(3 * p.N, 3 * p.N)
 
     def load(self, field, nq=4, fine=None, nq_fine=16):

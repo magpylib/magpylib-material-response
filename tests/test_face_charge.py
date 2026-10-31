@@ -154,14 +154,16 @@ def test_normal_fields_are_the_fields_normal_part():
     ids=["3 points a side", "2 points a side"],
 )
 def test_far_rectangle_field_holds_where_it_is_used(field, reference, sides):
-    """At the distance each is used from, on panels up to 1:1000 long, against the
-    more accurate field there: from 16 sides that is 3 points a side, as the closed
-    form's own first moments are 1.5e-4 off."""
+    """At the distance each is used from, on panels up to 1:1000 long either way,
+    against the more accurate field there: from 16 sides that is 3 points a side, as
+    the closed form's own first moments are 1.5e-4 off."""
     rng = np.random.default_rng(2)
     n = 20_000
     side = 10 ** rng.uniform(-4, -1, n)
     p1, q1 = rng.uniform(-1, 1, (2, n))
-    p2, q2 = p1 + side, q1 + side * 10 ** rng.uniform(-3, 0, n)
+    short, long_in_p = side * 10 ** rng.uniform(-3, 0, n), rng.random(n) < 0.5
+    p2 = p1 + np.where(long_in_p, side, short)
+    q2 = q1 + np.where(long_in_p, short, side)
     away = rng.normal(size=(n, 3))
     away /= np.linalg.norm(away, axis=1)[:, None]
     # past the panel's half diagonal: at least `sides` from its nearest point
@@ -174,8 +176,8 @@ def test_far_rectangle_field_holds_where_it_is_used(field, reference, sides):
 
 def test_far_panels_leave_the_answer_and_threads_do_not_change_it(monkeypatch):
     """Against all panels taken exactly, on bars close enough to mix both, at any
-    number of threads: each pair chooses alone, however the jobs are cut. Blocks
-    this small take all panels exactly by default."""
+    number of threads: in a block with far rules each pair chooses alone, however
+    the jobs are cut. Blocks this small take all panels exactly by default."""
 
     def solve():
         bars = [
