@@ -1,4 +1,7 @@
-"""A kept factorization behind apply_face_charge, as a prototype outside the
+"""Superseded by face_charge/_cache.py (#132). This prototype's key has no
+absolute size, so a uniformly scaled model hits the wrong matrix: use the package.
+
+A kept factorization behind apply_face_charge, as a prototype outside the
 package: no new API, and any call whose solved parts make the same matrix as the
 last call's takes only a new load and a back-substitution.
 
