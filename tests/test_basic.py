@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import itertools
 
 import magpylib as magpy
@@ -7,9 +8,10 @@ import numpy as np
 import pytest
 
 import magpylib_material_response
-from magpylib_material_response import demag
+from magpylib_material_response import configure_logging, demag, disable_logging
 from magpylib_material_response.demag import (
     apply_demag,
+    demag_tensor,
     get_susceptibilities,
 )
 from magpylib_material_response.face_charge import apply_face_charge
@@ -353,6 +355,82 @@ def test_segment_cells_are_averaged_from_a_susceptibility_of_one(
     J = solve()
     monkeypatch.setattr(demag, "_segment_averages", lambda *_: None)
     assert np.array_equal(J, solve()) is not averaged
+
+
+def _tube(chi, x=0.0):
+    tube = magpy.Collection(
+        *(
+            magpy.magnet.CylinderSegment(
+                polarization=(0, 0, 0),
+                dimension=(0.004, 0.005, 0.01, phi, phi + 60),
+                position=(x, 0, 0),
+            )
+            for phi in range(0, 360, 60)
+        )
+    )
+    tube.susceptibility = chi
+    tube.H_ext = (0.01, 0, 0)
+    return tube
+
+
+def test_cells_are_averaged_by_their_own_susceptibility():
+    """A chi = 1000 tube a long way off used to switch a chi = 0.9 tube to the
+    other scheme, which moved its field by 0.7 %."""
+    alone = apply_demag(magpy.Collection(_tube(0.9)))
+    with_far = apply_demag(magpy.Collection(_tube(0.9), _tube(1000, x=100.0)))
+    np.testing.assert_allclose(
+        [c.polarization for c in with_far.sources_all[:6]],
+        [c.polarization for c in alone.sources_all],
+        rtol=1e-6,
+        atol=1e-9,
+    )
+
+
+@pytest.mark.parametrize("given", [True, False], ids=["argument", "on the cells"])
+@pytest.mark.parametrize("chi", [0.5, 1000])
+def test_demag_tensor_is_the_one_apply_demag_solves_with(given, chi):
+    """On either side of the switch to averaged segment cells."""
+    tube = _tube(None if given else chi)
+    cells = tube.sources_all
+    T = demag_tensor(cells, susceptibility=chi if given else None) * magpy.mu_0
+    n = len(cells)
+    Q = np.eye(3 * n) - chi * T.swapaxes(2, 3).reshape(3 * n, 3 * n).T
+    rhs = chi * np.tile((0.01, 0, 0), n)
+    solved = apply_demag(tube, susceptibility=chi)
+    J = np.linalg.solve(Q, np.ravel(rhs.reshape(n, 3), order="F"))
+    np.testing.assert_allclose(
+        J.reshape(n, 3, order="F"),
+        [c.polarization for c in solved],
+        rtol=1e-9,
+        atol=1e-12,
+    )
+
+
+def test_a_model_with_no_susceptibility_goes_unsolved(monkeypatch):
+    """It warns, and the polarizations stand exactly, without minutes of solving."""
+    magnet = magpy.magnet.Cuboid(polarization=(0.1, 0.2, 1), dimension=(0.01,) * 3)
+    coil = magpy.current.Circle(diameter=0.05, current=1000)
+    monkeypatch.setattr(demag, "_solve_cells", None)
+    monkeypatch.setattr(magpy, "getB", None)
+    with pytest.warns(UserWarning, match="nothing responds"):
+        solved = apply_demag(magpy.Collection(coil, magnet))
+    assert np.array_equal(solved.sources[1].polarization, magnet.polarization)
+
+
+def test_fixed_magnets_beside_soft_parts_go_to_the_log():
+    """No warning: they are how a model gets its drive magnets."""
+    magnet = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01,) * 3)
+    soft = magpy.magnet.Cuboid(
+        polarization=(0, 0, 0), dimension=(0.01,) * 3, position=(0.02, 0, 0)
+    )
+    soft.susceptibility = 1000
+    sink = io.StringIO()
+    configure_logging(level="INFO", enable_colors=False, sink=sink)
+    try:
+        apply_demag(magpy.Collection(magnet, soft))
+    finally:
+        disable_logging()
+    assert "1 of 2 magnets have no susceptibility" in sink.getvalue()
 
 
 def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():

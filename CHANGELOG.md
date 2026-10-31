@@ -114,8 +114,11 @@ and this project adheres to
 - A magnet without a susceptibility, on itself or a parent, is fixed in
   `apply_demag`, `mesh_study` and `fem_solve`, as in `apply_face_charge`. They
   raised "No susceptibility defined in any parent collection", naming no object;
-  a model in which no magnet has one now warns that nothing responds
-  ([#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
+  a model in which no magnet has one now warns that nothing responds, and skips
+  the solve; with only some fixed, the log says how many. A magnet meshed away
+  from its parent keeps the susceptibility and `H_ext` it inherited
+  ([#121](https://github.com/magpylib/magpylib-material-response/pull/121),
+  [#128](https://github.com/magpylib/magpylib-material-response/pull/128)).
 - magpylib 6.1 computes fields in chunks, on threads
   ([magpylib#1059](https://github.com/magpylib/magpylib/pull/1059)). A drive of
   many current segments no longer takes gigabytes: #108's coil of 2,400 segments
@@ -165,10 +168,13 @@ and this project adheres to
   −12 %, −11 % and −11 %, and closer as cells are added around the ring. Such
   solves take 2 to 7 times longer, the most on small meshes; below a
   susceptibility of 1, where point matching cannot turn the system indefinite,
-  cells are matched at their centroids as before
+  cells are matched at their centroids as before. Each pair decides by its own
+  two cells, and `demag_tensor` takes the same `susceptibility`, so it returns
+  the tensor `apply_demag` solves with
   ([#92](https://github.com/magpylib/magpylib-material-response/issues/92),
   [#100](https://github.com/magpylib/magpylib-material-response/pull/100),
-  [#121](https://github.com/magpylib/magpylib-material-response/pull/121)).
+  [#121](https://github.com/magpylib/magpylib-material-response/pull/121),
+  [#128](https://github.com/magpylib/magpylib-material-response/pull/128)).
 - `H_ext` is checked before a solve, by `apply_demag`, `apply_face_charge` and
   `fem_solve` alike: anything but three finite numbers, in any layout, raises an
   error that says what is expected, and fields above 10 T warn once, at the
