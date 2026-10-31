@@ -8,7 +8,9 @@ import magpylib as magpy
 import numpy as np
 import pytest
 
+from magpylib_material_response import from_json, to_json
 from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.face_charge import apply_face_charge
 from magpylib_material_response.meshing import (
     mesh_all,
     mesh_Cuboid,
@@ -695,3 +697,53 @@ def test_mesh_all_returns_the_mesh_of_a_magnet_in_a_collection():
     assert isinstance(meshed, magpy.Collection)
     assert meshed.parent is outer
     assert len(meshed.sources_all) == 8
+
+
+def test_a_mesh_stays_one_sealed_object_until_its_cells_become_sheets():
+    def cuboid():
+        part = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.02))
+        part.susceptibility = 5
+        return part
+
+    mesh = mesh_Cuboid(cuboid(), 8)
+    kept = {
+        "mesh": mesh,
+        "copy": mesh.copy(),
+        "solved": apply_demag(mesh),
+        "json": from_json(to_json(mesh))[0],
+        "in a collection": mesh_all(magpy.Collection(cuboid()), 8).children[0],
+        "in json": from_json(to_json(magpy.Collection(mesh.copy())))[0].children[0],
+    }
+    assert [name for name, obj in kept.items() if obj.sealed is not True] == []
+    assert not hasattr(slice_Cuboid(cuboid()), "sealed")
+    for meshed in (mesh, mesh_all(mesh.copy(), 16), magpy.Collection(mesh.copy())):
+        solved = apply_face_charge(meshed, level=1)
+        for coll in (solved, *solved.collections_all):
+            assert not getattr(coll, "sealed", False)
+
+
+@pytest.mark.parametrize(
+    "mesher",
+    [lambda c: mesh_Cuboid(c, 8), lambda c: slice_Cuboid(c, shift=0.5)],
+    ids=["mesh", "slice"],
+)
+def test_a_mesh_draws_as_the_object_it_came_from(mesher):
+    def drawn(obj):
+        fig = magpy.show(obj, backend="plotly", return_fig=True)
+        mesh = next(t for t in fig.data if t.type == "mesh3d")
+        return mesh.opacity, mesh.color, mesh.intensity is None
+
+    part = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1),
+        dimension=(0.01, 0.01, 0.02),
+        style_label="bar",
+        style_color="blue",
+        style_opacity=0.5,
+        style_magnetization_show=False,
+    )
+    cells = mesher(part)
+    assert drawn(cells) == drawn(part) == (0.5, "blue", True)
+    assert cells.style.label == "bar"
+    assert cells.sources_all[0].style.label is None
+    cells.style.color = "red"  # still its parent's
+    assert drawn(cells)[1] == "red"

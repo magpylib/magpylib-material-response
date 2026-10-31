@@ -360,3 +360,13 @@ def trimesh_from_model3d(shape, polarization, **make_kwargs):
         vertices=vertices,
         faces=faces,
     )
+
+
+def set_values(style):
+    """A style's nested dict with only what is set."""
+    out = {}
+    for key, given in style.items():
+        value = set_values(given) if isinstance(given, dict) else given
+        if value is not None and not (isinstance(value, dict) and not value):
+            out[key] = value
+    return out
