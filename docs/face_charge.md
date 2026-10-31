@@ -227,8 +227,8 @@ second call with a matrix keeps its factorization, and the calls after it reuse
 it, as `face_charge_info["reused"]` tells.
 
 For the plate under a magnet, a call takes 77 ms at level 3 and then 21 ms, and
-1.9 s at level 8 (9,558 unknowns) and then 0.12 s. The answers agree with a fresh
-solve to rounding.
+1.9 s at level 8 (9,558 unknowns) and then 0.12 s. The answers agree with a
+fresh solve to rounding.
 
 The factorizations stay in memory, 8 n² bytes for n unknowns and 1 GB together
 by default, which fits one of about 11,000 unknowns:
