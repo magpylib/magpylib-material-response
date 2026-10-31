@@ -26,8 +26,8 @@ from magpylib_material_response.face_charge._bodies import (
     add_contact_lines,
     contact_tol,
     near_panels,
-    solve_system,
 )
+from magpylib_material_response.face_charge._cache import solve_kept
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.face_charge._triangle import frames
 from magpylib_material_response.face_charge._tribody import (
@@ -60,6 +60,12 @@ def apply_face_charge(
     to each other and driven by every other source in the collection and by the
     applied field ``H_ext``, as :func:`~magpylib_material_response.demag.apply_demag`
     reads it. No volume mesh is needed.
+
+    A loop that changes only what drives the parts, or moves them all as one, is
+    much faster from its third call: the factorization of a matrix that comes
+    back is kept, up to
+    :func:`~magpylib_material_response.face_charge.set_cache_limit`, until
+    :func:`~magpylib_material_response.face_charge.clear_cache`.
 
     Parameters
     ----------
@@ -114,8 +120,8 @@ def apply_face_charge(
         magnetization, which depends on the field of every source at once; for
         B inside a part, mesh it and use ``apply_demag``. Its
         ``face_charge_info`` dict holds the last solve's ``unknowns``, the
-        ``level``, the refinement ``rounds`` done and the wall time in
-        ``seconds``; ``to_json`` keeps it.
+        ``level``, the refinement ``rounds`` done, whether it ``reused`` a kept
+        factorization and the wall time in ``seconds``; ``to_json`` keeps it.
 
     Raises
     ------
@@ -142,7 +148,7 @@ def apply_face_charge(
     start = time.perf_counter()
     solved, fixed = _split(collection)
     out = collection.copy()
-    info = {"unknowns": 0, "level": level, "rounds": 0}
+    info = {"unknowns": 0, "level": level, "rounds": 0, "reused": False}
     if not solved:
         logger.info("Face charge: no part with a susceptibility to solve")
         out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
@@ -246,8 +252,8 @@ def apply_face_charge(
         )
         with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
             joined = _interfaces(bodies)
-            coefs = solve_system(bodies, external, joined)
-        info.update(unknowns=unknowns, rounds=rnd)
+            coefs, reused = solve_kept(bodies, external, joined)
+        info.update(unknowns=unknowns, rounds=rnd, reused=reused)
         sheets = [
             _sheet_of(b, c, ~shared)
             for b, c, shared in zip(bodies, coefs, joined[0], strict=True)

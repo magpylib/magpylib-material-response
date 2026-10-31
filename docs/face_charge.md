@@ -217,6 +217,34 @@ puts B 0.25 mm above the plate within 0.04 %, where uniform panels need 10,350
 unknowns and 20 s for 0.13 %. Outside the steel tube, one round from level 3
 brings 5.6 % down to 1.0 %.
 
+## Many solves in a loop
+
+The matrix of a solve depends only on the solved parts. When a loop changes only
+what drives them, such as a magnet's pose, `H_ext` or a part's remanence, or
+moves all solved parts as one, `apply_face_charge` keeps the factorization and
+takes only a new load and a back-substitution. Nothing needs asking for: the
+second call with a matrix keeps its factorization, and the calls after it reuse
+it, as `face_charge_info["reused"]` tells.
+
+For the plate under a magnet, a call takes 77 ms at level 3 and then 21 ms, and
+1.9 s at level 8 (9,558 unknowns) and then 0.12 s. The answers agree with a
+fresh solve to rounding.
+
+The factorizations stay in memory, 8 n² bytes for n unknowns and 1 GB together
+by default, which fits one of about 11,000 unknowns:
+
+```python
+from magpylib_material_response import face_charge
+
+face_charge.set_cache_limit(4)  # gigabytes; 0 turns it off
+face_charge.clear_cache()  # frees what is kept
+```
+
+One too large for the limit is not made, and the solve costs what it would
+without a cache. A matrix that comes back exactly once pays for a factorization
+it never reuses: a grid that revisits each arrangement once ran about 3 %
+slower.
+
 ## Whether saturation matters
 
 A sheet's `mean_polarization` is the average polarization of the part it

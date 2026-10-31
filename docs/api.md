@@ -17,6 +17,10 @@
 ```{eval-rst}
 .. autofunction:: magpylib_material_response.face_charge.apply_face_charge
 
+.. autofunction:: magpylib_material_response.face_charge.clear_cache
+
+.. autofunction:: magpylib_material_response.face_charge.set_cache_limit
+
 .. autoclass:: magpylib_material_response.face_charge.ChargeSheet
    :members: from_triangles, mean_polarization, jump_indicator, panel_indicator
 ```
