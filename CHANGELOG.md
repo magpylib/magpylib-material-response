@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Large face-charge solves of cuboids are up to 1.55x faster on 8 threads and 2x
+  on one: panel pairs far apart take Gauss points in place of the exact field.
+  Answers move by 7e-7 at most, far below what a finer mesh changes; smaller
+  solves are unchanged
+  ([#133](https://github.com/magpylib/magpylib-material-response/pull/133))
+
 ## [0.7.0] - 2026-10-31
 
 Two new ways to solve a model join `apply_demag`: face charge, which needs no

@@ -6,13 +6,14 @@ Body a's equation, tested with its own panel functions:
 
 ``G_ab`` is the flux of b's charge through a's test panels, computed like the
 self block: the closed-form weighted solid angle of the test panel, in a's
-frame, at b's Gauss points mapped into it. Where a face of b lies in a face
-plane of a (contact), that part is exact instead: no principal value, and the
-one-sided limit from a's inside gives -1/2 of the integral of the two charges
-over their overlap. The overlap of a test rectangle with b's panel (turned in
-the plane when b is) is clipped as a polygon and integrated exactly, so the two
-meshes need not match. Each body's equation is bordered by one row and column
-fixing its net charge to zero.
+frame, at b's Gauss points mapped into it. In large blocks, pairs far apart
+take Gauss points on both panels instead (``FAR_RULES``, ``FAR_PAIRS``). Where
+a face of b lies in a face plane of a (contact), that part is exact instead: no
+principal value, and the one-sided limit from a's inside gives -1/2 of the
+integral of the two charges over their overlap. The overlap of a test
+rectangle with b's panel (turned in the plane when b is) is clipped as a polygon
+and integrated exactly, so the two meshes need not match. Each body's equation
+is bordered by one row and column fixing its net charge to zero.
 """
 
 from __future__ import annotations
@@ -30,9 +31,12 @@ from magpylib_material_response.face_charge._contact import (
     polygon_rule as _polygon_rule,
 )
 from magpylib_material_response.face_charge._panels import (
+    FAR_CHUNKS,
+    FAR_PAIRS,
+    FAR_RULES,
     Galerkin,
     Panels,
-    contract,
+    flux_by_distance,
     graded_edges,
 )
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
@@ -356,6 +360,7 @@ def cross_block(a, bs):
     them in one go, so that many small bodies take as few calls as two large."""
     pa = a.panels
     y, wts, normal_b, center_b, corners_b, blocks = [], [], [], [], [], []
+    side_b = []
     # each b panel's reach: within it of a's face plane, the contact term.
     # Aligned cuboids are graded onto each other and their Gauss points resolve
     # a gap, better than the contact term: four pieces 1 um from a plate's side
@@ -368,9 +373,10 @@ def cross_block(a, bs):
         turn = np.abs(Rab)  # not np.allclose: 9,900 pairs of 100 cubes took 0.2 s
         aligned = np.abs(turn - np.round(turn)).max() <= 1e-9
         reach.append(np.full(b.panels.N, (contact_tol if aligned else near_tol)(a, b)))
-        pts, w, S, T = b.galerkin.gauss_points(b.galerkin.nq)
+        pts, w, functions = b.galerkin.rule(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
         wts.append(w)
+        side_b.append(np.maximum(b.panels.p2 - b.panels.p1, b.panels.q2 - b.panels.q1))
         normal_b.append(b.panels.normal @ Rab.T)
         center_b.append(b.panels.center @ Rab.T + cb)
         corners_b.append(b.panels.corners() @ Rab.T + cb)  # (Nb, 4, 3)
@@ -380,7 +386,24 @@ def cross_block(a, bs):
     corners_b, reach = np.concatenate(corners_b), np.concatenate(reach)
     lo_b, hi_b = corners_b.min(1), corners_b.max(1)
     n_gauss, Nb = wts.shape
-    phi = np.stack([np.ones(n_gauss), S, T], 1)
+    side_b = np.concatenate(side_b)
+    rules = [(0.0, rectangle_field, y, wts, functions)]
+    far = FAR_RULES if pa.N * Nb >= FAR_PAIRS else ()
+    for ratio, nq, field in far:
+        points, weights = [], []
+        for b, Rab, cb in blocks:
+            pts, w, functions = b.galerkin.rule(nq)
+            points.append(pts @ Rab.T + cb)
+            weights.append(w)
+        rules.append(
+            (
+                ratio,
+                field,
+                np.concatenate(points, 1),
+                np.concatenate(weights, 1),
+                functions,
+            )
+        )
     G = np.zeros((pa.N, 3, Nb, 3))
     jobs = []
     for fa in range(6):
@@ -405,7 +428,8 @@ def cross_block(a, bs):
             step = max(
                 1,
                 min(
-                    CHUNK // (n_gauss * len(src) * threads()),
+                    (FAR_CHUNKS * CHUNK if far else CHUNK)
+                    // (n_gauss * len(src) * threads()),
                     -(-len(ta) * 6 // threads()),
                 ),
             )
@@ -435,19 +459,7 @@ def cross_block(a, bs):
                     )
                 first = last
             return
-        yy = y[:, cols]
-        w3 = rectangle_field(
-            yy[None, ..., ia],
-            yy[None, ..., ja],
-            yy[None, ..., ka] - w0,
-            pa.p1[tc][:, None, None],
-            pa.p2[tc][:, None, None],
-            pa.q1[tc][:, None, None],
-            pa.q2[tc][:, None, None],
-        )  # (3 test densities, tc, gauss, cols)
-        G[np.ix_(tc, [0, 1, 2], cols, [0, 1, 2])] = -sa * contract(
-            w3, wts[:, cols], phi
-        )
+        flux_by_distance(G, pa, tc, cols, lo_b, hi_b, side_b, rules, -sa)
 
     run(job, jobs, work=pa.N * Nb * n_gauss)
     return G.reshape(a.n_dofs, 3 * Nb)
@@ -496,7 +508,7 @@ def _add_contact(G, pa, pb, ta, j, corners, plane, Rab, cb):
 
 def coupling_block(a, b):
     """``G_ab``: the flux of b's charge through a's test functions. Between
-    two cuboids by their own exact scheme; otherwise by b's quadrature, which
+    two cuboids by :func:`cross_block`; otherwise by b's quadrature, which
     holds for bodies apart by about their panels' size or more, and where
     faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):

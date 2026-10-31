@@ -16,6 +16,8 @@ from __future__ import annotations
 import numpy as np
 
 FOUR_PI = 4 * np.pi
+NODES2, WEIGHTS2 = np.polynomial.legendre.leggauss(2)
+NODES3, WEIGHTS3 = np.polynomial.legendre.leggauss(3)
 
 
 def _y_plus_r(x2w2, y, r):
@@ -75,3 +77,39 @@ def rectangle_field(P, Q, W, p1, p2, q1, q2):
     w1 = a * Sw - W * Sx / hp
     w2 = b * Sw - W * Sy / hq
     return np.stack([Sw, w1, w2]) / FOUR_PI
+
+
+def _field_far(P, Q, W, p1, p2, q1, q2, nodes, weights):
+    """``W / R^3`` at Gauss points on the rectangle, all in one array: threads take
+    turns between NumPy's calls, so few large calls run on more of them. Unlike
+    :func:`rectangle_field`, the bounds must broadcast to the shape of ``P``, not
+    against it: one rectangle for each observer."""
+    hp, hq = 0.5 * (p2 - p1), 0.5 * (q2 - q1)
+    s, w = nodes.reshape(-1, *[1] * P.ndim), weights.reshape(-1, *[1] * P.ndim)
+    # the source point at +s * hp is -s * hp from the observer's offset
+    r2 = ((P - 0.5 * (p1 + p2) - s * hp) ** 2 + W * W)[:, None] + (
+        (Q - 0.5 * (q1 + q2) - s * hq) ** 2
+    )[None]
+    f = W * hp * hq / (FOUR_PI * r2 * np.sqrt(r2))
+    along_s = (w[None] * f).sum(1)
+    return np.stack(
+        [
+            (w * along_s).sum(0),
+            (w * s * along_s).sum(0),
+            (w * (w[None] * s[None] * f).sum(1)).sum(0),
+        ]
+    )
+
+
+def rectangle_field_far3(P, Q, W, p1, p2, q1, q2):
+    """:func:`rectangle_field` for observers far from the rectangle, by ``W / R^3``
+    at 3 x 3 Gauss points on it: 1.7 times as fast, and more accurate from 16 sides
+    away, where the closed form's first moments cancel. The error against the
+    largest density is at worst 3e-4 at 2 sides, 5e-6 at 4, 2e-7 at 8."""
+    return _field_far(P, Q, W, p1, p2, q1, q2, NODES3, WEIGHTS3)
+
+
+def rectangle_field_far2(P, Q, W, p1, p2, q1, q2):
+    """:func:`rectangle_field` at 2 x 2 Gauss points: three times as fast. The error
+    against the largest density is at worst 1e-3 at 4 sides, 2e-5 at 16."""
+    return _field_far(P, Q, W, p1, p2, q1, q2, NODES2, WEIGHTS2)

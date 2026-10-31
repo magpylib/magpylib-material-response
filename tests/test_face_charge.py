@@ -17,6 +17,8 @@ from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import (
     ChargeSheet,
+    _bodies,
+    _panels,
     apply_face_charge,
 )
 from magpylib_material_response.face_charge._apply import _closed_surface
@@ -28,6 +30,11 @@ from magpylib_material_response.face_charge._mesh import (
     rounding,
 )
 from magpylib_material_response.face_charge._parallel import run
+from magpylib_material_response.face_charge._rectangle import (
+    rectangle_field,
+    rectangle_field_far2,
+    rectangle_field_far3,
+)
 from magpylib_material_response.face_charge._sheet import saturation
 from magpylib_material_response.face_charge._triangle import (
     charge_field,
@@ -136,6 +143,69 @@ def test_normal_fields_are_the_fields_normal_part():
     pairs = normal_field(near, V[one], tuple(a[one] for a in fr), pairs=True)
     assert np.allclose(pairs, normal_field(near, V, fr)[:, np.arange(len(near)), one])
     assert all(np.isfinite(normal_field(V[:, k], V, fr)).all() for k in range(3))
+
+
+@pytest.mark.parametrize(
+    ("field", "reference", "sides"),
+    [
+        (rectangle_field_far3, rectangle_field, 3.0),
+        (rectangle_field_far2, rectangle_field_far3, 16.0),
+    ],
+    ids=["3 points a side", "2 points a side"],
+)
+def test_far_rectangle_field_holds_where_it_is_used(field, reference, sides):
+    """At the distance each is used from, on panels up to 1:1000 long either way,
+    against the more accurate field there: from 16 sides that is 3 points a side, as
+    the closed form's own first moments are 1.5e-4 off."""
+    rng = np.random.default_rng(2)
+    n = 20_000
+    side = 10 ** rng.uniform(-4, -1, n)
+    p1, q1 = rng.uniform(-1, 1, (2, n))
+    short, long_in_p = side * 10 ** rng.uniform(-3, 0, n), rng.random(n) < 0.5
+    p2 = p1 + np.where(long_in_p, side, short)
+    q2 = q1 + np.where(long_in_p, short, side)
+    away = rng.normal(size=(n, 3))
+    away /= np.linalg.norm(away, axis=1)[:, None]
+    # past the panel's half diagonal: at least `sides` from its nearest point
+    away *= ((sides + 0.71 + rng.uniform(0, sides, n)) * side)[:, None]
+    P, Q, W = 0.5 * (p1 + p2) + away[:, 0], 0.5 * (q1 + q2) + away[:, 1], away[:, 2]
+    exact = reference(P, Q, W, p1, p2, q1, q2)
+    error = np.abs(field(P, Q, W, p1, p2, q1, q2) - exact).max(0)
+    assert (error / np.abs(exact).max(0)).max() < 5e-5
+
+
+def test_far_panels_leave_the_answer_and_threads_do_not_change_it(monkeypatch):
+    """Against all panels taken exactly, on bars close enough to mix both, at any
+    number of threads: in a block with far rules each pair chooses alone, however
+    the jobs are cut. Blocks this small take all panels exactly by default."""
+
+    def solve():
+        bars = [
+            magpy.magnet.Cuboid(
+                dimension=(0.01, 0.004, 0.002),
+                position=(0, 0.0045 * i, 0),
+                polarization=(0, 0, 0),
+            )
+            for i in range(3)
+        ]
+        bars[2].rotate_from_angax(30, "z")
+        coll = magpy.Collection(*bars)
+        coll.susceptibility, coll.H_ext = 999.0, (0.002, 0.001, 0.01)
+        return apply_face_charge(coll, level=2).getB(
+            [(0.008, 0.002, 0.003), (0, 0, 0.02)]
+        )
+
+    small = solve()
+    monkeypatch.setattr(_bodies, "FAR_PAIRS", 0)
+    monkeypatch.setattr(_panels, "FAR_PAIRS", 0)
+    field = solve()
+    monkeypatch.setattr(magpy.defaults, "threads", 3)
+    assert np.array_equal(solve(), field)
+    monkeypatch.setattr(_bodies, "FAR_RULES", ())
+    monkeypatch.setattr(_panels, "FAR_RULES", ())
+    exact = solve()
+    assert np.array_equal(small, exact)
+    assert 0 < _relative(field, exact) < 1e-6
 
 
 def _cube_as_triangles(half=0.005):
