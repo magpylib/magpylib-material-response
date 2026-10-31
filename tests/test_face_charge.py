@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import magpylib as magpy
 import numpy as np
@@ -17,7 +18,10 @@ from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response.face_charge import (
     ChargeSheet,
+    _cache,
     apply_face_charge,
+    clear_cache,
+    set_cache_limit,
 )
 from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
@@ -1181,3 +1185,228 @@ def test_sheet_is_closed_finite_at_its_corners_and_read_only():
     assert np.isfinite(sheet.getB(sheet.vertices + sheet.position)).all()
     with pytest.raises(ValueError, match="read-only"):
         sheet.charge_densities[:] *= 2
+
+
+def _soft(dimension=(0.01, 0.01, 0.002), position=(0, 0, 0), chi=1000.0, J=(0, 0, 0)):
+    part = magpy.magnet.Cuboid(polarization=J, dimension=dimension, position=position)
+    part.susceptibility = chi
+    return part
+
+
+def _drive(x=0.0, z=0.0045, tilt=0.0):
+    return magpy.magnet.Cuboid(
+        polarization=(0, 0, 1),
+        dimension=(0.005, 0.005, 0.005),
+        position=(x, 0, z),
+        orientation=R.from_euler("x", tilt, degrees=True),
+    )
+
+
+def _with_field(field):
+    model = magpy.Collection(_drive(), _soft())
+    model.H_ext = (field, -field, 0)
+    return model
+
+
+def _turned(k):
+    """Two soft parts turned and moved together, a magnet beside them."""
+    parts = magpy.Collection(_soft(), _soft((0.004, 0.004, 0.004), (0, 0, 0.006)))
+    parts.rotate(R.from_euler("xyz", (20 * k, 13 * k, 7 * k), degrees=True), anchor=0)
+    parts.move((0.001 * k, -0.002 * k, 0))
+    return magpy.Collection(_drive(0.015, 0), parts)
+
+
+def _shaft(angle):
+    shaft = magpy.magnet.Cylinder(
+        polarization=(0, 0, 0), dimension=(0.02, 0.04), position=(0, 0, -0.02)
+    )
+    shaft.susceptibility = 3999
+    magnet = magpy.magnet.Cylinder(
+        polarization=(0.5, 0, 0), dimension=(0.006, 0.003), position=(0, 0, 0.0025)
+    )
+    return magpy.Collection(
+        magpy.Collection(shaft, magnet).rotate_from_angax(angle, "z", anchor=0)
+    )
+
+
+def _models(make, *values):
+    return [lambda v=v: make(v) for v in values]
+
+
+HITS = (False, False, True, True)  # kept on its second call, reused from its third
+KEPT = {
+    "a magnet moves": (
+        _models(
+            lambda x: magpy.Collection(_drive(x, tilt=x * 1e3), _soft()),
+            0,
+            1e-3,
+            2e-3,
+            3e-3,
+        ),
+        {},
+        HITS,
+    ),
+    "above the mixed-precision size": (
+        _models(lambda x: magpy.Collection(_drive(x), _soft()), 0, 1e-3, 2e-3, 3e-3),
+        {"level": 4},
+        HITS,
+    ),
+    "H_ext changes": (_models(_with_field, 0.0, 5e-3, -0.2, 1.0), {}, HITS),
+    "the part's remanence changes": (
+        _models(
+            lambda j: magpy.Collection(_drive(), _soft(chi=0.05, J=(0, 0, j))),
+            0.2,
+            0.5,
+            -1.0,
+            0.1,
+        ),
+        {},
+        HITS,
+    ),
+    "parts move as one": (_models(_turned, 0, 1, 2, 3), {}, HITS),
+    "a mesh turns": (_models(_shaft, 0, 30, 77, 190), {}, HITS),
+    "parts of one material touch": (
+        _models(
+            lambda x: magpy.Collection(
+                _drive(x, 0.01),
+                _soft(position=(-0.005, 0, 0)),
+                _soft(position=(0.005, 0, 0)),
+            ),
+            0,
+            1e-3,
+            2e-3,
+            3e-3,
+        ),
+        {},
+        HITS,
+    ),
+    "parts move apart": (
+        _models(
+            lambda z: magpy.Collection(
+                _drive(0.015, 0), _soft(), _soft(position=(0, 0, z))
+            ),
+            0.003,
+            0.004,
+            0.005,
+        ),
+        {},
+        (False, False, False),
+    ),
+    "chi changes": (
+        _models(lambda x: magpy.Collection(_drive(), _soft(chi=x)), 1000, 999, 10),
+        {},
+        (False, False, False),
+    ),
+    "a length changes": (
+        _models(
+            lambda L: magpy.Collection(_drive(), _soft((L, 0.01, 0.002))),
+            0.01,
+            0.01001,
+            0.0105,
+        ),
+        {},
+        (False, False, False),
+    ),
+    "a magnet's footprint moves on a part": (
+        _models(
+            lambda x: magpy.Collection(_drive(x, 0.0035), _soft()), 0, 7e-4, 1.4e-3
+        ),
+        {},
+        (False, False, False),
+    ),
+    "parts swap places": (
+        [
+            lambda: magpy.Collection(
+                _drive(0.015, 0), _soft(), _soft((0.004, 0.004, 0.004), (0, 0, 0.006))
+            ),
+            lambda: magpy.Collection(
+                _drive(0.015, 0), _soft((0.004, 0.004, 0.004), (0, 0, 0.006)), _soft()
+            ),
+        ],
+        {},
+        (False, False),
+    ),
+    "refinement": (
+        _models(lambda x: magpy.Collection(_drive(x), _soft()), 0, 1e-3, 2e-3),
+        {"refine": 1},
+        None,  # the layout follows the solved charge
+    ),
+}
+
+
+@pytest.fixture
+def _no_cache_left():
+    clear_cache()
+    yield
+    set_cache_limit(1)
+    clear_cache()
+
+
+@pytest.mark.usefixtures("_no_cache_left")
+@pytest.mark.parametrize("case", KEPT)
+def test_a_kept_factorization_serves_only_its_own_matrix(case):
+    """A key that misses what makes the matrix would give wrong fields silently,
+    so every call is checked against a solve with no cache."""
+    models, kwargs, reused = KEPT[case]
+    observers = np.array([[0.012, 0, 0], [0, 0.012, 0.001], [0.007, 0.007, 0.007]])
+    kept = []
+    for model in models:
+        solved = apply_face_charge(
+            model(), level=kwargs.get("level", 2), refine=kwargs.get("refine", 0)
+        )
+        kept.append((magpy.getB(solved, observers), solved.face_charge_info["reused"]))
+    set_cache_limit(0)
+    for model, (B, _) in zip(models, kept, strict=True):
+        fresh = magpy.getB(
+            apply_face_charge(
+                model(), level=kwargs.get("level", 2), refine=kwargs.get("refine", 0)
+            ),
+            observers,
+        )
+        np.testing.assert_allclose(B, fresh, rtol=0, atol=1e-11 * np.abs(fresh).max())
+    if reused is not None:
+        assert tuple(r for _, r in kept) == reused
+
+
+@pytest.mark.usefixtures("_no_cache_left")
+def test_a_kept_factorization_is_safe_from_threads():
+    """Threads share one kept factorization, whose pivots scipy's lu_solve shifts
+    in place (#131): shared as they are, nearly every answer here is wrong."""
+    observers = np.array([[0.012, 0, 0], [0, 0, 0.012]])
+    positions = np.linspace(-1e-3, 1e-3, 40)
+
+    def read(x):
+        return magpy.getB(
+            apply_face_charge(magpy.Collection(_drive(x), _soft()), level=2), observers
+        )
+
+    fresh = [read(x) for x in positions]  # keeps it, for the threads to share
+    with ThreadPoolExecutor(8) as pool:
+        for _ in range(3):
+            threaded = list(pool.map(read, positions))
+            np.testing.assert_allclose(threaded, fresh, rtol=1e-10)
+    # and the factorization is still good afterwards
+    np.testing.assert_allclose(read(positions[0]), fresh[0], rtol=1e-10)
+
+
+@pytest.mark.usefixtures("_no_cache_left")
+def test_the_cache_stays_within_its_limit():
+    def reused(chi=1000.0):
+        model = magpy.Collection(_drive(), _soft(chi=chi))
+        return apply_face_charge(model, level=2).face_charge_info["reused"]
+
+    assert [reused() for _ in range(3)] == [False, False, True]
+    clear_cache()
+    assert [reused() for _ in range(3)] == [False, False, True]
+    # a limit that takes one: the older goes
+    one = sum(lu.nbytes + piv.nbytes for lu, piv in _cache._kept.values())
+    set_cache_limit(1.5 * one / 1e9)
+    assert [reused(500.0) for _ in range(3)] == [False, False, True]
+    assert len(_cache._kept) == 1
+    # too small for any: never factored for keeping, nor reused
+    set_cache_limit(one / 2e9)
+    assert not _cache._kept
+    assert [reused() for _ in range(3)] == [False, False, False]
+    assert not _cache._kept
+    with pytest.raises(ValueError, match="0 or more"):
+        set_cache_limit(-1)

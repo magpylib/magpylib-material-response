@@ -29,6 +29,7 @@ On a cube the method reproduces the polarizability of Helsing and Perfekt:
 from __future__ import annotations
 
 from magpylib_material_response.face_charge._apply import apply_face_charge
+from magpylib_material_response.face_charge._cache import clear_cache, set_cache_limit
 from magpylib_material_response.face_charge._sheet import ChargeSheet
 
-__all__ = ["ChargeSheet", "apply_face_charge"]
+__all__ = ["ChargeSheet", "apply_face_charge", "clear_cache", "set_cache_limit"]

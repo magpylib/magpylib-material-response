@@ -522,16 +522,13 @@ def coupling_block(a, b):
     return G
 
 
-def solve_system(bodies, external, joined=None):
-    """Solve the coupled bodies.
-
-    ``external`` maps global points ``(n, 3)`` to the field of the fixed sources
-    there, H in A/m, global; each body adds its own uniform applied field.
-    ``joined``, from where parts of one material touch: per body the panels
-    that carry no charge, and the group of each closed shell, whose members
-    hold no net charge together. Returns the charge coefficients of each body.
-    """
-    n_bodies = len(bodies)
+def assemble_system(bodies, joined=None):
+    """The matrix of the coupled bodies, column-major, for an in-place
+    factorization. It depends on their shapes, their poses against each other
+    and their susceptibilities, not on what drives them. ``joined``, from where
+    parts of one material touch: per body the panels that carry no charge, and
+    the group of each closed shell, whose members hold no net charge together
+    rather than each."""
     offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
     n = offsets[-1]
     # a net-charge row each: a cuboid's, or each closed shell of a mesh's, or
@@ -542,9 +539,7 @@ def solve_system(bodies, external, joined=None):
     total = np.zeros(group.max() + 1)
     for ia, border in enumerate(borders):
         np.add.at(total, group[first[ia] : first[ia + 1]], border.sum(0))
-    # column-major, which the in-place factorization below needs
     A = np.zeros((n + len(total), n + len(total)), order="F")
-    rhs = np.zeros(n + len(total))
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
         # each self block is assembled here and freed once copied, so that only
@@ -556,13 +551,6 @@ def solve_system(bodies, external, joined=None):
         for col, g in enumerate(group[first[ia] : first[ia + 1]]):
             A[rows, n + g] += borders[ia][:, col]  # two shells may join
             A[n + g, rows] += borders[ia][:, col] / total[g]
-
-        def field(x, a=a):
-            return (external(a.to_global(x)) + a.applied) @ a.R
-
-        rhs[rows] += a.load(field)
-        if a.J0 is not None:
-            rhs[rows] += a.load_remanence() / a.chi
 
     for ia, a in enumerate(bodies):
         rows = slice(offsets[ia], offsets[ia + 1])
@@ -586,16 +574,54 @@ def solve_system(bodies, external, joined=None):
                 out=A[rows, offsets[ib] : offsets[ib + 1]],
             )
     if joined is not None:  # the shared panels' unknowns: none
-        for ia, shared in enumerate(joined[0]):
-            dofs = (
-                offsets[ia]
-                + (3 * np.flatnonzero(shared)[:, None] + np.arange(3)).ravel()
-            )
+        for dofs in _shared_dofs(joined, offsets):
             A[dofs, :] = 0.0
             A[dofs, dofs] = 1.0
+    return A
+
+
+def load_system(bodies, external, size, joined=None):
+    """The right-hand side, of ``size`` rows, of the coupled bodies. ``external``
+    maps global points ``(n, 3)`` to the field of the fixed sources there, H in
+    A/m, global; each body adds its own uniform applied field."""
+    offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
+    rhs = np.zeros(size)
+    for ia, a in enumerate(bodies):
+        rows = slice(offsets[ia], offsets[ia + 1])
+
+        def field(x, a=a):
+            return (external(a.to_global(x)) + a.applied) @ a.R
+
+        rhs[rows] += a.load(field)
+        if a.J0 is not None:
+            rhs[rows] += a.load_remanence() / a.chi
+    if joined is not None:
+        for dofs in _shared_dofs(joined, offsets):
             rhs[dofs] = 0.0
-    x = _solve(A, rhs)
-    return [x[offsets[k] : offsets[k + 1]] for k in range(n_bodies)]
+    return rhs
+
+
+def _shared_dofs(joined, offsets):
+    """Per body, the unknowns of its panels that carry no charge."""
+    return [
+        offsets[ia] + (3 * np.flatnonzero(shared)[:, None] + np.arange(3)).ravel()
+        for ia, shared in enumerate(joined[0])
+    ]
+
+
+def split_unknowns(x, bodies):
+    """The charge coefficients of each body, out of all the unknowns."""
+    offsets = np.cumsum([0] + [b.n_dofs for b in bodies])
+    return [x[offsets[k] : offsets[k + 1]] for k in range(len(bodies))]
+
+
+def solve_system(bodies, external, joined=None):
+    """Solve the coupled bodies, as :func:`assemble_system` and
+    :func:`load_system` set them up. Returns the charge coefficients of each."""
+    A = assemble_system(bodies, joined)
+    return split_unknowns(
+        _solve(A, load_system(bodies, external, len(A), joined)), bodies
+    )
 
 
 def _solve(A, b):

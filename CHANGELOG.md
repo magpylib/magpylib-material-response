@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`apply_face_charge` keeps its factorization between calls**, when a call's
+  solved parts make the same matrix as an earlier call's: a loop over magnet
+  poses, `H_ext` or a part's remanence goes from 77 to 21 ms a call at level 3,
+  and is 15 times faster at 9,558 unknowns, with no new argument. The cache
+  holds at most 1 GB, which fits about 11,000 unknowns;
+  `face_charge.set_cache_limit` and `face_charge.clear_cache` set and free it
+  (#132).
+
 ## [0.7.0] - 2026-10-31
 
 Two new ways to solve a model join `apply_demag`: face charge, which needs no
