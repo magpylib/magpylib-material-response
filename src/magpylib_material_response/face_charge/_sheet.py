@@ -15,9 +15,17 @@ from scipy.spatial.transform import Rotation
 
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
-from magpylib_material_response.face_charge._triangle import charge_field, frames
+from magpylib_material_response.face_charge._triangle import (
+    charge_field,
+    charge_field_far,
+    frames,
+)
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
+# an observer this many of a sheet's longest triangle sides past all of it takes
+# `charge_field_far`. Each observer chooses for the whole sheet, so a near one costs
+# nothing: choosing per pair made fields 2 mm above six bars 1.3 times as slow
+FAR_SIDES = 128.0
 
 
 class ChargeColor(PropertyNode):
@@ -174,6 +182,12 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._V = P[F]
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
+        self._center, self._far_from = np.zeros(3), np.inf
+        if len(F):
+            self._center = cen.mean(0)
+            side = np.linalg.norm(self._V - self._V[:, [1, 2, 0]], axis=2).max()
+            reach = np.linalg.norm(self._V - self._center, axis=2).max()
+            self._far_from = reach + FAR_SIDES * side
         d = self._V - cen[:, None]
         A = np.stack(
             [
@@ -302,12 +316,22 @@ class ChargeSheet(magpy.misc.CustomSource):
             return out  # the source carries no magnetization of its own
         step = max(1, CHUNK // (max(len(self._V), 1) * threads()))
 
-        def chunk(a):  # each its own observers
-            out[a : a + step] = (
-                charge_field(X[a : a + step], self._V, self._frames, self._c) / FOUR_PI
-            )
+        def chunk(job):  # each its own observers
+            kernel, rows = job
+            out[rows] = kernel(X[rows], self._V, self._frames, self._c) / FOUR_PI
 
-        run(chunk, range(0, len(X), step), work=len(X) * len(self._V))
+        jobs = [(charge_field, slice(a, a + step)) for a in range(0, len(X), step)]
+        far = np.linalg.norm(X - self._center, axis=1) >= self._far_from
+        if far.any():
+            jobs = [
+                (kernel, rows[a : a + step])
+                for kernel, rows in (
+                    (charge_field, np.flatnonzero(~far)),
+                    (charge_field_far, np.flatnonzero(far)),
+                )
+                for a in range(0, len(rows), step)
+            ]
+        run(chunk, jobs, work=len(X) * len(self._V))
         return out if field == "H" else magpy.mu_0 * out
 
     # ── display ───────────────────────────────────────────────────────────

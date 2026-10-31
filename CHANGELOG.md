@@ -16,6 +16,13 @@ and this project adheres to
   solves are unchanged
   ([#133](https://github.com/magpylib/magpylib-material-response/pull/133))
 
+### Fixed
+
+- The field of a solved face-charge model is right far away: it lost accuracy
+  from about 10 times the model's size and grew with distance, 14 % off at 100
+  times, where it now falls as a dipole's
+  ([#134](https://github.com/magpylib/magpylib-material-response/pull/134))
+
 ## [0.7.0] - 2026-10-31
 
 Two new ways to solve a model join `apply_demag`: face charge, which needs no

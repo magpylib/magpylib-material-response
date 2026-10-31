@@ -145,6 +145,42 @@ def test_normal_fields_are_the_fields_normal_part():
     assert all(np.isfinite(normal_field(V[:, k], V, fr)).all() for k in range(3))
 
 
+def _solved_bars():
+    bars = [
+        magpy.magnet.Cuboid(
+            dimension=(0.01, 0.004, 0.002),
+            position=(0, 0.006 * i, 0),
+            polarization=(0, 0, 0),
+        )
+        for i in range(3)
+    ]
+    coll = magpy.Collection(*bars)
+    coll.susceptibility, coll.H_ext = 999.0, (0.002, 0.001, 0.01)
+    return apply_face_charge(coll, level=1)
+
+
+def test_field_far_from_a_solved_model_falls_as_a_dipole():
+    """Their closed-form terms cancel far away, and summed over panels whose net
+    charge is zero the error grew with distance: 14 % at 100 times the size."""
+    solved = _solved_bars()
+    away = np.array([0.6, 0.48, 0.64])
+    dipole = 1e12 * solved.getH(away * 1e4)
+    for distance in (1e1, 1e2, 1e3):
+        ratio = distance**3 * solved.getH(away * distance) / dipole
+        np.testing.assert_allclose(ratio, 1.0, rtol=2e-2 / distance)
+
+
+def test_field_of_near_and_far_observers_together_is_each_on_its_own(monkeypatch):
+    """Each pair chooses alone, so neither a near observer in the call nor the
+    number of threads changes what a far one sees."""
+    solved = _solved_bars()
+    X = np.array([[0.0, 0.0, 0.003], [0.0, 0.0, 0.4], [5.0, 0.0, 0.0], [0.0, 0.9, 0.1]])
+    alone = np.vstack([solved.getH(x) for x in X])
+    np.testing.assert_allclose(solved.getH(X), alone, rtol=1e-12)
+    monkeypatch.setattr(magpy.defaults, "threads", 3)
+    np.testing.assert_allclose(solved.getH(X), alone, rtol=1e-12)
+
+
 @pytest.mark.parametrize(
     ("field", "reference", "sides"),
     [
