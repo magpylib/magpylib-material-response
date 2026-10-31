@@ -242,7 +242,8 @@ face_charge.clear_cache()  # frees what is kept
 
 One too large for the limit is not made, and the solve costs what it would
 without a cache. A matrix that comes back exactly once pays for a factorization
-it never reuses: a grid that revisits each arrangement once ran 3 to 4 % slower.
+it never reuses: a grid that revisits each arrangement once ran about 3 %
+slower.
 
 ## Whether saturation matters
 

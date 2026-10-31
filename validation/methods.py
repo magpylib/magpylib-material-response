@@ -201,11 +201,14 @@ class FaceCharge:
     @staticmethod
     def solve(collection, sensors, setting, **options):
         """`options` go to ``apply_face_charge``."""
+        from magpylib_material_response import face_charge  # noqa: PLC0415
         from magpylib_material_response.face_charge import (  # noqa: PLC0415
             ChargeSheet,
             apply_face_charge,
         )
 
+        # each solve cold, whatever ran before it: a base branch has no cache
+        getattr(face_charge, "clear_cache", lambda: None)()
         start = time.perf_counter()
         try:
             solved = apply_face_charge(collection, level=setting, **options)

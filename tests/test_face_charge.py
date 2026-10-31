@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 from magpylib.graphics.backend import colors_from_colorscale
 from matplotlib.colors import to_rgb
+from scipy.linalg import LinAlgError, LinAlgWarning
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
@@ -1202,6 +1203,17 @@ def _drive(x=0.0, z=0.0045, tilt=0.0):
     )
 
 
+def _scaled(k):
+    return magpy.Collection(
+        magpy.magnet.Cuboid(
+            polarization=(0, 0, 1),
+            dimension=(0.005 * k, 0.005 * k, 0.005 * k),
+            position=(0, 0, 0.0045 * k),
+        ),
+        _soft((0.01 * k, 0.01 * k, 0.002 * k)),
+    )
+
+
 def _with_field(field):
     model = magpy.Collection(_drive(), _soft())
     model.H_ext = (field, -field, 0)
@@ -1296,6 +1308,11 @@ KEPT = {
         _models(lambda x: magpy.Collection(_drive(), _soft(chi=x)), 1000, 999, 10),
         {},
         (False, False, False),
+    ),
+    "the model is scaled": (
+        _models(_scaled, 1, 1, 1, 2, 1000),
+        {},
+        (False, False, True, False, False),
     ),
     "a length changes": (
         _models(
@@ -1410,3 +1427,25 @@ def test_the_cache_stays_within_its_limit():
     assert not _cache._kept
     with pytest.raises(ValueError, match="0 or more"):
         set_cache_limit(-1)
+    # more than fit, in a cycle: some still reused, not factored on every call
+    set_cache_limit(2.5 * one / 1e9)
+    cycle = [reused(chi) for chi in (100.0, 200.0, 300.0) * 5]
+    assert sum(cycle) >= 4
+    set_cache_limit(float("inf"))
+    clear_cache()
+    assert [reused() for _ in range(3)] == [False, False, True]
+
+
+@pytest.mark.parametrize(
+    ("matrix", "kept"), [(np.eye(3), True), (np.diag([1, 1, 1e-20]), False)]
+)
+def test_a_kept_factorization_needs_a_sound_matrix(matrix, kept):
+    """Later calls only back-substitute: they would lose scipy.linalg.solve's
+    error on a singular matrix and warning on an ill-conditioned one."""
+    if kept:
+        assert _cache._factor(matrix.copy())[2]
+    else:
+        with pytest.warns(LinAlgWarning, match="Ill-conditioned"):
+            assert not _cache._factor(matrix.copy())[2]
+        with pytest.raises(LinAlgError, match="singular"):
+            _cache._factor(np.zeros((3, 3)))
