@@ -18,7 +18,7 @@ from magpylib_material_response.meshing_utils import (
 )
 
 
-def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
+def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
     susceptibility = getattr(obj, "susceptibility", None)
     if susceptibility is not None:
         for cell in cells:
@@ -33,6 +33,8 @@ def _collection_from_obj_and_cells(obj, cells, **style_kwargs):
     h_ext = getattr(obj, "H_ext", None)
     if h_ext is not None:
         coll.H_ext = copy.deepcopy(h_ext)
+    if sealed:
+        coll.sealed = True  # one object made of cells, to magpylib-studio
     return coll
 
 
@@ -381,7 +383,8 @@ def slice_Cuboid(cuboid, shift=0.5, axis="z", **kwargs):
             position=position,
         )
         cells.append(cell)
-    return _collection_from_obj_and_cells(cuboid, cells[::-1], **kwargs)
+    # two parts, not a mesh
+    return _collection_from_obj_and_cells(cuboid, cells[::-1], sealed=False, **kwargs)
 
 
 #: Spacing updates `voxelize` tries for touching cells that hold the volume.

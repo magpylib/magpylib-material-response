@@ -109,7 +109,8 @@ def apply_face_charge(
         A copy of the collection in which each solved part is replaced by a
         :class:`ChargeSheet` carrying its solved surface charge, at the same
         place in the hierarchy and with its label; the other sources are
-        copied as they are. Like a collection solved by ``apply_demag``, its
+        copied as they are. A collection holding a sheet is no longer sealed:
+        magpylib-studio lists each sheet. Like a collection solved by ``apply_demag``, its
         field excludes the applied field ``H_ext``. Fields hold outside the
         solved parts: inside one, ``getB`` gives mu0 H, without the part's own
         magnetization, which depends on the field of every source at once; for
@@ -313,6 +314,12 @@ def apply_face_charge(
         children = [replace.get(id(child), child) for child in parent.children]
         parent.remove(*parent.children)
         parent.add(*children)
+        # a mesh no more, up to the top: its sheets stand on their own
+        above = parent
+        while above is not None:
+            if getattr(above, "sealed", False):
+                above.sealed = False
+            above = above.parent
     out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
     return out
 

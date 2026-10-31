@@ -71,6 +71,8 @@ and this project adheres to
 
 ### Changed
 
+- A mesh has `sealed = True`, kept by `copy`, `apply_demag` and `to_json`:
+  magpylib-studio shows it as one object rather than one per cell.
 - **Breaking:** `voxelize` keeps the cells whose centre lies inside the object,
   as its docstring said, and tunes the grid spacing so that these touching cells
   hold the object's exact volume, and a magnet its moment, close to

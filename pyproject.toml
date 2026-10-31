@@ -70,8 +70,8 @@ docs = [
   "plotly>=6.7",
   "magpylib-material-response[tetgen,fem]",
   # 3D views with field lines, saved into the pages; 0.7.1 draws unsolved soft
-  # parts in the neutral colour.
-  "magpylib-studio[widget]>=0.7.1",
+  # parts in the neutral colour, 0.8 a sealed mesh as one object.
+  "magpylib-studio[widget]>=0.8",
 ]
 
 [tool.hatch]

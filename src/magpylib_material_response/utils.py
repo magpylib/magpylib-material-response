@@ -211,6 +211,8 @@ def _serialize_recursive(obj, parent="warn"):
         dd["children"] = [
             _serialize_recursive(child, parent="ignore") for child in obj.children
         ]
+        if getattr(obj, "sealed", False) is True:  # as magpylib-studio reads it
+            dd["sealed"] = True
     return dd
 
 
@@ -314,6 +316,8 @@ def _deserialize_recursive(inp):
 
     if constr is magpy.Collection:
         obj.add(*[_deserialize_recursive(child) for child in inp["children"]])
+        if inp.get("sealed"):
+            obj.sealed = True
 
     return obj
 
