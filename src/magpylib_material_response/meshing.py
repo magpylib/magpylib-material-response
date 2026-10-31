@@ -15,6 +15,7 @@ from magpylib_material_response.meshing_utils import (
     get_volume,
     mask_inside,
     near_cubic_divisions,
+    set_values,
 )
 
 
@@ -26,6 +27,15 @@ def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
     coll = magpy.Collection(cells)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
+    # A cell inherits its parent's colour and nothing else of its style, and a
+    # collection's style has no magnetization, so the object's opacity and the
+    # like go to the cells, or its mesh looks otherwise, as a sheet looks like its
+    # part. What names the collection or draws for it alone stays on it.
+    style = {**set_values(obj.style.as_dict()), **set_values(coll.style.as_dict())}
+    for own in ("label", "description", "legend", "model3d", "color"):
+        style.pop(own, None)
+    if style:
+        coll.set_children_styles(style)
     coll.position = obj.position
     coll.orientation = obj.orientation
     # The applied field is uniform over the object, so it belongs to the meshed

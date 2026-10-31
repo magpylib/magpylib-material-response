@@ -72,7 +72,9 @@ and this project adheres to
 ### Changed
 
 - A mesh has `sealed = True`, kept by `copy`, `apply_demag` and `to_json`:
-  magpylib-studio shows it as one object rather than one per cell
+  magpylib-studio shows it as one object rather than one per cell. It also draws
+  as the magnet it came from: opacity and magnetization style now reach the
+  cells, which drew opaque with their arrows
   ([#127](https://github.com/magpylib/magpylib-material-response/pull/127)).
 - **Breaking:** `voxelize` keeps the cells whose centre lies inside the object,
   as its docstring said, and tunes the grid spacing so that these touching cells
