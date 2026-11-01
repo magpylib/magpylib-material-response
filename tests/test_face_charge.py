@@ -727,6 +727,7 @@ def _mesh_at(V, F):
     return magpy.magnet.TriangularMesh(vertices=V, faces=F, polarization=(0, 0, 0))
 
 
+@pytest.mark.filterwarnings("ignore:Observers inside a solved part")
 @pytest.mark.parametrize(
     "case",
     [
@@ -1593,6 +1594,7 @@ REUSED = {
 }
 
 
+@pytest.mark.filterwarnings("ignore:Observers inside a solved part")
 @pytest.mark.parametrize("case", REUSED)
 def test_reuse_serves_only_its_own_matrix(case):
     """A fingerprint that misses what makes the matrix would give wrong fields
@@ -1719,3 +1721,48 @@ def test_a_result_names_its_method():
     for solved in (by_demag, by_face_charge):
         assert from_json(to_json(solved))[0].solved_by == solved.solved_by
     assert not hasattr(model, "solved_by")
+
+
+@pytest.mark.parametrize(
+    "part",
+    [
+        magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.002), position=(0.001, 0, 0)),
+        magpy.magnet.Cuboid(
+            dimension=(0.01, 0.01, 0.002),
+            position=(0.001, 0, 0),
+            orientation=R.from_euler("xyz", (20, 30, 40), degrees=True),
+        ),
+        magpy.magnet.Cylinder(dimension=(0.01, 0.004), position=(0.001, 0, 0)),
+        magpy.magnet.Sphere(diameter=0.01, position=(0.001, 0, 0)),
+    ],
+    ids=["cuboid", "turned", "cylinder", "sphere"],
+)
+def test_reading_inside_a_solved_part_warns(part):
+    part = part.copy(polarization=(0, 0, 0))
+    part.susceptibility = 100.0
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1), dimension=(0.003,) * 3, position=(0, 0, 0.01)
+    )
+    solved = apply_face_charge(magpy.Collection(magnet, part), level=1)
+    middle = (0.001, 0, 0)
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(solved, middle)
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(solved.copy(), [(0, 0, 0.1), middle])
+    # the corner of its box, beside the cylinder or sphere; H there is right
+    outside = [(0, 0, 0.1), (0.0058, 0.0048, 0.0019)]
+    if not isinstance(part, magpy.magnet.Cuboid):
+        magpy.getB(solved, outside)
+    magpy.getH(solved, middle)
+    magpy.getB(solved, (0, 0, 0.1))
+
+
+def test_only_a_whole_surface_warns_when_read_inside():
+    """Touching parts of one material leave no closed surface to be inside of."""
+    a, b = _soft(position=(-0.005, 0, 0)), _soft(position=(0.005, 0, 0))
+    solved = apply_face_charge(magpy.Collection(_drive(), a, b), level=1)
+    magpy.getB(solved, (0.005, 0, 0))
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    magpy.getB(
+        ChargeSheet(sheet.vertices, sheet.faces, sheet.charge_densities), (0, 0, 0)
+    )

@@ -130,8 +130,8 @@ def apply_face_charge(
         magpylib-studio lists each sheet. Like a collection solved by ``apply_demag``, its
         field excludes the applied field ``H_ext``. Fields hold outside the
         solved parts: inside one, ``getB`` gives mu0 H, without the part's own
-        magnetization, which depends on the field of every source at once; for
-        B inside a part, mesh it and use ``apply_demag``. Its
+        magnetization, which depends on the field of every source at once, and
+        warns; for B inside a part, mesh it and use ``apply_demag``. Its
         ``face_charge_info`` dict holds the last solve's ``unknowns``, the
         ``level``, the refinement ``rounds`` done, whether it ``reused`` a
         factorization and the wall time in ``seconds``, and its ``solved_by`` is ``"face_charge"``; ``to_json`` keeps both, but
@@ -786,14 +786,18 @@ def _touch(first, second, tol):
 def _sheet_of(body, c, keep):
     """The ChargeSheet of a solved body, of the panels ``keep`` marks."""
     if isinstance(body, Body):
-        return ChargeSheet._from_body(body, c, keep=None if keep.all() else keep)
+        sheet = ChargeSheet._from_body(body, c, keep=None if keep.all() else keep)
+        sheet._solid = bool(keep.all())
+        return sheet
     if keep.all():
-        return ChargeSheet.from_triangles(
+        sheet = ChargeSheet.from_triangles(
             body.T,
             body.coefficients_at_corners(c),
             position=body.position,
             orientation=Rotation.from_matrix(body.R),
         )
+        sheet._solid = True
+        return sheet
     return ChargeSheet.from_triangles(  # each triangle its own panel, numbered as kept
         body.T[keep],
         body.coefficients_at_corners(c)[keep],

@@ -4,6 +4,7 @@ surface charge that varies linearly across each face."""
 from __future__ import annotations
 
 import itertools
+import warnings
 
 import magpylib as magpy
 import numpy as np
@@ -21,12 +22,14 @@ from magpylib_material_response.face_charge._triangle import (
     far_points,
     frames,
 )
+from magpylib_material_response.face_charge._tribody import _winding
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 # an observer this many of a sheet's longest triangle sides past all of it takes
 # `charge_field_far`. Each observer chooses for the whole sheet, so a near one costs
 # nothing: choosing per pair made fields 2 mm above six bars 1.3 times as slow
 FAR_SIDES = 64.0
+INSIDE_SAMPLE = 64  # observers tested for lying inside a part, at most
 
 
 class ChargeColor(PropertyNode):
@@ -181,7 +184,11 @@ class ChargeSheet(magpy.misc.CustomSource):
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._mean = None  # set by apply_face_charge on parts solved as one
+        self._solid = False  # set by apply_face_charge on a part's whole surface
         self._V = P[F]
+        self._lo, self._hi = (
+            (self._V.min((0, 1)), self._V.max((0, 1))) if len(F) else (0, 0)
+        )
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
         self._center, self._far_from, self._far_rule = np.zeros(3), np.inf, None
@@ -311,11 +318,27 @@ class ChargeSheet(magpy.misc.CustomSource):
         return np.unique(key, axis=0, return_inverse=True)[1].ravel(), face, charge
 
     # ── field ─────────────────────────────────────────────────────────────
+    def _warn_if_inside(self, X):
+        """Warn if observers lie inside the part, of a sample of them: it costs
+        a box test unless some lie in its box."""
+        box = X[((self._lo <= X) & (self._hi >= X)).all(axis=1)]
+        for point in box[:: max(1, len(box) // INSIDE_SAMPLE)]:
+            if abs(_winding(point, self._V)) > 0.5:
+                warnings.warn(
+                    "Observers inside a solved part: a ChargeSheet gives mu0 H there, "
+                    "not B, without the part's magnetization. For B inside a part, "
+                    "mesh it and use apply_demag, or use fem_solve.",
+                    stacklevel=2,
+                )
+                return
+
     def _field(self, field, observers):
         X = np.asarray(observers, float).reshape(-1, 3)
         out = np.zeros((len(X), 3))
         if field in ("M", "J"):
             return out  # the source carries no magnetization of its own
+        if field == "B" and self._solid:
+            self._warn_if_inside(X)
         step = max(1, CHUNK // (max(len(self._V), 1) * threads()))
 
         def near(rows):
