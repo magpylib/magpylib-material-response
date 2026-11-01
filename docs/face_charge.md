@@ -250,8 +250,10 @@ first match pays back.
 
 The factorization takes 8 n² bytes for n unknowns, on the result: it goes when
 the result goes. Keep the last result only, as the loop above does. A loop in
-which every call changes the matrix, such as parts that move against each other
-or a length that changes, gains nothing from `reuse`.
+which every call changes the matrix gains nothing from `reuse`: parts that move
+against each other, a length that changes, a magnet that comes within 1 % of a
+part's size, which grades its panels, or a magnet with a susceptibility that
+moves, since it is then a solved part.
 
 ## Whether saturation matters
 

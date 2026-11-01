@@ -1475,6 +1475,47 @@ REUSED = {
         2,
         (False, False),
     ),
+    "a part turns against another": (
+        _models(
+            lambda t: magpy.Collection(
+                _drive(0.02, 0.01),
+                _soft(),
+                _soft((0.004, 0.004, 0.004), (0, 0, 0.0031)).rotate_from_angax(t, "z"),
+            ),
+            30,
+            40,
+        ),
+        2,
+        (False, False),
+    ),
+    "which parts join changes": (
+        _models(
+            lambda j: magpy.Collection(
+                _drive(0, 0.01),
+                _soft(position=(-0.005, 0, 0), chi=0.05, J=(0.5, 0, 0)),
+                _soft(position=(0.005, 0, 0), chi=0.05, J=(j, 0, 0)),
+            ),
+            0.5,
+            0.6,
+        ),
+        2,
+        (False, False),
+    ),
+    "a turn crosses what counts as parallel": (
+        _models(
+            lambda t: magpy.Collection(
+                _drive(0.02, 0.01),
+                _soft(),
+                _soft(
+                    (0.004, 0.004, 0.004), (0, 0, 0.003001), chi=50.0
+                ).rotate_from_rotvec((t, 0, 0), degrees=False),
+            ),
+            np.sqrt(2e-9) * (1 - 2e-9),
+            np.sqrt(2e-9) * (1 + 2e-9),
+        ),
+        2,
+        (False, False),
+    ),
     "parts swap places": (
         [
             lambda: magpy.Collection(

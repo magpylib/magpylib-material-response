@@ -111,7 +111,8 @@ def apply_face_charge(
         For a loop that changes only what drives the solved parts, such as a
         magnet's pose, ``H_ext`` or a part's remanence, or moves them all as one.
         ``True`` keeps this solve's factorization on the result, ``8 n**2`` bytes
-        for ``n`` unknowns, until the result goes. A result kept that way lends
+        for ``n`` unknowns, until the result goes, and reuses nothing: later calls
+        must pass that result. A result kept that way lends
         its factorization to this solve if the solved parts make the same matrix
         and is otherwise solved afresh, so a poor match costs time, not a wrong
         field: a solve that factors takes up to twice as long as one without

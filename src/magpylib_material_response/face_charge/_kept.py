@@ -23,6 +23,7 @@ import scipy.linalg
 
 from magpylib_material_response.face_charge._bodies import (
     ALIGNED,
+    PARALLEL,
     assemble_system,
     load_system,
     split_unknowns,
@@ -78,11 +79,11 @@ def _fingerprint(bodies, joined):
         # its place against the first, as the coupling blocks see it
         add((b.position - first.position) @ first.R, size)
         add(first.R.T @ b.R, 1.0)
-    # rounded poses can fall on both sides of this choice, and the matrix differs
+    # rounded poses can fall on both sides of these choices, and the matrix differs
     frames = np.stack([b.R for b in bodies])
     turn = np.abs(frames.transpose(0, 2, 1)[:, None] @ frames[None])
-    aligned = np.abs(turn - np.round(turn)).max(axis=(2, 3)) <= ALIGNED
-    digest.update(aligned.tobytes())
+    digest.update((np.abs(turn - np.round(turn)).max(axis=(2, 3)) <= ALIGNED).tobytes())
+    digest.update((turn > 1 - PARALLEL).tobytes())
     if joined is not None:
         for shared in joined[0]:
             digest.update(np.asarray(shared, bool).data)
@@ -94,8 +95,10 @@ def _factor(A):
     """The LU of ``A``, overwriting it, and whether it is worth keeping: as
     ``scipy.linalg.solve``, a singular matrix raises and an ill-conditioned one
     warns, and it is then not kept, for later calls not to lose that warning."""
-    anorm = np.linalg.norm(A, 1)
-    (getrf, gecon) = scipy.linalg.get_lapack_funcs(("getrf", "gecon"), (A,))
+    (lange, getrf, gecon) = scipy.linalg.get_lapack_funcs(
+        ("lange", "getrf", "gecon"), (A,)
+    )
+    anorm = lange("1", A)  # no copy of A, as np.linalg.norm makes
     lu, piv, info = getrf(A, overwrite_a=True)
     if info:
         msg = "The face-charge system is singular."

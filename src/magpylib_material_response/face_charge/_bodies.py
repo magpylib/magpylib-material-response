@@ -62,6 +62,7 @@ PLANE = 1e-4
 # two parts whose axes differ by less than this count as aligned: a choice of
 # coupling, which changes the matrix across it however close the two sides are
 ALIGNED = 1e-9
+PARALLEL = 1e-9  # panels whose normals' product is within this of 1 lie parallel
 # systems from this size on are factorized in single precision and refined, for
 # a single-precision copy beside them, half their size again; smaller ones solve
 # in milliseconds anyway
@@ -414,7 +415,7 @@ def cross_block(a, bs):
         ia, ja, ka, w0 = pa.i[ta[0]], pa.j[ta[0]], pa.k[ta[0]], pa.w0[ta[0]]
         # b's panels lying in this face plane are handled exactly, below; of
         # them, those overlapping the face get a contact term
-        coplanar = (np.abs(normal_b[:, ka]) > 1 - 1e-9) & (
+        coplanar = (np.abs(normal_b[:, ka]) > 1 - PARALLEL) & (
             np.abs(center_b[:, ka] - w0) < reach
         )
         touching = (
