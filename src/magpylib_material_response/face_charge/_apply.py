@@ -13,6 +13,7 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from scipy.spatial import ConvexHull  # pylint: disable=no-name-in-module
 from scipy.spatial.transform import Rotation
 
+from magpylib_material_response._saturation import curve_of
 from magpylib_material_response.demag import (
     _get_susceptibility_from_hierarchy,
     _has_path,
@@ -387,6 +388,12 @@ def _split(collection):
             # currents take no susceptibility, even one set on a parent
             fixed.append(src)
             continue
+        if curve_of(src) is not None:
+            msg = (
+                f"{src} is on a B-H curve: apply_face_charge solves linear parts only. "
+                "Mesh it and use apply_demag, which follows the curve."
+            )
+            raise NotImplementedError(msg)
         chi = _get_susceptibility_from_hierarchy(src)  # 0 if none is set
         if not np.any(chi):
             fixed.append(src)

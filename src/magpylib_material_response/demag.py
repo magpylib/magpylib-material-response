@@ -72,6 +72,7 @@ from scipy.sparse.linalg import LinearOperator, gmres
 from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response._saturation import curve_of, iterate
 from magpylib_material_response.demag_fft import (
     MIN_CLUSTER_CELLS,
     QUAT_ATOL,
@@ -288,9 +289,12 @@ def _subtract_susceptibility_product(T, chi):
 
 
 def _has_susceptibility(source):
-    """Whether `source` or one of its parents sets a susceptibility."""
+    """Whether `source` or one of its parents sets a susceptibility or a B-H
+    curve."""
     while source is not None:
         if getattr(source, "susceptibility", None) is not None:
+            return True
+        if getattr(source, "bh_curve", None) is not None:
             return True
         source = source.parent
     return False
@@ -1326,7 +1330,9 @@ def _self_blocks(n, clusters, interaction, ops):
 GMRES_RESTART = 100
 
 
-def _solve_iterative(*, n, chi, rhs, rhs_shape, matvec, T_self, solver_tol, max_iter):
+def _solve_iterative(
+    *, n, chi, rhs, rhs_shape, matvec, T_self, solver_tol, max_iter, x0=None
+):
     """GMRES solve of (I - S T) x = rhs with block-Jacobi preconditioning.
 
     Raises ``RuntimeError`` when GMRES does not reach ``solver_tol`` — a
@@ -1357,7 +1363,7 @@ def _solve_iterative(*, n, chi, rhs, rhs_shape, matvec, T_self, solver_tol, max_
         restart=GMRES_RESTART,
         # scipy counts restart cycles; max_iter counts iterations
         maxiter=max(1, -(-max_iter // GMRES_RESTART)),
-        x0=rhs.copy(),  # warm start at rhs
+        x0=rhs.copy() if x0 is None else x0,  # warm start at rhs, or the last J
     )
     if info > 0:
         msg = (
@@ -1457,6 +1463,20 @@ def _solve_cells(
     min_log_time,
 ):
     """The polarizations solving ``(I - chi T) J = rhs``, shape as ``rhs``."""
+    return _prepare_solver(
+        magnets_list, chi, interaction, solver, solver_tol, max_iter, min_log_time
+    )(chi, rhs)
+
+
+def _prepare_solver(
+    magnets_list, chi, interaction, solver, solver_tol, max_iter, min_log_time
+):
+    """The demag operator of these cells, built once: returns ``solve(chi, rhs,
+    x0=None)``, which solves ``(I - chi T) J = rhs`` for any cell
+    susceptibilities ``chi`` of the same cells, the dense ``T`` or the FFT and
+    block operators kept between calls. The structure, and the sparsification
+    budget, follow the ``chi`` given here, so it must be the largest the
+    calls will bring."""
     n = len(magnets_list)
     # ── demag operator under the chosen rule ────────────────────────────
     positions, clusters = _analyze_collection(magnets_list, interaction, chi=chi)
@@ -1468,43 +1488,51 @@ def _solve_cells(
             share=share,
             solver=solver,
         )
-    T = None
-    if solver == "direct":
-        T = _assemble_T_dense(
-            magnets_list,
-            positions,
-            clusters,
-            interaction,
-            min_log_time=min_log_time,
-        )
+    kept = {"T": None, "ops": None, "T_self": None}
 
-    with timelog("Solving of linear system", min_log_time=min_log_time):
-        if solver == "direct":
-            pol_new = _solve_direct(T, chi, rhs)
-        else:
-            tol = solver_tol * AUTO_TOL_FACTOR if auto else solver_tol
-            ops = _build_operator(
+    def dense():
+        if kept["T"] is None:
+            kept["T"] = _assemble_T_dense(
                 magnets_list,
                 positions,
                 clusters,
-                chi,
-                tol,
-                min_log_time,
                 interaction,
+                min_log_time=min_log_time,
             )
-            matvec = _build_matvec(n, chi, ops)
-            T_self = _self_blocks(n, clusters, interaction, ops)
+        return kept["T"]
+
+    if solver == "direct":
+        dense()
+    else:
+        tol = solver_tol * AUTO_TOL_FACTOR if auto else solver_tol
+        kept["ops"] = _build_operator(
+            magnets_list,
+            positions,
+            clusters,
+            chi,
+            tol,
+            min_log_time,
+            interaction,
+        )
+        kept["T_self"] = _self_blocks(n, clusters, interaction, kept["ops"])
+
+    def solve(chi, rhs, x0=None):
+        with timelog("Solving of linear system", min_log_time=min_log_time):
+            if kept["ops"] is None:
+                # Q is formed in T's buffer: a copy keeps T for the next call
+                return _solve_direct(np.array(dense(), order="F"), chi, rhs)
             gmres_failure = None
             try:
-                pol_new = _solve_iterative(
+                return _solve_iterative(
                     n=n,
                     chi=chi,
                     rhs=rhs.ravel(),
                     rhs_shape=rhs.shape,
-                    matvec=matvec,
-                    T_self=T_self,
+                    matvec=_build_matvec(n, chi, kept["ops"]),
+                    T_self=kept["T_self"],
                     solver_tol=tol,
                     max_iter=max_iter,
+                    x0=None if x0 is None else x0.ravel(),
                 )
             except RuntimeError as err:
                 if not auto:
@@ -1519,21 +1547,14 @@ def _solve_cells(
                 # Leave the except block first: its traceback holds the
                 # GMRES frames, and with them the operator.
                 gmres_failure = str(err)
-            if gmres_failure is not None:
-                logger.warning(
-                    "solver='auto': {err} Falling back to the direct solver.",
-                    err=gmres_failure,
-                )
-                ops = matvec = None  # free the operator before the dense T
-                T = _assemble_T_dense(
-                    magnets_list,
-                    positions,
-                    clusters,
-                    interaction,
-                    min_log_time=min_log_time,
-                )
-                pol_new = _solve_direct(T, chi, rhs)
-    return pol_new
+            logger.warning(
+                "solver='auto': {err} Falling back to the direct solver.",
+                err=gmres_failure,
+            )
+            kept["ops"] = kept["T_self"] = None  # free the operator before T
+            return _solve_direct(np.array(dense(), order="F"), chi, rhs)
+
+    return solve
 
 
 def apply_demag(
@@ -1581,7 +1602,14 @@ def apply_demag(
         anisotropic susceptibility along the cell's own x, y and z axes, which turn
         with its orientation like its polarization. If not defined, values are
         searched at object level or parent level if needed; a cell with none
-        there either is fixed, as in ``apply_face_charge``.
+        there either is fixed, as in ``apply_face_charge``. A cell with a
+        ``bh_curve``, on itself or a parent, follows that instead: a table of
+        ``(H, B)`` rows in A/m and T, from ``(0, 0)``, H increasing; past its
+        last row the polarization keeps its last value. Each such cell takes
+        the susceptibility its own field gives on the curve, the linear solve
+        repeated until none changes by more than 1e-4, with Anderson
+        acceleration, the matrix built once; see the saturation example. The
+        ``susceptibility`` argument cannot go with a curve.
 
     inplace: bool
         If False, applies demagnetization on a copy of the input collection and returns
@@ -1713,8 +1741,22 @@ def apply_demag(
 
         # set up S: block-diagonal, one 3x3 tensor per cell in the global
         # frame, R diag(chi) R^T with chi along the cell's own axes (#50).
+        curves = [curve_of(src) for src in originals]
+        on_curve = np.flatnonzero([c is not None for c in curves])
+        if on_curve.size and susceptibility is not None:
+            msg = (
+                f"{len(on_curve)} cells are on a B-H curve, and the susceptibility "
+                "argument would override it: give one or the other."
+            )
+            raise ValueError(msg)
         sus = get_susceptibilities(originals, susceptibility)
         chi = _cell_susceptibilities(sus, [src.orientation for src in magnets_list])
+        if on_curve.size:
+            # the largest susceptibility each curve can give, for the operator
+            # and its budget; the iteration starts from the curve's own slope
+            chi[on_curve] = np.array([curves[i].chi_max for i in on_curve])[
+                :, None, None
+            ] * np.eye(3)
 
         # set up H_ext
         H_ext = get_H_ext(*originals)
@@ -1724,33 +1766,54 @@ def apply_demag(
             raise ValueError(msg)
         H_ext = np.reshape(H_ext, (3 * n, 1), order="F")
 
-        pol_total = pol_magnets
-
+        drive = H_ext  # the applied field and the currents', shape (3n, 1)
         if currents_list and chi.any():
             with timelog(
                 "Add current sources contributions", min_log_time=min_log_time
             ):
                 pos = np.array([src.centroid for src in magnets_list])
                 pol_currents = magpy.getB(currents_list, pos, sumup=True)
-                pol_currents = np.reshape(pol_currents, (3 * n, 1), order="F")
-                pol_total = pol_total + _apply_susceptibility(chi, pol_currents)
+                drive = drive + np.reshape(pol_currents, (3 * n, 1), order="F")
 
-        rhs = pol_total + _apply_susceptibility(chi, H_ext)  # shape (3n, 1)
+        def right_hand_side(chi):
+            return pol_magnets + _apply_susceptibility(chi, drive)
 
         _check_interaction(interaction, magnets_list)
         # a shortcut, not only time: GMRES would give rhs only to its tolerance
-        pol_new = rhs
-        if chi.any():
+        pol_new = right_hand_side(chi)
+        if chi.any() and not on_curve.size:
             pol_new = _solve_cells(
                 magnets_list,
                 chi,
-                rhs,
+                pol_new,
                 interaction,
                 solver,
                 solver_tol,
                 max_iter,
                 min_log_time,
             )
+        elif on_curve.size:
+            linear = _prepare_solver(
+                magnets_list,
+                chi,
+                interaction,
+                solver,
+                solver_tol,
+                max_iter,
+                min_log_time,
+            )
+            last = {"J": None}
+
+            def solve(chi):
+                J = linear(chi, right_hand_side(chi), x0=last["J"])
+                last["J"] = J
+                return np.reshape(J, (n, 3), order="F")
+
+            remanence = np.reshape(pol_magnets, (n, 3), order="F")
+            pol_new, _ = iterate(
+                solve, on_curve, [curves[i] for i in on_curve], chi, remanence
+            )
+            pol_new = np.reshape(pol_new, (3 * n, 1), order="F")
 
         pol_new = np.reshape(pol_new, (n, 3), order="F")
 

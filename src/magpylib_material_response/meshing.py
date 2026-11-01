@@ -23,15 +23,16 @@ from magpylib_material_response.meshing_utils import (
 
 
 def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
-    susceptibility = getattr(obj, "susceptibility", None)
-    if susceptibility is not None:
-        for cell in cells:
-            cell.susceptibility = copy.deepcopy(susceptibility)
     coll = magpy.Collection(cells)
-    if susceptibility is None:  # from its parents, which the mesh does not have
-        susceptibility = inherited(obj, "susceptibility")
-        if susceptibility is not None:
-            coll.susceptibility = copy.deepcopy(susceptibility)
+    for name in ("susceptibility", "bh_curve"):
+        value = getattr(obj, name, None)
+        if value is not None:
+            for cell in cells:
+                setattr(cell, name, copy.deepcopy(value))
+        else:  # from its parents, which the mesh does not have
+            value = inherited(obj, name)
+            if value is not None:
+                setattr(coll, name, copy.deepcopy(value))
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
     # A cell inherits its parent's colour and nothing else of its style, and a
@@ -863,6 +864,8 @@ def _responds(src):
     if isinstance(src, BaseCurrent):
         return False
     while src is not None:
+        if getattr(src, "bh_curve", None) is not None:
+            return True
         chi = getattr(src, "susceptibility", None)
         if chi is not None:
             return bool(np.any(np.asarray(chi, dtype=float) != 0))

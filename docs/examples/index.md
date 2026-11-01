@@ -24,6 +24,9 @@ Executable examples, in suggested reading order:
 - [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
   `TriangularMesh` magnet with TetGen, checked against the exact solution for a
   magnetized sphere.
+- [Saturation](saturation.md) — a B-H curve in place of a constant
+  susceptibility: a sphere against its exact answer, and where a cube in 0.5 T
+  saturates.
 
 ```{toctree}
 :maxdepth: 1
@@ -37,4 +40,5 @@ mesh_convergence
 fem_check
 shield_tube
 tetrahedral_meshes
+saturation
 ```
