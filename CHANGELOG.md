@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `apply_face_charge(model, reuse=previous)` keeps the factorization for a loop
+  that changes only what drives the solved parts: 72 to 18 ms a call at 1,518
+  unknowns, 1.15 s to 0.12 s at 9,558. It compares the meshed parts with the
+  previous result's and otherwise solves afresh, so a poor match costs time, not
+  accuracy
+  ([#135](https://github.com/magpylib/magpylib-material-response/pull/135))
+
 ### Changed
 
 - Large face-charge solves of cuboids are up to 1.55x faster on 8 threads and 2x
