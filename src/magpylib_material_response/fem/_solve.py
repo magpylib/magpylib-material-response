@@ -48,6 +48,7 @@ import time
 import warnings
 from collections import deque
 from contextlib import contextmanager
+from copy import deepcopy
 from itertools import combinations
 
 import magpylib as magpy
@@ -322,10 +323,18 @@ def _conforming(mesh):
     return True
 
 
-class FemSolution:
-    """A solved finite-element model: its field and what the solve took.
+class FemSolution(magpy.misc.CustomSource):
+    """A solved finite-element model, as a magpylib source: its field and what
+    the solve took.
 
-    Made by :func:`fem_solve` or :func:`fem_study`.
+    Made by :func:`fem_solve` or :func:`fem_study`. :func:`magpylib.getB`,
+    ``getH``, ``getJ`` and ``getM`` read it, alone or with other sources, as on a
+    collection solved by :func:`~magpylib_material_response.demag.apply_demag`:
+    the field of the model's magnets, remanent and induced, and of its currents,
+    without the uniform applied field. Moving it moves that field as it is,
+    without solving again. Inside a part with a high susceptibility the values
+    are pointwise and show the elements, because H there is small next to its
+    error: a part on a curve can read a few percent past its saturation.
 
     Attributes
     ----------
@@ -345,6 +354,10 @@ class FemSolution:
     """
 
     def __init__(self, model, order, gf, ndof, seconds, lift=None, chi=None):
+        super().__init__()
+        # past the setter, which tries a new field function out on two points of
+        # its own, and they can lie on the meshed ball
+        self._field_func = self._field
         self._model = model
         self._gf = gf
         self._lift = lift
@@ -363,68 +376,45 @@ class FemSolution:
         )
         self.moment = 3 / MU0 * model.length**3 * np.asarray(flux)
 
-    def getB(self, observers):
-        """Flux density B in T at `observers`, positions (..., 3) in m, or
-        magpylib sensors, in their own frames as :func:`magpylib.getB` gives
-        them.
+    def __deepcopy__(self, memo):
+        """A copy moves on its own and shares the solved field, which no one
+        changes and which takes as much memory as the solve."""
+        solved = ("_model", "_gf", "_lift", "_chi")
+        new = type(self).__new__(type(self))
+        memo[id(self)] = new
+        for name, value in self.__dict__.items():
+            new.__dict__[name] = value if name in solved else deepcopy(value, memo)
+        return new
 
-        The field of the model's magnets, remanent and induced, and of its
-        currents, without the uniform applied field: what :func:`magpylib.getB`
-        gives on a collection solved by
-        :func:`~magpylib_material_response.demag.apply_demag`.
-        """
-        if _are_sensors(observers):
-            return magpy.getB(self._source(), observers)
-        return self._field(observers, "B")
-
-    def getH(self, observers):
-        """Field H in A/m at `observers`, positions (..., 3) in m or magpylib
-        sensors, without the uniform applied field."""
-        if _are_sensors(observers):
-            return magpy.getH(self._source(), observers)
-        return self._field(observers, "H")
-
-    def _source(self):
-        """This solution as a magpylib source, for magpylib to read on sensors:
-        their pixels, paths, frames and handedness."""
-        made = False
-
-        def field_func(field, observers):
-            if not made:  # magpylib tries a new one out on (1, 2, 3) and (4, 5, 6) m,
-                return np.zeros((len(observers), 3))  # which may lie on the ball
-            return self._field(observers, field)
-
-        source = magpy.misc.CustomSource(field_func=field_func)
-        made = True
-        return source
-
-    def _field(self, observers, kind):
-        obs, shape = _positions(observers)
+    def _field(self, field, observers):
+        """`field` ("B", "H", "J" or "M") at the positions `observers` (n, 3) in
+        m, as magpylib asks for it."""
         model = self._model
-        s = (obs - model.center) / model.length
-        out = np.empty_like(s)
+        s = (observers - model.center) / model.length
+        out = np.zeros_like(s)
         rho = np.linalg.norm(s, axis=1)
         inside = rho < model.radius
         # a later solve of the same model curves its mesh for another order
         model.curve(self.order)
         air = ~inside
         if inside.any():
-            if kind == "B":
+            if field == "B":
                 cf = model.flux_density(self._gf, self._lift, self._chi)
-            else:
+            elif field == "H":
                 cf = model.field_strength(self._gf, self._lift)
+            else:
+                cf = model.polarization(self._gf, self._lift, self._chi)
             mp = model.locate(s[inside], np.zeros(3))
             out[inside] = np.asarray(cf(mp)).reshape(-1, 3)
             if model.currents:
                 air[inside] = model.in_air(mp)
-        if (~inside).any():
-            out[~inside] = -self._kelvin_gradient(s[~inside])
-        if model.currents and air.any():
-            # the currents' own field, where the air's reduced potential leaves it
-            out[air] += model.applied(s[air]) - model.B_ext
-        if kind == "H":
-            out /= MU0
-        return out.reshape(shape)
+        if field in ("B", "H"):
+            if (~inside).any():
+                out[~inside] = -self._kelvin_gradient(s[~inside])
+            if model.currents and air.any():
+                # the currents' own field, where the air's reduced potential leaves it
+                out[air] += model.applied(s[air]) - model.B_ext
+        return out / MU0 if field in ("H", "M") else out
 
     def _kelvin_gradient(self, s):
         """grad u at points outside the ball, from its image in the Kelvin ball:
@@ -780,6 +770,11 @@ class Model:
         return self.mesh.MaterialCF(
             {f"part{i}": inside for i in range(len(self.parts))}, default=-grad
         )
+
+    def polarization(self, gf, lift=None, chi=None):
+        """J in T: B - mu0 H, which leaves exactly the parts' own, and zero in
+        the air."""
+        return self.flux_density(gf, lift, chi) - self.field_strength(gf, lift)
 
     def _magnets(self):
         """The region of all magnets."""

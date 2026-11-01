@@ -150,7 +150,7 @@ def fem_study(
         observers = np.asarray(quantity, dtype=float).reshape(-1, 3)
 
         def evaluate(solution):
-            return solution.getB(observers)
+            return solution.getB(observers).reshape(-1, 3)
 
     model = Model(
         collection,
