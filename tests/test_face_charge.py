@@ -6,15 +6,18 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import magpylib as magpy
 import numpy as np
 import pytest
 from magpylib.graphics.backend import colors_from_colorscale
 from matplotlib.colors import to_rgb
+from scipy.linalg import LinAlgError, LinAlgWarning
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response import from_json, to_json
 from magpylib_material_response.face_charge import (
     ChargeSheet,
     _bodies,
@@ -25,6 +28,7 @@ from magpylib_material_response.face_charge import (
 )
 from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
+from magpylib_material_response.face_charge._kept import _factor
 from magpylib_material_response.face_charge._mesh import (
     _convex,
     _merge_coplanar,
@@ -1311,3 +1315,260 @@ def test_sheet_is_closed_finite_at_its_corners_and_read_only():
     assert np.isfinite(sheet.getB(sheet.vertices + sheet.position)).all()
     with pytest.raises(ValueError, match="read-only"):
         sheet.charge_densities[:] *= 2
+
+
+def _soft(dimension=(0.01, 0.01, 0.002), position=(0, 0, 0), chi=1000.0, J=(0, 0, 0)):
+    part = magpy.magnet.Cuboid(polarization=J, dimension=dimension, position=position)
+    part.susceptibility = chi
+    return part
+
+
+def _drive(x=0.0, z=0.0045, tilt=0.0):
+    return magpy.magnet.Cuboid(
+        polarization=(0, 0, 1),
+        dimension=(0.005, 0.005, 0.005),
+        position=(x, 0, z),
+        orientation=R.from_euler("x", tilt, degrees=True),
+    )
+
+
+def _scaled(k):
+    return magpy.Collection(
+        magpy.magnet.Cuboid(
+            polarization=(0, 0, 1),
+            dimension=(0.005 * k, 0.005 * k, 0.005 * k),
+            position=(0, 0, 0.0045 * k),
+        ),
+        _soft((0.01 * k, 0.01 * k, 0.002 * k)),
+    )
+
+
+def _with_field(field):
+    model = magpy.Collection(_drive(), _soft())
+    model.H_ext = (field, -field, 0)
+    return model
+
+
+def _turned(k):
+    """Two soft parts turned and moved together, a magnet beside them."""
+    parts = magpy.Collection(_soft(), _soft((0.004, 0.004, 0.004), (0, 0, 0.006)))
+    parts.rotate(R.from_euler("xyz", (20 * k, 13 * k, 7 * k), degrees=True), anchor=0)
+    parts.move((0.001 * k, -0.002 * k, 0))
+    return magpy.Collection(_drive(0.015, 0), parts)
+
+
+def _shaft(angle):
+    shaft = magpy.magnet.Cylinder(
+        polarization=(0, 0, 0), dimension=(0.02, 0.04), position=(0, 0, -0.02)
+    )
+    shaft.susceptibility = 3999
+    magnet = magpy.magnet.Cylinder(
+        polarization=(0.5, 0, 0), dimension=(0.006, 0.003), position=(0, 0, 0.0025)
+    )
+    return magpy.Collection(
+        magpy.Collection(shaft, magnet).rotate_from_angax(angle, "z", anchor=0)
+    )
+
+
+def _models(make, *values):
+    return [lambda v=v: make(v) for v in values]
+
+
+SAME = (False, True, True, True)
+REUSED = {
+    "a magnet moves": (
+        _models(
+            lambda x: magpy.Collection(_drive(x, tilt=x * 1e3), _soft()),
+            0,
+            1e-3,
+            2e-3,
+            3e-3,
+        ),
+        2,
+        SAME,
+    ),
+    "above the mixed-precision size": (
+        _models(lambda x: magpy.Collection(_drive(x), _soft()), 0, 1e-3, 2e-3, 3e-3),
+        4,
+        SAME,
+    ),
+    "H_ext changes": (_models(_with_field, 0.0, 5e-3, -0.2, 1.0), 2, SAME),
+    "the part's remanence changes": (
+        _models(
+            lambda j: magpy.Collection(_drive(), _soft(chi=0.05, J=(0, 0, j))),
+            0.2,
+            0.5,
+            -1.0,
+            0.1,
+        ),
+        2,
+        SAME,
+    ),
+    "parts move as one": (_models(_turned, 0, 1, 2, 3), 2, SAME),
+    "a mesh turns": (_models(_shaft, 0, 30, 77, 190), 2, SAME),
+    "parts of one material touch": (
+        _models(
+            lambda x: magpy.Collection(
+                _drive(x, 0.01),
+                _soft(position=(-0.005, 0, 0)),
+                _soft(position=(0.005, 0, 0)),
+            ),
+            0,
+            1e-3,
+            2e-3,
+            3e-3,
+        ),
+        2,
+        SAME,
+    ),
+    "parts move apart": (
+        _models(
+            lambda z: magpy.Collection(
+                _drive(0.015, 0), _soft(), _soft(position=(0, 0, z))
+            ),
+            0.003,
+            0.004,
+            0.005,
+        ),
+        2,
+        (False, False, False),
+    ),
+    "chi changes": (
+        _models(lambda x: magpy.Collection(_drive(), _soft(chi=x)), 1000, 999, 10),
+        2,
+        (False, False, False),
+    ),
+    "the model is scaled": (
+        _models(_scaled, 1, 1, 2, 1000),
+        2,
+        (False, True, False, False),
+    ),
+    "a length changes": (
+        _models(
+            lambda L: magpy.Collection(_drive(), _soft((L, 0.01, 0.002))),
+            0.01,
+            0.01001,
+            0.0105,
+        ),
+        2,
+        (False, False, False),
+    ),
+    "a magnet's footprint moves on a part": (
+        _models(
+            lambda x: magpy.Collection(_drive(x, 0.0035), _soft()), 0, 7e-4, 1.4e-3
+        ),
+        2,
+        (False, False, False),
+    ),
+    "a turn crosses what counts as aligned": (
+        _models(
+            lambda t: magpy.Collection(
+                _drive(0.02, 0.01),
+                _soft(),
+                _soft(
+                    (0.004, 0.004, 0.004), (0, 0, 0.00301), chi=50.0
+                ).rotate_from_rotvec((0, 0, t), degrees=False),
+            ),
+            0.9999e-9,
+            1.0001e-9,
+        ),
+        2,
+        (False, False),
+    ),
+    "parts swap places": (
+        [
+            lambda: magpy.Collection(
+                _drive(0.015, 0), _soft(), _soft((0.004, 0.004, 0.004), (0, 0, 0.006))
+            ),
+            lambda: magpy.Collection(
+                _drive(0.015, 0), _soft((0.004, 0.004, 0.004), (0, 0, 0.006)), _soft()
+            ),
+        ],
+        2,
+        (False, False),
+    ),
+}
+
+
+@pytest.mark.parametrize("case", REUSED)
+def test_reuse_serves_only_its_own_matrix(case):
+    """A fingerprint that misses what makes the matrix would give wrong fields
+    silently, so every call is checked against a solve without ``reuse``."""
+    models, level, reused = REUSED[case]
+    observers = np.array([[0.012, 0, 0], [0, 0.012, 0.001], [0.007, 0.007, 0.007]])
+    solved, seen = True, []
+    for model in models:
+        solved = apply_face_charge(model(), level=level, reuse=solved)
+        fresh = magpy.getB(apply_face_charge(model(), level=level), observers)
+        np.testing.assert_allclose(
+            magpy.getB(solved, observers),
+            fresh,
+            rtol=0,
+            atol=1e-11 * np.abs(fresh).max(),
+        )
+        seen.append(solved.face_charge_info["reused"])
+    assert tuple(seen) == reused
+
+
+def test_reuse_is_safe_from_threads():
+    """Threads share one factorization, whose pivots scipy's lu_solve shifts in
+    place (#131): shared as they are, nearly every answer here is wrong."""
+    observers = np.array([[0.012, 0, 0], [0, 0, 0.012]])
+    positions = np.linspace(-1e-3, 1e-3, 40)
+    first = apply_face_charge(magpy.Collection(_drive(), _soft()), level=2, reuse=True)
+
+    def read(x):
+        model = magpy.Collection(_drive(x), _soft())
+        solved = apply_face_charge(model, level=2, reuse=first)
+        assert solved.face_charge_info["reused"]
+        return magpy.getB(solved, observers)
+
+    fresh = [read(x) for x in positions]
+    with ThreadPoolExecutor(8) as pool:
+        for _ in range(3):
+            np.testing.assert_allclose(
+                list(pool.map(read, positions)), fresh, rtol=1e-10
+            )
+    # and the factorization is still good afterwards
+    np.testing.assert_allclose(read(positions[0]), fresh[0], rtol=1e-10)
+
+
+def test_only_a_result_kept_for_it_lends_its_factorization():
+    model = magpy.Collection(_drive(), _soft())
+
+    def reused(by):
+        return apply_face_charge(model, level=1, reuse=by).face_charge_info["reused"]
+
+    plain = apply_face_charge(model, level=1)
+    assert plain._kept_matrix is None
+    assert not plain.face_charge_info["reused"]
+    assert not reused(plain)  # kept nothing, so solved afresh
+
+    kept = apply_face_charge(model, level=1, reuse=True)
+    assert not kept.face_charge_info["reused"]
+    assert reused(kept)
+    copied = kept.copy()  # shared, not doubled
+    assert copied._kept_matrix is kept._kept_matrix
+    assert reused(copied)
+    assert not reused(from_json(to_json(kept))[0])  # not saved
+
+    # nor does a result solved from a kept one hold on to it
+    with pytest.warns(UserWarning, match="nothing responds"):
+        assert apply_face_charge(kept, level=1)._kept_matrix is None
+
+    with pytest.raises(TypeError, match="result of apply_face_charge"):
+        apply_face_charge(model, level=1, reuse=model)
+    with pytest.raises(ValueError, match="one layout"):
+        apply_face_charge(model, level=1, refine=1, reuse=True)
+
+
+def test_a_kept_factorization_needs_a_sound_matrix():
+    """Later calls only back-substitute: they would lose scipy.linalg.solve's
+    error on a singular matrix and warning on an ill-conditioned one."""
+    assert _factor(np.eye(3))[2]
+    with np.errstate(all="ignore"), pytest.warns(LinAlgWarning, match="rcond=nan"):
+        assert not _factor(np.diag([1.0, np.nan, 1.0]))[2]
+    with pytest.warns(LinAlgWarning, match="Ill-conditioned"):
+        assert not _factor(np.diag([1.0, 1.0, 1e-20]))[2]
+    with pytest.raises(LinAlgError, match="singular"):
+        _factor(np.zeros((3, 3)))

@@ -28,6 +28,7 @@ from magpylib_material_response.face_charge._bodies import (
     near_panels,
     solve_system,
 )
+from magpylib_material_response.face_charge._kept import solve_kept
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.face_charge._triangle import frames
 from magpylib_material_response.face_charge._tribody import (
@@ -50,7 +51,13 @@ FACETS = 12
 
 
 def apply_face_charge(
-    collection, *, level=None, refine=0, max_unknowns=20_000, min_log_time=None
+    collection,
+    *,
+    level=None,
+    refine=0,
+    max_unknowns=20_000,
+    min_log_time=None,
+    reuse=False,
 ):
     """Solve the collection's linear magnets on their surfaces.
 
@@ -100,6 +107,17 @@ def apply_face_charge(
     min_log_time : float, optional
         Log steps that take longer than this, in seconds; by default the value
         of :func:`~magpylib_material_response.configure_logging`.
+    reuse : bool or magpylib.Collection, default False
+        For a loop that changes only what drives the solved parts, such as a
+        magnet's pose, ``H_ext`` or a part's remanence, or moves them all as one.
+        ``True`` keeps this solve's factorization on the result, ``8 n**2`` bytes
+        for ``n`` unknowns, until the result goes. A result kept that way lends
+        its factorization to this solve if the solved parts make the same matrix
+        and is otherwise solved afresh, so a poor match costs time, not a wrong
+        field: a solve that factors takes up to twice as long as one without
+        ``reuse`` from 2,000 unknowns on, which the first match pays back. Fields
+        agree with a fresh solve to 1e-13 of the largest, 2e-11 at a weak observer.
+        It needs one layout, so it cannot go with ``refine``.
 
     Returns
     -------
@@ -114,8 +132,9 @@ def apply_face_charge(
         magnetization, which depends on the field of every source at once; for
         B inside a part, mesh it and use ``apply_demag``. Its
         ``face_charge_info`` dict holds the last solve's ``unknowns``, the
-        ``level``, the refinement ``rounds`` done and the wall time in
-        ``seconds``; ``to_json`` keeps it.
+        ``level``, the refinement ``rounds`` done, whether it ``reused`` a
+        factorization and the wall time in ``seconds``; ``to_json`` keeps it, but
+        not the factorization.
 
     Raises
     ------
@@ -139,10 +158,18 @@ def apply_face_charge(
     if level < 1 or refine < 0:
         msg = f"level must be 1 or more and refine 0 or more; got level={level}, refine={refine}."
         raise ValueError(msg)
+    previous = _kept_by(reuse)
+    if reuse is not False and refine:
+        msg = (
+            "reuse needs one layout, and refine makes it follow the solved charge; "
+            f"got refine={refine}."
+        )
+        raise ValueError(msg)
     start = time.perf_counter()
     solved, fixed = _split(collection)
     out = collection.copy()
-    info = {"unknowns": 0, "level": level, "rounds": 0}
+    out._kept_matrix = None  # a copy of an earlier result's is not this solve's
+    info = {"unknowns": 0, "level": level, "rounds": 0, "reused": False}
     if not solved:
         logger.info("Face charge: no part with a susceptibility to solve")
         out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
@@ -246,7 +273,13 @@ def apply_face_charge(
         )
         with timelog("Face-charge assembly and solve", min_log_time=min_log_time):
             joined = _interfaces(bodies)
-            coefs = solve_system(bodies, external, joined)
+            if reuse is False:
+                coefs = solve_system(bodies, external, joined)
+            else:
+                coefs, out._kept_matrix, reused = solve_kept(
+                    bodies, external, joined, previous
+                )
+                info.update(reused=reused)
         info.update(unknowns=unknowns, rounds=rnd)
         sheets = [
             _sheet_of(b, c, ~shared)
@@ -318,6 +351,19 @@ def apply_face_charge(
             above = above.parent
     out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
     return out
+
+
+def _kept_by(reuse):
+    """The factorization that ``reuse`` lends, if any."""
+    if isinstance(reuse, bool):
+        return None
+    if not hasattr(reuse, "face_charge_info"):
+        msg = (
+            "reuse must be True, False or a result of apply_face_charge; "
+            f"got {reuse!r}."
+        )
+        raise TypeError(msg)
+    return getattr(reuse, "_kept_matrix", None)
 
 
 def _at_least(bodies):

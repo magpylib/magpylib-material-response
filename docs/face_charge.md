@@ -217,6 +217,42 @@ puts B 0.25 mm above the plate within 0.04 %, where uniform panels need 10,350
 unknowns and 20 s for 0.13 %. Outside the steel tube, one round from level 3
 brings 5.6 % down to 1.0 %.
 
+## Many solves in a loop
+
+A solve is not a source you can move things around in: a magnet moved after the
+solve leaves the part's charge as it was. B at the sensor stays right, and its
+sensitivity to the magnet is wrong. For a plate under a magnet, the field
+changes by 218 mT per mm of magnet shift, as finite elements agree, and by 146
+mT if the magnet moves after one solve, as if the plate were not there. So a
+tolerance study needs a solve per sample.
+
+The matrix of a solve depends only on the solved parts, so a loop that changes
+only what drives them, such as a magnet's pose, `H_ext` or a part's remanence,
+or moves all solved parts as one, can keep its factorization:
+
+```python
+solved = True
+for pose in poses:
+    solved = apply_face_charge(model_at(pose), reuse=solved)
+    B.append(magpy.getB(solved, sensor))
+```
+
+Each call compares its meshed parts with the previous result's. If they make the
+same matrix it takes only a new load and a back-substitution, as
+`face_charge_info["reused"]` tells; if not, it solves afresh and keeps that
+factorization instead. So a poor match costs time, never a wrong field. Fields
+agree with a fresh solve to 1e-13 of the largest, 2e-11 at a weak observer.
+
+For the plate under a magnet, a call takes 72 ms at level 3 and then 18 ms, and
+1.15 s at 9,558 unknowns and then 0.12 s. The call that factors takes up to
+twice as long as a plain solve from 2,000 unknowns on, 1.9 s at 9,558, which the
+first match pays back.
+
+The factorization takes 8 n² bytes for n unknowns, on the result: it goes when
+the result goes. Keep the last result only, as the loop above does. A loop in
+which every call changes the matrix, such as parts that move against each other
+or a length that changes, gains nothing from `reuse`.
+
 ## Whether saturation matters
 
 A sheet's `mean_polarization` is the average polarization of the part it
