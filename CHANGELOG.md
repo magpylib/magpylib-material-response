@@ -18,6 +18,10 @@ and this project adheres to
 
 ### Fixed
 
+- Face charge no longer treats a turned part close to another as touching it: at
+  a 10 um gap the field near the parts was up to 16 % off finite elements, and a
+  finer level made it worse. It is now at most 1.4 % off
+  ([#137](https://github.com/magpylib/magpylib-material-response/pull/137))
 - The field of a solved face-charge model is right far away: it lost accuracy
   from about 10 times the model's size and grew with distance, 14 % off at 100
   times, where it now falls as a dipole's

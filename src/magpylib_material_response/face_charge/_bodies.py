@@ -364,15 +364,16 @@ def cross_block(a, bs):
     # each b panel's reach: within it of a's face plane, the contact term.
     # Aligned cuboids are graded onto each other and their Gauss points resolve
     # a gap, better than the contact term: four pieces 1 um from a plate's side
-    # 0.13 % so, 1.28 % by it. A turned one's panels cannot meet a's, and leak
-    # across a gap below them: 3 % for a cube turned 30 degrees 1e-6 m above a
-    # plate, 4.6e-4 by the contact term out to NEAR, as the gap's own effect
+    # 0.13 % so, 1.28 % by it. A turned one's panels cannot meet a's, but the
+    # contact term gives the touching answer, whose gap has an effect of its own:
+    # a cube 10 um above a plate, 16 % off finite elements by it out to NEAR and
+    # at most 1.4 % by Gauss points, which win down to 300 nm, FEM's smallest (#136)
     reach = []
     for b in bs:
         Rab, cb = _relative(a, b)
         turn = np.abs(Rab)  # not np.allclose: 9,900 pairs of 100 cubes took 0.2 s
         aligned = np.abs(turn - np.round(turn)).max() <= 1e-9
-        reach.append(np.full(b.panels.N, (contact_tol if aligned else near_tol)(a, b)))
+        reach.append(np.full(b.panels.N, (contact_tol if aligned else plane_tol)(a, b)))
         pts, w, functions = b.galerkin.rule(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
         wts.append(w)

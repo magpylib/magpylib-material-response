@@ -1311,3 +1311,35 @@ def test_sheet_is_closed_finite_at_its_corners_and_read_only():
     assert np.isfinite(sheet.getB(sheet.vertices + sheet.position)).all()
     with pytest.raises(ValueError, match="read-only"):
         sheet.charge_densities[:] *= 2
+
+
+@pytest.mark.parametrize(
+    ("turn", "reference"),
+    [
+        (0.0, ((0.9359, 0.0, -0.1898), (0.3074, -0.0345, 0.3261))),
+        (1e-6, ((0.9359, 0.0, -0.1898), (0.3074, -0.0345, 0.3261))),
+        (1e-3, ((0.9359, 0.0002, -0.1898), (0.3074, -0.0346, 0.3262))),
+        (0.1, ((0.9382, 0.0208, -0.1888), (0.3059, -0.0374, 0.3328))),
+    ],
+)
+def test_a_turned_part_near_another_has_its_gap(turn, reference):
+    """Against finite elements, order 3, in mT: a gap with an effect of its own is
+    not touching, however slight the turn (#136)."""
+    plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.01, 0.01, 0.002))
+    plate.susceptibility = 1000.0
+    cube = magpy.magnet.Cuboid(
+        polarization=(0, 0, 0),
+        dimension=(0.004, 0.004, 0.004),
+        position=(0, 0, 0.00301),
+        orientation=R.from_rotvec((0, 0, turn)),
+    )
+    cube.susceptibility = 50.0
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1),
+        dimension=(0.005, 0.005, 0.005),
+        position=(0.02, 0, 0.01),
+    )
+    solved = apply_face_charge(magpy.Collection(magnet, plate, cube), level=4)
+    B = magpy.getB(solved, [(0.003, 0, 0.0035), (0.003, 0.003, 0.0015)]) * 1e3
+    off = np.linalg.norm(B - reference, axis=1) / np.linalg.norm(reference, axis=1)
+    assert off.max() < 0.01
