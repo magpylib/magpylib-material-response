@@ -14,7 +14,7 @@ from scipy.spatial import ConvexHull  # pylint: disable=no-name-in-module
 from scipy.spatial.transform import Rotation
 
 from magpylib_material_response._saturation import curve_of
-from magpylib_material_response.demag import (
+from magpylib_material_response.cells import (
     _get_susceptibility_from_hierarchy,
     _has_path,
     _report_fixed_magnets,
@@ -51,7 +51,7 @@ MARK = 0.5  # a refinement round splits panels above this share of the largest j
 FACETS = 12
 
 
-def apply_face_charge(
+def solve_face_charge(
     collection,
     *,
     level=None,
@@ -66,7 +66,7 @@ def apply_face_charge(
     collection) and a uniform remanence has no magnetic charge inside: its whole
     response is a charge on its faces. Those faces are solved together, coupled
     to each other and driven by every other source in the collection and by the
-    applied field ``H_ext``, as :func:`~magpylib_material_response.demag.apply_demag`
+    applied field ``H_ext``, as :func:`~magpylib_material_response.cells.solve_cells`
     reads it. No volume mesh is needed.
 
     Parameters
@@ -128,11 +128,11 @@ def apply_face_charge(
         :class:`ChargeSheet` carrying its solved surface charge, at the same
         place in the hierarchy and with its label; the other sources are
         copied as they are. A collection holding a sheet is no longer sealed:
-        magpylib-studio lists each sheet. Like a collection solved by ``apply_demag``, its
+        magpylib-studio lists each sheet. Like a collection solved by ``solve_cells``, its
         field excludes the applied field ``H_ext``. Fields hold outside the
         solved parts: inside one, ``getB`` gives mu0 H, without the part's own
         magnetization, which depends on the field of every source at once, and
-        warns; for B inside a part, mesh it and use ``apply_demag``. Its
+        warns; for B inside a part, mesh it and use ``solve_cells``. Its
         ``face_charge_info`` dict holds the last solve's ``unknowns``, the
         ``level``, the refinement ``rounds`` done, whether it ``reused`` a
         factorization and the wall time in ``seconds``, and its ``solved_by`` is ``"face_charge"``; ``to_json`` keeps both, but
@@ -146,10 +146,10 @@ def apply_face_charge(
         before it is returned.
     NotImplementedError
         For an anisotropic susceptibility (it brings back charge inside the
-        body: mesh it and use ``apply_demag``), and objects moving along paths.
+        body: mesh it and use ``solve_cells``), and objects moving along paths.
     """
     if not isinstance(collection, magpy.Collection):
-        msg = f"apply_face_charge takes a magpylib Collection; got {type(collection).__name__}."
+        msg = f"solve_face_charge takes a magpylib Collection; got {type(collection).__name__}."
         raise TypeError(msg)
     chosen = level is not None
     try:
@@ -262,7 +262,7 @@ def apply_face_charge(
                 f"{_at_least(bodies)}{unknowns:,} unknowns, more than "
                 f"max_unknowns={max_unknowns:,}: the dense system would take about "
                 f"{8 * unknowns**2 / 1e9:.1f} GB. {lower} max_unknowns, or mesh the "
-                "parts for apply_demag."
+                "parts for solve_cells."
             )
             raise ValueError(msg)
         # before the solve: the unknowns decide its time and memory
@@ -362,7 +362,7 @@ def _kept_by(reuse):
         return None
     if not hasattr(reuse, "face_charge_info"):
         msg = (
-            "reuse must be True, False or a result of apply_face_charge; "
+            "reuse must be True, False or a result of solve_face_charge; "
             f"got {reuse!r}."
         )
         raise TypeError(msg)
@@ -377,7 +377,7 @@ def _at_least(bodies):
 def _split(collection):
     """The parts to solve, as (object, susceptibility), and the fixed sources."""
     if any(_has_path(obj) for obj in (collection, *collection.sources_all)):
-        msg = "apply_face_charge solves one configuration; objects moving along paths are not supported."
+        msg = "solve_face_charge solves one configuration; objects moving along paths are not supported."
         raise NotImplementedError(msg)
     _report_fixed_magnets(
         [src for src in collection.sources_all if isinstance(src, BaseMagnet)]
@@ -390,8 +390,8 @@ def _split(collection):
             continue
         if curve_of(src) is not None:
             msg = (
-                f"{src} is on a B-H curve: apply_face_charge solves linear parts only. "
-                "Mesh it and use apply_demag, which follows the curve."
+                f"{src} is on a B-H curve: solve_face_charge solves linear parts only. "
+                "Mesh it and use solve_cells, which follows the curve."
             )
             raise NotImplementedError(msg)
         chi = _get_susceptibility_from_hierarchy(src)  # 0 if none is set
@@ -400,7 +400,7 @@ def _split(collection):
             continue
         if not isinstance(src, SOLIDS):
             msg = (
-                f"{src} has a susceptibility but no volume: apply_face_charge solves "
+                f"{src} has a susceptibility but no volume: solve_face_charge solves "
                 "cuboids, cylinders, cylinder segments, spheres, tetrahedra and "
                 "triangle meshes."
             )
@@ -409,7 +409,7 @@ def _split(collection):
         if chi.ndim and not np.allclose(chi, chi.flat[0]):
             msg = (
                 f"{src} has an anisotropic susceptibility, which brings back charge inside "
-                "the body. Mesh it and use apply_demag instead."
+                "the body. Mesh it and use solve_cells instead."
             )
             raise NotImplementedError(msg)
         solved.append((src, float(chi.flat[0])))
@@ -865,7 +865,7 @@ def _warn_unaligned(bodies, solved, boxes, fixed):
                         "and is not a cuboid: its triangles are not graded toward "
                         "the magnet's footprint, where its field jumps. Expect "
                         "errors of a few percent near it, falling slowly with "
-                        "level; fem_solve checks it.",
+                        "level; solve_fem checks it.",
                         stacklevel=3,
                     )
             continue
@@ -885,6 +885,6 @@ def _warn_unaligned(bodies, solved, boxes, fixed):
                 f"{src} touches {obj}, which face charge solves, and is not a "
                 "cuboid aligned with it: the panels cannot follow its footprint, "
                 "where its field jumps. Expect errors of a few percent near it, "
-                "falling slowly with level; refine= helps, and fem_solve checks it.",
+                "falling slowly with level; refine= helps, and solve_fem checks it.",
                 stacklevel=3,
             )

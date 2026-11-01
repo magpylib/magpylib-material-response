@@ -18,7 +18,7 @@ kernelspec:
 
 Magpylib treats magnet polarization as fixed. This package adds the **material
 response**: mesh the magnets into cells, give them a susceptibility, and
-`apply_demag` computes the self-consistent polarization of every cell — the
+`solve_cells` computes the self-consistent polarization of every cell — the
 demagnetization of the magnets themselves and the magnetization of soft parts
 nearby. All quantities are SI (m, T). [How it works](how_it_works.md) shows what
 happens inside, with 3D views. Parts with a linear, uniform susceptibility, such
@@ -29,7 +29,7 @@ the same time.
 ```{code-cell} ipython3
 import magpylib as magpy
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_Cuboid
 
 # a hard magnet with finite susceptibility, SI units (m, T)
@@ -38,7 +38,7 @@ magnet.susceptibility = 0.3  # µr = 1.3
 
 # 1. mesh it into cells, 2. apply the material response
 mesh = mesh_Cuboid(magnet, target_elems=125)
-mesh_demag = apply_demag(mesh)
+mesh_demag = solve_cells(mesh)
 
 # the demagnetized collection is a field source like any other
 observer = (0, 0, 1.5e-3)
@@ -56,14 +56,14 @@ The field drops by about 10 %: the magnet demagnetizes itself. Refining the mesh
 
 Susceptibility is an attribute of a magnet, or of a parent `Collection` for all
 the magnets in it; the cells of a mesh copy their magnet's value when it is
-meshed. A value passed to `apply_demag` takes precedence:
+meshed. A value passed to `solve_cells` takes precedence:
 
 ```{code-cell} ipython3
 magnet.susceptibility = 0.3  # isotropic
 magnet.susceptibility = (0.3, 0.1, 0.0)  # anisotropic, along the magnet's axes
 
 # overrides the attributes: one value for all cells, or one per cell
-coll = apply_demag(mesh, susceptibility=0.3)
+coll = solve_cells(mesh, susceptibility=0.3)
 ```
 
 An anisotropic value acts along the **magnet's own axes** and turns with it,
@@ -77,7 +77,7 @@ soft = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(1e-3, 1e-3, 1e-3))
 soft.susceptibility = 3999  # µr = 4000
 soft.H_ext = (0, 0, 0.1)  # 0.1 T applied along z
 
-soft_demag = apply_demag(mesh_Cuboid(soft, target_elems=125))
+soft_demag = solve_cells(mesh_Cuboid(soft, target_elems=125))
 Jz = [cell.polarization[2] for cell in soft_demag.sources_all]
 print(f"mean induced polarization: {sum(Jz) / len(Jz):.3f} T along z")
 ```
@@ -99,8 +99,8 @@ By default each cell's field is taken at the centroids of the others (point
 matching). With `interaction="newell"` it is averaged over each cell instead:
 
 ```{code-cell} ipython3
-coll_point = apply_demag(mesh, susceptibility=0.3)
-coll_newell = apply_demag(mesh, susceptibility=0.3, interaction="newell")
+coll_point = solve_cells(mesh, susceptibility=0.3)
+coll_newell = solve_cells(mesh, susceptibility=0.3, interaction="newell")
 ```
 
 Both converge to the same answer, and at equal cell count neither is more

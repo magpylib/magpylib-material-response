@@ -15,7 +15,7 @@ import magpylib as magpy
 import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.meshing import mesh_uniform
 
 from .cases import CASES
@@ -71,7 +71,7 @@ class Magpylib:
 
 
 class MoM:
-    """Method of moments, ``apply_demag`` on uniform cells. A setting is the
+    """Method of moments, ``solve_cells`` on uniform cells. A setting is the
     number of cells across the thinnest part that responds
     (:func:`~magpylib_material_response.meshing.mesh_uniform`); each level has
     8 times the cells of the one before."""
@@ -91,7 +91,7 @@ class MoM:
         return case.waits is None
 
     def solve(self, collection, sensors, setting, **options):
-        """`options` go to ``apply_demag``."""
+        """`options` go to ``solve_cells``."""
         start = time.perf_counter()
         try:
             meshed = mesh_uniform(collection, setting, max_cells=self.max_cells)
@@ -100,7 +100,7 @@ class MoM:
                 raise
             raise TooLarge(str(error)) from error
         meshed_at = time.perf_counter()
-        solved = apply_demag(meshed, **options)
+        solved = solve_cells(meshed, **options)
         solved_at = time.perf_counter()
         B = magpy.getB(solved, sensors)
         cells = sum(isinstance(s, BaseMagnet) for s in meshed.sources_all)
@@ -116,7 +116,7 @@ class MoM:
 
 
 class FEM:
-    """Finite elements, ``fem_solve`` with the ``fem`` extra. A setting is the
+    """Finite elements, ``solve_fem`` with the ``fem`` extra. A setting is the
     polynomial order on one mesh refined toward the edges and the sensors."""
 
     name = "FEM"
@@ -146,10 +146,10 @@ class FEM:
 
     @staticmethod
     def solve(collection, sensors, setting, **options):
-        """`options` go to ``fem_solve``."""
-        from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+        """`options` go to ``solve_fem``."""
+        from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
-        solution = fem_solve(collection, order=setting, observers=sensors, **options)
+        solution = solve_fem(collection, order=setting, observers=sensors, **options)
         start = time.perf_counter()
         B = solution.getB(sensors)
         return Solved(
@@ -164,7 +164,7 @@ class FEM:
 
 
 class FaceCharge:
-    """Face charge, ``apply_face_charge``: the charge on the parts' faces, no
+    """Face charge, ``solve_face_charge``: the charge on the parts' faces, no
     volume mesh. A setting is the panel level, the panels in each graded layer
     toward a face's edges. It solves magnets of any shape with a volume and a
     uniform, isotropic susceptibility, beside any other source, coils
@@ -200,15 +200,15 @@ class FaceCharge:
 
     @staticmethod
     def solve(collection, sensors, setting, **options):
-        """`options` go to ``apply_face_charge``."""
+        """`options` go to ``solve_face_charge``."""
         from magpylib_material_response.face_charge import (  # noqa: PLC0415
             ChargeSheet,
-            apply_face_charge,
+            solve_face_charge,
         )
 
         start = time.perf_counter()
         try:
-            solved = apply_face_charge(collection, level=setting, **options)
+            solved = solve_face_charge(collection, level=setting, **options)
         except ValueError as error:
             if "max_unknowns" not in str(error):
                 raise

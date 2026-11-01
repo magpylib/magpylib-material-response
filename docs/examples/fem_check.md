@@ -16,7 +16,7 @@ kernelspec:
 
 # Checking a Result with Finite Elements
 
-`mesh_study` says how far the finest mesh is from what the method of moments
+`study_cells` says how far the finest mesh is from what the method of moments
 converges to ([Mesh convergence](mesh_convergence.md)). It cannot say whether
 its own estimate is too small, or whether the method converges at all where a
 thin shell shields a field. The `fem` extra answers both: it solves the same
@@ -43,8 +43,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from magpylib_material_response.convergence import compare, mesh_study
-from magpylib_material_response.fem import fem_study
+from magpylib_material_response import compare, study_cells
+from magpylib_material_response import study_fem
 
 MM = 1e-3  # lengths in metres, written in millimetres
 ORANGE, BLUE = "#eb6834", "#2a78d6"
@@ -59,8 +59,8 @@ soft.susceptibility = 3999
 model = magpy.Collection(magnet, soft)
 line = np.linspace((-4, 0, -1), (6, 0, -1), 41) * MM
 
-mom = mesh_study(model, line, (2, 4, 8))
-fem = fem_study(model, line)
+mom = study_cells(model, line, (2, 4, 8))
+fem = study_fem(model, line)
 comparison = compare(mom, fem)
 
 print(f"MoM: {mom.cells[-1]:,} cells in {mom.seconds[-1]:.1f} s, error {mom.error:.2%}")
@@ -80,8 +80,8 @@ they disagree, at least one bar is too short.
 x = line[:, 0] / MM
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=(0.6, 0.4))
 for name, value, bar, colour in (
-    ("MoM, mesh_study", comparison.a, comparison.a_errors, BLUE),
-    ("FEM, fem_study", comparison.b, comparison.b_errors, ORANGE),
+    ("MoM, study_cells", comparison.a, comparison.a_errors, BLUE),
+    ("FEM, study_fem", comparison.b, comparison.b_errors, ORANGE),
 ):
     fig.add_trace(go.Scatter(x=x, y=value[:, 2] * 1e3, name=name, mode="lines+markers", line={"color": colour, "width": 2},
                              error_y={"type": "data", "array": bar * 1e3, "visible": True}), 1, 1)
@@ -103,18 +103,18 @@ fig
 
 They disagree in two places, and both times MoM's bar is the short one: FEM at
 order 5 puts the sensor just under the soft cube's corner, at 1.5 mm, 1.31 %
-from MoM's finest mesh, where `mesh_study` estimated 1.15 %, and FEM's order 4
+from MoM's finest mesh, where `study_cells` estimated 1.15 %, and FEM's order 4
 within 0.002 %. Far to the left the field is weak and both differences are below
 0.1 %. A disagreement is the cue to refine the mesh there, or to take FEM's
 value.
 
-## What `fem_solve` does
+## What `solve_fem` does
 
-`fem_solve(model, order, observers=...)` solves one model at one polynomial
+`solve_fem(model, order, observers=...)` solves one model at one polynomial
 order and returns a magpylib source with `moment`: `magpy.getB`, `getH`, `getJ`
 and `getM` read it, and leave out a uniform `H_ext` as on a model solved by
-`apply_demag`. Inside a part with a high susceptibility these are pointwise and
-show the elements, because H there is small next to its error. `fem_study`
+`solve_cells`. Inside a part with a high susceptibility these are pointwise and
+show the elements, because H there is small next to its error. `study_fem`
 solves it at rising orders on one mesh and takes 1.25 times the last change as
 the error of the highest, per sensor and in all.
 

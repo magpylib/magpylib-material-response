@@ -21,7 +21,7 @@ kernelspec:
 The other examples drive the material response with hard magnets or a uniform
 applied field. This one uses **current sources**: a soft-magnetic U-core with a
 multi-turn coil wound around its middle bar. `mesh_all` passes current sources
-through unmeshed, and `apply_demag` adds their field at each cell's centroid to
+through unmeshed, and `solve_cells` adds their field at each cell's centroid to
 the applied field.
 
 The coil itself is built with the `polyline` helpers: `create_polyline_fillet`
@@ -48,7 +48,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_all, mesh_TriangularMesh
 from magpylib_material_response.polyline import (
     create_polyline_fillet,
@@ -147,7 +147,7 @@ magpy.show(system, plane_shown)
 ## Mesh and apply the material response
 
 `mesh_all` meshes the three cuboids into cells and passes the current polylines
-through untouched. `apply_demag` then solves for the self-consistent
+through untouched. `solve_cells` then solves for the self-consistent
 polarization of every cell, with the coil's field at each cell's centroid as the
 applied field.
 
@@ -160,9 +160,9 @@ magpy.show(system_meshed, plane_shown)
 
 ```{code-cell} ipython3
 def timed_demag(collection, **kwargs):
-    """apply_demag with wall-clock timing, quoted with the results below."""
+    """solve_cells with wall-clock timing, quoted with the results below."""
     t0 = time.perf_counter()
-    out = apply_demag(collection, **kwargs)
+    out = solve_cells(collection, **kwargs)
     return out, time.perf_counter() - t0
 
 

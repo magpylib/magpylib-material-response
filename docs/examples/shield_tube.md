@@ -35,7 +35,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_Cylinder
 
 MM = 1e-3  # lengths in metres, written in millimetres
@@ -56,7 +56,7 @@ def solve(around, along):
     magnet, tube = model()
     cells = mesh_Cylinder(tube, (around, 1, along))
     cells.susceptibility = 100
-    return apply_demag(magpy.Collection(magnet, cells))
+    return solve_cells(magpy.Collection(magnet, cells))
 
 
 magnet, tube = model()

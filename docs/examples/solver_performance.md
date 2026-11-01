@@ -18,7 +18,7 @@ kernelspec:
 
 +++
 
-`apply_demag` offers two solvers that apply the **same interactions** (the field
+`solve_cells` offers two solvers that apply the **same interactions** (the field
 of each cell at the centroids of the others by default, or averaged over them
 with `interaction="newell"`, see the [method page](../method.md)), so they solve
 the same system:
@@ -51,7 +51,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_Cuboid
 
 magpy.defaults.display.backend = "plotly"
@@ -111,8 +111,8 @@ rows = []
 for label, (coll, sus) in cases.items():
     n = len(coll.sources_all)
     sus_list = [sus] * n
-    coll_direct = apply_demag(coll, susceptibility=sus_list, solver="direct")
-    coll_iter = apply_demag(
+    coll_direct = solve_cells(coll, susceptibility=sus_list, solver="direct")
+    coll_iter = solve_cells(
         coll, susceptibility=sus_list, solver="iterative", solver_tol=1e-8
     )
     rows.append(
@@ -147,13 +147,13 @@ def measure_solve(target_elems, solver):
     coll = magpy.Collection(mesh_Cuboid(cube, target_elems=target_elems))
     n = len(coll.sources_all)
     t0 = time.perf_counter()
-    apply_demag(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
+    solve_cells(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
     dt = time.perf_counter() - t0
 
-    # separate traced run (tracing skews wall time); apply_demag works on a
+    # separate traced run (tracing skews wall time); solve_cells works on a
     # copy, so the same collection can be reused
     tracemalloc.start()
-    apply_demag(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
+    solve_cells(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     return {"solver": solver, "cells": n, "time": dt, "peak_mb": peak / 1e6}
@@ -164,8 +164,8 @@ def measure_solve(target_elems, solver):
 warmup = magpy.Collection(
     mesh_Cuboid(magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3)), 64)
 )
-apply_demag(warmup, susceptibility=3.0, solver="direct")
-apply_demag(warmup, susceptibility=3.0, solver="iterative", solver_tol=1e-8)
+solve_cells(warmup, susceptibility=3.0, solver="direct")
+solve_cells(warmup, susceptibility=3.0, solver="iterative", solver_tol=1e-8)
 
 sizes_direct = [216, 512, 1000, 1728]
 sizes_iterative = [216, 512, 1000, 1728, 4096, 8000]
@@ -245,7 +245,7 @@ fig.update_yaxes(type="log")
 fig.update_yaxes(title_text=f"wall time (× direct at {n_ref} cells)", row=1, col=1)
 fig.update_yaxes(title_text="peak memory (MB)", row=1, col=2)
 fig.update_layout(
-    title="apply_demag scaling — single meshed cuboid",
+    title="solve_cells scaling — single meshed cuboid",
     legend={"orientation": "h", "yanchor": "bottom", "y": 1.08},
     template="plotly_white",
 )
@@ -290,10 +290,10 @@ def bench_topology(label, coll):
     n = len(coll.sources_all)
     sus = [0.5] * n
     t0 = time.perf_counter()
-    coll_direct = apply_demag(coll, susceptibility=sus, solver="direct")
+    coll_direct = solve_cells(coll, susceptibility=sus, solver="direct")
     t_direct = time.perf_counter() - t0
     t0 = time.perf_counter()
-    coll_iter = apply_demag(coll, susceptibility=sus, solver="iterative", solver_tol=1e-8)
+    coll_iter = solve_cells(coll, susceptibility=sus, solver="iterative", solver_tol=1e-8)
     t_iter = time.perf_counter() - t0
     return {
         "topology": label,

@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 
 from magpylib_material_response import from_json, to_json
-from magpylib_material_response.demag import apply_demag
-from magpylib_material_response.face_charge import apply_face_charge
+from magpylib_material_response.cells import solve_cells
+from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import (
     mesh_all,
     mesh_Cuboid,
@@ -565,7 +565,7 @@ def test_mesh_Cylinder_thin_ring_centroids_inside():
     for target in (12, 48):
         cells = mesh_Cylinder(tube, target)
         cells.susceptibility = 1000
-        out = apply_demag(magpy.Collection(src.copy(), cells)).children[1]
+        out = solve_cells(magpy.Collection(src.copy(), cells)).children[1]
         assert sum(c.polarization[0] * c.volume for c in out.children) > 0
 
 
@@ -648,17 +648,17 @@ def test_H_ext_set_before_meshing_reaches_the_cells():
     mesh = mesh_Cuboid(obj, 8)
     mesh.H_ext *= 1  # an in-place edit of the mesh leaves the magnet alone
     assert mesh.H_ext is not obj.H_ext
-    before = apply_demag(mesh)
+    before = solve_cells(mesh)
     after = mesh_Cuboid(soft(), 8)
     after.H_ext = (0, 0, 0.01)
-    after = apply_demag(after)
+    after = solve_cells(after)
     J = np.array([c.polarization for c in before.sources_all])
     assert np.all(J[:, 2] > 0.01)
     np.testing.assert_allclose(J, [c.polarization for c in after.sources_all])
 
     changed = mesh_Cuboid(soft((0, 0, 0.01)), 8)
     changed.H_ext = (0, 0, 0.02)
-    J2 = np.array([c.polarization for c in apply_demag(changed).sources_all])
+    J2 = np.array([c.polarization for c in solve_cells(changed).sources_all])
     np.testing.assert_allclose(J2, 2 * J)
 
 
@@ -681,7 +681,7 @@ def test_a_mesh_inherits_as_its_magnet_did(name):
 def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher, on_parent):
     """A copy has no parent: the applied field or the susceptibility set on the
     model around the meshed collection was lost, and the part did not respond,
-    silently, where apply_face_charge and fem_solve read it."""
+    silently, where solve_face_charge and solve_fem read it."""
 
     def model(on_parent):
         cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
@@ -695,12 +695,12 @@ def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher, on_parent):
 
     cells = 64 if mesher is mesh_all else 4
     inner = model(on_parent)
-    B = apply_demag(mesher(inner, cells)).getB((0, 0, 0.006))
+    B = solve_cells(mesher(inner, cells)).getB((0, 0, 0.006))
     assert inner.parent is not None  # left as it was
     assert len(inner.children) == 1
     assert B[2] > 1e-3
     np.testing.assert_allclose(
-        B, apply_demag(mesher(model(None), cells)).getB((0, 0, 0.006)), atol=1e-12
+        B, solve_cells(mesher(model(None), cells)).getB((0, 0, 0.006)), atol=1e-12
     )
 
 
@@ -723,7 +723,7 @@ def test_a_mesh_stays_one_sealed_object_until_its_cells_become_sheets():
     kept = {
         "mesh": mesh,
         "copy": mesh.copy(),
-        "solved": apply_demag(mesh),
+        "solved": solve_cells(mesh),
         "json": from_json(to_json(mesh))[0],
         "in a collection": mesh_all(magpy.Collection(cuboid()), 8).children[0],
         "in json": from_json(to_json(magpy.Collection(mesh.copy())))[0].children[0],
@@ -731,7 +731,7 @@ def test_a_mesh_stays_one_sealed_object_until_its_cells_become_sheets():
     assert [name for name, obj in kept.items() if obj.sealed is not True] == []
     assert not hasattr(slice_Cuboid(cuboid()), "sealed")
     for meshed in (mesh, mesh_all(mesh.copy(), 16), magpy.Collection(mesh.copy())):
-        solved = apply_face_charge(meshed, level=1)
+        solved = solve_face_charge(meshed, level=1)
         for coll in (solved, *solved.collections_all):
             assert not getattr(coll, "sealed", False)
 

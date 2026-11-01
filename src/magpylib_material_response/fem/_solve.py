@@ -327,9 +327,9 @@ class FemSolution(magpy.misc.CustomSource):
     """A solved finite-element model, as a magpylib source: its field and what
     the solve took.
 
-    Made by :func:`fem_solve` or :func:`fem_study`. :func:`magpylib.getB`,
+    Made by :func:`solve_fem` or :func:`study_fem`. :func:`magpylib.getB`,
     ``getH``, ``getJ`` and ``getM`` read it, alone or with other sources, as on a
-    collection solved by :func:`~magpylib_material_response.demag.apply_demag`:
+    collection solved by :func:`~magpylib_material_response.cells.solve_cells`:
     the field of the model's magnets, remanent and induced, and of its currents,
     without the uniform applied field. Moving it moves that field as it is,
     without solving again. Inside a part with a high susceptibility the values
@@ -350,7 +350,7 @@ class FemSolution(magpy.misc.CustomSource):
     moment : ndarray, shape (3,)
         Magnetic moment in A m² of all magnetization: remanent and induced.
     solved_by : str
-        ``"fem"``, as ``apply_demag`` and ``apply_face_charge`` name theirs.
+        ``"fem"``, as ``solve_cells`` and ``solve_face_charge`` name theirs.
     """
 
     def __init__(self, model, order, gf, ndof, seconds, lift=None, chi=None):
@@ -588,7 +588,7 @@ class Model:
 
     def _check_overlap(self, solids):
         """Refuse magnets that overlap: the mesh would hold their union, where
-        magpylib and apply_demag add up their fields."""
+        magpylib and solve_cells add up their fields."""
         volumes = [shape.mass for shape in solids]
         for (i, a), (j, b) in combinations(enumerate(solids), 2):
             lo_a, hi_a = self.parts[i].bounds
@@ -600,7 +600,7 @@ class Model:
                 msg = (
                     f"Magnets {i} and {j} overlap ({shared * self.length**3:.3g} "
                     "m³): the finite elements would model their union, where "
-                    "magpylib and apply_demag add up their fields."
+                    "magpylib and solve_cells add up their fields."
                 )
                 raise ValueError(msg)
 
@@ -685,7 +685,7 @@ class Model:
     def _follow_curves(self, gf, lift, log_chi, linear_solve, order):
         """Repeat `linear_solve` until chi stops moving on its curve, to ``TOL``
         in the root mean square over the worst element, Anderson-accelerated on
-        log chi as ``apply_demag``'s iteration is. `log_chi` is a polynomial on
+        log chi as ``solve_cells``'s iteration is. `log_chi` is a polynomial on
         each element of the parts on a curve; the field's chi is projected onto
         it, with one integration rule on both sides: ``Set`` with more points
         does not keep a constant on a curved element."""
@@ -1050,7 +1050,7 @@ class Model:
         return FemSolution(self, order, gf, fes.ndof, seconds, lift, chi)
 
 
-def fem_solve(
+def solve_fem(
     collection,
     order=3,
     *,
@@ -1064,7 +1064,7 @@ def fem_solve(
 ):
     """Solve a magpylib model by finite elements.
 
-    An independent check of :func:`~magpylib_material_response.demag.apply_demag`
+    An independent check of :func:`~magpylib_material_response.cells.solve_cells`
     on the same objects: the magnets keep their shapes, not cells, and the
     field is a polynomial of degree `order` on each element. A part with a
     ``bh_curve`` follows it: the linear solve repeats until its susceptibility,
@@ -1074,7 +1074,7 @@ def fem_solve(
     Parameters
     ----------
     collection : magpylib.Collection
-        The model, as :func:`~magpylib_material_response.demag.apply_demag`
+        The model, as :func:`~magpylib_material_response.cells.solve_cells`
         takes it before meshing: Cuboid, Cylinder, CylinderSegment, Sphere,
         Tetrahedron and TriangularMesh magnets with their polarization (the
         remanence) and susceptibility, isotropic or along their own axes (none

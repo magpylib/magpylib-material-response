@@ -18,7 +18,7 @@ To see log messages from the library, call `configure_logging()`:
 
 ```python
 from magpylib_material_response import configure_logging
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 
 # Enable logging with default settings (INFO level, colored output to stderr)
 configure_logging()
@@ -81,8 +81,8 @@ configure_logging(min_log_time=0)
 configure_logging(min_log_time=10)
 ```
 
-This setting is also picked up by `apply_demag`, `demag_tensor`,
-`apply_face_charge`, `fem_solve` and `fem_study` whenever their own
+This setting is also picked up by `solve_cells`, `demag_tensor`,
+`solve_face_charge`, `solve_fem` and `study_fem` whenever their own
 `min_log_time` argument is left at its default (`None`). Passing an explicit
 value to those functions still overrides the global setting for that call.
 
@@ -124,7 +124,7 @@ logger.enable("magpylib_material_response")
 ```python
 import magpylib as magpy
 from magpylib_material_response import configure_logging
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_Cuboid
 
 configure_logging(level="INFO")
@@ -133,7 +133,7 @@ magnet = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.02), polarization=(0, 0, 1
 magnet.susceptibility = 0.1
 
 meshed = mesh_Cuboid(magnet, target_elems=1000, verbose=True)
-apply_demag(meshed, inplace=True)
+solve_cells(meshed, inplace=True)
 ```
 
 ## See Also

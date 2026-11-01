@@ -1,11 +1,11 @@
 """Finite elements on a magpylib model: an independent check of the method of
 moments.
 
-:func:`fem_solve` solves the same objects that
-:func:`~magpylib_material_response.demag.apply_demag` takes, with NGSolve, on
-their own shapes rather than on cells; :func:`fem_study` raises the element
+:func:`solve_fem` solves the same objects that
+:func:`~magpylib_material_response.cells.solve_cells` takes, with NGSolve, on
+their own shapes rather than on cells; :func:`study_fem` raises the element
 order on one mesh and estimates the error of the highest, as
-:func:`~magpylib_material_response.convergence.mesh_study` does for the method
+:func:`~magpylib_material_response.convergence.study_cells` does for the method
 of moments. Install with ``pip install "magpylib-material-response[fem]"``.
 
 The formulation is the reduced scalar potential with an exact open boundary (a
@@ -36,7 +36,10 @@ if importlib.util.find_spec("ngsolve") is None:  # pragma: no cover
     )
     raise ImportError(msg)
 
-from magpylib_material_response.fem._solve import FemSolution, fem_solve
-from magpylib_material_response.fem._study import FemStudy, fem_study
+from magpylib_material_response._renamed import old_names
+from magpylib_material_response.fem._solve import FemSolution, solve_fem
+from magpylib_material_response.fem._study import FemStudy, study_fem
 
-__all__ = ["FemSolution", "FemStudy", "fem_solve", "fem_study"]
+__all__ = ["FemSolution", "FemStudy", "solve_fem", "study_fem"]
+
+__getattr__ = old_names(__name__, {"fem_solve": "solve_fem", "fem_study": "study_fem"})

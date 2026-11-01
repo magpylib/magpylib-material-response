@@ -15,7 +15,7 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMag
 from netgen import occ
 
 from magpylib_material_response._saturation import Curve, curve_of
-from magpylib_material_response.demag import (
+from magpylib_material_response.cells import (
     _cell_susceptibilities,
     _has_path,
     get_H_ext,
@@ -67,7 +67,7 @@ def parts_of(collection):
     if with_paths:
         msg = (
             f"{len(with_paths)} objects with paths found; fem solves one position "
-            "of the model, like apply_demag."
+            "of the model, like solve_cells."
         )
         raise ValueError(msg)
     sheets = [s for s in sources if isinstance(s, magpy.current.TriangleSheet)]

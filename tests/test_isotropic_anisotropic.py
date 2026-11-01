@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response import demag, meshing
+from magpylib_material_response import meshing, solve_cells
 
 
 def test_isotropic_susceptibility():
@@ -20,7 +20,7 @@ def test_isotropic_susceptibility():
     magnet.susceptibility = 0.1
     magnet_meshed = meshing.mesh_Cuboid(magnet, cells)
 
-    demag.apply_demag(magnet_meshed, inplace=True)
+    solve_cells(magnet_meshed, inplace=True)
 
     field_magpylib = magnet_meshed.getB(grid)
 
@@ -49,7 +49,7 @@ def test_anisotropic_susceptibility(rotation, solver):
     magnet.susceptibility = (0.3, 0.2, 0.1)
     magnet_meshed = meshing.mesh_Cuboid(magnet, cells)
 
-    demag.apply_demag(magnet_meshed, inplace=True, solver=solver)
+    solve_cells(magnet_meshed, inplace=True, solver=solver)
 
     field_magpylib = rotation.inv().apply(magnet_meshed.getB(rotation.apply(grid)))
 
@@ -70,7 +70,7 @@ def test_negative_susceptibility():
     magnet.susceptibility = -1.1
     magnet_meshed = meshing.mesh_Cuboid(magnet, cells)
 
-    demag.apply_demag(magnet_meshed, inplace=True)
+    solve_cells(magnet_meshed, inplace=True)
 
     field_magpylib = magnet_meshed.getB(grid)
 

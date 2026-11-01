@@ -42,7 +42,7 @@ from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 
 from magpylib_material_response import configure_logging, disable_logging
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.demag_fft import analyze_collection
 from magpylib_material_response.meshing import (
     mesh_Cuboid,
@@ -68,7 +68,7 @@ field exactly. The solver finds that one polarization per cell. More cells
 follow the real, smoothly varying polarization more closely.
 
 Here a magnet sits 1.5 mm below a 3 mm iron plate. Both are meshed, and
-`apply_demag` solves them together:
+`solve_cells` solves them together:
 
 ```{code-cell} ipython3
 def magnet_and_plate(chi):
@@ -88,7 +88,7 @@ def magnet_and_plate(chi):
     model = magpy.Collection(
         mesh_Cuboid(magnet, (4, 4, 2)), mesh_Cuboid(plate, (16, 16, 4))
     )
-    return apply_demag(model)
+    return solve_cells(model)
 
 
 iron = magnet_and_plate(1000)
@@ -280,7 +280,7 @@ takes eight times the cells, cuts the error to about a third. Soft iron is the
 hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
 Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
-elements give it, `fem_study(cube, lambda s: s.moment[2], orders=(3, 4, 5))`, in
+elements give it, `study_fem(cube, lambda s: s.moment[2], orders=(3, 4, 5))`, in
 seconds ([Checking a result with finite elements](examples/fem_check.md)). The
 polarizability of a cube of infinite susceptibility, 3.6443 times its volume
 (Helsing and Perfekt 2013), gives 0.028895 A m² through
@@ -312,12 +312,12 @@ for rule in ("point", "newell"):
     for n in (27, 64, 216, 512, 1728, 4096):
         cells = mesh_Cuboid(soft_cube(), n)
         t0 = time.perf_counter()
-        solved = apply_demag(cells, interaction=rule)
+        solved = solve_cells(cells, interaction=rule)
         runs.append((f"cuboids, {rule}", len(cells.sources_all), moment(solved), time.perf_counter() - t0))
 for n in (30, 100, 300, 1000):
     cells = mesh_TriangularMesh(soft_cube_surface(), n)
     t0 = time.perf_counter()
-    solved = apply_demag(cells)
+    solved = solve_cells(cells)
     runs.append(("tetrahedra", len(cells.sources_all), moment(solved), time.perf_counter() - t0))
 ```
 
@@ -383,7 +383,7 @@ model = magpy.Collection(
 )
 
 configure_logging(sink=lambda message: print(message.record["message"]), min_log_time=60)
-solved = apply_demag(model)
+solved = solve_cells(model)
 disable_logging()
 ```
 

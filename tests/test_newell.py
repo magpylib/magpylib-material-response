@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.meshing import mesh_Cuboid
 from magpylib_material_response.newell import (
     POINT_FAR_FIELD_RATIO,
@@ -92,18 +92,18 @@ def test_demag_tensor_matches_magpylib_far_field(getH_tensor):
 
 
 def test_newell_rule_close_to_point_rule_end_to_end():
-    """`apply_demag` with the Newell rule stays close to the point rule on a
+    """`solve_cells` with the Newell rule stays close to the point rule on a
     cube mesh: the two rules differ only at second order in cell size."""
     cube = magpy.magnet.Cuboid(dimension=(1.0, 1.0, 1.0), polarization=(0.0, 0.0, 1.0))
     cube.susceptibility = 0.5
     coll = magpy.Collection(mesh_Cuboid(cube, target_elems=27))
 
     # Path 1: the Newell rule.
-    coll1 = apply_demag(coll, interaction="newell")
+    coll1 = solve_cells(coll, interaction="newell")
     pol1 = np.array([s.polarization for s in coll1.sources_all])
 
     # Path 2: the default point rule.
-    coll2 = apply_demag(coll)
+    coll2 = solve_cells(coll)
     pol2 = np.array([s.polarization for s in coll2.sources_all])
 
     np.testing.assert_allclose(pol1, pol2, atol=2e-3)

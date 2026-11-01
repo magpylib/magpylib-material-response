@@ -23,7 +23,7 @@ can be run later without repeating the simulation.
 `magnet.Cuboid`, `magnet.Cylinder`, `magnet.CylinderSegment`, `magnet.Sphere`,
 `magnet.Tetrahedron`, `magnet.TriangularMesh`, `current.Polyline`,
 `current.Circle`, `current.TriangleStrip`, `current.TriangleSheet`, `Sensor`,
-the `ChargeSheet` of `apply_face_charge`, and arbitrarily nested `Collection`
+the `ChargeSheet` of `solve_face_charge`, and arbitrarily nested `Collection`
 objects — in particular, demagnetized tetrahedral meshes from
 `mesh_TriangularMesh` and face-charge solutions can be persisted. All geometry
 (position, orientation, paths), magnetic polarizations and susceptibilities are
@@ -38,7 +38,7 @@ import time
 import magpylib as magpy
 import numpy as np
 from magpylib_material_response import to_json
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_all
 
 magpy.defaults.display.backend = "plotly"
@@ -57,7 +57,7 @@ coll = magpy.Collection(cube, loop, style_label="setup")
 # mesh and apply demagnetization — clock this
 t0 = time.perf_counter()
 coll_demag = mesh_all(coll, target_elems=200)
-apply_demag(coll_demag, inplace=True)
+solve_cells(coll_demag, inplace=True)
 t_demag = time.perf_counter() - t0
 print(f"Demag computation : {t_demag * 1e3:.0f} ms")
 ```

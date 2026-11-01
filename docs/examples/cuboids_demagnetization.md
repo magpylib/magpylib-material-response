@@ -15,7 +15,7 @@ kernelspec:
 # Cuboid Demagnetization
 
 Three hard cuboid magnets with different susceptibilities, positions, and
-orientations are meshed at increasing resolution and solved with `apply_demag`.
+orientations are meshed at increasing resolution and solved with `solve_cells`.
 The field along a sensor line is compared against a Finite Element Method (FEM)
 reference solution, directly and as the difference to it.
 
@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from magpylib_material_response import get_dataset
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_all
 
 # Uncomment to enable logging output from the package (silent by default).
@@ -86,7 +86,7 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
         coll, target_elems=target_elems, per_child_elems=True, min_elems=1
     )
 
-    coll_demag = apply_demag(
+    coll_demag = solve_cells(
         coll_meshed,
         style={"label": f"Coll_demag ({len(coll_meshed.sources_all):3d} cells)"},
     )

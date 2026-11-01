@@ -116,7 +116,7 @@ def configure_logging(
     min_log_time : float, optional
         Default minimum duration (in seconds) for ``timelog()`` blocks to
         emit a record. Steps that complete faster than this are not logged.
-        Functions like ``apply_demag`` honour this value when their own
+        Functions like ``solve_cells`` honour this value when their own
         ``min_log_time`` argument is left at its default. Can be overridden
         with ``MAGPYLIB_LOG_MIN_TIME``. Defaults to ``1.0``.
 

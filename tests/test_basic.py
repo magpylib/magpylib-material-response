@@ -8,13 +8,13 @@ import numpy as np
 import pytest
 
 import magpylib_material_response
-from magpylib_material_response import configure_logging, demag, disable_logging
-from magpylib_material_response.demag import (
-    apply_demag,
+from magpylib_material_response import cells, configure_logging, disable_logging
+from magpylib_material_response.cells import (
     demag_tensor,
     get_susceptibilities,
+    solve_cells,
 )
-from magpylib_material_response.face_charge import apply_face_charge
+from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import mesh_Cuboid, mesh_Cylinder, mesh_uniform
 
 
@@ -23,17 +23,17 @@ def test_version():
 
 
 def test_apply_demag_integration():
-    """Integration test: verify get_susceptibilities works correctly with apply_demag"""
+    """Integration test: verify get_susceptibilities works correctly with solve_cells"""
     zone = magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
     mesh = mesh_Cuboid(zone, (2, 2, 2))
 
     # Test that different equivalent susceptibility inputs give same result
-    dm1 = apply_demag(mesh, susceptibility=4)
-    dm2 = apply_demag(mesh, susceptibility=(4, 4, 4))
+    dm1 = solve_cells(mesh, susceptibility=4)
+    dm2 = solve_cells(mesh, susceptibility=(4, 4, 4))
 
     zone.susceptibility = 4
     mesh_with_attr = mesh_Cuboid(zone, (2, 2, 2))
-    dm3 = apply_demag(mesh_with_attr)
+    dm3 = solve_cells(mesh_with_attr)
 
     # All should give same magnetic field result
     b_ref = dm1.getB((1, 2, 3))
@@ -221,7 +221,7 @@ def test_apply_demag_refuses_property_paths(make):
     obj = make()
     obj.susceptibility = 1
     with pytest.raises(ValueError, match="paths"):
-        apply_demag(magpy.Collection(cube, obj))
+        solve_cells(magpy.Collection(cube, obj))
 
 
 @pytest.mark.parametrize(
@@ -242,11 +242,11 @@ def test_current_field_is_taken_at_the_cell_centroid(make):
     coil = magpy.current.Circle(diameter=0.05, current=1000, position=(0.02, 0, 0.01))
     cell = make()
     cell.polarization = (0, 0, 0)
-    J_coil = apply_demag(magpy.Collection(coil, cell), susceptibility=10).sources[1]
+    J_coil = solve_cells(magpy.Collection(coil, cell), susceptibility=10).sources[1]
     cell = make()
     cell.polarization = (0, 0, 0)
     cell.H_ext = coil.getB(cell.centroid)
-    J_ext = apply_demag(magpy.Collection(cell), susceptibility=10).sources[0]
+    J_ext = solve_cells(magpy.Collection(cell), susceptibility=10).sources[0]
     np.testing.assert_allclose(J_coil.polarization, J_ext.polarization, rtol=1e-12)
 
 
@@ -285,14 +285,14 @@ def test_copy_keeps_the_parents_material_attributes():
         outer.susceptibility = 100
         return inner
 
-    copied = apply_demag(scene()).sources_all[0].polarization
+    copied = solve_cells(scene()).sources_all[0].polarization
     in_place = scene()
-    apply_demag(in_place, inplace=True)
+    solve_cells(in_place, inplace=True)
     assert copied[2] > 0.01
     np.testing.assert_allclose(copied, in_place.sources_all[0].polarization)
 
 
-@pytest.mark.parametrize("solver", ["demag", "face charge"])
+@pytest.mark.parametrize("solver", ["cells", "face charge"])
 @pytest.mark.parametrize(
     ("h_ext", "kind", "match"),
     [
@@ -306,8 +306,8 @@ def test_copy_keeps_the_parents_material_attributes():
     ids=["scalar", "two numbers", "nan", "text", "A/m", "a row"],
 )
 def test_H_ext_is_checked_before_the_solve(solver, h_ext, kind, match):
-    """On every part of two cubes. A scalar failed in apply_demag with a
-    reshape error and passed in apply_face_charge; the Earth's 40 A/m taken as
+    """On every part of two cubes. A scalar failed in solve_cells with a
+    reshape error and passed in solve_face_charge; the Earth's 40 A/m taken as
     tesla gave 40 T unremarked. A row, as getB gives for one point in a list,
     is three numbers too. One warning, at the line that called the solver."""
 
@@ -318,12 +318,12 @@ def test_H_ext_is_checked_before_the_solve(solver, h_ext, kind, match):
                 dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(x, 0, 0)
             )
             soft.susceptibility = 1000
-            model.add(mesh_Cuboid(soft, (2, 2, 2)) if solver == "demag" else soft)
+            model.add(mesh_Cuboid(soft, (2, 2, 2)) if solver == "cells" else soft)
         for part in model.sources_all:
             part.H_ext = value
-        if solver == "demag":
-            return apply_demag(model)
-        return apply_face_charge(model, level=1)
+        if solver == "cells":
+            return solve_cells(model)
+        return solve_face_charge(model, level=1)
 
     if kind is None:
         np.testing.assert_allclose(
@@ -349,11 +349,11 @@ def test_segment_cells_are_averaged_from_a_susceptibility_of_one(
     cylinder = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(1e-3, 1e-3))
 
     def solve():
-        solved = apply_demag(mesh_Cylinder(cylinder, 40), susceptibility=chi)
+        solved = solve_cells(mesh_Cylinder(cylinder, 40), susceptibility=chi)
         return np.array([c.polarization for c in solved.sources_all])
 
     J = solve()
-    monkeypatch.setattr(demag, "_segment_averages", lambda *_: None)
+    monkeypatch.setattr(cells, "_segment_averages", lambda *_: None)
     assert np.array_equal(J, solve()) is not averaged
 
 
@@ -376,8 +376,8 @@ def _tube(chi, x=0.0):
 def test_cells_are_averaged_by_their_own_susceptibility():
     """A chi = 1000 tube a long way off used to switch a chi = 0.9 tube to the
     other scheme, which moved its field by 0.7 %."""
-    alone = apply_demag(magpy.Collection(_tube(0.9)))
-    with_far = apply_demag(magpy.Collection(_tube(0.9), _tube(1000, x=100.0)))
+    alone = solve_cells(magpy.Collection(_tube(0.9)))
+    with_far = solve_cells(magpy.Collection(_tube(0.9), _tube(1000, x=100.0)))
     np.testing.assert_allclose(
         [c.polarization for c in with_far.sources_all[:6]],
         [c.polarization for c in alone.sources_all],
@@ -396,7 +396,7 @@ def test_demag_tensor_is_the_one_apply_demag_solves_with(given, chi):
     n = len(cells)
     Q = np.eye(3 * n) - chi * T.swapaxes(2, 3).reshape(3 * n, 3 * n).T
     rhs = chi * np.tile((0.01, 0, 0), n)
-    solved = apply_demag(tube, susceptibility=chi)
+    solved = solve_cells(tube, susceptibility=chi)
     J = np.linalg.solve(Q, np.ravel(rhs.reshape(n, 3), order="F"))
     np.testing.assert_allclose(
         J.reshape(n, 3, order="F"),
@@ -410,10 +410,10 @@ def test_a_model_with_no_susceptibility_goes_unsolved(monkeypatch):
     """It warns, and the polarizations stand exactly, without minutes of solving."""
     magnet = magpy.magnet.Cuboid(polarization=(0.1, 0.2, 1), dimension=(0.01,) * 3)
     coil = magpy.current.Circle(diameter=0.05, current=1000)
-    monkeypatch.setattr(demag, "_solve_cells", None)
+    monkeypatch.setattr(cells, "_solve_cells", None)
     monkeypatch.setattr(magpy, "getB", None)
     with pytest.warns(UserWarning, match="nothing responds"):
-        solved = apply_demag(magpy.Collection(coil, magnet))
+        solved = solve_cells(magpy.Collection(coil, magnet))
     assert np.array_equal(solved.sources[1].polarization, magnet.polarization)
 
 
@@ -427,7 +427,7 @@ def test_fixed_magnets_beside_soft_parts_go_to_the_log():
     sink = io.StringIO()
     configure_logging(level="INFO", enable_colors=False, sink=sink)
     try:
-        apply_demag(magpy.Collection(magnet, soft))
+        solve_cells(magpy.Collection(magnet, soft))
     finally:
         disable_logging()
     assert "1 of 2 magnets have no susceptibility" in sink.getvalue()
@@ -457,7 +457,7 @@ def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():
             )
         )
         tube.susceptibility = 1000
-        apply_demag(magpy.Collection(magnet, tube), inplace=True)
+        solve_cells(magpy.Collection(magnet, tube), inplace=True)
         return sum(cell.polarization[0] * cell.volume for cell in tube)
 
     assert moment(2) == pytest.approx(moment(1), rel=0.01)
@@ -466,10 +466,10 @@ def test_thin_tube_keeps_its_moment_with_more_cells_across_its_wall():
 @pytest.mark.parametrize(
     "solve",
     [
-        lambda plate: apply_demag(mesh_Cuboid(plate, 8)),
-        lambda plate: apply_face_charge(magpy.Collection(plate.copy()), level=1),
+        lambda plate: solve_cells(mesh_Cuboid(plate, 8)),
+        lambda plate: solve_face_charge(magpy.Collection(plate.copy()), level=1),
     ],
-    ids=["demag", "face charge"],
+    ids=["cells", "face charge"],
 )
 def test_a_model_with_no_susceptibility_anywhere_warns(solve):
     """Every part fixed is said, as it is not what was meant. An explicit 0
@@ -481,25 +481,25 @@ def test_a_model_with_no_susceptibility_anywhere_warns(solve):
     solve(plate)
 
 
-@pytest.mark.parametrize("solver", ["demag", "face charge", "fem"])
+@pytest.mark.parametrize("solver", ["cells", "face charge", "fem"])
 def test_a_magnet_without_susceptibility_is_fixed_everywhere(solver):
     """The face-charge page's model: a magnet with no susceptibility over a soft
-    plate. apply_face_charge took the magnet as fixed; apply_demag, mesh_study
-    and fem_solve refused it, and could not check face charge."""
+    plate. solve_face_charge took the magnet as fixed; solve_cells, study_cells
+    and solve_fem refused it, and could not check face charge."""
     magnet = magpy.magnet.Cuboid(
         polarization=(0, 0, 1), dimension=(0.01,) * 3, position=(0, 0, 0.0075)
     )
     plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.03, 0.03, 0.005))
     plate.susceptibility = 1000
     model = magpy.Collection(magnet, plate)
-    if solver == "demag":
-        solved = apply_demag(mesh_uniform(model, 4))
+    if solver == "cells":
+        solved = solve_cells(mesh_uniform(model, 4))
     elif solver == "face charge":
-        solved = apply_face_charge(model, level=1)
+        solved = solve_face_charge(model, level=1)
     else:
         pytest.importorskip("ngsolve")
-        from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+        from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
-        solved = fem_solve(model, order=2)
-    reference = apply_face_charge(model, level=2).getB((0, 0, 0.02))[2]
+        solved = solve_fem(model, order=2)
+    reference = solve_face_charge(model, level=2).getB((0, 0, 0.02))[2]
     np.testing.assert_allclose(solved.getB((0, 0, 0.02))[2], reference, rtol=0.05)

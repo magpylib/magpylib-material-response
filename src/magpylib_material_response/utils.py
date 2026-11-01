@@ -166,7 +166,7 @@ def _serialize_recursive(obj, parent="warn"):
     h_ext = getattr(obj, "H_ext", None)
     if h_ext is not None:
         dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
-    # what apply_face_charge solved: numbers only
+    # what solve_face_charge solved: numbers only
     info = getattr(obj, "face_charge_info", None)
     if info is not None:
         dd["face_charge_info"] = dict(info)
@@ -325,7 +325,8 @@ def _deserialize_recursive(inp):
     if inp.get("face_charge_info") is not None:
         obj.face_charge_info = inp["face_charge_info"]
     if inp.get("solved_by") is not None:
-        obj.solved_by = inp["solved_by"]
+        # "demag" is what files saved before 0.9 call the cells
+        obj.solved_by = {"demag": "cells"}.get(inp["solved_by"], inp["solved_by"])
 
     if constr is magpy.Collection:
         obj.add(*[_deserialize_recursive(child) for child in inp["children"]])

@@ -44,7 +44,7 @@ $$J = \frac{J_0}{1 + \chi/3}$$
 import magpylib as magpy
 import numpy as np
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_TriangularMesh
 
 magpy.defaults.display.backend = "plotly"
@@ -79,7 +79,7 @@ magpy.show(
 ```{code-cell} ipython3
 chi = 0.5
 
-mesh_demag = apply_demag(mesh, susceptibility=chi)
+mesh_demag = solve_cells(mesh, susceptibility=chi)
 pol = np.array([s.polarization for s in mesh_demag.sources_all])
 
 # volume-weighted mean polarization vs the analytical sphere result
