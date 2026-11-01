@@ -178,38 +178,42 @@ its axes.
 
 ## Against finite elements
 
-The repository's validation suite (`validation/`) solves 15 of its cases with
+The repository's validation suite (`validation/`) solves 18 of its cases with
 face charge, at levels 1 to 5, against stored finite-element references; the
 three curved ones are in the table above, the others below. The time each method
 needs to bring the worst group of sensors within 1 % and 0.1 % of the reference,
 solve and `getB` together, one run each on an Apple M4 Pro; finite elements are
 `fem_solve` at orders 2 to 5:
 
-| Case                         | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
-| ---------------------------- | -----------------: | ---------: | -------------------: | -----------: |
-| Three cuboids, turned        |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
-| Magnet beside a soft cube    |             0.02 s |      2.3 s |               0.10 s |        2.3 s |
-| U-core driven by a coil      |             0.07 s |      4.5 s |                  – ¹ |          – ¹ |
-| Flux concentrator            |             0.04 s |     0.83 s |               0.05 s |        3.3 s |
-| Halbach array on back iron   |             0.06 s |      1.5 s |               0.06 s |        6.3 s |
-| Iron cube in 10 mT           |             0.04 s |     0.52 s |               0.04 s |        2.0 s |
-| Magnet on a soft plate       |             0.09 s |      3.1 s |               0.40 s |        5.0 s |
-| Magnet on a plate, sides off |             0.09 s |      2.8 s |               0.40 s |        2.8 s |
-| Thin shielding sheet         |             0.28 s |      2.7 s |               0.91 s |         10 s |
-| CAD part, a triangle mesh    |             0.20 s |       11 s |                1.0 s |         21 s |
-| Cuboids of many sizes        |              2.9 s |      8.3 s |                  – ² |          – ² |
-| 100 small cubes              |                – ³ |        – ² |                    – |            – |
+| Case                          | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
+| ----------------------------- | -----------------: | ---------: | -------------------: | -----------: |
+| Three cuboids, turned         |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
+| Magnet beside a soft cube     |             0.02 s |      2.3 s |               0.10 s |        2.3 s |
+| U-core driven by a coil       |             0.07 s |      4.5 s |                  – ¹ |          – ¹ |
+| Flux concentrator             |             0.04 s |     0.83 s |               0.05 s |        3.3 s |
+| Halbach array on back iron    |             0.06 s |      1.5 s |               0.06 s |        6.3 s |
+| Iron cube in 10 mT            |             0.04 s |     0.52 s |               0.04 s |        2.0 s |
+| Magnet on a soft plate        |             0.09 s |      3.1 s |               0.40 s |        5.0 s |
+| Magnet on a plate, sides off  |             0.09 s |      2.8 s |               0.40 s |        2.8 s |
+| Thin shielding sheet          |             0.28 s |      2.7 s |               0.91 s |         10 s |
+| CAD part, a triangle mesh     |             0.20 s |       11 s |                1.0 s |         21 s |
+| Cuboids of many sizes         |              2.9 s |      8.3 s |                  – ² |          – ² |
+| Aligned cube just off a plate |             0.11 s |      1.3 s |               0.44 s |        5.1 s |
+| Turned cube just off a plate  |             0.23 s |      1.6 s |               0.97 s |         15 s |
+| Small cube just off a plate   |             0.11 s |      1.1 s |                  – ⁴ |        6.5 s |
+| 100 small cubes               |                – ³ |        – ² |                    – |            – |
 
 ¹ The reference, from an independent FEM, is good to 0.25 %. ² The references
 are good to 0.2 % for the cuboids of many sizes and 1.5 % for the 100 cubes. ³
 1.8 % at level 2, in 27 s and 11 GB, with `max_unknowns` raised to its 28,800
-unknowns.
+unknowns. ⁴ 0.15 % at level 5, in 1.1 s.
 
-Face charge reaches 1 % faster than finite elements on all eleven cases both
+Face charge reaches 1 % faster than finite elements on all fourteen cases both
 reach it on, 13 to 104 times faster on nine. Finite elements come closest where
 fields close to a surface need fine panels (the plate with its sides off, 7
-times at 0.1 %), on the thin sheet (10 times) and where many bodies form one
-large dense system (the cuboids of many sizes, 3 times).
+times at 0.1 %), on the thin sheet (10 times), where many bodies form one large
+dense system (the cuboids of many sizes, 3 times) and where two parts nearly
+touch (the cubes just off a plate, 5 to 15 times).
 
 ## How accurate a solve is
 
