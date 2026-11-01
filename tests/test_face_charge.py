@@ -1343,3 +1343,32 @@ def test_a_turned_part_near_another_has_its_gap(turn, reference):
     B = magpy.getB(solved, [(0.003, 0, 0.0035), (0.003, 0.003, 0.0015)]) * 1e3
     off = np.linalg.norm(B - reference, axis=1) / np.linalg.norm(reference, axis=1)
     assert off.max() < 0.01
+
+
+def test_a_turned_part_at_a_tiny_gap_couples_as_touching():
+    """Gauss points leak across a gap far below the panels: up to 88 % off at both
+    chi 1000 and 2e-4 of the cube's half-side, where the gap itself moves the field
+    by under 1 %."""
+
+    def read(gap):
+        plate = magpy.magnet.Cuboid(
+            polarization=(0, 0, 0), dimension=(0.01, 0.01, 0.002)
+        )
+        cube = magpy.magnet.Cuboid(
+            polarization=(0, 0, 0),
+            dimension=(0.004, 0.004, 0.004),
+            position=(0, 0, 0.003 + gap),
+            orientation=R.from_rotvec((0, 0, 0.1)),
+        )
+        plate.susceptibility = cube.susceptibility = 1000.0
+        magnet = magpy.magnet.Cuboid(
+            polarization=(0, 0, 1),
+            dimension=(0.005, 0.005, 0.005),
+            position=(0.02, 0, 0.01),
+        )
+        solved = apply_face_charge(magpy.Collection(magnet, plate, cube), level=4)
+        return magpy.getB(solved, [(0.003, 0, 0.0035), (0.003, 0.003, 0.0015)])
+
+    touching = read(0.0)
+    off = np.linalg.norm(read(4e-7) - touching, axis=1)
+    assert (off < 0.02 * np.linalg.norm(touching, axis=1)).all()
