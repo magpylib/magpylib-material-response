@@ -146,12 +146,33 @@ J_max = max(np.linalg.norm(c.polarization) for c in linear.sources_all)
 print(f"polarization: {share.min() * JS:.2f} to {share.max() * JS:.2f} T; with χ = 1000 up to {J_max:.2f} T")
 ```
 
+## A part in use: the U-core at high current
+
+The docs' U-core with every winding at 25, 100 and 400 A, on the same kind of
+curve (χ₀ = 999, Jₛ = 1.6 T). Peak Bz 30 mm above the poles, in mT, from runs
+not repeated on this page, which would take minutes:
+
+| Method                       |  25 A | 100 A | 400 A |
+| ---------------------------- | ----: | ----: | ----: |
+| Linear, χ = 999, face charge | 2.151 | 8.605 | 34.42 |
+| `fem_solve`, order 3         | 2.148 | 8.176 | 14.24 |
+| `fem_solve`, order 2         | 2.189 | 8.330 | 14.50 |
+| `apply_demag`, 2,392 sources | 1.971 | 7.576 | 13.91 |
+| `apply_demag`, 720 sources   | 1.822 | 7.054 | 13.64 |
+
+At 400 A saturation cuts the field to 0.41 times the linear one, and the two
+methods differ by 2.3 %, the cells still rising. At lower currents the cells'
+gap, 8 % at 25 A, is their own discretization of a part with a high χ, which
+saturation shrinks. No measurement backs these: the curve is a stand-in, and
+both methods share it.
+
 ## What it costs, and what it leaves out
 
 - A part on a curve solves 10 to 40 times, the matrix built once; the sphere
   above takes about 20 solves at each field.
-- `apply_face_charge` and `fem_solve` refuse a part on a curve: face charge
-  needs a uniform susceptibility in each part, and finite elements here are
-  linear.
+- `apply_face_charge` refuses a part on a curve: it needs a uniform
+  susceptibility in each part. `fem_solve` follows the curve, and is the check
+  on a part that a sphere's exact answer cannot give; it assembles again at each
+  of its 5 to 40 solves.
 - The curve is the material's initial curve: no hysteresis, so a field that
   comes back down returns along the same curve.

@@ -14,7 +14,7 @@ import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from netgen import occ
 
-from magpylib_material_response._saturation import curve_of
+from magpylib_material_response._saturation import Curve, curve_of
 from magpylib_material_response.demag import (
     _cell_susceptibilities,
     _has_path,
@@ -43,6 +43,8 @@ class Part:
     bounds: np.ndarray
     #: Smallest extent in m.
     thinnest: float
+    #: Its B-H curve, if it follows one; `chi` is then the curve's initial slope.
+    curve: Curve | None = None
 
 
 def parts_of(collection):
@@ -104,17 +106,13 @@ def parts_of(collection):
         msg = f"fem meshes magnets with a volume; got {flat}."
         raise TypeError(msg)
 
-    curved = [m for m in magnets if curve_of(m) is not None]
-    if curved:
-        msg = (
-            f"{len(curved)} magnets are on a B-H curve: fem_solve takes linear "
-            "materials only. apply_demag follows the curve."
-        )
-        raise NotImplementedError(msg)
     sus = get_susceptibilities(magnets)
     chis = _cell_susceptibilities(sus, [m.orientation for m in magnets])
     parts = []
     for magnet, chi in zip(magnets, chis, strict=True):
+        curve = curve_of(magnet)
+        if curve is not None:
+            chi = curve.chi0 * np.eye(3)  # noqa: PLW2901
         pol = magnet.polarization
         pol = np.zeros(3) if pol is None else magnet.orientation.apply(pol).ravel()
         corners = _corners(magnet)
@@ -125,6 +123,7 @@ def parts_of(collection):
                 polarization=pol,
                 bounds=np.array([corners.min(axis=0), corners.max(axis=0)]),
                 thinnest=_thinnest(magnet),
+                curve=curve,
             )
         )
 

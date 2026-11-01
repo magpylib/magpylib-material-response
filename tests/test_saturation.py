@@ -183,11 +183,6 @@ def test_what_a_curve_cannot_go_with():
     part.bh_curve = table(n=30)
     with pytest.raises(NotImplementedError, match="B-H curve"):
         apply_face_charge(magpy.Collection(part))
-    pytest.importorskip("ngsolve")
-    from magpylib_material_response import fem  # noqa: PLC0415
-
-    with pytest.raises(NotImplementedError, match="B-H curve"):
-        fem.fem_solve(magpy.Collection(part.copy()), order=1)
 
 
 def test_a_curve_that_starts_flat_solves():
@@ -208,3 +203,48 @@ def test_a_curve_that_starts_flat_solves():
         if c.dimension[0] < 0.004
     ]
     assert 0.5 * JS < max(J_cells) < 1.001 * JS  # the iteration stops at 1e-4
+
+
+@pytest.mark.parametrize("B0", [0.3, 1.0, 2.0])
+def test_finite_elements_follow_a_curve(B0):
+    """A sphere stays uniform while it saturates, so its answer is exact, inside
+    the part and by its moment outside."""
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
+    sphere.bh_curve = table()
+    model = magpy.Collection(sphere)
+    model.H_ext = (0, 0, B0)
+    solved = fem_solve(model, order=4)
+    J = exact_sphere(B0)
+    # B leaves out the applied field: inside, J - J / 3
+    assert solved.getB(np.array([[0, 0, 0]]))[0, 2] == pytest.approx(
+        2 * J / 3, rel=5e-3
+    )
+    assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=2e-3)
+
+
+def test_finite_elements_and_cells_agree_on_a_coil_in_a_saturating_core():
+    """A coil at a current that saturates the bar: the reduced and the total
+    potential both take chi from the curve, and the two methods agree."""
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+    from magpylib_material_response.meshing import mesh_uniform  # noqa: PLC0415
+
+    def model():
+        bar = magpy.magnet.Cuboid(dimension=(0.04, 0.01, 0.01), polarization=(0, 0, 0))
+        bar.bh_curve = table(n=120)
+        coil = magpy.current.Circle(
+            current=2e4, diameter=0.03, orientation=None, position=(0, 0, 0)
+        ).rotate_from_angax(90, "y")
+        return magpy.Collection(bar, coil)
+
+    points = np.array([[0.03, 0, 0], [0, 0.02, 0], [0.03, 0.01, 0]])
+    by_fem = fem_solve(
+        model(), order=3, observers=points, solver_tol=1e-7, max_iter=30000
+    )
+    by_cells = apply_demag(mesh_uniform(model(), 4))
+    np.testing.assert_allclose(
+        by_fem.getB(points), magpy.getB(by_cells, points), rtol=0.05, atol=1e-3
+    )
