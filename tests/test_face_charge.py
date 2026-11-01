@@ -1747,6 +1747,9 @@ def test_reading_inside_a_solved_part_warns(part):
     middle = (0.001, 0, 0)
     with pytest.warns(UserWarning, match="inside a solved part"):
         magpy.getB(solved, middle)
+    for getter in (magpy.getJ, magpy.getM):
+        with pytest.warns(UserWarning, match="no volume"):
+            assert not getter(solved, middle).any()
     with pytest.warns(UserWarning, match="inside a solved part"):
         magpy.getB(solved.copy(), [(0, 0, 0.1), middle])
     # the corner of its box, beside the cylinder or sphere; H there is right

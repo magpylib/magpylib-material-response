@@ -23,6 +23,10 @@ and this project adheres to
 
 ### Changed
 
+- `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
+  `getB` warns there. The docs say not to read a cell model exactly on a
+  boundary between cells, where the field is wrong with no warning
+  ([#157](https://github.com/magpylib/magpylib-material-response/pull/157))
 - **Breaking, with warnings for one release:** the solvers take one form and are
   importable from the top level: `solve_cells` (`apply_demag`),
   `solve_face_charge` (`apply_face_charge`), `solve_fem` (`fem_solve`),

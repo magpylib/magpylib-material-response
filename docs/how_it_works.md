@@ -351,6 +351,14 @@ each other. In practice: start coarse, multiply the cells by four to eight, and
 stop when the quantity you need, a force or a field at a sensor, changes by less
 than you can accept.
 
+**Do not read exactly on a boundary between cells.** Touching cells each count a
+point on their shared surface as inside, and return zero on their own edges, so
+the field there is wrong, with no warning: J counts 2, 4 or 8 times, and B can
+be far off. The centre of a part with an even number of cells across is such a
+point, as is any point on a symmetry plane through it: a 10 mm cube with χ = 10
+in 0.1 T, 6 cells across, reads B = 0.007 T at its centre and 0.191 T 1 µm away.
+Read a small step off the boundary, or use an odd number of cells.
+
 ## Solving: direct or iterative
 
 N cells give 3N unknowns and a matrix of 9N² numbers: 1 GB for 3,700 cells. The
