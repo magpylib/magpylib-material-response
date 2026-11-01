@@ -59,6 +59,10 @@ NEAR = 1e-2
 # ones: a 6 mm mesh cube 1e-7 m above a 10 mm one moved 2.5 % off touching by
 # quadrature, 2e-4 so; 1e-3 left 1e-6 m worse, 2.2e-3 against 1.6e-3
 PLANE = 1e-4
+# a turned cuboid this close to another, in the smaller's largest half-side, takes
+# the contact term (cross_block): against finite elements it wins at 5e-4 and
+# Gauss points at 1.5e-3, a cube above a plate, both at chi 1000 (#136)
+TURNED = 1e-3
 # two parts whose axes differ by less than this count as aligned: a choice of
 # coupling, which changes the matrix across it however close the two sides are
 ALIGNED = 1e-9
@@ -81,6 +85,11 @@ def plane_tol(*parts):
     exact contact term: ``PLANE`` of the smallest part's size, at least what
     touches."""
     return max(contact_tol(*parts), PLANE * min(np.max(p.half) for p in parts))
+
+
+def turned_tol(*parts):
+    """Parts closer than this, one turned against the other, couple as touching."""
+    return max(contact_tol(*parts), TURNED * min(np.max(p.half) for p in parts))
 
 
 def contact_tol(*parts):
@@ -369,14 +378,16 @@ def cross_block(a, bs):
     # Aligned cuboids are graded onto each other and their Gauss points resolve
     # a gap, better than the contact term: four pieces 1 um from a plate's side
     # 0.13 % so, 1.28 % by it. A turned one's panels cannot meet a's, and leak
-    # across a gap below them: 3 % for a cube turned 30 degrees 1e-6 m above a
-    # plate, 4.6e-4 by the contact term out to NEAR, as the gap's own effect
+    # across a gap far below them, so it takes the contact term; but that gives the
+    # touching answer, and a wider gap has an effect of its own (TURNED)
     reach = []
     for b in bs:
         Rab, cb = _relative(a, b)
         turn = np.abs(Rab)  # not np.allclose: 9,900 pairs of 100 cubes took 0.2 s
         aligned = np.abs(turn - np.round(turn)).max() <= ALIGNED
-        reach.append(np.full(b.panels.N, (contact_tol if aligned else near_tol)(a, b)))
+        reach.append(
+            np.full(b.panels.N, contact_tol(a, b) if aligned else turned_tol(a, b))
+        )
         pts, w, functions = b.galerkin.rule(b.galerkin.nq)
         y.append(pts @ Rab.T + cb)  # b's Gauss points in a's frame, (gauss, Nb, 3)
         wts.append(w)
