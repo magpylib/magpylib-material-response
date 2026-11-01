@@ -52,8 +52,9 @@ CONTACT = 1e-6
 # each other's outline as touching ones are, though not joined: across a gap
 # far below their panels their charges nearly cancel, and panels that do not
 # face each other leak. Four pieces 30 um from a plate's side were 29 % off at
-# level 2, 2.9 % graded, the gap's own effect; from 1 mm on it changes nothing
-NEAR = 1e-2
+# level 2, 2.9 % graded, the gap's own effect. Past where grading stops the field
+# jumps: a 4 mm cube over a plate, level 3, 48 % at 1 %, 17 at 10, 5 at 20 (#139)
+NEAR = 0.2
 # faces of two parts closer than this, in the smaller's largest half-side, to
 # parallel ones couple by the exact contact term (coupling_block), as touching
 # ones: a 6 mm mesh cube 1e-7 m above a 10 mm one moved 2.5 % off touching by
