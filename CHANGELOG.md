@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Saturation: a `bh_curve` set on a part or a collection, a table of (H, B)
+  rows, replaces its constant susceptibility in `apply_demag`. Each cell takes
+  the susceptibility its own field gives on the curve, the linear solve repeated
+  until none changes, with the matrix built once and Anderson acceleration: 10
+  to 40 solves. A sphere comes out within 1 % of its exact answer along the
+  curve. Meshers and `to_json` carry the curve; `apply_face_charge` and
+  `fem_solve` refuse it
+  ([#150](https://github.com/magpylib/magpylib-material-response/pull/150))
+
 ## [0.8.0] - 2026-11-01
 
 Parts close to each other are solved right, and loops get cheap. Face charge

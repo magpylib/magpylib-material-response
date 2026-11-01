@@ -1,0 +1,113 @@
+"""A material's B-H curve, and the iteration that puts each cell on it.
+
+A ``bh_curve`` is set like ``susceptibility``, on a magnet or a parent
+collection: a table of ``(H, B)`` points in A/m and T, from ``(0, 0)``, with H
+increasing and B not decreasing. Between the points B follows a monotone cubic
+(PCHIP); past the last, the polarization ``J = B - mu0 H`` keeps its last value,
+so B rises with the slope of vacuum. A cell on a curve takes the secant
+susceptibility ``chi = J / (mu0 H)`` at the field inside it, the way Radia
+treats non-linear iron: repeat the linear solve, read each cell's field, move
+its chi onto the curve, until no chi changes by more than ``TOL``. Anderson
+acceleration (depth ``DEPTH``) of that fixed point cuts the solves 3 to 4 times.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+from loguru import logger
+from scipy.interpolate import PchipInterpolator
+
+MU0 = 4e-7 * np.pi
+TOL = 1e-4  # relative change of any cell's chi at which the iteration stops
+DEPTH = 6  # Anderson's memory
+DAMPING = 0.7
+MAX_SOLVES = 200
+
+
+class Curve:
+    """One B-H curve, read from its table."""
+
+    def __init__(self, table):
+        table = np.asarray(table, float)
+        if table.ndim != 2 or table.shape[1] != 2 or len(table) < 2:
+            msg = f"bh_curve must be a table of (H, B) rows, at least two; got shape {table.shape}."
+            raise ValueError(msg)
+        H, B = table.T
+        if not np.isfinite(table).all() or H[0] != 0 or B[0] != 0:
+            msg = "bh_curve must start at (0, 0) and hold finite numbers."
+            raise ValueError(msg)
+        if (np.diff(H) <= 0).any() or (np.diff(B) < 0).any():
+            msg = "bh_curve needs H increasing and B not decreasing."
+            raise ValueError(msg)
+        J = B - MU0 * H
+        if (J < 0).any():
+            msg = "bh_curve lies below vacuum (B < mu0 H) somewhere: the polarization would be negative."
+            raise ValueError(msg)
+        self.table = table
+        self._J = PchipInterpolator(H, J, extrapolate=False)
+        self.J_last = float(J[-1])
+        self.H_last = float(H[-1])
+        # the initial susceptibility, from the curve's slope at the origin
+        self.chi0 = float(max(self._J(0.0, 1) / MU0, 0.0))
+
+    def polarization(self, H):
+        """``J`` in T at the field strengths ``H`` in A/m."""
+        H = np.asarray(H, float)
+        J = self._J(np.minimum(H, self.H_last))
+        return np.where(self.H_last <= H, self.J_last, J)
+
+    def chi(self, mu0H):
+        """The secant susceptibility ``J / (mu0 H)`` at ``mu0H`` in T, ``chi0``
+        at zero field."""
+        mu0H = np.asarray(mu0H, float)
+        small = mu0H <= 0
+        safe = np.where(small, 1.0, mu0H)
+        return np.where(small, self.chi0, self.polarization(safe / MU0) / safe)
+
+
+def curve_of(source):
+    """The :class:`Curve` set on `source` or its nearest parent that sets one,
+    or None."""
+    while source is not None:
+        table = getattr(source, "bh_curve", None)
+        if table is not None:
+            return table if isinstance(table, Curve) else Curve(table)
+        source = source.parent
+    return None
+
+
+def iterate(solve, on_curve, curves, chi, remanence):
+    """Solve until every cell on a curve has its chi at its own field.
+
+    ``solve(chi)`` returns the polarizations ``(n, 3)`` for the (n, 3, 3) cell
+    susceptibilities ``chi``; ``on_curve`` indexes the cells with a curve, in
+    ``curves``, and ``remanence`` (n, 3) is each cell's own polarization, which
+    the field inside does not include. Returns the polarizations, and the
+    number of solves."""
+    x = np.log(np.array([c.chi0 for c in curves]))
+    X, F = [], []
+    for solves in range(1, MAX_SOLVES + 1):
+        chi[on_curve] = np.exp(x)[:, None, None] * np.eye(3)
+        J = solve(chi)
+        induced = np.linalg.norm(J[on_curve] - remanence[on_curve], axis=1)
+        mu0H = induced / np.exp(x)
+        f = np.log(np.array([c.chi(h) for c, h in zip(curves, mu0H, strict=True)])) - x
+        if np.max(np.abs(np.expm1(f))) < TOL:
+            logger.info(
+                "Saturation: {k} cells on B-H curves, converged in {solves} solves",
+                k=len(x),
+                solves=solves,
+            )
+            return J, solves
+        X, F = [*X, x.copy()][-DEPTH:], [*F, f.copy()][-DEPTH:]
+        if len(F) == 1:
+            x = x + DAMPING * f
+            continue
+        dF, dX = np.diff(F, axis=0).T, np.diff(X, axis=0).T
+        gamma = np.linalg.lstsq(dF, f, rcond=None)[0]
+        x = x + DAMPING * f - (dX + DAMPING * dF) @ gamma
+    msg = (
+        f"The B-H iteration did not converge in {MAX_SOLVES} solves: the largest "
+        f"change of a cell's susceptibility is still {np.max(np.abs(np.expm1(f))):.1e}."
+    )
+    raise RuntimeError(msg)

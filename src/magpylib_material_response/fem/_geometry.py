@@ -14,6 +14,7 @@ import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from netgen import occ
 
+from magpylib_material_response._saturation import curve_of
 from magpylib_material_response.demag import (
     _cell_susceptibilities,
     _has_path,
@@ -103,6 +104,13 @@ def parts_of(collection):
         msg = f"fem meshes magnets with a volume; got {flat}."
         raise TypeError(msg)
 
+    curved = [m for m in magnets if curve_of(m) is not None]
+    if curved:
+        msg = (
+            f"{len(curved)} magnets are on a B-H curve: fem_solve takes linear "
+            "materials only. apply_demag follows the curve."
+        )
+        raise NotImplementedError(msg)
     sus = get_susceptibilities(magnets)
     chis = _cell_susceptibilities(sus, [m.orientation for m in magnets])
     parts = []
