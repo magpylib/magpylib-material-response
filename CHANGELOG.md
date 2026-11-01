@@ -30,8 +30,10 @@ and this project adheres to
 - Face charge grades a part's panels toward another part out to a gap of 20 % of
   the smaller's half-side, not 1 %. Just past 1 %, the field near the parts was
   up to 48 % off finite elements at level 3 and 7 % at level 6, aligned parts
-  too; it is now 0.5 %. Models with parts in that range take about 30 % more
-  unknowns and 1.6 times as long at a level
+  too; it is now 0.5 %. It costs more at a level: 1.6 times as long for one part
+  beside another, and it grows with the magnets on a part, 30 times for 25
+  magnets on a yoke (648 to 13,608 unknowns), where the default level may drop,
+  with a warning, and a model near `max_unknowns` may be refused
   ([#140](https://github.com/magpylib/magpylib-material-response/pull/140))
 - Face charge no longer treats a turned part as touching another up to 1 % of
   its size away: at a gap of 0.5 % the field near the parts was 9 to 19 % off
