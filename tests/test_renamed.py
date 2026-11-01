@@ -6,6 +6,7 @@ import importlib
 import subprocess
 import sys
 
+import magpylib as magpy
 import pytest
 
 import magpylib_material_response as mmr
@@ -50,6 +51,29 @@ def test_importing_the_package_loads_no_solver():
         "assert 'ngsolve' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_without_ngsolve_the_package_can_be_listed_and_star_imported():
+    code = (
+        "import importlib.util as u, inspect;"
+        "find = u.find_spec;"
+        "u.find_spec = lambda name, *a: None if name == 'ngsolve' else find(name, *a);"
+        "import magpylib_material_response as mmr;"
+        "inspect.getmembers(mmr);"
+        "namespace = {};"
+        "exec('from magpylib_material_response import *', namespace);"
+        "assert 'solve_cells' in namespace;\n"
+        "try:\n    mmr.solve_fem\n"
+        "except ImportError as error:\n    assert 'pip install' in str(error)\n"
+        "else:\n    raise AssertionError('no install hint')"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_a_file_saved_with_the_old_name_reads_as_cells():
+    magnet = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 1))
+    magnet.solved_by = "demag"
+    assert mmr.from_json(mmr.to_json(magnet))[0].solved_by == "cells"
 
 
 def test_an_unknown_name_is_an_attribute_error():

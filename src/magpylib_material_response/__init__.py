@@ -6,6 +6,7 @@ magpylib-material-response: Python package extending the Magpylib library by pro
 from __future__ import annotations
 
 from importlib import import_module
+from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 from magpylib_material_response._data import get_dataset
@@ -18,7 +19,7 @@ if TYPE_CHECKING:  # for editors and linters; at run time, __getattr__ below
     from magpylib_material_response.cells import solve_cells
     from magpylib_material_response.convergence import compare, study_cells
     from magpylib_material_response.face_charge import solve_face_charge
-    from magpylib_material_response.fem import solve_fem, study_fem
+    from magpylib_material_response.fem import solve_fem, study_fem  # noqa: F401
 
 # loaded when first asked for: import stays fast, and NGSolve optional
 _FUNCTIONS = {
@@ -43,6 +44,7 @@ _MODULES = (
     "utils",
 )
 
+# not solve_fem and study_fem: `import *` must not need NGSolve, nor load it
 __all__ = [
     "__version__",
     "compare",
@@ -52,9 +54,7 @@ __all__ = [
     "get_dataset",
     "solve_cells",
     "solve_face_charge",
-    "solve_fem",
     "study_cells",
-    "study_fem",
     "to_json",
 ]
 
@@ -69,4 +69,8 @@ def __getattr__(name):
 
 
 def __dir__():
-    return sorted({*globals(), *__all__, *_MODULES})
+    names = {*globals(), *_FUNCTIONS, *_MODULES}
+    # what lists a module's names reads each one, and only NGSolve can fail
+    return sorted(
+        names if find_spec("ngsolve") else names - {"fem", "solve_fem", "study_fem"}
+    )
