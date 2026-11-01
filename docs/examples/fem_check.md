@@ -111,8 +111,10 @@ value.
 ## What `fem_solve` does
 
 `fem_solve(model, order, observers=...)` solves one model at one polynomial
-order and returns a solution with `moment`, and with `getB` and `getH`, which
-leave out a uniform `H_ext` as a model solved by `apply_demag` does. `fem_study`
+order and returns a magpylib source with `moment`: `magpy.getB`, `getH`, `getJ`
+and `getM` read it, and leave out a uniform `H_ext` as on a model solved by
+`apply_demag`. Inside a part with a high susceptibility these are pointwise and
+show the elements, because H there is small next to its error. `fem_study`
 solves it at rising orders on one mesh and takes 1.25 times the last change as
 the error of the highest, per sensor and in all.
 

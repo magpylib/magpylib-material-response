@@ -219,9 +219,7 @@ def test_finite_elements_follow_a_curve(B0):
     solved = fem_solve(model, order=4)
     J = exact_sphere(B0)
     # B leaves out the applied field: inside, J - J / 3
-    assert solved.getB(np.array([[0, 0, 0]]))[0, 2] == pytest.approx(
-        2 * J / 3, rel=5e-3
-    )
+    assert solved.getB((0, 0, 0))[2] == pytest.approx(2 * J / 3, rel=5e-3)
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=2e-3)
 
 
@@ -249,7 +247,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     )
     from_big = uniform.getB(point[0])[2]
     expected = from_big + 2 * exact_sphere(2.0 + from_big) / 3
-    assert solved.getB(point)[0, 2] == pytest.approx(expected, rel=5e-3)
+    assert solved.getB(point)[2] == pytest.approx(expected, rel=5e-3)
 
 
 def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
@@ -285,9 +283,7 @@ def test_finite_elements_keep_a_remanent_part_on_its_curve():
     sphere.bh_curve = table()
     solved = fem_solve(magpy.Collection(sphere), order=4)
     J = brentq(lambda J: 1.0 - polarization(J / 3 / MU0) - J, 0.0, 1.0)
-    assert solved.getB(np.array([[0, 0, 0]]))[0, 2] == pytest.approx(
-        2 * J / 3, rel=0.01
-    )
+    assert solved.getB((0, 0, 0))[2] == pytest.approx(2 * J / 3, rel=0.01)
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=0.01)
 
 

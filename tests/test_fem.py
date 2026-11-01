@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pickle
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -168,10 +170,51 @@ def test_sensors_are_read_in_their_own_frames():
     with pytest.warns(UserWarning, match="Two orders give no error estimate"):
         study = fem_study(model, sensor, (1, 2), edge_layers=0)
     np.testing.assert_allclose(study.values[-1], study.solution.getB(sensor))
-    # magpylib tries a new field function out on two points of its own, which
-    # can lie on the meshed ball and warned
-    solution._field = lambda *_: pytest.fail("evaluated where magpylib probes")
-    solution._source()
+
+
+@pytest.mark.parametrize("driven_by", ["H_ext", "coil"])
+def test_a_solution_is_a_magpylib_source(driven_by):
+    """magpylib's getB, getH, getJ and getM read it like any solved model, and J
+    is the exact one of a sphere, with or without a current in the model."""
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
+    sphere.susceptibility = 10.0
+    if driven_by == "H_ext":
+        model, B0 = magpy.Collection(sphere), 0.1
+        model.H_ext = (0, 0, B0)
+    else:
+        coil = magpy.current.Circle(current=2e5, diameter=2.0)
+        model, B0 = magpy.Collection(sphere, coil), coil.getB((0, 0, 0))[2]
+    centre, air = (0, 0, 0), (0, 0, 0.02)
+    solution = fem_solve(model, 3)
+
+    J = 10 * B0 / (1 + 10 / 3)
+    np.testing.assert_allclose(magpy.getJ(solution, centre), (0, 0, J), atol=0.01 * J)
+    np.testing.assert_allclose(
+        magpy.getM(solution, centre), magpy.getJ(solution, centre) / magpy.mu_0
+    )
+    np.testing.assert_array_equal(magpy.getJ(solution, air), 0)
+    np.testing.assert_array_equal(magpy.getJ(solution, (0, 0, 100.0)), 0)
+    # B and H differ by J alone, inside and out
+    points = [centre, air]
+    np.testing.assert_allclose(
+        magpy.getB(solution, points) - magpy.mu_0 * magpy.getH(solution, points),
+        magpy.getJ(solution, points),
+        atol=1e-12,
+    )
+
+    other = magpy.magnet.Cuboid(
+        dimension=(0.001,) * 3, polarization=(0, 0, 1), position=(0.05, 0, 0)
+    )
+    np.testing.assert_allclose(
+        magpy.getB(magpy.Collection(solution, other), air),
+        solution.getB(air) + other.getB(air),
+    )
+    moved = solution.copy().move((0.03, 0, 0))
+    assert moved.solved_by == "fem"
+    np.testing.assert_allclose(moved.getB((0.03, 0, 0.02)), solution.getB(air))
+    np.testing.assert_array_equal(solution.position, (0, 0, 0))
+    with pytest.raises(TypeError, match="cannot be saved"):
+        pickle.dumps(solution)
 
 
 def test_edge_layers_match_across_faces(monkeypatch):

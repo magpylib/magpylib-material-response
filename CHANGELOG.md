@@ -21,6 +21,13 @@ and this project adheres to
   check: a sphere is within 0.2 % of its exact answer at order 4 from 0.05 to 2
   T ([#151](https://github.com/magpylib/magpylib-material-response/pull/151))
 
+### Changed
+
+- `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
+  read it, alone or with other sources, and it moves and copies like one. Its
+  own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`
+  ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
+
 ## [0.8.0] - 2026-11-01
 
 Parts close to each other are solved right, and loops get cheap. Face charge
