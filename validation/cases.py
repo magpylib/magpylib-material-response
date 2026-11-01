@@ -421,6 +421,50 @@ def _cad_part():
 # ── edge cases ────────────────────────────────────────────────────────────────
 
 
+THIN_GAP = {"solver_tol": 1e-7, "max_iter": 30000}
+
+
+def _near(gap, turn=0.0, cube=4 * MM, chi=50):
+    """A soft cube close above a soft plate (10 x 10 x 2 mm, chi = 1000), a magnet
+    to the side: `gap` as a share of the cube's half-side, `turn` in rad about z."""
+    plate = _soft((10 * MM, 10 * MM, 2 * MM), "plate, χ = 1000", 1000)
+    z = 1 * MM + gap * cube / 2 + cube / 2
+    part = _soft((cube, cube, cube), f"cube, χ = {chi}", chi, position=(0, 0, z))
+    part.orientation = Rotation.from_rotvec((0, 0, turn))
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1),
+        dimension=(5 * MM, 5 * MM, 5 * MM),
+        position=(20 * MM, 0, 10 * MM),
+        style_label="magnet, 1 T",
+    )
+    edge = cube / 2 + 1 * MM
+    d = np.array([0.2, 0.5, 1, 2])[:, None] * MM
+    groups = {
+        "beside the gap": [edge, 0, 1 * MM] + d * [0, 0, 1],
+        "off a corner": [edge, edge, 1 * MM] + d * [0, 0, 1],
+        "under the plate": [0, 0, -1 * MM] - d * [0, 0, 1],
+    }
+    return magpy.Collection(plate, part, magnet), groups
+
+
+def _near_turned():
+    """A cube 0.5 % of its half-side above the plate, turned: solved as touching,
+    it was 4.5 % off beside the gap, at level 5 as at level 3 (#136)."""
+    return _near(0.005, turn=0.1)
+
+
+def _near_aligned():
+    """A cube 5 % of its half-side above the plate: past the grading, it was 3.5 %
+    off at level 3, where it now is 0.2 % (#139)."""
+    return _near(0.05)
+
+
+def _near_small():
+    """Both limits again at another size and chi: a 1 mm cube of chi = 1000 turned
+    0.5 rad, 2 % of its half-side above the plate."""
+    return _near(0.02, turn=0.5, cube=1 * MM, chi=1000)
+
+
 def _sides_off():
     """The magnet on the plate, the magnet 4.4 mm tall: no cell size fits both
     the plate's 5 mm and the magnet's 4.4 mm, so MoM's uniform cells never share
@@ -576,6 +620,31 @@ CASES = {
             reference="concentrator",
         ),
         Case("sides_off", "Sides off the cell size", "edge", _sides_off),
+        # conjugate gradients crawl across a thin gap: 1e-10 not reached in 5,000
+        Case(
+            "near_turned",
+            "A turned cube just off a plate",
+            "edge",
+            _near_turned,
+            options={"FEM": THIN_GAP},
+            reference_orders=(2, 3, 4),
+        ),
+        Case(
+            "near_aligned",
+            "An aligned cube just off a plate",
+            "edge",
+            _near_aligned,
+            options={"FEM": THIN_GAP},
+            reference_orders=(2, 3, 4),
+        ),
+        Case(
+            "near_small",
+            "A small cube just off a plate",
+            "edge",
+            _near_small,
+            options={"FEM": THIN_GAP},
+            reference_orders=(2, 3, 4),
+        ),
         # 1,200 edges: FEM's default four layers toward them pass 7 GB at order 2
         Case(
             "small_bodies",
