@@ -15,9 +15,11 @@ and this project adheres to
   the susceptibility its own field gives on the curve, the linear solve repeated
   until none changes, with the matrix built once and Anderson acceleration: 10
   to 40 solves. A sphere comes out within 1 % of its exact answer along the
-  curve. Meshers and `to_json` carry the curve; `apply_face_charge` and
-  `fem_solve` refuse it
+  curve. Meshers and `to_json` carry the curve; `apply_face_charge` refuses it
   ([#150](https://github.com/magpylib/magpylib-material-response/pull/150))
+- `fem_solve` follows a `bh_curve` too, so a saturated part has an independent
+  check: a sphere is within 0.2 % of its exact answer at order 4 from 0.05 to 2
+  T ([#151](https://github.com/magpylib/magpylib-material-response/pull/151))
 
 ## [0.8.0] - 2026-11-01
 

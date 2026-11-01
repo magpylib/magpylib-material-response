@@ -40,6 +40,8 @@ References
   International Journal for Numerical Methods in Engineering 14(3), 423-440.
 """
 
+# pylint: disable=too-many-lines
+
 from __future__ import annotations
 
 import time
@@ -55,6 +57,7 @@ from netgen import meshing, occ
 from ngsolve.comp import IntegrationRuleSpaceSurface
 from scipy.spatial import cKDTree
 
+from magpylib_material_response._saturation import CHI_MIN, DAMPING, DEPTH
 from magpylib_material_response.fem._geometry import (
     contains,
     current_segments,
@@ -283,6 +286,24 @@ def outward(mesh, groups):
     return mesh.BoundaryCF(side, default=0) * ng.specialcf.normal(3)
 
 
+BONUS = 4  # integration order added where chi follows a curve
+CHI_ORDER = 1  # log chi's polynomial degree on each element
+# chi moving on the worst element at which the iteration stops: the U-core's peak
+# is the same to 1e-4 here and at 70 solves, where 1e-4 on that element never comes
+TOL = 1e-3
+FEM_SOLVES = 70  # at most; each assembles again
+STALL = 1e-2  # left moving by at most this, the result stands, with a warning
+
+
+def _secant_spline(curve):
+    """The curve's secant susceptibility against mu0 H in T, as NGSolve's spline
+    on a fine grid, with the field past which J stays at its last value."""
+    last = MU0 * curve.H_last
+    mu0H = np.r_[0.0, np.geomspace(1e-3 * last / 1e6, last, 4000)]
+    chi = curve.chi(mu0H)
+    return ng.BSpline(2, [0.0, *mu0H], [float(c) for c in chi]), last, curve.J_last
+
+
 def _conforming(mesh):
     """Whether the elements of `mesh` match across every face. Assembling with
     unknowns on the faces, from order 2, finds a square face of a prism
@@ -323,10 +344,11 @@ class FemSolution:
         ``"fem"``, as ``apply_demag`` and ``apply_face_charge`` name theirs.
     """
 
-    def __init__(self, model, order, gf, ndof, seconds, lift=None):
+    def __init__(self, model, order, gf, ndof, seconds, lift=None, chi=None):
         self._model = model
         self._gf = gf
         self._lift = lift
+        self._chi = chi
         self.solved_by = "fem"
         self.order = order
         self.ndof = ndof
@@ -388,7 +410,7 @@ class FemSolution:
         air = ~inside
         if inside.any():
             if kind == "B":
-                cf = model.flux_density(self._gf, self._lift)
+                cf = model.flux_density(self._gf, self._lift, self._chi)
             else:
                 cf = model.field_strength(self._gf, self._lift)
             mp = model.locate(s[inside], np.zeros(3))
@@ -441,6 +463,7 @@ class Model:
         self.radius = BALL
         self.kelvin_center = np.array([3 * BALL, 0.0, 0.0])
         self.min_log_time = min_log_time
+        self._splines = {}
 
         self.curved = None
         sizes = self._sizes(maxh)
@@ -615,20 +638,126 @@ class Model:
             warnings.warn(msg, stacklevel=4)
         return mp
 
-    def coefficients(self):
-        """Per part: mu_r = I + chi, and the source chi B_ext + J_r, in T."""
+    @staticmethod
+    def _dx(chi):
+        """The integration for a form holding `chi`: more points if it is on a
+        curve."""
+        return ng.dx if chi is None else ng.dx(bonus_intorder=BONUS)
+
+    def _on_curves(self):
+        """Whether a part follows a B-H curve."""
+        return any(part.curve is not None for part in self.parts)
+
+    def _secant(self, part, gf, lift):
+        """The curve's secant susceptibility of `part` at the field `gf` and
+        `lift` give, as a coefficient: mu0 H is B_ext - grad u, or with currents
+        -grad(u + L)."""
+        total = (
+            ng.CF(tuple(self.B_ext)) - ng.grad(gf)
+            if lift is None
+            else -ng.grad(gf) - ng.grad(lift)
+        )
+        mu0H = ng.Norm(total)
+        if id(part) not in self._splines:
+            self._splines[id(part)] = _secant_spline(part.curve)
+        spline, last, J_last = self._splines[id(part)]
+        return ng.IfPos(mu0H - last, J_last / (mu0H + 1e-300), spline(mu0H))
+
+    def coefficients(self, chi=None):
+        """Per part: mu_r = I + chi, and the source chi B_ext + J_r, in T. A part
+        on a curve takes the coefficient `chi` if given, else its initial slope."""
         mu, source = {}, {}
         for i, part in enumerate(self.parts):
+            if part.curve is not None and chi is not None:
+                mu[f"part{i}"] = (1 + chi) * ng.Id(3)
+                source[f"part{i}"] = chi * ng.CF(tuple(self.B_ext)) + ng.CF(
+                    tuple(part.polarization)
+                )
+                continue
             mu[f"part{i}"] = ng.CF(tuple((np.eye(3) + part.chi).ravel()), dims=(3, 3))
             source[f"part{i}"] = ng.CF(tuple(part.chi @ self.B_ext + part.polarization))
         return mu, source
 
-    def flux_density(self, gf, lift=None):
+    def _curved(self):
+        """The region of the parts on a curve."""
+        names = [f"part{i}" for i, p in enumerate(self.parts) if p.curve is not None]
+        return self.mesh.Materials("|".join(names))
+
+    def _follow_curves(self, gf, lift, log_chi, linear_solve, order):
+        """Repeat `linear_solve` until chi stops moving on its curve, to ``TOL``
+        in the root mean square over the worst element, Anderson-accelerated on
+        log chi as ``apply_demag``'s iteration is. `log_chi` is a polynomial on
+        each element of the parts on a curve; the field's chi is projected onto
+        it, with one integration rule on both sides: ``Set`` with more points
+        does not keep a constant on a curved element."""
+        mesh, curved = self.mesh, self._curved()
+        start = mesh.MaterialCF(
+            {
+                f"part{i}": np.log(p.curve.chi0)
+                for i, p in enumerate(self.parts)
+                if p.curve is not None
+            },
+            default=0.0,
+        )
+        target = mesh.MaterialCF(
+            {
+                f"part{i}": ng.log(self._secant(p, gf, lift))
+                for i, p in enumerate(self.parts)
+                if p.curve is not None
+            },
+            default=0.0,
+        )
+        space = log_chi.space
+        projected = ng.GridFunction(space)
+        log_chi.Set(start, definedon=curved)
+        difference = ng.InnerProduct(projected - log_chi, projected - log_chi)
+        rule = ng.dx(definedon=curved, bonus_intorder=BONUS)
+        trial, test = space.TnT()
+        mass = ng.BilinearForm(space)
+        mass += trial * test * rule
+        rhs = ng.LinearForm(space)
+        rhs += target * test * rule
+        with ng.TaskManager():
+            mass.Assemble()
+            inverse = mass.mat.Inverse(space.FreeDofs(), inverse="sparsecholesky")
+            volumes = ng.Integrate(ng.CF(1.0) * rule, mesh, element_wise=True)
+        volumes = np.asarray(volumes)
+        inside = volumes > 0
+        X, F = [], []
+        for _ in range(FEM_SOLVES):
+            linear_solve()
+            with ng.TaskManager():
+                rhs.Assemble()
+                projected.vec.data = inverse * rhs.vec
+                squares = ng.Integrate(difference * rule, mesh, element_wise=True)
+            # written so that a NaN stays NaN, and fails both tests below
+            moved = float((np.asarray(squares)[inside] / volumes[inside]).max()) ** 0.5
+            if moved < TOL:
+                return
+            x = np.array(log_chi.vec.FV().NumPy())
+            f = np.asarray(projected.vec.FV().NumPy()) - x
+            X, F = [*X, x][-DEPTH:], [*F, f][-DEPTH:]
+            if len(F) == 1:
+                log_chi.vec.FV().NumPy()[:] = x + DAMPING * f
+                continue
+            dF, dX = np.diff(F, axis=0).T, np.diff(X, axis=0).T
+            gamma = np.linalg.lstsq(dF, f, rcond=None)[0]
+            log_chi.vec.FV().NumPy()[:] = x + DAMPING * f - (dX + DAMPING * dF) @ gamma
+        msg = (
+            f"The B-H iteration did not settle in {FEM_SOLVES} solves at order "
+            f"{order}: chi still moves by {moved:.1e} on the worst element."
+        )
+        if not moved <= STALL:
+            raise RuntimeError(msg)
+        warnings.warn(msg, stacklevel=2)
+
+    def flux_density(self, gf, lift=None, chi=None):
         """B without the uniform applied field, in T: -grad u in the air, the
         currents' own field left out; in a part chi B_ext + J_r - mu_r grad u,
-        or with currents J_r - mu_r grad(u + L) - B_ext."""
+        or with currents J_r - mu_r grad(u + L) - B_ext. `chi` is what the solve
+        used on a curve, so that B, the field and the moment agree."""
         grad = ng.grad(gf)
-        mu, source = self.coefficients()
+        mu, source = self.coefficients(chi)
         if lift is None:
             values = {name: source[name] - m * grad for name, m in mu.items()}
         else:
@@ -828,19 +957,37 @@ class Model:
             self.curve(order)
             fes = ng.Periodic(ng.H1(mesh, order=order))
             u, v = fes.TnT()
-            mu, source = self.coefficients()
+            lift = None
+            if self.currents:
+                flux, ds, lift = self._two_potentials(order, solver_tol, max_iter)
+            # on a curve, log chi is held as a polynomial on each element
+            log_chi, chi = None, None
+            if self._on_curves():
+                log_chi = ng.GridFunction(
+                    ng.L2(mesh, order=CHI_ORDER, definedon=self._curved())
+                )
+                # within what the curves can give: Anderson's steps can overshoot,
+                # and conjugate gradients diverged on what that made of chi
+                curves = [p.curve for p in self.parts if p.curve is not None]
+                low = np.log(CHI_MIN)  # a saturated part's chi falls far below chi0
+                high = np.log(max(c.chi_max for c in curves) * 2)
+                chi = ng.exp(
+                    ng.IfPos(
+                        log_chi - high, high, ng.IfPos(low - log_chi, low, log_chi)
+                    )
+                )
+            mu, source = self.coefficients(chi)
             mu_cf = mesh.MaterialCF(
                 mu, default=ng.CF((1, 0, 0, 0, 1, 0, 0, 0, 1), dims=(3, 3))
             )
             src_cf = mesh.MaterialCF(source, default=ng.CF((0, 0, 0)))
             a = ng.BilinearForm(fes, condense=True)
-            a += (mu_cf * ng.grad(u)) * ng.grad(v) * ng.dx
+            # chi varies inside an element of a part on a curve: more points
+            a += (mu_cf * ng.grad(u)) * ng.grad(v) * self._dx(chi)
             # the surface term of the energy outside, see the module docstring
             a += (1 / self.radius) * u * v * ng.ds("gammak")
             f = ng.LinearForm(fes)
-            lift = None
             if self.currents:
-                flux, ds, lift = self._two_potentials(order, solver_tol, max_iter)
                 remanence = mesh.MaterialCF(
                     {
                         f"part{i}": ng.CF(tuple(p.polarization))
@@ -848,41 +995,55 @@ class Model:
                     },
                     default=ng.CF((0, 0, 0)),
                 )
-                inside = ng.dx(definedon=self._magnets())
+                inside = ng.dx(
+                    definedon=self._magnets(),
+                    bonus_intorder=BONUS if chi is not None else 0,
+                )
                 f += (remanence - mu_cf * ng.grad(lift)) * ng.grad(v) * inside
                 f += -flux * v * ds
             # with no remanence and no applied field the field is zero, and a
             # zero source would leave NGSolve a form without a test function
             elif any(np.any(p.chi @ self.B_ext + p.polarization) for p in self.parts):
-                f += src_cf * ng.grad(v) * ng.dx
+                f += src_cf * ng.grad(v) * self._dx(chi)
             pre = ng.Preconditioner(a, "bddc")
             gf = ng.GridFunction(fes)
-            with ng.TaskManager():
-                a.Assemble()
-                f.Assemble()
-                assembled = time.perf_counter()
-                solver = ng.CGSolver(a.mat, pre.mat, tol=solver_tol, maxiter=max_iter)
-                rhs = f.vec.CreateVector()
-                rhs.data = f.vec + a.harmonic_extension_trans * f.vec
-                gf.vec.data = solver * rhs
-                gf.vec.data += a.harmonic_extension * gf.vec
-                gf.vec.data += a.inner_solve * rhs
-            first, last = solver.residuals[0], solver.residuals[-1]
-            # written so that a NaN residual fails too
-            if not last <= solver_tol * first:
-                msg = (
-                    f"Conjugate gradients stopped at a relative residual of "
-                    f"{last / first:.1e}, above solver_tol={solver_tol:g}, after "
-                    f"{solver.iterations} iterations at order {order}."
-                )
-                raise RuntimeError(msg)
+
+            def linear_solve():
+                with ng.TaskManager():
+                    a.Assemble()
+                    f.Assemble()
+                    assembled = time.perf_counter()
+                    solver = ng.CGSolver(
+                        a.mat, pre.mat, tol=solver_tol, maxiter=max_iter
+                    )
+                    rhs = f.vec.CreateVector()
+                    rhs.data = f.vec + a.harmonic_extension_trans * f.vec
+                    gf.vec.data = solver * rhs
+                    gf.vec.data += a.harmonic_extension * gf.vec
+                    gf.vec.data += a.inner_solve * rhs
+                first, last = solver.residuals[0], solver.residuals[-1]
+                # written so that a NaN residual fails too
+                if not last <= solver_tol * first:
+                    msg = (
+                        f"Conjugate gradients stopped at a relative residual of "
+                        f"{last / first:.1e}, above solver_tol={solver_tol:g}, after "
+                        f"{solver.iterations} iterations at order {order}."
+                    )
+                    raise RuntimeError(msg)
+                return assembled
+
+            if chi is None:
+                assembled = linear_solve()
+            else:
+                assembled = start
+                self._follow_curves(gf, lift, log_chi, linear_solve, order)
             done = time.perf_counter()
         seconds = {
             "mesh": self.mesh_seconds,
             "assemble": assembled - start,
             "solve": done - assembled,
         }
-        return FemSolution(self, order, gf, fes.ndof, seconds, lift)
+        return FemSolution(self, order, gf, fes.ndof, seconds, lift, chi)
 
 
 def fem_solve(
@@ -901,7 +1062,10 @@ def fem_solve(
 
     An independent check of :func:`~magpylib_material_response.demag.apply_demag`
     on the same objects: the magnets keep their shapes, not cells, and the
-    field is a polynomial of degree `order` on each element.
+    field is a polynomial of degree `order` on each element. A part with a
+    ``bh_curve`` follows it: the linear solve repeats until its susceptibility,
+    a polynomial on each element, stops moving, 5 to 40 solves. Each assembles
+    again, and a saturating part can need ``solver_tol`` loosened to about 1e-7.
 
     Parameters
     ----------
