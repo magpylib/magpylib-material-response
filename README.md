@@ -31,20 +31,20 @@ Magpylib-Material-Response adds the response of magnetic materials to
 parts and the demagnetization of hard magnets. A solved model is a magpylib
 source like any other.
 
-- **`solve_face_charge`** solves linear, uniform parts on their
-  surface, with no volume mesh: cuboids, cylinders, cylinder segments, spheres
-  and closed triangle meshes, such as CAD exports. It gets within 1 % of a
-  finite-element reference faster than finite elements on every validation case
-  where both get there.
-- **`solve_cells`** cuts the parts into cells and solves for the
-  polarization of every cell at once with the method of moments: for an
-  anisotropic susceptibility, or one that varies inside a part. A dense direct
-  solver, or matrix-free GMRES with FFT products on grids of identical cells;
-  meshing helpers cut cuboids, cylinders and, through TetGen, any closed
-  triangular surface into cells.
+- **`solve_face_charge`** solves linear, uniform parts on their surface, with no
+  volume mesh: cuboids, cylinders, cylinder segments, spheres and closed
+  triangle meshes, such as CAD exports. It gets within 1 % of a finite-element
+  reference faster than finite elements on every validation case where both get
+  there.
+- **`solve_cells`** cuts the parts into cells and solves for the polarization of
+  every cell at once with the method of moments: for an anisotropic
+  susceptibility, or one that varies inside a part. A dense direct solver, or
+  matrix-free GMRES with FFT products on grids of identical cells; meshing
+  helpers cut cuboids, cylinders and, through TetGen, any closed triangular
+  surface into cells.
 - **`solve_fem`** (the `fem` extra, NGSolve) solves the same model by finite
-  elements, to check the other two; `study_cells`, `study_fem` and
-  `compare` give error bars by refining the mesh or the element order.
+  elements, to check the other two; `study_cells`, `study_fem` and `compare`
+  give error bars by refining the mesh or the element order.
 
 ## Installation
 
