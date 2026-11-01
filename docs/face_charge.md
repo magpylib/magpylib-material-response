@@ -69,7 +69,10 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
   with the part: the mesh follows its footprint and the field near it is
   integrated finely. A disc magnet, or a cuboid turned against the part, has a
   footprint the panels cannot follow; `apply_face_charge` warns, and a disc on a
-  soft cube stays 3 to 4 % off near it from level 4 on.
+  soft cube stays 3 to 4 % off near it from level 4 on. Each magnet within 20 %
+  of the part's half-side grades the face, so many cost more: 25 cube magnets on
+  a yoke take 6,048 unknowns at level 2 and 13,608 at level 3. Start such arrays
+  at `level=2`, within 7 % of level 3 or 4 close to the magnets.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, and `getJ` gives 0. For B inside a part, such as
   the flux in a yoke, mesh it and use `apply_demag`.
