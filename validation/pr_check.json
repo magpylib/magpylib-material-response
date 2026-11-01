@@ -10,9 +10,9 @@
   "FaceCharge": {
    "setting": 2,
    "errors": {
-    "line below": 0.0001403
+    "line below": 0.0001318
    },
-   "unknowns": 2016
+   "unknowns": 1536
   }
  },
  "plate": {
@@ -134,7 +134,7 @@
   "FaceCharge": {
    "setting": 1,
    "errors": {
-    "2 mm behind the sheet": 0.001651
+    "2 mm behind the sheet": 0.001652
    },
    "unknowns": 4032
   }
@@ -266,6 +266,66 @@
     "outside the tube": 0.3463
    },
    "unknowns": 3216
+  }
+ },
+ "near_turned": {
+  "MoM": {
+   "setting": 2,
+   "errors": {
+    "beside the gap": 0.3077,
+    "off a corner": 0.238,
+    "under the plate": 0.3082
+   },
+   "unknowns": 795
+  },
+  "FaceCharge": {
+   "setting": 3,
+   "errors": {
+    "beside the gap": 0.003856,
+    "off a corner": 0.001961,
+    "under the plate": 0.002899
+   },
+   "unknowns": 2886
+  }
+ },
+ "near_aligned": {
+  "MoM": {
+   "setting": 2,
+   "errors": {
+    "beside the gap": 0.2337,
+    "off a corner": 0.2044,
+    "under the plate": 0.2794
+   },
+   "unknowns": 795
+  },
+  "FaceCharge": {
+   "setting": 3,
+   "errors": {
+    "beside the gap": 0.00165,
+    "off a corner": 0.001721,
+    "under the plate": 0.0004372
+   },
+   "unknowns": 2775
+  }
+ },
+ "near_small": {
+  "MoM": {
+   "setting": 2,
+   "errors": {
+    "beside the gap": 0.08539,
+    "off a corner": 0.03883,
+    "under the plate": 0.2245
+   },
+   "unknowns": 4827
+  },
+  "FaceCharge": {
+   "setting": 3,
+   "errors": {
+    "beside the gap": 0.005515,
+    "off a corner": 0.003042,
+    "under the plate": 0.0004849
+   },
+   "unknowns": 3003
   }
  }
 }
