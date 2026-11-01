@@ -1,0 +1,52 @@
+2026-10-31 22:42:18.511 | INFO     | magpylib_material_response.demag:_report_fixed_magnets:396 - 1 of 201 magnets have no susceptibility, on themselves or a parent collection: they are fixed
+2026-10-31 22:42:18.513 | INFO     | magpylib_material_response.demag:_analyze_collection:464 - Cell structure: 1 grid, 0 loose, 1 generic clusters
+2026-10-31 22:42:18.513 | INFO     | magpylib_material_response.demag:_solve_cells:1466 - solver='auto' chose iterative: FFT covers 99% of the interactions
+2026-10-31 22:42:18.518 | INFO     | magpylib_material_response.utils:timelog:104 - Completed: Demag operator build in 4.6 ms
+2026-10-31 22:42:18.522 | INFO     | magpylib_material_response.utils:run:51 - Starting: Demagnetization of model_02 with 201 cells (201 Cuboid)
+2026-10-31 22:42:18.526 | INFO     | magpylib_material_response.utils:run:51 - Starting: Solving of linear system
+2026-10-31 22:42:18.539 | INFO     | magpylib_material_response.utils:timelog:104 - Completed: Solving of linear system in 25.1 ms
+2026-10-31 22:42:18.541 | INFO     | magpylib_material_response.utils:timelog:104 - Completed: Demagnetization of model_02 with 201 cells (201 Cuboid) in 32 ms
+== mesh ==
+type: Collection | is the input: False
+children order, input: ['plate', 'magnet', 'sensor'] | meshed: [('Cuboid', 'magnet'), ('Sensor', 'sensor'), ('Collection', 'plate')]
+plate mesh: sealed = True | cells: 200 Cuboid | cell size mm: [1. 1. 1.]
+cell.susceptibility: 1000 | plate_mesh.susceptibility: <none> | plate_mesh.H_ext: <none>
+magnet in the mesh: Cuboid | its susceptibility: <none>
+sensors in the mesh: ['Sensor']
+input plate untouched: Cuboid
+meshed collection has face_charge_info: False
+== result ==
+warnings: []
+log lines naming the solver: ['Cell structure: 1 grid, 0 loose, 1 generic clusters', "solver='auto' chose iterative: FFT covers 99% of the interactions"]
+type: Collection | is the input: False | info attributes: []
+solved plate: sealed = True | cells: 200 | first cell polarization (T): [0.1201 0.1201 0.028 ]
+input mesh cells still at zero polarization: True
+solved cells keep susceptibility: 1000
+moment by hand (A m2): [0.     0.     0.0104] | mean J (T): [0.     0.     0.0653] | max |J| of a cell (T): 0.399
+== fields ==
+B at the sensor mT: [  0.       0.     542.4546] | magnet alone: [  0.       0.     356.6562]
+inside the plate (0,0,0): B mT [-0.     -0.     90.5043] | mu0 H mT [   -0.        -0.     -2086.6341] | J T [0.     0.     2.1771] | B == mu0 H + J: True
+0.3 mm below the top face: B mT [ -0.      -0.     269.3982]
+observer path of 5 steps, getB shape: (5, 3)
+== show ==
+plotly traces: 2
+== serialization ==
+json chars: 211922 | children: ['Cuboid', 'Sensor', 'Collection'] | plate sealed: True | cell susceptibility: 1000 | collection susceptibility: <none>
+B after the round trip equal: True
+== re-solve trap: apply_demag on an already solved mesh ==
+B solved once mT: [  0.       0.     542.4546] | solved twice: [ -0.      -0.     542.8805] | warnings: []
+== inplace ==
+returns: None | the input's cells are now polarized: True
+== direct vs auto ==
+direct B mT: [ -0.       0.     542.4546] | largest difference to auto (T): 4.93e-13
+== refusals and what is accepted ==
+magnet with a 3-step path -> ValueError : 1 objects with paths, found. Demagnetization of objects with paths (in position, orientation or any other property, e.g. dimension, polarization or current) is not yet supported
+unmeshed model accepted: the plate is one cell; B at the sensor mT [  0.       0.     390.1863] | warnings: []
+a Dipole source -> TypeError : Only Magnet and Current sources supported. Incompatible objects found: 1 Dipole
+no responding part -> ValueError : No part has a susceptibility other than zero: nothing to mesh.
+anisotropic chi accepted: B at the sensor mT [ -0.       0.     532.7665]
+H_ext=5 mT on the collection: B at the sensor mT [ -0.      0.    543.228]
+== cells and B per cells_across ==
+cells_across 1: cells 25, B at the sensor mT [  0.      -0.     503.3306]
+cells_across 2: cells 200, B at the sensor mT [  0.       0.     542.4546]
+cells_across 4: cells 1600, B at the sensor mT [  0.       0.     552.2319]

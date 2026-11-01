@@ -1,0 +1,32 @@
+== a sensor path inside the model: accepted by both solvers ==
+face charge: solved; getB(solved, its sensor) shape (10, 3)
+method of moments: solved; getB shape (10, 3)
+== feeding one solver's output to another ==
+a cell mesh (cells_across=1): 25 cells, sealed = True
+apply_face_charge on the cell mesh: accepted; unknowns 1800 | sheets: 25 | plate collection sealed now: False | warnings: []
+   B at the sensor mT: [ -0.     0.   556.58] | the unmeshed plate solved at level 1: [  0.     -0.    554.603]
+apply_demag on a face-charge result -> TypeError : Only Magnet and Current sources supported. Incompatible objects found: 1 ChargeSheet
+mesh_uniform on a face-charge result -> ValueError : No part has a susceptibility other than zero: nothing to mesh.
+== mesh_study on the plate ==
+type: MeshStudy | fields: ['cells', 'values', 'seconds', 'order', 'estimate', 'error', 'errors', 'last_change']
+cells: [  25  200 1600] | values (mT): [[  0.      -0.     503.3306]
+ [  0.       0.     542.4546]
+ [  0.       0.     552.2319]] | order: 2.000545513389876 | error: 0.0073733844097674354 | last_change: 1.771% | estimate mT: [[  0.       0.     555.4893]]
+warnings: []
+the study holds no solved collection: False
+compare(study, study): Comparison agreement 1.0 relative_difference 0.0
+== finite elements on a tiny version (order 2, edge_layers 1) ==
+type: FemSolution | isinstance FemSolution: True | order 2 | ndof 12407 | elements 5411 | seconds keys ['assemble', 'mesh', 'solve']
+public attributes: ['elements', 'getB', 'getH', 'moment', 'ndof', 'order', 'seconds']
+moment (A m2): [ 0.0001 -0.      0.1098]
+getB(sensor) mT: [  0.0707  -0.0639 557.0985] | getB(point) mT: [  0.0707  -0.0639 557.0985]
+getB inside the plate (0,0,0) mT: [  1.4337   0.7231 252.7988] | mu0 getH there mT: [0.0014 0.0007 0.2525]
+getB on a 5-step sensor path shape: (5, 3)
+magpy.getB(solution, sensor) -> MagpylibBadUserInput : Bad sources provided
+Sources must be either
+- one of type ['Cuboid', 'Cylinder', 'CylinderSegment', 
+magpy.show(solution) : ok
+to_json(solution) -> TypeError : Unsupported object type: 'FemSolution'. Supported types: ['Collection', 'Sensor', 'current.Circle', 
+solution.getJ -> AttributeError : 'FemSolution' object has no attribute 'getJ'
+fem_solve with a magnet path -> ValueError : 1 objects with paths found; fem solves one position of the model, like apply_demag.
+fem_solve with two H_ext values on responding parts -> ValueError : The magnets that respond see different applied fields (H_ext); a finite-element model has one field in all space.

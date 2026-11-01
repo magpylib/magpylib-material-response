@@ -1,0 +1,12 @@
+Bz at the sensor (3, 0, 1.5) mm and its slope per mm of magnet shift:
+  magpylib alone, no plate      :    52.23 mT    144.93 mT/mm
+  face charge level 3,  1518 unknowns, a solve per position:   104.95 mT    217.82 mT/mm
+  level 3 solved once, magnet moved afterwards in magpylib:   104.95 mT    144.93 mT/mm
+  the plate's share: 52.71 mT of Bz, 72.90 mT/mm of the slope
+  the solved plate at level 3: mean polarization 0.065 T (saturation check, bulk average only), jump indicator 7.90e-03
+  face charge level 4,  2520 unknowns, a solve per position:   105.06 mT    217.72 mT/mm
+
+API checks on main:
+  getB of the solved collection at a sensor path of 100 poses: shape (100, 3), Bz spread 120.5 mT
+  apply_face_charge on a magnet path: NotImplementedError: apply_face_charge solves one configuration; objects moving along paths are not supported.
+  apply_demag on a magnet path: ValueError: 1 objects with paths, found. Demagnetization of objects with paths (in position, orientation or any other property, e.g. dimension, polarization or current) is not yet supported

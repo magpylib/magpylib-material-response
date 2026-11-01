@@ -1,0 +1,60 @@
+/Users/alexandreboisselet/Documents/GitRepos.nosync/magpylib-material-response/src/magpylib_material_response/utils.py:361: UserWarning: object parent (Collection(id=4505612560, label='model_01')) not included in serialization
+  return json.dumps([_serialize_recursive(obj) for obj in objs], **json_kwargs)
+== input ==
+children: ['Cuboid', 'Cuboid', 'Sensor']
+sources_all: ['Cuboid', 'Cuboid'] | sensors_all: ['Sensor']
+warnings during the solve: []
+== result ==
+type: Collection | is the input object: False
+face_charge_info: {'unknowns': 768, 'level': 2, 'rounds': 0, 'seconds': '<masked>'}
+sealed: <no attribute>
+children: [('ChargeSheet', 'plate'), ('Cuboid', 'magnet'), ('Sensor', 'sensor')]
+sensors kept: ['Sensor']
+input plate untouched: Cuboid | input magnet: Cuboid
+sheet MRO: ['ChargeSheet', 'CustomSource', 'BaseSource', 'BaseGeo']
+sheet vertices (258, 3) faces (512, 3) charge_densities (512, 3) panels 256 triangles (512, 3, 3)
+unknowns by hand, 3 per panel: 768
+sheet.mean_polarization (T): [-0.     0.     0.065] | norm: 0.0650 T
+sheet.jump_indicator: 1.864% | panel_indicator shape: (256,)
+sheet.style.charge.level (A/m): 295991.19467660144
+sheet.susceptibility: <no attribute> | sheet.H_ext: <no attribute>
+sheet.position: [0. 0. 0.] | orientation rotvec: [0. 0. 0.]
+sheet has .volume: False | .moment: False | .getB: True | .polarization: False | .dimension: False
+volume from the sheet's triangles: 2.0000e-07 m3 (the plate: 2.0000e-07); moment by hand J V / mu0 = 1.0352e-02 A m2
+== fields ==
+magpy.getB(solved, sensor) mT: [  0.      -0.     557.3275]
+solved.getB(sensor) -> MagpylibBadUserInput : Collections with sensors and sources do not allow collection.getB() inputs.Consider using magpy.getB() instead.
+solved.getB() with no inputs, its own sensor, equal: True
+magnet alone at the sensor mT: [  0.       0.     356.6562]
+sheet alone at the sensor mT: [  0.      -0.     200.6713]
+inside the plate (0,0,0): B mT [-0.     -0.      0.2064] | mu0 H mT [-0.     -0.      0.2064] | J [0. 0. 0.] | M [0. 0. 0.]
+   B == mu0 H inside: True (the part's mean polarization, 0.065 T, is missing from B)
+0.3 mm below the top face: B mT [-0.     -0.     -1.7208]
+observer path of 5 steps, getB shape: (5, 3)
+a sheet given its own 3-step path, getB shape: (3, 3)
+== show ==
+plotly traces: 3 ['mesh3d', 'mesh3d', 'mesh3d']
+matplotlib figure: Figure
+== serialization ==
+json chars: 54866 | round-trip type: Collection | children: ['ChargeSheet', 'Cuboid', 'Sensor']
+face_charge_info survives: {'unknowns': 768, 'level': 2, 'rounds': 0, 'seconds': 0.054584499972406775} | sealed: <none>
+style.charge.level survives: 295991.19467660144 | mean_polarization equal: True
+B after the round trip equal: True
+sensor survives: ['Sensor']
+to_json(sheet) alone: ok
+== re-solve trap: move the magnet inside the solved collection, solve again ==
+warnings: ['No magnet has a susceptibility, on itself or a parent collection: every one is fixed, and nothing re']
+info: {'unknowns': 0, 'level': 2, 'rounds': 0, 'seconds': '<masked>'}
+B from re-solving the solved copy mT: [215.5745  -0.     488.489 ]
+B from a fresh solve of the moved model mT: [109.8345  -0.     424.3909]
+== refusals and fallbacks ==
+magnet with a 3-step path -> NotImplementedError : apply_face_charge solves one configuration; objects moving along paths are not supported.
+anisotropic chi -> NotImplementedError : Cuboid(id=4666506864, label='plate') has an anisotropic susceptibility, which brings back charge inside the body. Mesh it and use apply_dema
+level=3 over max_unknowns=1000 -> ValueError : level=3 needs 1,518 unknowns, more than max_unknowns=1,000: the dense system would take about 0.0 GB. Lower the level, raise max_unknowns, or mesh the parts for apply_demag.
+no level, max_unknowns=1000 -> info: {'unknowns': 768, 'level': 2, 'rounds': 0, 'seconds': '<masked>'} | warning: ['Level 3 would need 1,518 unknowns, more than max_unknowns=1,000; solved at level 2 (768). Pass level= to choose it.']
+magnet with chi=0.05: children [('ChargeSheet', 'plate'), ('ChargeSheet', 'magnet'), ('Sensor', 'sensor')] | unknowns 1056
+H_ext=5 mT on the collection: B at the sensor mT [  0.      -0.     558.1032] (field excludes H_ext itself)
+== unknowns and B per level ==
+level 1: unknowns 270, B at the sensor mT [  0.     -0.    554.603], jump 3.34%
+level 2: unknowns 768, B at the sensor mT [  0.      -0.     557.3275], jump 1.86%
+level 3: unknowns 1518, B at the sensor mT [  0.      -0.     556.3596], jump 0.79%
