@@ -27,6 +27,12 @@ and this project adheres to
 
 ### Fixed
 
+- Face charge grades a part's panels toward another part out to a gap of 20 % of
+  the smaller's half-side, not 1 %. Just past 1 %, the field near the parts was
+  up to 48 % off finite elements at level 3 and 7 % at level 6, aligned parts
+  too; it is now 0.5 %. Models with parts in that range take about 30 % more
+  unknowns and 1.6 times as long at a level
+  ([#140](https://github.com/magpylib/magpylib-material-response/pull/140))
 - Face charge no longer treats a turned part as touching another up to 1 % of
   its size away: at a gap of 0.5 % the field near the parts was 9 to 19 % off
   finite elements at level 6, and far more with both at chi 1000, and a finer

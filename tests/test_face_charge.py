@@ -1674,3 +1674,32 @@ def test_a_kept_factorization_needs_a_sound_matrix():
         assert not _factor(np.diag([1.0, 1.0, 1e-20]))[2]
     with pytest.raises(LinAlgError, match="singular"):
         _factor(np.zeros((3, 3)))
+
+
+@pytest.mark.parametrize(
+    ("gap", "reference"),
+    [
+        (2.1e-5, ((0.9491, -0.0003, -0.1907), (0.3105, -0.0315, 0.315))),
+        (1e-4, ((1.0281, -0.0001, -0.1955), (0.3285, -0.0133, 0.2512))),
+    ],
+)
+def test_a_part_near_another_is_graded_toward_it(gap, reference):
+    """Against finite elements, order 3, in mT: past where the grading stopped, a
+    coarse level was 48 % off (#139)."""
+    plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.01, 0.01, 0.002))
+    plate.susceptibility = 1000.0
+    cube = magpy.magnet.Cuboid(
+        polarization=(0, 0, 0),
+        dimension=(0.004, 0.004, 0.004),
+        position=(0, 0, 0.003 + gap),
+    )
+    cube.susceptibility = 50.0
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1),
+        dimension=(0.005, 0.005, 0.005),
+        position=(0.02, 0, 0.01),
+    )
+    solved = apply_face_charge(magpy.Collection(magnet, plate, cube), level=3)
+    B = magpy.getB(solved, [(0.003, 0, 0.0035), (0.003, 0.003, 0.0015)]) * 1e3
+    off = np.linalg.norm(B - reference, axis=1) / np.linalg.norm(reference, axis=1)
+    assert off.max() < 0.01
