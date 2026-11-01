@@ -73,6 +73,14 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
   of the part's half-side grades the face, so many cost more: 25 cube magnets on
   a yoke take 6,048 unknowns at level 2 and 13,608 at level 3. Start such arrays
   at `level=2`, within 7 % of level 3 or 4 close to the magnets.
+- **Parts close to each other:** a soft part within 20 % of its half-side of
+  another is graded toward it, and parts closer than 0.1 % of that couple as
+  touching. Down to a gap of 0.5 % of the half-side the field near the gap stays
+  within 1 % of finite elements from level 3 (the `near_*` validation cases).
+  Below that, with χ 1000 on both sides, expect 1 to 4 % near the gap: the
+  panels cannot follow a gap far below their size, and neither can finite
+  elements, so the error there cannot be measured yet. An exact benchmark, two
+  spheres in a uniform field, would settle it.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, with a warning, and `getJ` gives 0. For B inside
   a part, such as the flux in a yoke, mesh it and use `apply_demag`. No warning
