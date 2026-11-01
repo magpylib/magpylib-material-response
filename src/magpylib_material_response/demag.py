@@ -1475,7 +1475,8 @@ def _prepare_solver(
     x0=None)``, which solves ``(I - chi T) J = rhs`` for any cell
     susceptibilities ``chi`` of the same cells, the dense ``T`` or the FFT and
     block operators kept between calls. The structure, and the sparsification
-    budget, follow the ``chi`` given here: the largest a B-H iteration sees."""
+    budget, follow the ``chi`` given here, so it must be the largest the
+    calls will bring."""
     n = len(magnets_list)
     # ── demag operator under the chosen rule ────────────────────────────
     positions, clusters = _analyze_collection(magnets_list, interaction, chi=chi)
@@ -1750,8 +1751,10 @@ def apply_demag(
             raise ValueError(msg)
         sus = get_susceptibilities(originals, susceptibility)
         chi = _cell_susceptibilities(sus, [src.orientation for src in magnets_list])
-        if len(on_curve):  # the curve's own slope at the origin, to start from
-            chi[on_curve] = np.array([curves[i].chi0 for i in on_curve])[
+        if len(on_curve):
+            # the largest susceptibility each curve can give, for the operator
+            # and its budget; the iteration starts from the curve's own slope
+            chi[on_curve] = np.array([curves[i].chi_max for i in on_curve])[
                 :, None, None
             ] * np.eye(3)
 

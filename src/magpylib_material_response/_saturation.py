@@ -22,6 +22,7 @@ TOL = 1e-4  # relative change of any cell's chi at which the iteration stops
 DEPTH = 6  # Anderson's memory
 DAMPING = 0.7
 MAX_SOLVES = 200
+CHI_MIN = 1e-6  # the least susceptibility a cell on a curve takes: log chi must exist
 
 
 class Curve:
@@ -43,12 +44,22 @@ class Curve:
         if (J < 0).any():
             msg = "bh_curve lies below vacuum (B < mu0 H) somewhere: the polarization would be negative."
             raise ValueError(msg)
+        if not (J > 0).any():
+            msg = (
+                "bh_curve is vacuum everywhere (B = mu0 H): the part would not respond."
+            )
+            raise ValueError(msg)
         self.table = table
         self._J = PchipInterpolator(H, J, extrapolate=False)
         self.J_last = float(J[-1])
         self.H_last = float(H[-1])
-        # the initial susceptibility, from the curve's slope at the origin
-        self.chi0 = float(max(self._J(0.0, 1) / MU0, 0.0))
+        # the initial susceptibility, from the curve's slope at the origin; a
+        # curve that starts flat, as a steel's can, starts from CHI_MIN instead
+        self.chi0 = float(max(self._J(0.0, 1) / MU0, CHI_MIN))
+        # the largest secant the curve can give, for what is built once
+        with np.errstate(divide="ignore", invalid="ignore"):
+            secants = np.where(H > 0, J / (MU0 * H), 0.0)
+        self.chi_max = float(max(self.chi0, secants.max()))
 
     def polarization(self, H):
         """``J`` in T at the field strengths ``H`` in A/m."""
@@ -62,7 +73,8 @@ class Curve:
         mu0H = np.asarray(mu0H, float)
         small = mu0H <= 0
         safe = np.where(small, 1.0, mu0H)
-        return np.where(small, self.chi0, self.polarization(safe / MU0) / safe)
+        chi = np.where(small, self.chi0, self.polarization(safe / MU0) / safe)
+        return np.maximum(chi, CHI_MIN)
 
 
 def curve_of(source):
@@ -71,7 +83,7 @@ def curve_of(source):
     while source is not None:
         table = getattr(source, "bh_curve", None)
         if table is not None:
-            return table if isinstance(table, Curve) else Curve(table)
+            return Curve(table)  # a table, which copies, pickles and saves
         source = source.parent
     return None
 

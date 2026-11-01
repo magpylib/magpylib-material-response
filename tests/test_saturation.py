@@ -167,6 +167,7 @@ def test_a_curve_set_on_a_parent_reaches_the_cells_and_survives_json():
         ([[0, 0], [2, 1], [1, 2]], "H increasing"),
         ([[0, 0], [1, 1], [2, 0.5]], "B not decreasing"),
         ([[0, 0], [1e6, 0.1]], "below vacuum"),
+        ([[0, 0], [1e6, MU0 * 1e6]], "vacuum everywhere"),
     ],
 )
 def test_a_bad_curve_is_refused(bad, match):
@@ -185,3 +186,23 @@ def test_what_a_curve_cannot_go_with():
     fem = pytest.importorskip("magpylib_material_response.fem")
     with pytest.raises(NotImplementedError, match="B-H curve"):
         fem.fem_solve(magpy.Collection(part.copy()), order=1)
+
+
+def test_a_curve_that_starts_flat_solves():
+    """A steel's curve can rise slowly at first: the iteration starts from a
+    small susceptibility, not from log(0)."""
+    H = np.r_[0.0, np.geomspace(1.0, 1e6, 200)]
+    rise = np.clip((H - 1e3) / 2e3, 0, 1) ** 1.5
+    flat = np.c_[H, 4 * JS * rise / (1 + 3 * rise) + MU0 * H]
+    curve = Curve(flat)
+    assert curve.chi0 == 1e-6
+    assert curve.chi_max > 100
+    model = _plate(flat)
+    model.H_ext = (0.5, 0, 0)
+    solved = apply_demag(model)
+    J_cells = [
+        np.linalg.norm(c.polarization)
+        for c in solved.sources_all
+        if c.dimension[0] < 0.004
+    ]
+    assert 0.5 * JS < max(J_cells) < 1.001 * JS  # the iteration stops at 1e-4
