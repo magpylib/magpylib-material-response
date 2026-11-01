@@ -16,7 +16,7 @@ kernelspec:
 
 # Mesh Convergence
 
-The method of moments gives one answer per mesh and no error bar. `mesh_study`
+The method of moments gives one answer per mesh and no error bar. `study_cells`
 solves a model on meshes four to eight times apart and estimates the error of
 the finest from how the results change between them. The estimate is the grid
 convergence index (Roache 1994), set out as a procedure by Celik et al. (2008):
@@ -26,7 +26,7 @@ one error for the whole quantity and one per sensor, and none while the results
 do not yet change steadily.
 
 Three parts from sensor and actuator design follow. The levels passed to
-`mesh_study`, such as `(4, 8, 16)`, are cells across the thinnest part that
+`study_cells`, such as `(4, 8, 16)`, are cells across the thinnest part that
 responds: its default mesher, `mesh_uniform`, cuts every such part into cells of
 that one size, which the solver multiplies by FFT. Each study runs here in
 seconds; finite elements on the same models, run separately, show how good its
@@ -37,7 +37,7 @@ import magpylib as magpy
 import numpy as np
 import plotly.graph_objects as go
 
-from magpylib_material_response.convergence import mesh_study
+from magpylib_material_response import study_cells
 
 MM = 1e-3  # lengths in metres, written in millimetres
 
@@ -74,7 +74,7 @@ def gain(solved):
     return (magpy.getB(solved, sensors)[:, 0] + B0) / B0
 
 
-concentrator = mesh_study(magpy.Collection(bar), gain, (4, 8, 16))
+concentrator = study_cells(magpy.Collection(bar), gain, (4, 8, 16))
 report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
 ```
 
@@ -83,7 +83,7 @@ report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
 The gain 0.5 mm from the tip falls from 4.34 to 4.27 as the cells shrink, while
 the gain 2 mm out rises. Finite elements put the gains at 4.259, 3.347 and
 2.168, to within 0.001 %. Against these, the finest mesh here is 0.29 %, 0.06 %
-and 0.11 % off; `mesh_study` said 0.44 %, 0.13 % and 0.17 %.
+and 0.11 % off; `study_cells` said 0.44 %, 0.13 % and 0.17 %.
 
 ## A Halbach array on back iron
 
@@ -108,7 +108,7 @@ array = magpy.Collection(*magnets, plate)
 x = np.linspace(-15, 15, 21)
 profile = np.column_stack([x, 0 * x, np.full(21, 5.0)]) * MM  # 2 mm above the magnets
 
-halbach = mesh_study(array, profile, (2, 4, 8))
+halbach = study_cells(array, profile, (2, 4, 8))
 print(f"cells {halbach.cells.tolist()}, order {halbach.order:.2f}, solve of the finest {halbach.seconds[-1]:.1f} s")
 print(f"error of the whole profile {halbach.error:.3%}, of the worst point {np.nanmax(halbach.errors):.3%}")
 magpy.show(array, backend="widget")
@@ -152,7 +152,7 @@ sheet = magpy.magnet.Cuboid(
 sheet.susceptibility = 1000
 behind = np.array([(0, 0, 9), (6, 0, 9), (12, 0, 9)]) * MM
 
-shield = mesh_study(magpy.Collection(magnet, sheet), behind, (1, 2, 4))
+shield = study_cells(magpy.Collection(magnet, sheet), behind, (1, 2, 4))
 report(shield, ["axis", "6 mm out", "12 mm out"], "mT", 1e3)
 ```
 
@@ -161,7 +161,7 @@ report(shield, ["axis", "6 mm out", "12 mm out"], "mT", 1e3)
 On the axis the residual field falls from 12.4 mT on the coarsest mesh to 6.1
 mT. Finite elements put the three sensors at 5.53, 5.85 and 8.80 mT, to within
 0.002 %. Against these, the finest mesh here is 9.9 %, 3.1 % and 0.30 % off, and
-`mesh_study` said 13.6 %, 4.7 % and 0.23 %. The last falls 0.07 % short: the
+`study_cells` said 13.6 %, 4.7 % and 0.23 %. The last falls 0.07 % short: the
 error is an estimate, not a bound.
 
 <details>
@@ -172,13 +172,13 @@ The same models are cases of the repository's validation suite
 (`validation/cases.py`), whose stored references these are.
 
 ```python
-from magpylib_material_response.convergence import compare
-from magpylib_material_response.fem import fem_study
+from magpylib_material_response import compare
+from magpylib_material_response import study_fem
 
 fem = [
-    fem_study(bar.parent, sensors, orders=(3, 4, 5)),
-    fem_study(array, profile, orders=(3, 4, 5)),
-    fem_study(sheet.parent, behind, orders=(3, 4, 5)),
+    study_fem(bar.parent, sensors, orders=(3, 4, 5)),
+    study_fem(array, profile, orders=(3, 4, 5)),
+    study_fem(sheet.parent, behind, orders=(3, 4, 5)),
 ]
 print(f"gains {(fem[0].estimate[:, 0] + B0) / B0}, within {fem[0].errors}")
 for study, reference in zip((halbach, shield), fem[1:], strict=True):
@@ -192,7 +192,7 @@ for study, reference in zip((halbach, shield), fem[1:], strict=True):
 ## Notes
 
 - **Choose meshes 4 to 8 times apart.** Meshes closer than that change little
-  without being converged. `mesh_study` warns when the cell count grows by less
+  without being converged. `study_cells` warns when the cell count grows by less
   than 2.2 times, cells 1.3 times smaller, the least Celik et al. (2008)
   recommend. The finest solve takes most of the time.
 - **No estimate** means the three finest results do not change steadily yet: the

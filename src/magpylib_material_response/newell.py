@@ -1,4 +1,4 @@
-"""Interaction tensors between rectangular prisms, the two rules of ``apply_demag``.
+"""Interaction tensors between rectangular prisms, the two rules of ``solve_cells``.
 
 A tensor block ``N`` gives the field one uniformly magnetized prism (the source)
 produces at another (the observer), ``H = -N @ M``. The demagnetization solver
@@ -38,8 +38,8 @@ The point rule switches the same way, much farther out (see
 ``POINT_FAR_FIELD_RATIO``).
 
 Sign convention: the tensor returned by :func:`demag_tensor_newell` matches
-the layout produced by :func:`magpylib_material_response.demag.demag_tensor`
-*before* the ``*= mu_0`` step in ``apply_demag``. That is
+the layout produced by :func:`magpylib_material_response.cells.demag_tensor`
+*before* the ``*= mu_0`` step in ``solve_cells``. That is
 
     T[k, i, j, m] = -(1/mu_0) * N_mk(disp = pos[j] - pos[i], dim)
 
@@ -483,11 +483,11 @@ def demag_tensor_newell(positions, dim, mu_0):
     Returns
     -------
     T : ndarray, shape (3, n, n, 3)
-        Same layout as :func:`magpylib_material_response.demag.demag_tensor`:
+        Same layout as :func:`magpylib_material_response.cells.demag_tensor`:
         ``T[k, i, j, m] = -N_mk(pos[j] - pos[i]) / mu_0``: component ``m`` of
         the volume-averaged field over observer cell ``j`` per unit
         polarization along axis ``k`` of source cell ``i``. The returned
-        tensor is *pre*-``mu_0``; multiplying by ``mu_0`` (as ``apply_demag``
+        tensor is *pre*-``mu_0``; multiplying by ``mu_0`` (as ``solve_cells``
         does) yields the dimensionless ``-N``.
     """
     pos = np.asarray(positions, dtype=float)

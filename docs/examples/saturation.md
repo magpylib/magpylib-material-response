@@ -21,7 +21,7 @@ kernelspec:
 With a constant susceptibility, iron can reach any polarization: at 1 T applied,
 a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. A
 `bh_curve` set on a part, or on a collection above it, replaces the constant:
-`apply_demag` then puts every cell at the susceptibility its own field gives on
+`solve_cells` then puts every cell at the susceptibility its own field gives on
 the curve, repeating the linear solve until none changes. The interaction matrix
 is built once; the fixed point takes 10 to 40 solves with Anderson acceleration.
 
@@ -38,7 +38,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import brentq
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_Cuboid, mesh_TriangularMesh
 
 MU0 = 4e-7 * np.pi
@@ -102,13 +102,13 @@ B0 = np.array([0.05, 0.2, 0.5, 1.0, 1.5, 2.0])
 solved, exact = [], []
 for b in B0:
     mesh.H_ext = (0, 0, b)
-    J = np.array([c.polarization for c in apply_demag(mesh, solver="direct").sources_all])
+    J = np.array([c.polarization for c in solve_cells(mesh, solver="direct").sources_all])
     solved.append((J[:, 2] * volumes).sum() / volumes.sum())
     exact.append(brentq(lambda J, b=b: polarization((b - J / 3) / MU0) - J, 0, 3 * b))
 
 fig, ax = plt.subplots(figsize=(5, 3))
 ax.plot(B0, exact, label="exact")
-ax.plot(B0, solved, "o", label=f"apply_demag, {len(cells)} tetrahedra")
+ax.plot(B0, solved, "o", label=f"solve_cells, {len(cells)} tetrahedra")
 ax.plot(B0, 3 * B0 / (1 + 3 / CHI0), "--", label="χ = 1000")
 ax.set(xlabel="applied field B₀ (T)", ylabel="polarization of the sphere (T)", ylim=(0, 3))
 ax.legend()
@@ -126,12 +126,12 @@ cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
 cube.bh_curve = curve
 cells = mesh_Cuboid(cube, (8, 8, 8))
 cells.H_ext = (0, 0, 0.5)
-solved = apply_demag(cells, solver="direct")
+solved = solve_cells(cells, solver="direct")
 constant = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
 constant.susceptibility = CHI0
 cells_constant = mesh_Cuboid(constant, (8, 8, 8))
 cells_constant.H_ext = (0, 0, 0.5)
-linear = apply_demag(cells_constant, solver="direct")
+linear = solve_cells(cells_constant, solver="direct")
 
 share = np.array([np.linalg.norm(c.polarization) / JS for c in solved.sources_all])
 centres = np.array([c.position for c in solved.sources_all])
@@ -155,10 +155,10 @@ not repeated on this page, which would take minutes:
 | Method                       |  25 A | 100 A | 400 A |
 | ---------------------------- | ----: | ----: | ----: |
 | Linear, χ = 999, face charge | 2.151 | 8.605 | 34.42 |
-| `fem_solve`, order 3         | 2.148 | 8.178 | 14.28 |
-| `fem_solve`, order 2         | 2.189 | 8.331 | 14.51 |
-| `apply_demag`, 2,392 sources | 1.971 | 7.576 | 13.91 |
-| `apply_demag`, 720 sources   | 1.822 | 7.054 | 13.64 |
+| `solve_fem`, order 3         | 2.148 | 8.178 | 14.28 |
+| `solve_fem`, order 2         | 2.189 | 8.331 | 14.51 |
+| `solve_cells`, 2,392 sources | 1.971 | 7.576 | 13.91 |
+| `solve_cells`, 720 sources   | 1.822 | 7.054 | 13.64 |
 
 At 400 A saturation cuts the field to 0.41 times the linear one, and the two
 methods differ by 2.3 %, the cells still rising. At lower currents the cells'
@@ -170,8 +170,8 @@ both methods share it.
 
 - A part on a curve solves 10 to 40 times, the matrix built once; the sphere
   above takes about 20 solves at each field.
-- `apply_face_charge` refuses a part on a curve: it needs a uniform
-  susceptibility in each part. `fem_solve` follows the curve, and is the check
+- `solve_face_charge` refuses a part on a curve: it needs a uniform
+  susceptibility in each part. `solve_fem` follows the curve, and is the check
   on a part that a sphere's exact answer cannot give; it assembles again at each
   of its 5 to 40 solves.
 - The curve is the material's initial curve: no hysteresis, so a field that

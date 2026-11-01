@@ -1,4 +1,4 @@
-"""A factorization kept for ``apply_face_charge(..., reuse=...)``.
+"""A factorization kept for ``solve_face_charge(..., reuse=...)``.
 
 The matrix of a solve depends only on the solved parts, so a call whose parts
 make the matrix of an earlier call takes only a new load and a

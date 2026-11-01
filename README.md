@@ -31,19 +31,19 @@ Magpylib-Material-Response adds the response of magnetic materials to
 parts and the demagnetization of hard magnets. A solved model is a magpylib
 source like any other.
 
-- **`face_charge.apply_face_charge`** solves linear, uniform parts on their
+- **`solve_face_charge`** solves linear, uniform parts on their
   surface, with no volume mesh: cuboids, cylinders, cylinder segments, spheres
   and closed triangle meshes, such as CAD exports. It gets within 1 % of a
   finite-element reference faster than finite elements on every validation case
   where both get there.
-- **`demag.apply_demag`** cuts the parts into cells and solves for the
+- **`solve_cells`** cuts the parts into cells and solves for the
   polarization of every cell at once with the method of moments: for an
   anisotropic susceptibility, or one that varies inside a part. A dense direct
   solver, or matrix-free GMRES with FFT products on grids of identical cells;
   meshing helpers cut cuboids, cylinders and, through TetGen, any closed
   triangular surface into cells.
-- **`fem.fem_solve`** (the `fem` extra, NGSolve) solves the same model by finite
-  elements, to check the other two; `convergence.mesh_study`, `fem_study` and
+- **`solve_fem`** (the `fem` extra, NGSolve) solves the same model by finite
+  elements, to check the other two; `study_cells`, `study_fem` and
   `compare` give error bars by refining the mesh or the element order.
 
 ## Installation
@@ -65,7 +65,7 @@ pip install "magpylib-material-response[fem]"
 
 ```python
 import magpylib as magpy
-from magpylib_material_response.face_charge import apply_face_charge
+from magpylib_material_response import solve_face_charge
 
 # a magnet on an iron plate, SI units (m, T)
 magnet = magpy.magnet.Cuboid(polarization=(0, 0, 1.2), dimension=(0.01, 0.01, 0.005))
@@ -73,7 +73,7 @@ magnet.position = (0, 0, 0.0055)
 plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.04, 0.04, 0.006))
 plate.susceptibility = 1000  # soft iron; the magnet, with none, keeps its polarization
 
-solved = apply_face_charge(magpy.Collection(magnet, plate))
+solved = solve_face_charge(magpy.Collection(magnet, plate))
 print(
     magpy.getB(solved, (0, 0, 0.012))
 )  # 205 mT above the magnet, 160 without the plate
@@ -81,14 +81,14 @@ print(
 
 ```python
 import magpylib as magpy
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_Cuboid
 
 # a magnet with finite susceptibility, demagnetizing itself
 magnet = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3))
 magnet.susceptibility = 0.3  # µr = 1.3
 
-mesh_demag = apply_demag(mesh_Cuboid(magnet, target_elems=125))
+mesh_demag = solve_cells(mesh_Cuboid(magnet, target_elems=125))
 print(magpy.getB(mesh_demag, (0, 0, 1.5e-3)))
 ```
 

@@ -23,6 +23,12 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking, with warnings for one release:** the solvers take one form and are
+  importable from the top level: `solve_cells` (`apply_demag`),
+  `solve_face_charge` (`apply_face_charge`), `solve_fem` (`fem_solve`),
+  `study_cells` (`mesh_study`), `study_fem` (`fem_study`). The module `demag` is
+  now `cells`, `demag_kwargs` is `solve_kwargs`, and `solved_by` says `"cells"`
+  ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
 - `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
   read it, alone or with other sources, and it moves and copies like one. Its
   own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`

@@ -9,8 +9,8 @@ from scipy.optimize import brentq
 
 from magpylib_material_response import from_json, to_json
 from magpylib_material_response._saturation import MU0, Curve, curve_of
-from magpylib_material_response.demag import apply_demag
-from magpylib_material_response.face_charge import apply_face_charge
+from magpylib_material_response.cells import solve_cells
+from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import mesh_Cuboid, mesh_TriangularMesh
 
 CHI0, JS = 1000.0, 1.6  # the test curve: J = chi0 mu0 H / (1 + chi0 mu0 H / Js)
@@ -81,7 +81,7 @@ def test_a_sphere_follows_its_curve(B0):
     sphere.bh_curve = table()
     model = mesh_TriangularMesh(sphere, 300)
     model.H_ext = (0, 0, B0)
-    solved = apply_demag(model, solver="direct")
+    solved = solve_cells(model, solver="direct")
     cells = solved.sources_all
     volumes = np.array([c.volume for c in cells])
     J = np.array([c.polarization for c in cells])
@@ -109,8 +109,8 @@ def test_a_linear_curve_is_a_susceptibility(solver):
     """A straight curve of slope 1 + chi solves as chi does, in one more solve."""
     H = np.array([0.0, 1e7])
     straight = np.c_[H, (1 + CHI0) * MU0 * H]
-    on_curve = apply_demag(_plate(straight), solver=solver)
-    linear = apply_demag(_plate(chi=CHI0), solver=solver)
+    on_curve = solve_cells(_plate(straight), solver=solver)
+    linear = solve_cells(_plate(chi=CHI0), solver=solver)
     points = np.array([[0.003, 0, 0.0015], [0, 0.006, 0], [0, 0, -0.003]])
     np.testing.assert_allclose(
         magpy.getB(on_curve, points), magpy.getB(linear, points), rtol=1e-5, atol=1e-9
@@ -122,10 +122,10 @@ def test_saturation_lowers_the_field_and_the_rest_stays_linear():
     would give, and the fixed magnet stays as given."""
     along = _plate(table())
     along.H_ext = (0.5, 0, 0)
-    saturating = apply_demag(along)
+    saturating = solve_cells(along)
     along = _plate(chi=CHI0)
     along.H_ext = (0.5, 0, 0)
-    linear = apply_demag(along)
+    linear = solve_cells(along)
     J_sat = max(
         np.linalg.norm(c.polarization)
         for c in saturating.sources_all
@@ -149,12 +149,12 @@ def test_a_curve_set_on_a_parent_reaches_the_cells_and_survives_json():
     model.H_ext = (0, 0, 0.5)
     for cell in model.sources_all:
         assert curve_of(cell) is not None
-    solved = apply_demag(model)
+    solved = solve_cells(model)
     assert all(np.linalg.norm(c.polarization) < JS for c in solved.sources_all)
     back = from_json(to_json(model))[0]
     np.testing.assert_array_equal(back.bh_curve, model.bh_curve)
     np.testing.assert_allclose(
-        apply_demag(back).sources_all[0].polarization,
+        solve_cells(back).sources_all[0].polarization,
         solved.sources_all[0].polarization,
     )
 
@@ -178,11 +178,11 @@ def test_a_bad_curve_is_refused(bad, match):
 def test_what_a_curve_cannot_go_with():
     model = _plate(table(n=30))
     with pytest.raises(ValueError, match="susceptibility argument"):
-        apply_demag(model, susceptibility=10.0)
+        solve_cells(model, susceptibility=10.0)
     part = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.002), polarization=(0, 0, 0))
     part.bh_curve = table(n=30)
     with pytest.raises(NotImplementedError, match="B-H curve"):
-        apply_face_charge(magpy.Collection(part))
+        solve_face_charge(magpy.Collection(part))
 
 
 def test_a_curve_that_starts_flat_solves():
@@ -196,7 +196,7 @@ def test_a_curve_that_starts_flat_solves():
     assert curve.chi_max > 100
     model = _plate(flat)
     model.H_ext = (0.5, 0, 0)
-    solved = apply_demag(model)
+    solved = solve_cells(model)
     J_cells = [
         np.linalg.norm(c.polarization)
         for c in solved.sources_all
@@ -210,13 +210,13 @@ def test_finite_elements_follow_a_curve(B0):
     """A sphere stays uniform while it saturates, so its answer is exact, inside
     the part and by its moment outside."""
     pytest.importorskip("ngsolve")
-    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+    from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
     sphere.bh_curve = table()
     model = magpy.Collection(sphere)
     model.H_ext = (0, 0, B0)
-    solved = fem_solve(model, order=4)
+    solved = solve_fem(model, order=4)
     J = exact_sphere(B0)
     # B leaves out the applied field: inside, J - J / 3
     assert solved.getB((0, 0, 0))[2] == pytest.approx(2 * J / 3, rel=5e-3)
@@ -227,7 +227,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     """A part a billionth of the other's volume converges too: the iteration
     stops on its worst element, not on an average over the volume."""
     pytest.importorskip("ngsolve")
-    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+    from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
     H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
     big = magpy.magnet.Sphere(diameter=0.02, polarization=(0, 0, 0))
@@ -239,7 +239,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     model = magpy.Collection(big, tiny)
     model.H_ext = (0, 0, 2.0)
     point = np.array([[0.03, 0, 0]])
-    solved = fem_solve(
+    solved = solve_fem(
         model, order=3, solver_tol=1e-8, observers=point, observer_maxh=1e-5
     )
     uniform = magpy.magnet.Sphere(
@@ -253,7 +253,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
 def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
     """On curved elements too: projecting chi must keep a constant."""
     pytest.importorskip("ngsolve")
-    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+    from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
     def solved(**attributes):
         sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
@@ -261,7 +261,7 @@ def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
             setattr(sphere, name, value)
         model = magpy.Collection(sphere)
         model.H_ext = (0, 0, 1.0)
-        return fem_solve(model, order=3, observers=points)
+        return solve_fem(model, order=3, observers=points)
 
     points = np.array([[0, 0, 0], [0.003, 0, 0], [0, 0, 0.012]])
     H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
@@ -277,11 +277,11 @@ def test_finite_elements_keep_a_remanent_part_on_its_curve():
     """B and the moment come from the chi of the solve, and they agree: with
     no field, ``J = J_r - J(J / 3)``."""
     pytest.importorskip("ngsolve")
-    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+    from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 1.0))
     sphere.bh_curve = table()
-    solved = fem_solve(magpy.Collection(sphere), order=4)
+    solved = solve_fem(magpy.Collection(sphere), order=4)
     J = brentq(lambda J: 1.0 - polarization(J / 3 / MU0) - J, 0.0, 1.0)
     assert solved.getB((0, 0, 0))[2] == pytest.approx(2 * J / 3, rel=0.01)
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=0.01)
@@ -291,7 +291,7 @@ def test_finite_elements_and_cells_agree_on_a_coil_in_a_saturating_core():
     """A coil at a current that saturates the bar: the reduced and the total
     potential both take chi from the curve, and the two methods agree."""
     pytest.importorskip("ngsolve")
-    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+    from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
     from magpylib_material_response.meshing import mesh_uniform  # noqa: PLC0415
 
     def model():
@@ -303,10 +303,10 @@ def test_finite_elements_and_cells_agree_on_a_coil_in_a_saturating_core():
         return magpy.Collection(bar, coil)
 
     points = np.array([[0.03, 0, 0], [0, 0.02, 0], [0.03, 0.01, 0]])
-    by_fem = fem_solve(
+    by_fem = solve_fem(
         model(), order=3, observers=points, solver_tol=1e-7, max_iter=30000
     )
-    by_cells = apply_demag(mesh_uniform(model(), 4))
+    by_cells = solve_cells(mesh_uniform(model(), 4))
     np.testing.assert_allclose(
         by_fem.getB(points), magpy.getB(by_cells, points), rtol=0.05, atol=1e-3
     )

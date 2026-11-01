@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from magpylib_material_response import from_json, to_json
-from magpylib_material_response.demag import apply_demag
-from magpylib_material_response.face_charge import apply_face_charge
+from magpylib_material_response.cells import solve_cells
+from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import mesh_TriangularMesh
 from magpylib_material_response.meshing_utils import trimesh_from_model3d
 from magpylib_material_response.utils import (
@@ -298,13 +298,13 @@ def test_roundtrip_triangular_mesh():
 
 
 def test_roundtrip_demagnetized_tet_collection():
-    """The mesh_TriangularMesh -> apply_demag workflow must be persistable."""
+    """The mesh_TriangularMesh -> solve_cells workflow must be persistable."""
     pytest.importorskip("tetgen", reason="tetgen optional dependency not installed")
 
     trimesh = trimesh_from_model3d("cuboid", (0, 0, 1), dimension=(0.001, 0.001, 0.001))
     mesh = mesh_TriangularMesh(trimesh, target_elems=30)
     mesh.susceptibility = 0.5
-    demag = apply_demag(mesh)
+    demag = solve_cells(mesh)
 
     out = from_json(to_json(demag))[0]
     assert len(out.sources_all) == len(demag.sources_all)
@@ -325,8 +325,8 @@ def test_roundtrip_keeps_material_attributes():
 
     out = from_json(to_json(coll))[0]
     np.testing.assert_allclose(
-        [s.polarization for s in apply_demag(out).sources_all],
-        [s.polarization for s in apply_demag(coll).sources_all],
+        [s.polarization for s in solve_cells(out).sources_all],
+        [s.polarization for s in solve_cells(coll).sources_all],
     )
 
 
@@ -340,7 +340,7 @@ def test_roundtrip_face_charge_solution():
         position=(0, 0, 0.0045),
         polarization=(0, 0, 1.2),
     )
-    solved = apply_face_charge(magpy.Collection(plate, magnet), level=1)
+    solved = solve_face_charge(magpy.Collection(plate, magnet), level=1)
     back = from_json(to_json(solved))[0]
     _assert_field_equal(back, solved, rtol=0, atol=0)
     assert back.children[0].style.color == "grey"
@@ -349,7 +349,7 @@ def test_roundtrip_face_charge_solution():
     sheet, original = back.children[0], solved.children[0]
     assert sheet.style.charge.level == original.style.charge.level is not None
     np.testing.assert_array_equal(sheet.panels, original.panels)
-    # as apply_face_charge gives parts solved as one
+    # as solve_face_charge gives parts solved as one
     joined = type(sheet)(
         sheet.vertices,
         sheet.faces,

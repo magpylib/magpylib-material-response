@@ -19,7 +19,7 @@ conditions.
 
 The clusters only decide *how fast* a block is computed, never which rule it
 follows: the rule is chosen once per solve (``interaction`` in
-:func:`~magpylib_material_response.demag.apply_demag`), and the FFT kernel is
+:func:`~magpylib_material_response.cells.solve_cells`), and the FFT kernel is
 built from that same rule, :func:`~magpylib_material_response.newell.point_block`
 or :func:`~magpylib_material_response.newell.demag_block`. Only the 6
 independent components ``(Nxx, Nyy, Nzz, Nxy, Nxz, Nyz)`` are stored; both
@@ -612,7 +612,7 @@ def demag_fft_matvec(M, kernel_fft, grid_shape):
     H : ndarray, shape (Nx, Ny, Nz, 3)
         ``T @ M`` with ``T = -N`` (the demag field scaled by ``mu_0``,
         matching the dense demag matrix used in
-        :func:`~magpylib_material_response.demag.apply_demag`).
+        :func:`~magpylib_material_response.cells.solve_cells`).
     """
     Nx, Ny, Nz = grid_shape
     Mp = np.zeros((2 * Nx, 2 * Ny, 2 * Nz, 3), dtype=float)

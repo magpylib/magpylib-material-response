@@ -22,8 +22,8 @@ from pathlib import Path
 import magpylib as magpy
 from PIL import Image
 
-from magpylib_material_response.demag import apply_demag
-from magpylib_material_response.face_charge import apply_face_charge
+from magpylib_material_response.cells import solve_cells
+from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import mesh_uniform
 from validation.cases import CASES
 from validation.methods import METHODS
@@ -58,8 +58,8 @@ def solved(case, method, setting):
     options = case.options.get(method, {})
     if method == "MoM":
         cells = mesh_uniform(collection, setting, max_cells=METHODS[method].max_cells)
-        return apply_demag(cells, **options)
-    return apply_face_charge(collection, level=setting, **options)
+        return solve_cells(cells, **options)
+    return solve_face_charge(collection, level=setting, **options)
 
 
 def draw(case, method, setting):

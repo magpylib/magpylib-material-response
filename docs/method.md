@@ -1,6 +1,6 @@
 # Method of Moments for Demagnetization
 
-This page describes the physics and numerical method behind `apply_demag`, from
+This page describes the physics and numerical method behind `solve_cells`, from
 the material model to the linear system and the two solvers. For the ideas
 first, with 3D views and charts to play with, see
 [How it works](how_it_works.md).
@@ -78,7 +78,7 @@ where:
 ### Two interaction rules
 
 A cell's field is known exactly; the method only has to decide _where_ in the
-observer cell to take it. `apply_demag` offers two answers, chosen per solve
+observer cell to take it. `solve_cells` offers two answers, chosen per solve
 with `interaction` and applied to **every pair**:
 
 | `interaction`       | The field of cell $j$ at cell $i$   | Works for                              |
@@ -198,7 +198,7 @@ meshed with 1 mm cells received 300 times its induced polarization.
 
 `demag_tensor` returns the blocks with shape $(3, N, N, 3)$: polarization
 component, source cell, observer cell, field component, as $\mathbf{H}$ in A/m
-per tesla. `apply_demag` multiplies them by $\mu_0$ and arranges them into
+per tesla. `solve_cells` multiplies them by $\mu_0$ and arranges them into
 $\mathbf{T}$ in the component-major layout of $\mathbf{J}$.
 
 ### Self-demagnetization
@@ -402,7 +402,7 @@ $$
 ## 6. Algorithm flow
 
 ```text
-apply_demag(collection, solver=..., interaction=...)
+solve_cells(collection, solver=..., interaction=...)
 │
 ├─ 1. Collect the magnet cells; one 3×3 susceptibility tensor per cell,
 │      R diag(χ) Rᵀ; check the rule ("newell": all cells cuboid, one

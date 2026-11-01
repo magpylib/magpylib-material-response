@@ -78,13 +78,13 @@ class ChargeSheet(magpy.misc.CustomSource):
         rectangular panels are two faces each. By default each face is one.
     mean_polarization : array-like, shape (3,), optional
         What :attr:`mean_polarization` gives, in T, in place of the sheet's own:
-        :func:`apply_face_charge` sets it on parts solved as one.
+        :func:`solve_face_charge` sets it on parts solved as one.
     position, orientation, style, **kwargs
         As for any magpylib source. ``style`` is a TriangularMesh's:
         ``style.magnetization.color`` colours the charge and ``style.mesh.grid``
         draws the edges. ``style.charge.level`` is the charge in A/m at which
         the colours are full, by default the charge 95 % of the sheet's area
-        stays below; :func:`apply_face_charge` gives the sheets it solves one
+        stays below; :func:`solve_face_charge` gives the sheets it solves one
         level, so that their colours compare.
     """
 
@@ -183,8 +183,8 @@ class ChargeSheet(magpy.misc.CustomSource):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
-        self._mean = None  # set by apply_face_charge on parts solved as one
-        self._solid = False  # set by apply_face_charge on a part's whole surface
+        self._mean = None  # set by solve_face_charge on parts solved as one
+        self._solid = False  # set by solve_face_charge on a part's whole surface
         self._V = P[F]
         self._lo, self._hi = (
             (self._V.min((0, 1)), self._V.max((0, 1))) if len(F) else (0, 0)
@@ -327,7 +327,7 @@ class ChargeSheet(magpy.misc.CustomSource):
                 warnings.warn(
                     "Observers inside a solved part: a ChargeSheet gives mu0 H there, "
                     "not B, without the part's magnetization. For B inside a part, "
-                    "mesh it and use apply_demag, or use fem_solve.",
+                    "mesh it and use solve_cells, or use solve_fem.",
                     stacklevel=2,
                 )
                 return
@@ -378,7 +378,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         across the body's edges, where it truly does. The colour is full at the
         charge that 95 % of the area stays below, not at the peak, which sits
         in a singular corner, or at ``style.charge.level``; the sheets of one
-        :func:`apply_face_charge` share that level, taken from the faces not
+        :func:`solve_face_charge` share that level, taken from the faces not
         pressed against another part, so their colours compare. Fields use the
         charge as solved.
         """

@@ -1,16 +1,16 @@
 # Face charge: linear parts without a volume mesh
 
-`apply_demag` fills every part with cells. For a part whose susceptibility is
+`solve_cells` fills every part with cells. For a part whose susceptibility is
 uniform and isotropic, such as soft iron in its linear range or a magnet with a
 small susceptibility, that is more than the physics needs: such a part carries
 no magnetic charge inside, and its whole response is a charge on its surface.
-`apply_face_charge` solves only that charge, on panels over the faces, without a
+`solve_face_charge` solves only that charge, on panels over the faces, without a
 volume mesh.
 
 ```python
 import magpylib as magpy
 
-from magpylib_material_response.face_charge import apply_face_charge
+from magpylib_material_response import solve_face_charge
 
 plate = magpy.magnet.Cuboid(
     dimension=(0.01, 0.01, 0.004),
@@ -23,7 +23,7 @@ magnet = magpy.magnet.Cuboid(
     polarization=(0, 0, 1.2),
 )
 
-solved = apply_face_charge(magpy.Collection(plate, magnet))
+solved = solve_face_charge(magpy.Collection(plate, magnet))
 B = solved.getB((0, 0, 0.0035))
 ```
 
@@ -47,11 +47,11 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
   a uniform remanence, driven by any other magpylib sources and by the applied
   field `H_ext`.
 - **How well:** on the six documented examples it lands within each reference's
-  own uncertainty, 0.64 % at worst, where `apply_demag` at the documented
+  own uncertainty, 0.64 % at worst, where `solve_cells` at the documented
   settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
-  than `apply_demag` in the same time, and it reaches 1 % faster than finite
+  than `solve_cells` in the same time, and it reaches 1 % faster than finite
   elements on every validation case both reach it on, 3 to 104 times (below).
-- **Where it is slower:** a few weak magnets alone (`apply_demag` reaches the
+- **Where it is slower:** a few weak magnets alone (`solve_cells` reaches the
   same accuracy faster), many bodies (one dense coupled system: 100 small cubes
   take 7,200 unknowns at level 1 and four times as many at level 2), thin sheets
   (panels sized to the thickness across the whole sheet). Those small panels
@@ -68,7 +68,7 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
   part, or close above it, converges like the rest when it is a cuboid aligned
   with the part: the mesh follows its footprint and the field near it is
   integrated finely. A disc magnet, or a cuboid turned against the part, has a
-  footprint the panels cannot follow; `apply_face_charge` warns, and a disc on a
+  footprint the panels cannot follow; `solve_face_charge` warns, and a disc on a
   soft cube stays 3 to 4 % off near it from level 4 on. Each magnet within 20 %
   of the part's half-side grades the face, so many cost more: 25 cube magnets on
   a yoke take 6,048 unknowns at level 2 and 13,608 at level 3. Start such arrays
@@ -83,12 +83,12 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
   spheres in a uniform field, would settle it.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, with a warning, and `getJ` gives 0. For B inside
-  a part, such as the flux in a yoke, mesh it and use `apply_demag`. No warning
+  a part, such as the flux in a yoke, mesh it and use `solve_cells`. No warning
   comes from a part that touches another of its material, whose surface is not
   closed, or from a sheet loaded with `from_json`.
-- **What it leaves to `apply_demag`:** an anisotropic susceptibility and one
+- **What it leaves to `solve_cells`:** an anisotropic susceptibility and one
   varying inside a part, which bring back charge inside the part;
-  `apply_face_charge` raises for these. Neither models saturation yet (#81):
+  `solve_face_charge` raises for these. Neither models saturation yet (#81):
   check `mean_polarization` (below). Objects moving along paths are refused by
   both.
 
@@ -110,7 +110,7 @@ part = magpy.magnet.TriangularMesh.from_pyvista(
     polarization=(0, 0, 0),
 )
 part.susceptibility = 1000
-solved = apply_face_charge(magpy.Collection(part, coil), level=2)
+solved = solve_face_charge(magpy.Collection(part, coil), level=2)
 ```
 
 ![The validation's CAD part in a 10 mT field along a direction no symmetry helps with, and the U-core as one closed mesh with its coil, each solved at level 2 and drawn by show() with its graded triangles.](_static/images/face_charge_triangles.png)
@@ -156,7 +156,7 @@ without it 0.16 %. A sphere is a geodesic polyhedron that gets finer with the
 level, as it has no edge to grade toward. Against the validation's FEM
 references and the exact field of a sphere, on one M4 Pro:
 
-| Part                                   | Error, time                                                | `apply_demag` at best |
+| Part                                   | Error, time                                                | `solve_cells` at best |
 | -------------------------------------- | ---------------------------------------------------------- | --------------------- |
 | Soft cylinder, 1 mm off its surface    | 0.41 % in 0.12 s at level 2, 0.12 % in 0.3 s at level 3    | 2.4 %                 |
 | Soft sphere, 1 mm off its surface      | 1.4 % in 0.09 s at level 1, 0.35 % in 0.5 s at level 3 ¹   |                       |
@@ -183,7 +183,7 @@ face charge, at levels 1 to 5, against stored finite-element references; the
 three curved ones are in the table above, the others below. The time each method
 needs to bring the worst group of sensors within 1 % and 0.1 % of the reference,
 solve and `getB` together, one run each on an Apple M4 Pro; finite elements are
-`fem_solve` at orders 2 to 5:
+`solve_fem` at orders 2 to 5:
 
 | Case                          | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
 | ----------------------------- | -----------------: | ---------: | -------------------: | -----------: |
@@ -250,7 +250,7 @@ or moves all solved parts as one, can keep its factorization:
 ```python
 solved = True
 for pose in poses:
-    solved = apply_face_charge(model_at(pose), reuse=solved)
+    solved = solve_face_charge(model_at(pose), reuse=solved)
     B.append(magpy.getB(solved, sensor))
 ```
 
@@ -276,8 +276,8 @@ that moves, since it is then a solved part.
 
 A sheet's `mean_polarization` is the average polarization of the part it
 encloses. While it stays below the knee of the material's B–H curve, the linear
-solve holds. Above it, saturation takes over, which neither `apply_face_charge`
-nor `apply_demag` models yet (#81): the result then overstates the part's
+solve holds. Above it, saturation takes over, which neither `solve_face_charge`
+nor `solve_cells` models yet (#81): the result then overstates the part's
 polarization.
 
 ## How it works

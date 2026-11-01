@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation
 
 pytest.importorskip("ngsolve")
 
-from magpylib_material_response.fem import _solve, fem_solve, fem_study
+from magpylib_material_response.fem import _solve, solve_fem, study_fem
 
 B_EXT = 0.01
 
@@ -51,7 +51,7 @@ def test_sphere_matches_the_exact_field(chi, polarization, rotvec, field):
     distances = np.r_[rng.uniform(1.2, 3, 40), rng.uniform(5, 20, 20)] * a
     observers = sphere.position + directions * distances[:, None]
 
-    study = fem_study(model, observers, (2, 3, 4), maxh=0.35 * a)
+    study = study_fem(model, observers, (2, 3, 4), maxh=0.35 * a)
 
     exact = dipole.getB(observers)
     error = np.linalg.norm(study.estimate - exact) / np.linalg.norm(exact)
@@ -77,7 +77,7 @@ def test_cube_converges_to_the_polarizability_from_above():
     model = magpy.Collection(cube)
     model.H_ext = tuple(cube.orientation.apply((0, 0, B_EXT)))
 
-    study = fem_study(model, lambda s: s.moment, (2, 3, 4), edge_layers=3)
+    study = study_fem(model, lambda s: s.moment, (2, 3, 4), edge_layers=3)
 
     alphas = np.linalg.norm(study.values, axis=1) * magpy.mu_0 / (B_EXT * a**3)
     exact = 1 / (1 / 3.644305 + 1e-6)
@@ -143,14 +143,14 @@ def test_every_shape_solves(make):
     model.H_ext = (0, 0, B_EXT)
 
     with pytest.warns(UserWarning, match="Two orders give no error estimate"):
-        study = fem_study(model, lambda s: s.moment, (1, 2))
+        study = study_fem(model, lambda s: s.moment, (1, 2))
 
     assert np.all(study.values[:, 2] > 0)
 
 
 def test_sensors_are_read_in_their_own_frames():
-    """As magpylib and mesh_study read them: fem_solve, FemSolution.getB and
-    fem_study took positions only, and failed on a sensor."""
+    """As magpylib and study_cells read them: solve_fem, FemSolution.getB and
+    study_fem took positions only, and failed on a sensor."""
     model = magpy.Collection(
         _cube(),
         magpy.magnet.Cuboid(
@@ -159,7 +159,7 @@ def test_sensors_are_read_in_their_own_frames():
     )
     sensor = magpy.Sensor(pixel=[(0, 0, 0), (0.2, 0, 0)], position=(1, 0, 1.2))
     sensor.rotate_from_angax(30, "z")
-    solution = fem_solve(model, 1, observers=sensor, edge_layers=0)
+    solution = solve_fem(model, 1, observers=sensor, edge_layers=0)
     at_pixels = solution.getB(sensor.orientation.apply(sensor.pixel) + sensor.position)
     np.testing.assert_allclose(
         solution.getB(sensor), sensor.orientation.inv().apply(at_pixels), atol=1e-15
@@ -168,7 +168,7 @@ def test_sensors_are_read_in_their_own_frames():
         solution.getB(magpy.Collection(sensor.copy())), solution.getB(sensor)
     )
     with pytest.warns(UserWarning, match="Two orders give no error estimate"):
-        study = fem_study(model, sensor, (1, 2), edge_layers=0)
+        study = study_fem(model, sensor, (1, 2), edge_layers=0)
     np.testing.assert_allclose(study.values[-1], study.solution.getB(sensor))
 
 
@@ -185,7 +185,7 @@ def test_a_solution_is_a_magpylib_source(driven_by):
         coil = magpy.current.Circle(current=2e5, diameter=2.0)
         model, B0 = magpy.Collection(sphere, coil), coil.getB((0, 0, 0))[2]
     centre, air = (0, 0, 0), (0, 0, 0.02)
-    solution = fem_solve(model, 3)
+    solution = solve_fem(model, 3)
 
     J = 10 * B0 / (1 + 10 / 3)
     np.testing.assert_allclose(magpy.getJ(solution, centre), (0, 0, J), atol=0.01 * J)
@@ -236,7 +236,7 @@ def test_edge_layers_match_across_faces(monkeypatch):
     model.H_ext = (B_EXT, 0, 0)
     observer = np.array([(0, 0, 2e-3)])
 
-    solution = fem_solve(model, order=2, observers=observer)
+    solution = solve_fem(model, order=2, observers=observer)
 
     if checks[0]:
         pytest.skip("netgen meshed this cuboid matching at the first grading here")
@@ -258,19 +258,19 @@ def test_kept_solutions_stay_valid():
         kept.append((solution, solution.getB(observers)))
         return solution.moment
 
-    fem_study(model, keep, (1, 2, 3))
+    study_fem(model, keep, (1, 2, 3))
 
     for solution, at_solve in kept:
         np.testing.assert_allclose(solution.getB(observers), at_solve, rtol=1e-12)
-    assert fem_study(model, observers[0], (1, 2, 3)).errors.shape == (1,)
+    assert study_fem(model, observers[0], (1, 2, 3)).errors.shape == (1,)
 
 
 def test_no_source_gives_no_field():
-    """No remanence and no applied field: a zero field, as from apply_demag."""
+    """No remanence and no applied field: a zero field, as from solve_cells."""
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
     sphere.susceptibility = 1000
 
-    solution = fem_solve(magpy.Collection(sphere), 2)
+    solution = solve_fem(magpy.Collection(sphere), 2)
 
     np.testing.assert_array_equal(solution.moment, 0)
     np.testing.assert_array_equal(solution.getB((0, 0, 0.008)), 0)
@@ -453,7 +453,7 @@ def _band_round_a_cube():
 )
 def test_solves_currents_that_link_nothing(model):
     observer = np.array([(0, 0, 5)])
-    solution = fem_solve(model(), 1, observers=observer, edge_layers=0)
+    solution = solve_fem(model(), 1, observers=observer, edge_layers=0)
     assert np.all(np.isfinite(solution.getB(observer)))
 
 
@@ -507,8 +507,8 @@ def test_a_far_coil_acts_as_a_uniform_field():
     observers = np.array([(0, 0, 0.008), (0, 0, 0.0049), (0, 0.006, 0)])
     plain = model()
     plain.H_ext = tuple(magpy.getB(loop, np.zeros(3)))
-    driven = fem_solve(model(loop), order=2, observers=observers)
-    reference = fem_solve(plain, order=2, observers=observers)
+    driven = solve_fem(model(loop), order=2, observers=observers)
+    reference = solve_fem(plain, order=2, observers=observers)
 
     scale = np.abs(reference.getB(observers)).max()
     np.testing.assert_allclose(
@@ -587,4 +587,4 @@ def test_a_far_coil_acts_as_a_uniform_field():
 def test_refuses_what_it_cannot_model(model, kwargs, error, match):
     kwargs = {"observers": [(0, 0, 5)], **kwargs}
     with pytest.raises(error, match=match):
-        fem_solve(model(), 2, **kwargs)
+        solve_fem(model(), 2, **kwargs)

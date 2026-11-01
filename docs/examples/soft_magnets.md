@@ -19,7 +19,7 @@ kernelspec:
 +++
 
 A hard cuboid magnet next to a high-permeability soft cuboid (µr = 4000): the
-pair is meshed at increasing resolution and solved with `apply_demag`, and the
+pair is meshed at increasing resolution and solved with `solve_cells`, and the
 fields along three sensor lines are compared against FEM reference data — with
 the unsolved collection included to show how much the material response matters.
 
@@ -33,7 +33,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from magpylib_material_response import get_dataset
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_all
 
 # Uncomment to enable logging output from the package (silent by default).
@@ -91,7 +91,7 @@ for target_elems in [1, 2, 8, 16, 32, 64, 128, 256]:
         coll, target_elems=target_elems, per_child_elems=True, min_elems=1
     )
 
-    coll_demag = apply_demag(
+    coll_demag = solve_cells(
         coll_meshed,
         style={"label": f"Coll_demag ({len(coll_meshed.sources_all):3d} cells)"},
     )

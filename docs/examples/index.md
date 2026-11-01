@@ -13,10 +13,10 @@ Executable examples, in suggested reading order:
   iterative solver: their agreement, their time and memory as meshes grow, and
   which interactions take the fast paths.
 - [Mesh convergence](mesh_convergence.md) — how fine a mesh must be, and the
-  error of the finest, with `mesh_study` on a flux concentrator, a Halbach array
+  error of the finest, with `study_cells` on a flux concentrator, a Halbach array
   on back iron and a steel shield.
-- [Checking a result with finite elements](fem_check.md) — `fem_study` and
-  `compare` against `mesh_study` on a magnet beside a soft cube: where the two
+- [Checking a result with finite elements](fem_check.md) — `study_fem` and
+  `compare` against `study_cells` on a magnet beside a soft cube: where the two
   methods disagree, and whose error bar is too short.
 - [A magnet in a steel tube](shield_tube.md) — a tube meshed into cylinder
   segments: inside it the method of moments converges, behind the shield it

@@ -5,17 +5,68 @@ magpylib-material-response: Python package extending the Magpylib library by pro
 
 from __future__ import annotations
 
+from importlib import import_module
+from typing import TYPE_CHECKING
+
 from magpylib_material_response._data import get_dataset
 from magpylib_material_response.logging_config import configure_logging, disable_logging
 from magpylib_material_response.utils import from_json, to_json
 
 from ._version import version as __version__
 
+if TYPE_CHECKING:  # for editors and linters; at run time, __getattr__ below
+    from magpylib_material_response.cells import solve_cells
+    from magpylib_material_response.convergence import compare, study_cells
+    from magpylib_material_response.face_charge import solve_face_charge
+    from magpylib_material_response.fem import solve_fem, study_fem
+
+# loaded when first asked for: import stays fast, and NGSolve optional
+_FUNCTIONS = {
+    "compare": "convergence",
+    "solve_cells": "cells",
+    "solve_face_charge": "face_charge",
+    "solve_fem": "fem",
+    "study_cells": "convergence",
+    "study_fem": "fem",
+}
+_MODULES = (
+    "cells",
+    "convergence",
+    "demag",
+    "demag_fft",
+    "face_charge",
+    "fem",
+    "meshing",
+    "meshing_utils",
+    "newell",
+    "polyline",
+    "utils",
+)
+
 __all__ = [
     "__version__",
+    "compare",
     "configure_logging",
     "disable_logging",
     "from_json",
     "get_dataset",
+    "solve_cells",
+    "solve_face_charge",
+    "solve_fem",
+    "study_cells",
+    "study_fem",
     "to_json",
 ]
+
+
+def __getattr__(name):
+    if name in _FUNCTIONS:
+        return getattr(import_module(f"{__name__}.{_FUNCTIONS[name]}"), name)
+    if name in _MODULES:
+        return import_module(f"{__name__}.{name}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
+
+
+def __dir__():
+    return sorted({*globals(), *__all__, *_MODULES})

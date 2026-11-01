@@ -17,7 +17,7 @@ from magpylib_material_response.fem._solve import Model, _are_sensors
 
 @dataclass(frozen=True)
 class FemStudy:
-    """Result of :func:`fem_study`: one model solved at increasing orders.
+    """Result of :func:`study_fem`: one model solved at increasing orders.
 
     Attributes
     ----------
@@ -66,7 +66,7 @@ class FemStudy:
     solution: object
 
 
-def fem_study(
+def study_fem(
     collection,
     quantity,
     orders=(2, 3, 4),
@@ -84,10 +84,10 @@ def fem_study(
     Parameters
     ----------
     collection : magpylib.Collection
-        The model, as :func:`fem_solve` takes it.
+        The model, as :func:`solve_fem` takes it.
     quantity : array_like, Sensor or callable
         Positions (..., 3) in m, or magpylib sensors read in their own frames
-        as :func:`~magpylib_material_response.convergence.mesh_study` reads
+        as :func:`~magpylib_material_response.convergence.study_cells` reads
         them, at which the flux density B is compared; the mesh is refined
         there. Or a function of a :class:`FemSolution` returning the quantity
         of interest, such as ``lambda s: s.moment``.
@@ -95,7 +95,7 @@ def fem_study(
         Polynomial orders, increasing. Three or more give an error estimate,
         two only a warning.
     maxh, edge_layers, observer_maxh, solver_tol, max_iter, min_log_time
-        As for :func:`fem_solve`.
+        As for :func:`solve_fem`.
 
     Returns
     -------
@@ -139,7 +139,7 @@ def fem_study(
     if callable(quantity):
         evaluate, observers = quantity, None
     elif _are_sensors(quantity):
-        observers = quantity  # read in the sensors' frames, as mesh_study does
+        observers = quantity  # read in the sensors' frames, as study_cells does
 
         def evaluate(solution):
             field = np.asarray(solution.getB(quantity), dtype=float)

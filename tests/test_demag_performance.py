@@ -17,8 +17,8 @@ import pytest
 import scipy.sparse as sp
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response import demag
-from magpylib_material_response.demag import (
+from magpylib_material_response import cells as cells_module
+from magpylib_material_response.cells import (
     _assemble_T_dense,
     _check_interaction,
     _dedup_blocks,
@@ -26,9 +26,9 @@ from magpylib_material_response.demag import (
     _pair_block,
     _reciprocity_factor,
     _row_sparsify,
-    apply_demag,
     demag_tensor,
     get_susceptibilities,
+    solve_cells,
 )
 from magpylib_material_response.demag_fft import (
     analyze_collection,
@@ -63,13 +63,13 @@ def _interactions(coll):
 
 def _assert_solvers_agree(coll, susceptibility=None, atol=1e-6, **iter_kwargs):
     for interaction in _interactions(coll):
-        coll1 = apply_demag(
+        coll1 = solve_cells(
             coll,
             susceptibility=susceptibility,
             solver="direct",
             interaction=interaction,
         )
-        coll2 = apply_demag(
+        coll2 = solve_cells(
             coll,
             susceptibility=susceptibility,
             solver="iterative",
@@ -344,13 +344,13 @@ def test_gmres_nonconvergence_raises():
     """A partially-converged iterative result must never be returned silently."""
     coll = _build_uniform_collection(27, susceptibility=1000.0)
     with pytest.raises(RuntimeError, match="GMRES did not converge"):
-        apply_demag(coll, solver="iterative", solver_tol=1e-14, max_iter=1)
+        solve_cells(coll, solver="iterative", solver_tol=1e-14, max_iter=1)
 
 
 def test_invalid_solver_kwarg():
     coll = _build_uniform_collection(8)
     with pytest.raises(ValueError, match="solver"):
-        apply_demag(coll, solver="banana")
+        solve_cells(coll, solver="banana")
 
 
 def _graded_cells():
@@ -412,7 +412,7 @@ def test_auto_solver_follows_the_cell_structure(make, expected):
     """ "auto" goes by the share of the interaction matrix FFT products cover:
     a grid's cells among themselves, large grids of one spacing between them."""
     _, clusters = analyze_collection(make().sources_all)
-    assert demag._auto_solver(clusters)[0] == expected
+    assert cells_module._auto_solver(clusters)[0] == expected
 
 
 def test_iterative_preconditions_every_cell_type():
@@ -432,8 +432,8 @@ def test_iterative_preconditions_every_cell_type():
         src.susceptibility = 1000.0
         src.H_ext = (0, 0, 1)
     coll = magpy.Collection(mesh_Cuboid(cube, 125), *spheres)
-    direct = _pols(apply_demag(coll, solver="direct"))
-    iterative = _pols(apply_demag(coll, solver="iterative", max_iter=100))
+    direct = _pols(solve_cells(coll, solver="direct"))
+    iterative = _pols(solve_cells(coll, solver="iterative", max_iter=100))
     np.testing.assert_allclose(iterative, direct, atol=1e-4 * np.abs(direct).max())
 
 
@@ -441,8 +441,8 @@ def test_auto_solver_matches_direct():
     """GMRES at solver_tol / 100 lands within about solver_tol of the direct
     polarization, at high susceptibility too."""
     coll = _build_uniform_collection(512, susceptibility=1000.0)
-    direct = _pols(apply_demag(coll, solver="direct"))
-    auto = _pols(apply_demag(coll))
+    direct = _pols(solve_cells(coll, solver="direct"))
+    auto = _pols(solve_cells(coll))
     np.testing.assert_allclose(auto, direct, atol=2e-6 * np.abs(direct).max())
 
 
@@ -451,13 +451,13 @@ def test_auto_solver_falls_back_to_direct_only_when_it_fits():
     matrix and raises beyond."""
     small = _build_uniform_collection(512, susceptibility=1000.0)
     np.testing.assert_allclose(
-        _pols(apply_demag(small, solver_tol=1e-14, max_iter=1)),
-        _pols(apply_demag(small, solver="direct")),
+        _pols(solve_cells(small, solver_tol=1e-14, max_iter=1)),
+        _pols(solve_cells(small, solver="direct")),
         atol=1e-12,
     )
     large = _build_uniform_collection(5832, susceptibility=1000.0)
     with pytest.raises(RuntimeError, match="direct solver would need"):
-        apply_demag(large, solver_tol=1e-14, max_iter=1)
+        solve_cells(large, solver_tol=1e-14, max_iter=1)
 
 
 @pytest.mark.slow
@@ -468,11 +468,11 @@ def test_fft_faster_than_direct():
     coll = _build_uniform_collection(3375)
 
     t0 = time.perf_counter()
-    apply_demag(coll, solver="direct")
+    solve_cells(coll, solver="direct")
     t_direct = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    apply_demag(coll, solver="iterative", solver_tol=1e-6)
+    solve_cells(coll, solver="iterative", solver_tol=1e-6)
     t_iter = time.perf_counter() - t0
 
     print(f"\nn=3375: direct={t_direct:.3f}s  iterative+FFT={t_iter:.3f}s")
@@ -523,7 +523,7 @@ def test_distant_bodies_interact_as_with_point_matching(getH_tensor):
     jz = [
         np.mean([c.polarization[2] for c in res.children[1].sources_all])
         for res in (
-            apply_demag(bodies(), susceptibility=chi, interaction=rule)
+            solve_cells(bodies(), susceptibility=chi, interaction=rule)
             for rule in ("newell", "point")
         )
     ]
@@ -603,15 +603,15 @@ def test_newell_refuses_cells_it_cannot_cover(build, match):
     than mixing rules. Cells all turned alike are parallel, so they pass."""
     coll = build()
     if match is None:
-        apply_demag(coll, susceptibility=0.5, interaction="newell")
+        solve_cells(coll, susceptibility=0.5, interaction="newell")
         return
     with pytest.raises(ValueError, match=match):
-        apply_demag(coll, susceptibility=0.5, interaction="newell")
+        solve_cells(coll, susceptibility=0.5, interaction="newell")
 
 
 def test_unknown_interaction_is_refused():
     with pytest.raises(ValueError, match="interaction must be one of"):
-        apply_demag(_build_uniform_collection(8), susceptibility=0.5, interaction="avg")
+        solve_cells(_build_uniform_collection(8), susceptibility=0.5, interaction="avg")
 
 
 @pytest.mark.parametrize(
@@ -630,7 +630,7 @@ def test_newell_moment_rises_under_refinement(dimension, divisions):
     for div in divisions:
         body = magpy.magnet.Cuboid(dimension=dimension, polarization=(0, 0, 0))
         body.H_ext = (0.01, 0, 0)
-        res = apply_demag(
+        res = solve_cells(
             mesh_Cuboid(body, div), susceptibility=1000.0, interaction="newell"
         )
         moments.append(
@@ -652,7 +652,7 @@ def test_point_rule_is_smooth_when_a_body_turns():
             dimension=(a, a, a), polarization=(0, 0, 0), position=(0, 0, a)
         )
         iron = mesh_Cuboid(iron.rotate_from_angax(angle, "x"), 27)
-        res = apply_demag(
+        res = solve_cells(
             magpy.Collection(magnet, iron), susceptibility=[0.05] * 27 + [1000.0] * 27
         )
         return np.mean(
@@ -704,8 +704,8 @@ def test_large_block_is_sparsified_only_when_it_pays(
     # Every block may go sparse, in chunks of 32 plate cells. In the second
     # case the first chunk (an edge) would show 98 % droppable, and every
     # 32nd cell (the bottom layer) 99 %.
-    monkeypatch.setattr(demag, "DENSE_BLOCK_MAX_ENTRIES", 1)
-    monkeypatch.setattr(demag, "KERNEL_PAIRS_PER_CALL", 32 * 27)
+    monkeypatch.setattr(cells_module, "DENSE_BLOCK_MAX_ENTRIES", 1)
+    monkeypatch.setattr(cells_module, "KERNEL_PAIRS_PER_CALL", 32 * 27)
     plate = magpy.magnet.Cuboid(dimension=(16, 16, 8), polarization=(0, 0, 1))
     magnet = magpy.magnet.Cuboid(
         dimension=(4, 4, 4), position=(0, 0, 6.5), polarization=(0, 0, 1)
@@ -925,7 +925,9 @@ def test_lattice_with_holes_is_one_grid(monkeypatch, make, kinds, labels):
     """Cells on one lattice that fill at least an eighth of their box, at least
     four cells deep, run as one grid, zero in the holes; the dense T matches
     magpylib's own fields, and both solvers agree, cross-grid FFT included."""
-    monkeypatch.setattr(demag, "FFT_CROSS_MIN_ENTRIES", 0)  # the test bodies are small
+    monkeypatch.setattr(
+        cells_module, "FFT_CROSS_MIN_ENTRIES", 0
+    )  # the test bodies are small
     coll = make()
     coll.susceptibility, coll.H_ext = 1000.0, (0.002, 0, 0.01)
     cells = coll.sources_all
@@ -981,14 +983,18 @@ def test_structure_falls_back_to_loose_cells(make):
 
 
 def test_cross_grid_blocks_use_fft(monkeypatch):
-    monkeypatch.setattr(demag, "FFT_CROSS_MIN_ENTRIES", 0)  # the test bodies are small
+    monkeypatch.setattr(
+        cells_module, "FFT_CROSS_MIN_ENTRIES", 0
+    )  # the test bodies are small
     """Two grids of one spacing: the iterative solver's cross blocks are FFT
     convolutions that agree with the direct solver."""
     core = _u_core_cells()
     cells = core.sources_all
     positions, clusters = analyze_collection(cells)
     chi = np.zeros((len(cells), 3, 3))
-    ops = demag._build_operator(cells, positions, clusters, chi, 1e-6, None, "point")
+    ops = cells_module._build_operator(
+        cells, positions, clusters, chi, 1e-6, None, "point"
+    )
     kinds = sorted(op["kind"] for op in ops)
     assert kinds == ["fft"] * 3 + ["fft_cross"] * 6
     _assert_solvers_agree(core)

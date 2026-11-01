@@ -16,7 +16,7 @@ exactly. A solved body becomes a :class:`ChargeSheet`, an ordinary magpylib
 source.
 
 An anisotropic susceptibility and one varying inside a body bring back volume
-charge; they stay with :func:`~magpylib_material_response.demag.apply_demag`.
+charge; they stay with :func:`~magpylib_material_response.cells.solve_cells`.
 Neither models saturation yet: a solved sheet's
 :attr:`ChargeSheet.mean_polarization` tells whether it matters, and its
 :attr:`ChargeSheet.jump_indicator` how accurate the fields near its surface are.
@@ -29,7 +29,10 @@ On a cube the method reproduces the polarizability of Helsing and Perfekt:
 
 from __future__ import annotations
 
-from magpylib_material_response.face_charge._apply import apply_face_charge
+from magpylib_material_response._renamed import old_names
+from magpylib_material_response.face_charge._apply import solve_face_charge
 from magpylib_material_response.face_charge._sheet import ChargeSheet
 
-__all__ = ["ChargeSheet", "apply_face_charge"]
+__all__ = ["ChargeSheet", "solve_face_charge"]
+
+__getattr__ = old_names(__name__, {"apply_face_charge": "solve_face_charge"})

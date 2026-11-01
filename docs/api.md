@@ -1,21 +1,21 @@
 # API Reference
 
-## Demagnetization solver — `demag`
+## Cells — `cells`
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.demag.apply_demag
+.. autofunction:: magpylib_material_response.cells.solve_cells
 
-.. autofunction:: magpylib_material_response.demag.demag_tensor
+.. autofunction:: magpylib_material_response.cells.demag_tensor
 
-.. autofunction:: magpylib_material_response.demag.get_susceptibilities
+.. autofunction:: magpylib_material_response.cells.get_susceptibilities
 
-.. autofunction:: magpylib_material_response.demag.get_H_ext
+.. autofunction:: magpylib_material_response.cells.get_H_ext
 ```
 
 ## Face charge — `face_charge`
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.face_charge.apply_face_charge
+.. autofunction:: magpylib_material_response.face_charge.solve_face_charge
 
 .. autoclass:: magpylib_material_response.face_charge.ChargeSheet
    :members: from_triangles, mean_polarization, jump_indicator, panel_indicator
@@ -24,7 +24,7 @@
 ## Mesh convergence — `convergence`
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.convergence.mesh_study
+.. autofunction:: magpylib_material_response.convergence.study_cells
 
 .. autoclass:: magpylib_material_response.convergence.MeshStudy
    :members: from_values
@@ -39,9 +39,9 @@
 Needs the `fem` extra: `pip install "magpylib-material-response[fem]"`.
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.fem.fem_solve
+.. autofunction:: magpylib_material_response.fem.solve_fem
 
-.. autofunction:: magpylib_material_response.fem.fem_study
+.. autofunction:: magpylib_material_response.fem.study_fem
 
 .. autoclass:: magpylib_material_response.fem.FemSolution
    :members: getB, getH
@@ -95,7 +95,7 @@ Needs the `fem` extra: `pip install "magpylib-material-response[fem]"`.
 
 ## Interaction tensors — `newell`
 
-The two interaction rules of `apply_demag`: the field at a point (`point_block`,
+The two interaction rules of `solve_cells`: the field at a point (`point_block`,
 the default) and the field averaged over a cell (the Newell tensors).
 
 ```{eval-rst}

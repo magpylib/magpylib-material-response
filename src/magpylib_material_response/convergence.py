@@ -1,11 +1,11 @@
 """Mesh-convergence studies.
 
 The method of moments gives no error estimate of its own: a result is as good as
-its mesh. :func:`mesh_study` solves one model on meshes of increasing resolution
+its mesh. :func:`study_cells` solves one model on meshes of increasing resolution
 and estimates the error of the finest from how the results change between them.
 :func:`compare` puts two such studies side by side, such as one of
-:func:`mesh_study` and one of
-:func:`~magpylib_material_response.fem.fem_study`.
+:func:`study_cells` and one of
+:func:`~magpylib_material_response.fem.study_fem`.
 """
 
 from __future__ import annotations
@@ -20,7 +20,8 @@ import magpylib as magpy
 import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
-from magpylib_material_response.demag import apply_demag
+from magpylib_material_response._renamed import old_names
+from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.meshing import _responds, mesh_uniform
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ MIN_GROWTH = 1.3**3
 
 @dataclass(frozen=True)
 class MeshStudy:
-    """Result of a mesh study: of :func:`mesh_study` for this package's solver,
+    """Result of a mesh study: of :func:`study_cells` for this package's solver,
     or of :meth:`from_values` for results from another, such as FEM.
 
     Attributes
@@ -76,7 +77,7 @@ class MeshStudy:
     error : float
         Estimated relative error of the finest mesh, ``|estimate - finest| /
         |finest|`` times ``SAFETY_FACTOR``: the grid convergence index of the
-        finest mesh (see :func:`mesh_study`), with
+        finest mesh (see :func:`study_cells`), with
         Euclidean norms over the whole quantity; NaN when ``order`` is None.
     errors : ndarray
         The same, one per entry of the quantity: per observer for fields at
@@ -116,7 +117,7 @@ class MeshStudy:
         Returns
         -------
         MeshStudy
-            The estimate as :func:`mesh_study` gives it; see its notes. Three or
+            The estimate as :func:`study_cells` gives it; see its notes. Three or
             more results give an estimate; with two, ``order`` is None, with a
             warning.
         """
@@ -128,7 +129,7 @@ class MeshStudy:
 
 def _study(cells, values, seconds, stacklevel):
     """The checks, the warning and the estimate behind :meth:`MeshStudy.from_values`
-    and :func:`mesh_study`; `stacklevel` points the warning at their caller."""
+    and :func:`study_cells`; `stacklevel` points the warning at their caller."""
     cells, values = np.asarray(cells), np.asarray(values, dtype=float)
     if cells.ndim != 1 or len(cells) < 2 or np.any(np.diff(cells) <= 0):
         msg = "cells must hold at least two increasing counts."
@@ -227,11 +228,13 @@ def _gci(cells, values):
     return 3 * p, f3 + beyond, error, errors
 
 
-def mesh_study(
+def study_cells(
     collection,
     quantity,
     levels: Sequence,
     mesher: Callable | None = None,
+    solve_kwargs: dict | None = None,
+    *,
     demag_kwargs: dict | None = None,
 ) -> MeshStudy:
     """Solve `collection` on meshes of increasing resolution and estimate the
@@ -257,8 +260,8 @@ def mesh_study(
         ``mesher(collection, level)`` returning the meshed collection;
         :func:`~magpylib_material_response.meshing.mesh_uniform` by default,
         which gives every part cells of one size.
-    demag_kwargs : dict, optional
-        Passed on to :func:`~magpylib_material_response.demag.apply_demag`, for
+    solve_kwargs : dict, optional
+        Passed on to :func:`~magpylib_material_response.cells.solve_cells`, for
         example ``{"solver": "direct"}``. Not ``inplace`` or ``susceptibility``:
         every level solves a fresh mesh, whose cells carry the model's
         susceptibilities.
@@ -306,11 +309,18 @@ def mesh_study(
     if len(levels) < 2:
         msg = "levels must hold at least two values."
         raise ValueError(msg)
-    demag_kwargs = dict(demag_kwargs or {})
-    clash = sorted({"inplace", "susceptibility"} & set(demag_kwargs))
+    if demag_kwargs is not None:
+        warnings.warn(
+            "demag_kwargs is now solve_kwargs; the old name goes in the next release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        solve_kwargs = demag_kwargs
+    solve_kwargs = dict(solve_kwargs or {})
+    clash = sorted({"inplace", "susceptibility"} & set(solve_kwargs))
     if clash:
         msg = (
-            f"mesh_study cannot pass {clash} to apply_demag: every level solves a "
+            f"study_cells cannot pass {clash} to solve_cells: every level solves a "
             "fresh mesh, whose cells carry the model's susceptibilities."
         )
         raise ValueError(msg)
@@ -339,7 +349,7 @@ def mesh_study(
             )
             raise ValueError(msg)
         start = time.perf_counter()
-        solved = apply_demag(meshed, **demag_kwargs)
+        solved = solve_cells(meshed, **solve_kwargs)
         seconds.append(time.perf_counter() - start)
         cells.append(n)
         values.append(np.asarray(evaluate(solved), dtype=float))
@@ -411,8 +421,8 @@ def compare(a, b) -> Comparison:
     a, b : MeshStudy, FemStudy or alike
         Studies of the same quantity, such as B at the same observers: any
         objects with ``values``, of which the last is compared, and relative
-        ``errors`` per entry for it, as :func:`mesh_study` and
-        :func:`~magpylib_material_response.fem.fem_study` give them.
+        ``errors`` per entry for it, as :func:`study_cells` and
+        :func:`~magpylib_material_response.fem.study_fem` give them.
 
     Returns
     -------
@@ -455,3 +465,6 @@ def compare(a, b) -> Comparison:
         agreement=float(agree[known].mean()) if known.any() else np.nan,
         relative_difference=float(_relative(np.linalg.norm(step), np.linalg.norm(vb))),
     )
+
+
+__getattr__ = old_names(__name__, {"mesh_study": "study_cells"})

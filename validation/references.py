@@ -6,7 +6,7 @@
     python -m validation.references --check plate    # these only
     python -m validation.references --check --having CylinderSegment
 
-Needs the fem extra. Each case is solved by ``fem_study`` at its reference
+Needs the fem extra. Each case is solved by ``study_fem`` at its reference
 orders (3, 4 and 5 unless the case says otherwise) on one mesh whose elements at
 the sensors are half the default size, and once more at the highest order on
 the default mesh, the mesh the FEM method runs on. Each
@@ -93,7 +93,7 @@ def _solve(case):
     """The reference of `case` by finite elements, as ``make`` writes it."""
     import ngsolve  # noqa: PLC0415
 
-    from magpylib_material_response.fem import fem_solve, fem_study  # noqa: PLC0415
+    from magpylib_material_response.fem import solve_fem, study_fem  # noqa: PLC0415
 
     if case.reference or case.refused or case.waits:
         msg = f"{case.name!r} has no reference of its own to make."
@@ -109,11 +109,11 @@ def _solve(case):
     orders, options = case.reference_orders, case.options.get("FEM", {})
     start = time.perf_counter()
     with _finer_at_sensors(FINER):
-        study = fem_study(collection, sensors, orders=orders, **options)
+        study = study_fem(collection, sensors, orders=orders, **options)
     if not np.isfinite(study.error):
         msg = f"{case.name}: orders {orders} do not converge on the reference mesh."
         raise RuntimeError(msg)
-    coarse = fem_solve(collection, order=orders[-1], observers=sensors, **options).getB(
+    coarse = solve_fem(collection, order=orders[-1], observers=sensors, **options).getB(
         sensors
     )
     seconds = time.perf_counter() - start

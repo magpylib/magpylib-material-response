@@ -3,7 +3,7 @@
     python scripts/fem_references.py            # the files that do not exist yet
     python scripts/fem_references.py cuboids    # these, even if they exist
 
-Needs the fem extra. Each model is solved by ``fem_study`` at orders 3, 4 and 5
+Needs the fem extra. Each model is solved by ``study_fem`` at orders 3, 4 and 5
 on one mesh, with fine elements at the sensors, and its estimated error is
 stored with it. About 5 minutes and 7 GB in all. The models are those of the docs pages and the tests that read
 the files; change both together.
@@ -21,7 +21,7 @@ import ngsolve
 import numpy as np
 
 import magpylib_material_response
-from magpylib_material_response.fem import fem_study
+from magpylib_material_response.fem import study_fem
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASETS = ROOT / "src" / "magpylib_material_response" / "package_data" / "datasets"
@@ -112,7 +112,7 @@ REFERENCES = {
 
 def method(study, maxh, observer_maxh, seconds):
     return {
-        "solver": "magpylib_material_response.fem.fem_study",
+        "solver": "magpylib_material_response.fem.study_fem",
         "orders": [int(p) for p in study.orders],
         "maxh_m": maxh,
         "observer_maxh_m": observer_maxh,
@@ -137,7 +137,7 @@ def main(names):
             continue
         collection, sensors = model()
         start = time.perf_counter()
-        study = fem_study(
+        study = study_fem(
             collection, sensors, ORDERS, maxh=maxh, observer_maxh=observer_maxh
         )
         seconds = time.perf_counter() - start
