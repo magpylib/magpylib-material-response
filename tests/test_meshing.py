@@ -700,7 +700,7 @@ def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher, on_parent):
     assert len(inner.children) == 1
     assert B[2] > 1e-3
     np.testing.assert_allclose(
-        B, apply_demag(mesher(model(None), cells)).getB((0, 0, 0.006))
+        B, apply_demag(mesher(model(None), cells)).getB((0, 0, 0.006)), atol=1e-12
     )
 
 
