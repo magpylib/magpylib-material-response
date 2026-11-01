@@ -318,16 +318,21 @@ class ChargeSheet(magpy.misc.CustomSource):
         return np.unique(key, axis=0, return_inverse=True)[1].ravel(), face, charge
 
     # ── field ─────────────────────────────────────────────────────────────
-    def _warn_if_inside(self, X):
+    def _warn_if_inside(self, X, field):
         """Warn if observers lie inside the part, of a sample of them: it costs
         a box test unless some lie in its box."""
         box = X[((self._lo <= X) & (self._hi >= X)).all(axis=1)]
         for point in box[:: max(1, len(box) // INSIDE_SAMPLE)]:
             if abs(_winding(point, self._V)) > 0.5:
+                gives = (
+                    "mu0 H there, not B, without the part's magnetization"
+                    if field == "B"
+                    else f"{field} = 0 there, as a sheet has no volume"
+                )
                 warnings.warn(
-                    "Observers inside a solved part: a ChargeSheet gives mu0 H there, "
-                    "not B, without the part's magnetization. For B inside a part, "
-                    "mesh it and use solve_cells, or use solve_fem.",
+                    f"Observers inside a solved part: a ChargeSheet gives {gives}. "
+                    f"For {field} inside a part, mesh it and use solve_cells, or use "
+                    "solve_fem.",
                     stacklevel=2,
                 )
                 return
@@ -335,10 +340,10 @@ class ChargeSheet(magpy.misc.CustomSource):
     def _field(self, field, observers):
         X = np.asarray(observers, float).reshape(-1, 3)
         out = np.zeros((len(X), 3))
+        if field != "H" and self._solid:
+            self._warn_if_inside(X, field)
         if field in ("M", "J"):
             return out  # the source carries no magnetization of its own
-        if field == "B" and self._solid:
-            self._warn_if_inside(X)
         step = max(1, CHUNK // (max(len(self._V), 1) * threads()))
 
         def near(rows):

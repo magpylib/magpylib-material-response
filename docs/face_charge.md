@@ -82,8 +82,9 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
   elements, so the error there cannot be measured yet. An exact benchmark, two
   spheres in a uniform field, would settle it.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
-  the part's own magnetization, with a warning, and `getJ` gives 0. For B inside
-  a part, such as the flux in a yoke, mesh it and use `solve_cells`. No warning
+  the part's own magnetization, and `getJ` and `getM` give 0, each with a warning.
+  For B inside a part, such as the flux in a yoke, mesh it and use `solve_cells`,
+  and for its mean polarization read `mean_polarization`. No warning
   comes from a part that touches another of its material, whose surface is not
   closed, or from a sheet loaded with `from_json`.
 - **What it leaves to `solve_cells`:** an anisotropic susceptibility and one
