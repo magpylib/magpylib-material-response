@@ -1743,7 +1743,7 @@ def apply_demag(
         # frame, R diag(chi) R^T with chi along the cell's own axes (#50).
         curves = [curve_of(src) for src in originals]
         on_curve = np.flatnonzero([c is not None for c in curves])
-        if len(on_curve) and susceptibility is not None:
+        if on_curve.size and susceptibility is not None:
             msg = (
                 f"{len(on_curve)} cells are on a B-H curve, and the susceptibility "
                 "argument would override it: give one or the other."
@@ -1751,7 +1751,7 @@ def apply_demag(
             raise ValueError(msg)
         sus = get_susceptibilities(originals, susceptibility)
         chi = _cell_susceptibilities(sus, [src.orientation for src in magnets_list])
-        if len(on_curve):
+        if on_curve.size:
             # the largest susceptibility each curve can give, for the operator
             # and its budget; the iteration starts from the curve's own slope
             chi[on_curve] = np.array([curves[i].chi_max for i in on_curve])[
@@ -1781,7 +1781,7 @@ def apply_demag(
         _check_interaction(interaction, magnets_list)
         # a shortcut, not only time: GMRES would give rhs only to its tolerance
         pol_new = right_hand_side(chi)
-        if chi.any() and not len(on_curve):
+        if chi.any() and not on_curve.size:
             pol_new = _solve_cells(
                 magnets_list,
                 chi,
@@ -1792,7 +1792,7 @@ def apply_demag(
                 max_iter,
                 min_log_time,
             )
-        elif len(on_curve):
+        elif on_curve.size:
             linear = _prepare_solver(
                 magnets_list,
                 chi,

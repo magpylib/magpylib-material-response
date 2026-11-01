@@ -183,7 +183,9 @@ def test_what_a_curve_cannot_go_with():
     part.bh_curve = table(n=30)
     with pytest.raises(NotImplementedError, match="B-H curve"):
         apply_face_charge(magpy.Collection(part))
-    fem = pytest.importorskip("magpylib_material_response.fem")
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response import fem  # noqa: PLC0415
+
     with pytest.raises(NotImplementedError, match="B-H curve"):
         fem.fem_solve(magpy.Collection(part.copy()), order=1)
 
