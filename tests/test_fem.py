@@ -56,6 +56,7 @@ def test_sphere_matches_the_exact_field(chi, polarization, rotvec, field):
     assert error < study.error < 0.05
     moment_error = np.linalg.norm(study.solution.moment - dipole.moment)
     assert moment_error < 1e-4 * np.linalg.norm(dipole.moment)
+    assert study.solution.solved_by == "fem"
 
 
 def test_cube_converges_to_the_polarizability_from_above():

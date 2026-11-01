@@ -319,12 +319,15 @@ class FemSolution:
         and ``"solve"``.
     moment : ndarray, shape (3,)
         Magnetic moment in A m² of all magnetization: remanent and induced.
+    solved_by : str
+        ``"fem"``, as ``apply_demag`` and ``apply_face_charge`` name theirs.
     """
 
     def __init__(self, model, order, gf, ndof, seconds, lift=None):
         self._model = model
         self._gf = gf
         self._lift = lift
+        self.solved_by = "fem"
         self.order = order
         self.ndof = ndof
         self.elements = model.mesh.ne

@@ -18,6 +18,7 @@ from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response import from_json, to_json
+from magpylib_material_response.demag import apply_demag
 from magpylib_material_response.face_charge import (
     ChargeSheet,
     _bodies,
@@ -1703,3 +1704,18 @@ def test_a_part_near_another_is_graded_toward_it(gap, reference):
     B = magpy.getB(solved, [(0.003, 0, 0.0035), (0.003, 0.003, 0.0015)]) * 1e3
     off = np.linalg.norm(B - reference, axis=1) / np.linalg.norm(reference, axis=1)
     assert off.max() < 0.01
+
+
+def test_a_result_names_its_method():
+    magnet = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.01))
+    cell = _soft((0.002, 0.002, 0.002), (0, 0, 0.01))
+    model = magpy.Collection(magnet, cell)
+    assert not hasattr(model, "solved_by")
+    by_demag = apply_demag(model)
+    by_face_charge = apply_face_charge(model, level=1)
+    assert by_demag.solved_by == "demag"
+    assert by_face_charge.solved_by == "face_charge"
+    assert by_face_charge.copy().solved_by == "face_charge"
+    for solved in (by_demag, by_face_charge):
+        assert from_json(to_json(solved))[0].solved_by == solved.solved_by
+    assert not hasattr(model, "solved_by")

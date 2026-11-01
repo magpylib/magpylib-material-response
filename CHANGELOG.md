@@ -10,6 +10,9 @@ and this project adheres to
 
 ### Added
 
+- Every solved result names its method in `solved_by`: `"demag"`,
+  `"face_charge"` or `"fem"`, and `to_json` keeps it
+  ([#145](https://github.com/magpylib/magpylib-material-response/pull/145))
 - `apply_face_charge(model, reuse=previous)` keeps the factorization for a loop
   that changes only what drives the solved parts: 72 to 18 ms a call at 1,518
   unknowns, 1.15 s to 0.12 s at 9,558. It compares the meshed parts with the
