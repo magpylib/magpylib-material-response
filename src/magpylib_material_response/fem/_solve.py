@@ -57,7 +57,7 @@ from netgen import meshing, occ
 from ngsolve.comp import IntegrationRuleSpaceSurface
 from scipy.spatial import cKDTree
 
-from magpylib_material_response._saturation import CHI_MIN, DAMPING, DEPTH, TOL
+from magpylib_material_response._saturation import CHI_MIN, DAMPING, DEPTH
 from magpylib_material_response.fem._geometry import (
     contains,
     current_segments,
@@ -288,6 +288,9 @@ def outward(mesh, groups):
 
 BONUS = 4  # integration order added where chi follows a curve
 CHI_ORDER = 1  # log chi's polynomial degree on each element
+# chi moving on the worst element at which the iteration stops: the U-core's peak
+# is the same to 1e-4 here and at 70 solves, where 1e-4 on that element never comes
+TOL = 1e-3
 FEM_SOLVES = 70  # at most; each assembles again
 STALL = 1e-2  # left moving by at most this, the result stands, with a warning
 
@@ -341,10 +344,11 @@ class FemSolution:
         ``"fem"``, as ``apply_demag`` and ``apply_face_charge`` name theirs.
     """
 
-    def __init__(self, model, order, gf, ndof, seconds, lift=None):
+    def __init__(self, model, order, gf, ndof, seconds, lift=None, chi=None):
         self._model = model
         self._gf = gf
         self._lift = lift
+        self._chi = chi
         self.solved_by = "fem"
         self.order = order
         self.ndof = ndof
@@ -406,7 +410,7 @@ class FemSolution:
         air = ~inside
         if inside.any():
             if kind == "B":
-                cf = model.flux_density(self._gf, self._lift)
+                cf = model.flux_density(self._gf, self._lift, self._chi)
             else:
                 cf = model.field_strength(self._gf, self._lift)
             mp = model.locate(s[inside], np.zeros(3))
@@ -659,16 +663,14 @@ class Model:
         spline, last, J_last = self._splines[id(part)]
         return ng.IfPos(mu0H - last, J_last / (mu0H + 1e-300), spline(mu0H))
 
-    def coefficients(self, gf=None, lift=None, chi=None):
+    def coefficients(self, chi=None):
         """Per part: mu_r = I + chi, and the source chi B_ext + J_r, in T. A part
-        on a curve takes the coefficient `chi` if given, else chi at the field
-        `gf` and `lift` give, else its initial slope."""
+        on a curve takes the coefficient `chi` if given, else its initial slope."""
         mu, source = {}, {}
         for i, part in enumerate(self.parts):
-            if part.curve is not None and (chi is not None or gf is not None):
-                on = chi if chi is not None else self._secant(part, gf, lift)
-                mu[f"part{i}"] = (1 + on) * ng.Id(3)
-                source[f"part{i}"] = on * ng.CF(tuple(self.B_ext)) + ng.CF(
+            if part.curve is not None and chi is not None:
+                mu[f"part{i}"] = (1 + chi) * ng.Id(3)
+                source[f"part{i}"] = chi * ng.CF(tuple(self.B_ext)) + ng.CF(
                     tuple(part.polarization)
                 )
                 continue
@@ -683,9 +685,11 @@ class Model:
 
     def _follow_curves(self, gf, lift, log_chi, linear_solve, order):
         """Repeat `linear_solve` until chi stops moving on its curve, to ``TOL``
-        in the root mean square over the parts, Anderson-accelerated on log chi
-        as ``apply_demag``'s iteration is. `log_chi` is a polynomial on each
-        element of the parts on a curve; the field's chi is projected onto it."""
+        in the root mean square over the worst element, Anderson-accelerated on
+        log chi as ``apply_demag``'s iteration is. `log_chi` is a polynomial on
+        each element of the parts on a curve; the field's chi is projected onto
+        it, with one integration rule on both sides: ``Set`` with more points
+        does not keep a constant on a curved element."""
         mesh, curved = self.mesh, self._curved()
         start = mesh.MaterialCF(
             {
@@ -703,17 +707,31 @@ class Model:
             },
             default=0.0,
         )
-        projected = ng.GridFunction(log_chi.space)
+        space = log_chi.space
+        projected = ng.GridFunction(space)
         log_chi.Set(start, definedon=curved)
-        volume = ng.Integrate(ng.CF(1.0) * ng.dx(definedon=curved), mesh)
         difference = ng.InnerProduct(projected - log_chi, projected - log_chi)
         rule = ng.dx(definedon=curved, bonus_intorder=BONUS)
+        trial, test = space.TnT()
+        mass = ng.BilinearForm(space)
+        mass += trial * test * rule
+        rhs = ng.LinearForm(space)
+        rhs += target * test * rule
+        with ng.TaskManager():
+            mass.Assemble()
+            inverse = mass.mat.Inverse(space.FreeDofs(), inverse="sparsecholesky")
+            volumes = ng.Integrate(ng.CF(1.0) * rule, mesh, element_wise=True)
+        volumes = np.asarray(volumes)
+        inside = volumes > 0
         X, F = [], []
         for _ in range(FEM_SOLVES):
             linear_solve()
-            projected.Set(target, definedon=curved, bonus_intorder=BONUS)
             with ng.TaskManager():
-                moved = (ng.Integrate(difference * rule, mesh) / volume) ** 0.5
+                rhs.Assemble()
+                projected.vec.data = inverse * rhs.vec
+                squares = ng.Integrate(difference * rule, mesh, element_wise=True)
+            # written so that a NaN stays NaN, and fails both tests below
+            moved = float((np.asarray(squares)[inside] / volumes[inside]).max()) ** 0.5
             if moved < TOL:
                 return
             x = np.array(log_chi.vec.FV().NumPy())
@@ -727,18 +745,19 @@ class Model:
             log_chi.vec.FV().NumPy()[:] = x + DAMPING * f - (dX + DAMPING * dF) @ gamma
         msg = (
             f"The B-H iteration did not settle in {FEM_SOLVES} solves at order "
-            f"{order}: chi still moves by {moved:.1e} in the root mean square."
+            f"{order}: chi still moves by {moved:.1e} on the worst element."
         )
-        if moved > STALL:
+        if not moved <= STALL:
             raise RuntimeError(msg)
         warnings.warn(msg, stacklevel=2)
 
-    def flux_density(self, gf, lift=None):
+    def flux_density(self, gf, lift=None, chi=None):
         """B without the uniform applied field, in T: -grad u in the air, the
         currents' own field left out; in a part chi B_ext + J_r - mu_r grad u,
-        or with currents J_r - mu_r grad(u + L) - B_ext."""
+        or with currents J_r - mu_r grad(u + L) - B_ext. `chi` is what the solve
+        used on a curve, so that B, the field and the moment agree."""
         grad = ng.grad(gf)
-        mu, source = self.coefficients(gf, lift)
+        mu, source = self.coefficients(chi)
         if lift is None:
             values = {name: source[name] - m * grad for name, m in mu.items()}
         else:
@@ -957,7 +976,7 @@ class Model:
                         log_chi - high, high, ng.IfPos(low - log_chi, low, log_chi)
                     )
                 )
-            mu, source = self.coefficients(chi=chi)
+            mu, source = self.coefficients(chi)
             mu_cf = mesh.MaterialCF(
                 mu, default=ng.CF((1, 0, 0, 0, 1, 0, 0, 0, 1), dims=(3, 3))
             )
@@ -1024,7 +1043,7 @@ class Model:
             "assemble": assembled - start,
             "solve": done - assembled,
         }
-        return FemSolution(self, order, gf, fes.ndof, seconds, lift)
+        return FemSolution(self, order, gf, fes.ndof, seconds, lift, chi)
 
 
 def fem_solve(

@@ -155,8 +155,8 @@ not repeated on this page, which would take minutes:
 | Method                       |  25 A | 100 A | 400 A |
 | ---------------------------- | ----: | ----: | ----: |
 | Linear, χ = 999, face charge | 2.151 | 8.605 | 34.42 |
-| `fem_solve`, order 3         | 2.148 | 8.176 | 14.24 |
-| `fem_solve`, order 2         | 2.189 | 8.330 | 14.50 |
+| `fem_solve`, order 3         | 2.148 | 8.178 | 14.28 |
+| `fem_solve`, order 2         | 2.189 | 8.331 | 14.51 |
 | `apply_demag`, 2,392 sources | 1.971 | 7.576 | 13.91 |
 | `apply_demag`, 720 sources   | 1.822 | 7.054 | 13.64 |
 

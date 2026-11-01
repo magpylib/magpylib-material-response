@@ -225,6 +225,72 @@ def test_finite_elements_follow_a_curve(B0):
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=2e-3)
 
 
+def test_finite_elements_bring_a_tiny_part_onto_its_curve():
+    """A part a billionth of the other's volume converges too: the iteration
+    stops on its worst element, not on an average over the volume."""
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+
+    H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
+    big = magpy.magnet.Sphere(diameter=0.02, polarization=(0, 0, 0))
+    big.bh_curve = np.c_[H, 11 * MU0 * H]  # a straight curve: chi = 10
+    tiny = magpy.magnet.Sphere(
+        diameter=2e-5, polarization=(0, 0, 0), position=(0.03, 0, 0)
+    )
+    tiny.bh_curve = table()
+    model = magpy.Collection(big, tiny)
+    model.H_ext = (0, 0, 2.0)
+    point = np.array([[0.03, 0, 0]])
+    solved = fem_solve(
+        model, order=3, solver_tol=1e-8, observers=point, observer_maxh=1e-5
+    )
+    uniform = magpy.magnet.Sphere(
+        diameter=0.02, polarization=(0, 0, 10 / (1 + 10 / 3) * 2)
+    )
+    from_big = uniform.getB(point[0])[2]
+    expected = from_big + 2 * exact_sphere(2.0 + from_big) / 3
+    assert solved.getB(point)[0, 2] == pytest.approx(expected, rel=5e-3)
+
+
+def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
+    """On curved elements too: projecting chi must keep a constant."""
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+
+    def solved(**attributes):
+        sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
+        for name, value in attributes.items():
+            setattr(sphere, name, value)
+        model = magpy.Collection(sphere)
+        model.H_ext = (0, 0, 1.0)
+        return fem_solve(model, order=3, observers=points)
+
+    points = np.array([[0, 0, 0], [0.003, 0, 0], [0, 0, 0.012]])
+    H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
+    on_curve = solved(bh_curve=np.c_[H, 11 * MU0 * H])
+    linear = solved(susceptibility=10.0)
+    np.testing.assert_allclose(
+        on_curve.getB(points), linear.getB(points), rtol=1e-4, atol=1e-5
+    )
+    assert on_curve.moment[2] == pytest.approx(linear.moment[2], rel=1e-5)
+
+
+def test_finite_elements_keep_a_remanent_part_on_its_curve():
+    """B and the moment come from the chi of the solve, and they agree: with
+    no field, ``J = J_r - J(J / 3)``."""
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import fem_solve  # noqa: PLC0415
+
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 1.0))
+    sphere.bh_curve = table()
+    solved = fem_solve(magpy.Collection(sphere), order=4)
+    J = brentq(lambda J: 1.0 - polarization(J / 3 / MU0) - J, 0.0, 1.0)
+    assert solved.getB(np.array([[0, 0, 0]]))[0, 2] == pytest.approx(
+        2 * J / 3, rel=0.01
+    )
+    assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=0.01)
+
+
 def test_finite_elements_and_cells_agree_on_a_coil_in_a_saturating_core():
     """A coil at a current that saturates the bar: the reduced and the total
     potential both take chi from the curve, and the two methods agree."""
