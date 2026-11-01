@@ -6,7 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-11-01
+
+Parts close to each other are solved right, and loops get cheap. Face charge
+treated a turned part up to 1 % of its size from another as touching it, and
+stopped grading toward another part past that same 1 %; near such parts the
+field was off by 10 to 50 %, and by far more with high susceptibilities on both
+sides, with a finer level no help. Both are fixed, and three validation cases
+with finite-element references guard them. The cost: a solve with parts in that
+range takes more unknowns at a level, up to 30 times for magnet arrays. A loop
+that moves only the magnets can now reuse the factorization, 4 to 13 times
+faster. No change to existing code is needed.
 
 ### Added
 
@@ -484,7 +494,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.7.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.8.0...HEAD
+[0.8.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.7.0...0.8.0
 [0.7.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.6.0...0.7.0
 [0.6.0]:
