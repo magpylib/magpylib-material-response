@@ -386,6 +386,15 @@ class FemSolution(magpy.misc.CustomSource):
             new.__dict__[name] = value if name in solved else deepcopy(value, memo)
         return new
 
+    def __reduce_ex__(self, protocol):
+        """Refused: NGSolve pickles the mesh and the solution, and crashes the
+        interpreter on the first read of what it loads."""
+        msg = (
+            "A FemSolution cannot be saved: NGSolve crashes on reading its pickled "
+            "field back. Keep the values, as FemStudy does, or solve again."
+        )
+        raise TypeError(msg)
+
     def _field(self, field, observers):
         """`field` ("B", "H", "J" or "M") at the positions `observers` (n, 3) in
         m, as magpylib asks for it."""

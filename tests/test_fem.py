@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pickle
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -211,6 +213,8 @@ def test_a_solution_is_a_magpylib_source(driven_by):
     assert moved.solved_by == "fem"
     np.testing.assert_allclose(moved.getB((0.03, 0, 0.02)), solution.getB(air))
     np.testing.assert_array_equal(solution.position, (0, 0, 0))
+    with pytest.raises(TypeError, match="cannot be saved"):
+        pickle.dumps(solution)
 
 
 def test_edge_layers_match_across_faces(monkeypatch):
