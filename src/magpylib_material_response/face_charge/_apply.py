@@ -134,7 +134,7 @@ def apply_face_charge(
         warns; for B inside a part, mesh it and use ``apply_demag``. Its
         ``face_charge_info`` dict holds the last solve's ``unknowns``, the
         ``level``, the refinement ``rounds`` done, whether it ``reused`` a
-        factorization and the wall time in ``seconds``; ``to_json`` keeps it, but
+        factorization and the wall time in ``seconds``, and its ``solved_by`` is ``"face_charge"``; ``to_json`` keeps both, but
         not the factorization.
 
     Raises
@@ -351,6 +351,7 @@ def apply_face_charge(
                 above.sealed = False
             above = above.parent
     out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
+    out.solved_by = "face_charge"
     return out
 
 

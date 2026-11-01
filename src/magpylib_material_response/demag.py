@@ -1638,7 +1638,8 @@ def apply_demag(
     Returns
     -------
     magpylib.Collection or None
-        The demagnetized copy of `collection` if `inplace=False`, else None.
+        The demagnetized copy of `collection` if `inplace=False`, else None. Its
+        ``solved_by`` is ``"demag"``; ``to_json`` keeps it.
 
     Notes
     -----
@@ -1755,6 +1756,7 @@ def apply_demag(
 
         for src, pol in zip(magnets_list, pol_new, strict=True):
             src.polarization = src.orientation.inv().apply(pol)  # ROTATION CHECK
+        collection.solved_by = "demag"
 
     if not inplace:
         return collection

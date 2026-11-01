@@ -164,6 +164,9 @@ def _serialize_recursive(obj, parent="warn"):
     info = getattr(obj, "face_charge_info", None)
     if info is not None:
         dd["face_charge_info"] = dict(info)
+    solved_by = getattr(obj, "solved_by", None)
+    if solved_by is not None:
+        dd["solved_by"] = solved_by
 
     if isinstance(obj, BaseMagnet):
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
@@ -313,6 +316,8 @@ def _deserialize_recursive(inp):
         obj.H_ext = inp["H_ext"]["value"]
     if inp.get("face_charge_info") is not None:
         obj.face_charge_info = inp["face_charge_info"]
+    if inp.get("solved_by") is not None:
+        obj.solved_by = inp["solved_by"]
 
     if constr is magpy.Collection:
         obj.add(*[_deserialize_recursive(child) for child in inp["children"]])
