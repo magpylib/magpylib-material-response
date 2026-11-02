@@ -72,7 +72,12 @@ from scipy.sparse.linalg import LinearOperator, gmres
 from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response._saturation import curve_of, iterate
+from magpylib_material_response._saturation import (
+    curve_of,
+    is_table,
+    iterate,
+    refuse_bh_curve,
+)
 from magpylib_material_response.demag_fft import (
     MIN_CLUSTER_CELLS,
     QUAT_ATOL,
@@ -161,12 +166,14 @@ def get_susceptibilities(sources, susceptibility=None):
     Priority is given at the source level, however if value is not found, it is searched
     up the parent tree, if available. A magnet with none, on itself or any
     parent, is fixed: 0, as in solve_face_charge, and
-    :func:`_report_fixed_magnets` says so."""
+    :func:`_report_fixed_magnets` says so. A part on a B-H curve counts 0 here:
+    its susceptibility comes from :func:`~._saturation.curve_of`."""
     n = len(sources)
 
     if susceptibility is None:
         # Get susceptibilities from source attributes
         susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
+        susceptibilities = [0.0 if is_table(s) else s for s in susceptibilities]
         _report_fixed_magnets(sources)
 
         susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
@@ -289,12 +296,10 @@ def _subtract_susceptibility_product(T, chi):
 
 
 def _has_susceptibility(source):
-    """Whether `source` or one of its parents sets a susceptibility or a B-H
-    curve."""
+    """Whether `source` or one of its parents sets a susceptibility."""
+    refuse_bh_curve(source)
     while source is not None:
         if getattr(source, "susceptibility", None) is not None:
-            return True
-        if getattr(source, "bh_curve", None) is not None:
             return True
         source = source.parent
     return False
@@ -1602,8 +1607,8 @@ def solve_cells(
         anisotropic susceptibility along the cell's own x, y and z axes, which turn
         with its orientation like its polarization. If not defined, values are
         searched at object level or parent level if needed; a cell with none
-        there either is fixed, as in ``solve_face_charge``. A cell with a
-        ``bh_curve``, on itself or a parent, follows that instead: a table of
+        there either is fixed, as in ``solve_face_charge``. The value there can
+        be a B-H curve: a table of
         ``(H, B)`` rows in A/m and T, from ``(0, 0)``, H increasing; past its
         last row the polarization keeps its last value. Each such cell takes
         the susceptibility its own field gives on the curve, the linear solve

@@ -14,6 +14,7 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMag
 from scipy.spatial.transform import Rotation
 
 from magpylib_material_response import logging_config
+from magpylib_material_response._saturation import is_table
 
 
 class ElapsedTimeThread(threading.Thread):
@@ -157,12 +158,6 @@ def _serialize_recursive(obj, parent="warn"):
     susceptibility = getattr(obj, "susceptibility", None)
     if susceptibility is not None:
         dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
-    bh_curve = getattr(obj, "bh_curve", None)
-    if bh_curve is not None:
-        dd["bh_curve"] = {
-            "value": np.asarray(bh_curve, float).tolist(),
-            "unit": "A/m, T",
-        }
     h_ext = getattr(obj, "H_ext", None)
     if h_ext is not None:
         dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
@@ -316,9 +311,8 @@ def _deserialize_recursive(inp):
     obj = constr(**kw)
 
     if inp.get("susceptibility") is not None:
-        obj.susceptibility = inp["susceptibility"]["value"]
-    if inp.get("bh_curve") is not None:
-        obj.bh_curve = np.asarray(inp["bh_curve"]["value"], float)
+        value = inp["susceptibility"]["value"]
+        obj.susceptibility = np.asarray(value, float) if is_table(value) else value
     if inp.get("H_ext") is not None:
         _check_unit("H_ext", inp["H_ext"], "T")
         obj.H_ext = inp["H_ext"]["value"]

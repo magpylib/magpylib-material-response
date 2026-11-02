@@ -20,8 +20,8 @@ kernelspec:
 
 With a constant susceptibility, iron can reach any polarization: at 1 T applied,
 a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. A
-`bh_curve` set on a part, or on a collection above it, replaces the constant:
-`solve_cells` then puts every cell at the susceptibility its own field gives on
+table set as `susceptibility` on a part, or on a collection above it, replaces
+the constant: `solve_cells` then puts every cell at the susceptibility its own field gives on
 the curve, repeating the linear solve until none changes. The interaction matrix
 is built once; the fixed point takes 10 to 40 solves with Anderson acceleration.
 
@@ -93,7 +93,7 @@ def icosphere(diameter, splits=2):
 
 
 sphere = icosphere(0.01)
-sphere.bh_curve = curve
+sphere.susceptibility = curve
 mesh = mesh_TriangularMesh(sphere, 300)
 cells = mesh.sources_all
 volumes = np.array([c.volume for c in cells])
@@ -123,7 +123,7 @@ two pole faces not yet.
 
 ```{code-cell} ipython3
 cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
-cube.bh_curve = curve
+cube.susceptibility = curve
 cells = mesh_Cuboid(cube, (8, 8, 8))
 cells.H_ext = (0, 0, 0.5)
 solved = solve_cells(cells, solver="direct")

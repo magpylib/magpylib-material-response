@@ -1066,8 +1066,8 @@ def solve_fem(
 
     An independent check of :func:`~magpylib_material_response.cells.solve_cells`
     on the same objects: the magnets keep their shapes, not cells, and the
-    field is a polynomial of degree `order` on each element. A part with a
-    ``bh_curve`` follows it: the linear solve repeats until its susceptibility,
+    field is a polynomial of degree `order` on each element. A part whose
+    susceptibility is a B-H curve follows it: the linear solve repeats until its susceptibility,
     a polynomial on each element, stops moving, 5 to 40 solves. Each assembles
     again, and a saturating part can need ``solver_tol`` loosened to about 1e-7.
 

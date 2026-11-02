@@ -1,7 +1,7 @@
 """A material's B-H curve, and the iteration that puts each cell on it.
 
-A ``bh_curve`` is set like ``susceptibility``, on a magnet or a parent
-collection: a table of ``(H, B)`` points in A/m and T, from ``(0, 0)``, with H
+A ``susceptibility`` can be a table of ``(H, B)`` rows in place of a number, on
+a magnet or a parent collection: points in A/m and T, from ``(0, 0)``, with H
 increasing and B not decreasing. Between the points B follows a monotone cubic
 (PCHIP); past the last, the polarization ``J = B - mu0 H`` keeps its last value,
 so B rises with the slope of vacuum. A cell on a curve takes the secant
@@ -31,23 +31,21 @@ class Curve:
     def __init__(self, table):
         table = np.asarray(table, float)
         if table.ndim != 2 or table.shape[1] != 2 or len(table) < 2:
-            msg = f"bh_curve must be a table of (H, B) rows, at least two; got shape {table.shape}."
+            msg = f"A B-H curve must be a table of (H, B) rows, at least two; got shape {table.shape}."
             raise ValueError(msg)
         H, B = table.T
         if not np.isfinite(table).all() or H[0] != 0 or B[0] != 0:
-            msg = "bh_curve must start at (0, 0) and hold finite numbers."
+            msg = "A B-H curve must start at (0, 0) and hold finite numbers."
             raise ValueError(msg)
         if (np.diff(H) <= 0).any() or (np.diff(B) < 0).any():
-            msg = "bh_curve needs H increasing and B not decreasing."
+            msg = "A B-H curve needs H increasing and B not decreasing."
             raise ValueError(msg)
         J = B - MU0 * H
         if (J < 0).any():
-            msg = "bh_curve lies below vacuum (B < mu0 H) somewhere: the polarization would be negative."
+            msg = "The B-H curve lies below vacuum (B < mu0 H) somewhere: the polarization would be negative."
             raise ValueError(msg)
         if not (J > 0).any():
-            msg = (
-                "bh_curve is vacuum everywhere (B = mu0 H): the part would not respond."
-            )
+            msg = "The B-H curve is vacuum everywhere (B = mu0 H): the part would not respond."
             raise ValueError(msg)
         self.table = table
         self._J = PchipInterpolator(H, J, extrapolate=False)
@@ -77,13 +75,36 @@ class Curve:
         return np.maximum(chi, CHI_MIN)
 
 
-def curve_of(source):
-    """The :class:`Curve` set on `source` or its nearest parent that sets one,
-    or None."""
+def is_table(value):
+    """Whether a susceptibility is a table of (H, B) rows."""
+    try:
+        shape = np.shape(value)
+    except ValueError:  # rows of different lengths: no table, and refused later
+        return False
+    return len(shape) == 2 and shape[1] == 2
+
+
+def refuse_bh_curve(source):
+    """Raise if `source` or a parent has ``bh_curve``, which nothing reads any
+    more: a magnet takes any attribute, so the part would silently be linear."""
     while source is not None:
-        table = getattr(source, "bh_curve", None)
-        if table is not None:
-            return Curve(table)  # a table, which copies, pickles and saves
+        if getattr(source, "bh_curve", None) is not None:
+            msg = (
+                f"{source} has bh_curve: set the table as its susceptibility instead, "
+                "which takes a number, three numbers or a table of (H, B) rows."
+            )
+            raise ValueError(msg)
+        source = source.parent
+
+
+def curve_of(source):
+    """The :class:`Curve` of `source`, if the nearest susceptibility on it or its
+    parents is a table, or None."""
+    refuse_bh_curve(source)
+    while source is not None:
+        value = getattr(source, "susceptibility", None)
+        if value is not None:
+            return Curve(value) if is_table(value) else None
         source = source.parent
     return None
 
