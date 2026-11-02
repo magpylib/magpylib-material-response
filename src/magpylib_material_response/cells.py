@@ -3,8 +3,8 @@
 The self-consistent polarization of ``n`` interacting cells is the solution
 of ``(I - S T) J = J0 + S B_ext`` where ``S`` is the block-diagonal
 susceptibility matrix (one 3x3 block per cell, its susceptibility along its own axes) and ``T`` the demag interaction operator. The
-``H_ext`` object attribute is interpreted as the applied flux density
-``B_ext`` in Tesla (B-field convention, consistent with polarization).
+``UniformField`` in the model gives the applied flux density ``B_ext`` in Tesla
+(B-field convention, consistent with polarization).
 
 Every entry of ``T`` follows one *interaction rule*, chosen per solve with
 ``interaction`` and applied to every pair of cells:
@@ -1693,9 +1693,9 @@ def solve_cells(
 
     Notes
     -----
-    Each cell responds to a uniform applied field set by its `H_ext` attribute (or
-    a parent's), given as mu_0 * H in tesla, and to the field of the current
-    sources in `collection` at its centroid.
+    Each cell responds to the field at its centroid of the current sources and of
+    any :class:`~magpylib_material_response.UniformField` in `collection`, which
+    ``getB`` of the result includes.
     """
     if solver not in SOLVERS:
         msg = f"solver must be one of {SOLVERS}; got {solver!r}"

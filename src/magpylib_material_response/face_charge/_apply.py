@@ -67,7 +67,7 @@ def solve_face_charge(
     collection) and a uniform remanence has no magnetic charge inside: its whole
     response is a charge on its faces. Those faces are solved together, coupled
     to each other and driven by every other source in the collection and by the
-    applied field ``H_ext``, as :func:`~magpylib_material_response.cells.solve_cells`
+    applied field of a ``UniformField``, as :func:`~magpylib_material_response.cells.solve_cells`
     reads it. No volume mesh is needed.
 
     Parameters
@@ -111,7 +111,7 @@ def solve_face_charge(
         of :func:`~magpylib_material_response.configure_logging`.
     reuse : bool or magpylib.Collection, default False
         For a loop that changes only what drives the solved parts, such as a
-        magnet's pose, ``H_ext`` or a part's remanence, or moves them all as one.
+        magnet's pose, a ``UniformField`` or a part's remanence, or moves them all as one.
         ``True`` keeps this solve's factorization on the result, ``8 n**2`` bytes
         for ``n`` unknowns, until the result goes, and reuses nothing: later calls
         must pass that result. A result kept that way lends
