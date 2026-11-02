@@ -116,6 +116,7 @@ def _plate(curve=None, chi=None):
     return magpy.Collection(magnet, mesh_Cuboid(plate, (5, 5, 2)))
 
 
+@pytest.mark.filterwarnings("ignore:This B-H curve reaches")
 @pytest.mark.parametrize("solver", ["direct", "iterative"])
 def test_a_linear_curve_is_a_susceptibility(solver):
     """A straight curve of slope 1 + chi solves as chi does, in one more solve."""
@@ -257,6 +258,19 @@ def test_a_steep_curve_solves():
     assert 0.9 < max(J) < 2.5
 
 
+@pytest.mark.parametrize(
+    "wrong",
+    [
+        table()[:, ::-1],
+        table() * [1, 1e4],
+    ],
+    ids=["columns swapped", "B in gauss"],
+)
+def test_a_curve_past_any_material_warns(wrong):
+    with pytest.warns(UserWarning, match="past any material"):
+        Curve(wrong)
+
+
 def test_a_curve_that_starts_flat_solves():
     """A steel's curve can rise slowly at first: the iteration starts from a
     small susceptibility, not from log(0)."""
@@ -295,6 +309,7 @@ def test_finite_elements_follow_a_curve(B0):
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=2e-3)
 
 
+@pytest.mark.filterwarnings("ignore:This B-H curve reaches")
 def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     """A part a billionth of the other's volume converges too: the iteration
     stops on its worst element, not on an average over the volume."""
@@ -322,6 +337,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     assert solved.getB(point)[2] == pytest.approx(expected, rel=5e-3)
 
 
+@pytest.mark.filterwarnings("ignore:This B-H curve reaches")
 def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
     """On curved elements too: projecting chi must keep a constant."""
     pytest.importorskip("ngsolve")

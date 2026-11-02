@@ -13,6 +13,8 @@ acceleration (depth ``DEPTH``) of that fixed point cuts the solves 3 to 4 times.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from loguru import logger
 from scipy.interpolate import PchipInterpolator
@@ -22,6 +24,7 @@ TOL = 1e-4  # relative change of any cell's chi at which the iteration stops
 DEPTH = 6  # Anderson's memory
 DAMPING = 0.7
 MAX_SOLVES = 200
+J_MAX = 5.0  # T: past any material, so a curve above it has its columns or units wrong
 CHI_MIN = 1e-6  # the least susceptibility a cell on a curve takes: log chi must exist
 
 
@@ -47,6 +50,13 @@ class Curve:
         if not (J > 0).any():
             msg = "The B-H curve is vacuum everywhere (B = mu0 H): the part would not respond."
             raise ValueError(msg)
+        if J.max() > J_MAX:
+            warnings.warn(
+                f"This B-H curve reaches a polarization of {J.max():.3g} T, past any "
+                "material: the rows must be (H, B) in A/m and T. Check that the "
+                "columns are not swapped, and the units.",
+                stacklevel=2,
+            )
         self.table = table
         self._J = PchipInterpolator(H, J, extrapolate=False)
         self.J_last = float(J[-1])
