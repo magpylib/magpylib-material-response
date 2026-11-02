@@ -174,6 +174,8 @@ both methods share it.
 - `solve_face_charge` refuses a part on a curve: it needs a uniform
   susceptibility in each part. `solve_fem` follows the curve, and is the check
   on a part that a sphere's exact answer cannot give; it assembles again at each
-  of its 5 to 40 solves.
+  of its 5 to 40 solves. Start at order 3: order 2 can fail to settle, and says
+  so, as on a cube in 0.3 T or a plate under a magnet in 0.3 T, which settled at
+  order 3 in about 20 s.
 - The curve is the material's initial curve: no hysteresis, so a field that
   comes back down returns along the same curve.

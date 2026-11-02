@@ -24,6 +24,9 @@ and this project adheres to
 
 ### Changed
 
+- When a B-H curve does not settle, `solve_fem` says to try a higher order; the
+  saturation page says to start at order 3
+  ([#160](https://github.com/magpylib/magpylib-material-response/pull/160))
 - `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
   `getB` warns there. The docs say not to read a cell model exactly on a
   boundary between cells, where the field is wrong with no warning

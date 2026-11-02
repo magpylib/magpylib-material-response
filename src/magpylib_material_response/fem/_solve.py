@@ -744,7 +744,8 @@ class Model:
             log_chi.vec.FV().NumPy()[:] = x + DAMPING * f - (dX + DAMPING * dF) @ gamma
         msg = (
             f"The B-H iteration did not settle in {FEM_SOLVES} solves at order "
-            f"{order}: chi still moves by {moved:.1e} on the worst element."
+            f"{order}: chi still moves by {moved:.1e} on the worst element. Try a "
+            "higher order."
         )
         if not moved <= STALL:
             raise RuntimeError(msg)
