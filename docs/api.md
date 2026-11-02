@@ -22,7 +22,7 @@
 .. autofunction:: magpylib_material_response.face_charge.solve_face_charge
 
 .. autoclass:: magpylib_material_response.face_charge.ChargeSheet
-   :members: from_triangles, mean_polarization, jump_indicator, panel_indicator
+   :members: from_triangles, part, mean_polarization, jump_indicator, panel_indicator
 ```
 
 ## Mesh convergence — `convergence`

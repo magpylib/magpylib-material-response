@@ -56,7 +56,9 @@ The field drops by about 10 %: the magnet demagnetizes itself. Refining the mesh
 
 Susceptibility is an attribute of a magnet, or of a parent `Collection` for all
 the magnets in it; the cells of a mesh copy their magnet's value when it is
-meshed. A value passed to `solve_cells` takes precedence:
+meshed, also one it inherits. A magnet's own `copy` leaves its parent behind,
+and what it inherits from it; a collection's `copy` keeps it. A value passed to
+`solve_cells` takes precedence:
 
 ```{code-cell} ipython3
 magnet.susceptibility = 0.3  # isotropic

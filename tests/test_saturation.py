@@ -407,12 +407,38 @@ def test_a_curve_in_a_list_says_to_set_it_on_the_part():
         solve_cells(magpy.Collection(part), susceptibility=[table(n=5)])
 
 
-def test_solving_a_result_warns():
+@pytest.mark.parametrize(
+    "wrap",
+    [
+        lambda r: r,
+        lambda r: r.copy(),
+        magpy.Collection,
+        lambda r: r.children[0],
+    ],
+    ids=["itself", "a copy", "nested", "taken out"],
+)
+@pytest.mark.parametrize("solve", [solve_cells, solve_face_charge])
+def test_solving_a_result_warns(solve, wrap):
     part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
     part.susceptibility = 10.0
-    solved = solve_cells(magpy.Collection(part, UniformField(B=(0, 0, 0.1))))
+    meshed = mesh_Cuboid(part, (1, 1, 1))
+    solved = solve_cells(magpy.Collection(meshed, UniformField(B=(0, 0, 0.1))))
     with pytest.warns(UserWarning, match="already solved"):
-        solve_cells(solved)
+        solve(wrap(solved))
+
+
+def test_a_part_with_nothing_on_it_warns():
+    """A child's copy leaves its parent's susceptibility behind, and does nothing."""
+    child = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    holder = magpy.Collection(child)
+    holder.susceptibility = 100.0
+    other = magpy.magnet.Cuboid(
+        dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(0.03, 0, 0)
+    )
+    other.susceptibility = 100.0
+    model = magpy.Collection(child.copy(), other, UniformField(B=(0, 0, 0.1)))
+    with pytest.warns(UserWarning, match="does nothing"):
+        solve_cells(model)
 
 
 def test_a_fem_solution_keeps_its_own_coil():

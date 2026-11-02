@@ -10,6 +10,7 @@ import magpylib as magpy
 import numpy as np
 from magpylib._src.defaults.property_tree import Nested, Number, PropertyNode
 from magpylib._src.exceptions import MagpylibBadUserInput
+from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from magpylib._src.style import TriangularMeshStyle
 from scipy.spatial import cKDTree  # pylint: disable=no-name-in-module
 from scipy.spatial.transform import Rotation
@@ -22,7 +23,8 @@ from magpylib_material_response.face_charge._triangle import (
     far_points,
     frames,
 )
-from magpylib_material_response.face_charge._tribody import _winding
+from magpylib_material_response.meshing_utils import detached_copy
+from magpylib_material_response.uniform import shallow_copy
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 # an observer this many of a sheet's longest triangle sides past all of it takes
@@ -49,6 +51,40 @@ class ChargeSheetStyle(TriangularMeshStyle):
     """A TriangularMesh's style, and how the charge is coloured (``charge``)."""
 
     charge = Nested(ChargeColor, doc="Charge colour properties.")
+
+
+def _read_only(array):
+    """A view that refuses an edit in place, which the charge and the part rest on
+    and which would reach the saved file and not the field. A flag on the array
+    itself would not hold: deepcopy and pickle drop it."""
+    view = array.view()
+    view.flags.writeable = False
+    return view
+
+
+def _reach(part):
+    """How far a magnet reaches from its own centre, in m."""
+    if isinstance(part, magpy.magnet.Cuboid):
+        return np.linalg.norm(part.dimension) / 2
+    if isinstance(part, magpy.magnet.Sphere):
+        return part.diameter / 2
+    if isinstance(part, magpy.magnet.Cylinder):
+        return np.hypot(*part.dimension) / 2
+    if isinstance(part, magpy.magnet.CylinderSegment):
+        return np.hypot(part.dimension[1], part.dimension[2] / 2)
+    return np.linalg.norm(part.vertices, axis=-1).max()
+
+
+def _copy_of(part):
+    """A copy of `part` standing alone, under its own label: ``copy`` adds a suffix.
+    A style is read only if it has one, as reading creates it, on the caller's
+    object too."""
+    styled = getattr(part, "_style", None) is not None or part._style_kwargs
+    label = part.style.label if styled else None
+    copied = detached_copy(part)
+    if styled:
+        copied.style.label = label
+    return copied
 
 
 class ChargeSheet(magpy.misc.CustomSource):
@@ -79,6 +115,10 @@ class ChargeSheet(magpy.misc.CustomSource):
     mean_polarization : array-like, shape (3,), optional
         What :attr:`mean_polarization` gives, in T, in place of the sheet's own:
         :func:`solve_face_charge` sets it on parts solved as one.
+    part : magpylib magnet, optional
+        The part the sheet was solved from, what :attr:`part` gives. A copy is
+        kept, and it takes the sheet's pose: give ``position`` and ``orientation``
+        too. :func:`solve_face_charge` sets it.
     position, orientation, style, **kwargs
         As for any magpylib source. ``style`` is a TriangularMesh's:
         ``style.magnetization.color`` colours the charge and ``style.mesh.grid``
@@ -89,6 +129,8 @@ class ChargeSheet(magpy.misc.CustomSource):
     """
 
     _style_class = ChargeSheetStyle
+    _part = None  # also for a sheet pickled before there were parts
+    _probe = None
     _style_family = ("magnet", "triangularmesh")
 
     def __init__(
@@ -102,11 +144,14 @@ class ChargeSheet(magpy.misc.CustomSource):
         style=None,
         *,
         mean_polarization=None,
+        part=None,
         **kwargs,
     ):
         self._set(vertices, faces, charge_densities, panels)
         if mean_polarization is not None:
             self._mean = np.asarray(mean_polarization, float).reshape(3)
+        if part is not None:
+            self._keep_part(part)
         super().__init__(
             position=position, orientation=orientation, style=style, **kwargs
         )
@@ -119,11 +164,15 @@ class ChargeSheet(magpy.misc.CustomSource):
         except MagpylibBadUserInput:
             self._field_func = self._field
 
+    def __copy__(self):
+        return shallow_copy(self)
+
     # ── mesh and charge ───────────────────────────────────────────────────
     @property
     def vertices(self):
-        """Mesh points (n, 3) in m, in the source's own frame."""
-        return self._vertices
+        """Mesh points (n, 3) in m, in the source's own frame. Read-only: set the
+        whole array to change it."""
+        return _read_only(self._vertices)
 
     @vertices.setter
     def vertices(self, value):
@@ -132,8 +181,9 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @property
     def faces(self):
-        """Vertex index triplets (m, 3)."""
-        return self._faces
+        """Vertex index triplets (m, 3). Read-only: set the whole array to change
+        it."""
+        return _read_only(self._faces)
 
     @faces.setter
     def faces(self, value):
@@ -144,9 +194,7 @@ class ChargeSheet(magpy.misc.CustomSource):
     def charge_densities(self):
         """Surface charge density at each face's corners (m, 3), in A/m.
         Read-only: set the whole array to change it."""
-        q = self._q.view()
-        q.flags.writeable = False
-        return q
+        return _read_only(self._q)
 
     @charge_densities.setter
     def charge_densities(self, value):
@@ -157,17 +205,17 @@ class ChargeSheet(magpy.misc.CustomSource):
     def panels(self):
         """The surface element (m,) each face belongs to, or None where each
         face is one."""
-        return self._panels
+        return None if self._panels is None else _read_only(self._panels)
 
     @property
     def triangles(self):
         """Corners of each face (m, 3, 3) in m, in the source's own frame."""
-        return self._V
+        return _read_only(self._V)
 
     def _set(self, vertices, faces, charge_densities, panels=None):
-        P = np.asarray(vertices, float).reshape(-1, 3)
-        F = np.asarray(faces, int).reshape(-1, 3)
-        q = np.asarray(charge_densities, float).reshape(-1, 3)
+        P = np.array(vertices, float).reshape(-1, 3)
+        F = np.array(faces, int).reshape(-1, 3)
+        q = np.array(charge_densities, float).reshape(-1, 3)
         if len(q) != len(F):
             msg = (
                 f"charge_densities needs one value per face corner, shape ({len(F)}, 3); "
@@ -178,17 +226,15 @@ class ChargeSheet(magpy.misc.CustomSource):
             msg = f"faces index vertices 0 to {len(P) - 1}; got {F.min()} to {F.max()}."
             raise ValueError(msg)
         if panels is not None:
-            panels = np.asarray(panels, int).reshape(-1)
+            panels = np.array(panels, int).reshape(-1)
             if len(panels) != len(F):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._mean = None  # set by solve_face_charge on parts solved as one
-        self._solid = False  # set by solve_face_charge on a part's whole surface
+        self._part = None  # set by solve_face_charge: new charges, no such part
+        self._probe = None  # the part at the sheet's own frame, to test observers
         self._V = P[F]
-        self._lo, self._hi = (
-            (self._V.min((0, 1)), self._V.max((0, 1))) if len(F) else (0, 0)
-        )
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
         self._center, self._far_from, self._far_rule = np.zeros(3), np.inf, None
@@ -209,6 +255,40 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._c = np.linalg.solve(A, q[..., None])[..., 0]  # charge = c0 + c1 u + c2 v
 
     # ── what a solve tells ────────────────────────────────────────────────
+    @property
+    def part(self):
+        """The magnet this sheet was solved from, or ``None`` for a sheet built
+        without one, with its mesh or charge changed since, or a fixed source of
+        a later solve.
+
+        A copy, at the sheet's pose now, standing alone: its susceptibility,
+        inherited or not, is on it, and its polarization is its remanence. Solving
+        a model's parts again, with copies of its other sources, at the same
+        ``level`` and without ``refine``, whose panels are not kept, reproduces its
+        charges. A moved sheet gives the part moved. See the face-charge page for
+        the loop that solves a drag.
+        """
+        if self._part is None:
+            return None
+        part = _copy_of(self._part)
+        part.position, part.orientation = self.position, self.orientation
+        return part
+
+    def _keep_part(self, part):
+        if not isinstance(part, BaseMagnet):
+            msg = f"part must be a magnet; got {type(part).__name__}."
+            raise TypeError(msg)
+        self._part = _copy_of(part)
+
+    def _came_from(self, part):
+        """Whether `part` has the shape of the part this sheet was solved from,
+        wherever it is now: a part it was solved from moves."""
+        return (
+            self._part is not None
+            and type(part) is type(self._part)
+            and bool(np.isclose(_reach(part), _reach(self._part)))
+        )
+
     @property
     def mean_polarization(self):
         """Average polarization (3,) in T of the body a closed sheet encloses,
@@ -319,28 +399,43 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     # ── field ─────────────────────────────────────────────────────────────
     def _warn_if_inside(self, X, field):
-        """Warn if observers lie inside the part, of a sample of them: it costs
-        a box test unless some lie in its box."""
-        box = X[((self._lo <= X) & (self._hi >= X)).all(axis=1)]
-        for point in box[:: max(1, len(box) // INSIDE_SAMPLE)]:
-            if abs(_winding(point, self._V)) > 0.5:
-                gives = (
-                    "mu0 H there, not B, without the part's magnetization"
-                    if field == "B"
-                    else f"{field} = 0 there, as a sheet has no volume"
-                )
-                warnings.warn(
-                    f"Observers inside a solved part: a ChargeSheet gives {gives}. "
-                    f"For {field} inside a part, mesh it and use solve_cells, or use "
-                    "solve_fem.",
-                    stacklevel=2,
-                )
-                return
+        """Warn if observers lie inside the part this sheet was solved from, of a
+        sample of them: it costs a distance test unless some are near. Of parts
+        solved as one the sheet has lost faces, so the part says, not the surface."""
+        reach = _reach(self._part)
+        near = X[(X * X).sum(axis=1) <= reach * reach]
+        if not near.size:
+            return
+        if self._probe is None:
+            self._probe = _copy_of(self._part)
+            self._probe.position, self._probe.orientation = (0, 0, 0), None
+            self._probe.polarization = (0, 0, 1)
+        sample = near[:: max(1, len(near) // INSIDE_SAMPLE)]
+        # a point on the surface is outside as well: a step to each side tells. A
+        # mesh's inside test reads a tilted face as inside out to about 1e-10 m,
+        # and 1e-8 of a mesh 1 m wide
+        step = max(1e-6 * reach, 1e-9)
+        steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
+        points = (sample[:, None] + steps).reshape(-1, 3)
+        with np.errstate(divide="ignore", invalid="ignore"):  # on a mesh's own points
+            J = self._probe.getJ(points).reshape(len(sample), len(steps), 3)
+        if ((J != 0).any(axis=2) & np.isfinite(J).all(axis=2)).all(axis=1).any():
+            gives = (
+                "mu0 H there, not B, without the part's magnetization"
+                if field == "B"
+                else f"{field} = 0 there, as a sheet has no volume"
+            )
+            warnings.warn(
+                f"Observers inside a solved part: a ChargeSheet gives {gives}. "
+                f"For {field} inside a part, mesh it and use solve_cells, or use "
+                "solve_fem.",
+                stacklevel=2,
+            )
 
     def _field(self, field, observers):
         X = np.asarray(observers, float).reshape(-1, 3)
         out = np.zeros((len(X), 3))
-        if field != "H" and self._solid:
+        if field != "H" and self._part is not None:
             self._warn_if_inside(X, field)
         if field in ("M", "J"):
             return out  # the source carries no magnetization of its own

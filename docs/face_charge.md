@@ -261,6 +261,34 @@ same matrix it takes only a new load and a back-substitution, as
 factorization instead. So a poor match costs time, never a wrong field. Fields
 agree with a fresh solve to 1e-13 of the largest, 2e-11 at a weak observer.
 
+A solved model can be solved again from what it holds. Each sheet's `part` is
+the magnet it was solved from, at the sheet's pose now, with its susceptibility
+on it. Everything else is a drive, and goes in as a copy, as an object has one
+parent:
+
+```python
+sources = solved.sources_all
+sheets = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
+drives = [s.copy() for s in sources if not any(s is k for k in sheets)]
+parts = [s.part for s in sheets]
+parts[0].move((0.001, 0, 0))  # a drag
+level = solved.face_charge_info["level"]
+again = solve_face_charge(magpy.Collection(*parts, *drives), level=level)
+```
+
+The parts are copies, so `solved` stays as it was. Moving a sheet of `solved`
+instead moves its field too, without solving, and its part with it. Each `copy`
+of a drive adds a suffix to its label, as magpylib's does.
+
+Pass `reuse=solved` as well, if the first solve had `reuse=True`, to keep its
+factorization when only the drives moved. Leave the sheets out: one kept beside
+its own part counts its response twice, and warns.
+
+`to_json` keeps it, so a triangle-mesh part holds its mesh twice in the file. A
+result solved with `refine` cannot be reproduced exactly from its parts, as the
+panels it split are not kept. A sheet built without `part=`, with its mesh or
+charge changed, or kept as a fixed source of a later solve has no part.
+
 For the plate under a magnet, a call takes 72 ms at level 3 and then 18 ms, and
 1.15 s at 9,558 unknowns and then 0.12 s. The call that factors takes up to
 twice as long as a plain solve from 2,000 unknowns on, 1.9 s at 9,558, which the

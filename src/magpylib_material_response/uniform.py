@@ -11,6 +11,18 @@ MU0 = magpy.mu_0
 B_WARN = 10.0  # T: stronger is most likely H in A/m given as B
 
 
+def shallow_copy(source):
+    """What ``copy.copy`` gives of a source whose field function is its own bound
+    method: bound to the new one, or the copy would read the original's field. One
+    set by hand stays."""
+    new = type(source).__new__(type(source))
+    new.__dict__.update(source.__dict__)
+    func = source._field_func
+    if getattr(func, "__self__", None) is source:
+        new._field_func = getattr(new, func.__name__)
+    return new
+
+
 class UniformField(magpy.misc.CustomSource):
     """A field that is the same everywhere: a source like a coil, in a model's
     collection, which every solver takes as driving its parts, and whose field
@@ -64,8 +76,11 @@ class UniformField(magpy.misc.CustomSource):
 
     @property
     def B(self):
-        """The flux density in T, in the source's own frame."""
-        return self._B
+        """The flux density in T, in the source's own frame. Read-only: set the
+        whole array to change it."""
+        value = self._B.view()
+        value.flags.writeable = False
+        return value
 
     @B.setter
     def B(self, value):
@@ -97,6 +112,9 @@ class UniformField(magpy.misc.CustomSource):
         field = field * factor
         field.flags.writeable = False
         self._B = field
+
+    def __copy__(self):
+        return shallow_copy(self)
 
     def _field(self, field, observers):
         n = len(observers)

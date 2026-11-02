@@ -68,6 +68,7 @@ from magpylib_material_response.fem._geometry import (
     wire_points,
 )
 from magpylib_material_response.uniform import applied as uniform_field
+from magpylib_material_response.uniform import shallow_copy
 from magpylib_material_response.utils import timelog
 
 MU0 = magpy.mu_0
@@ -365,7 +366,7 @@ class FemSolution(magpy.misc.CustomSource):
         self._lift = lift
         self._chi = chi
         self.solved_by = "fem"
-        self.order = order
+        self._order = order
         self.ndof = ndof
         self.elements = model.mesh.ne
         self.seconds = seconds
@@ -378,6 +379,11 @@ class FemSolution(magpy.misc.CustomSource):
         )
         self.moment = 3 / MU0 * model.length**3 * np.asarray(flux)
 
+    @property
+    def order(self):
+        """Polynomial order of the elements, which the solved field belongs to."""
+        return self._order
+
     def __deepcopy__(self, memo):
         """A copy moves on its own and shares the solved field, which no one
         changes and which takes as much memory as the solve."""
@@ -389,14 +395,14 @@ class FemSolution(magpy.misc.CustomSource):
         return new
 
     def __copy__(self):
-        return self.__deepcopy__({})
+        return shallow_copy(self)
 
     def __reduce_ex__(self, protocol):
         """Refused: NGSolve pickles the mesh and the solution, and crashes the
         interpreter on the first read of what it loads."""
         msg = (
             "A FemSolution cannot be saved: NGSolve crashes on reading its pickled "
-            "field back. Keep the values, as FemStudy does, or solve again."
+            "field back, and a FemStudy holds one. Keep the values, or solve again."
         )
         raise TypeError(msg)
 
@@ -409,7 +415,7 @@ class FemSolution(magpy.misc.CustomSource):
         rho = np.linalg.norm(s, axis=1)
         inside = rho < model.radius
         # a later solve of the same model curves its mesh for another order
-        model.curve(self.order)
+        model.curve(self._order)
         air = ~inside
         if inside.any():
             if field == "B":

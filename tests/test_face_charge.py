@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 import os
+import pickle
 import subprocess
 import sys
 import time
@@ -1760,12 +1762,290 @@ def test_reading_inside_a_solved_part_warns(part):
     magpy.getB(solved, (0, 0, 0.1))
 
 
-def test_only_a_whole_surface_warns_when_read_inside():
-    """Touching parts of one material leave no closed surface to be inside of."""
+def test_reading_inside_warns_on_touching_parts_and_from_json_not_by_hand():
+    """Touching parts of one material leave no closed surface: the part tells. A
+    sheet built by hand has no part to tell."""
     a, b = _soft(position=(-0.005, 0, 0)), _soft(position=(0.005, 0, 0))
     solved = solve_face_charge(magpy.Collection(_drive(), a, b), level=1)
-    magpy.getB(solved, (0.005, 0, 0))
+    inside = (0.005, 0.001, 0)
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(solved, inside)
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(from_json(to_json(solved))[0], inside)
     sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
-    magpy.getB(
-        ChargeSheet(sheet.vertices, sheet.faces, sheet.charge_densities), (0, 0, 0)
+    magpy.getB(ChargeSheet(sheet.vertices, sheet.faces, sheet.charge_densities), inside)
+
+
+def test_reading_on_a_surface_is_not_inside_and_a_lone_part_still_tells():
+    """A mesh's inside test reads a tilted face as inside just past it; a part that
+    keeps only flat faces, or none, leaves the sheet no box around itself."""
+    points = np.array(
+        [(1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1)], float
+    )  # a tetrahedron's corners
+    mesh = magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 0), points=0.005 * points
     )
+    mesh.susceptibility = 100.0
+    solved = solve_face_charge(magpy.Collection(mesh, _drive()), level=1)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    magpy.getB(sheet, sheet.triangles.mean(axis=1))
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(sheet, (0, 0, 0))
+
+    flat = _one_face((1, 1, 1), part=_soft(position=(0, 0, 0)))  # one face of a part
+    far = [(1e6, 0, 0)] * 500 + [(0, 0, 0)]
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(flat, far)
+
+
+def test_a_sheet_beside_a_part_of_another_shape_does_not_warn():
+    first = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    frozen = next(s for s in first.sources_all if isinstance(s, ChargeSheet)).copy()
+    other = magpy.magnet.Sphere(
+        diameter=0.004, polarization=(0, 0, 0), position=(0.05, 0, 0)
+    )
+    other.susceptibility = 10.0
+    solve_face_charge(magpy.Collection(frozen, other), level=1)
+
+
+def _triangular_part():
+    corners = np.array(
+        [(x, y, z) for x in (-5e-3, 5e-3) for y in (-5e-3, 5e-3) for z in (-5e-3, 5e-3)]
+    )
+    return magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 0), points=corners
+    )
+
+
+PARTS = {
+    "cuboid": lambda: magpy.magnet.Cuboid(
+        dimension=(0.01, 0.012, 0.008), polarization=(0, 0, 0)
+    ),
+    "cylinder": lambda: magpy.magnet.Cylinder(
+        dimension=(0.01, 0.01), polarization=(0, 0, 0)
+    ),
+    "cylinder segment": lambda: magpy.magnet.CylinderSegment(
+        dimension=(0.005, 0.01, 0.01, 0, 180), polarization=(0, 0, 0)
+    ),
+    "sphere": lambda: magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0)),
+    "triangles": _triangular_part,
+}
+
+
+def _solved_with_part(kind):
+    """A turned part beside a magnet, on a susceptibility it inherits."""
+    part = PARTS[kind]()
+    part.move((0.002, 0.001, -0.02))
+    part.rotate_from_angax(30, (1, 2, 3))
+    drive = _drive()
+    model = magpy.Collection(magpy.Collection(part), drive)
+    model.children[0].susceptibility = 100.0
+    return solve_face_charge(model, level=1), drive
+
+
+def _charges(solved):
+    return [
+        s.charge_densities for s in solved.sources_all if isinstance(s, ChargeSheet)
+    ]
+
+
+@pytest.mark.parametrize("round_trip", [False, True], ids=["as solved", "from json"])
+@pytest.mark.parametrize("kind", PARTS)
+def test_a_sheets_part_solves_to_the_same_charges(kind, round_trip):
+    solved, drive = _solved_with_part(kind)
+    if round_trip:
+        solved = from_json(to_json(solved))[0]
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    assert not isinstance(sheet.part, ChargeSheet)
+    assert sheet.part.parent is None
+    assert sheet.part.susceptibility == 100.0
+    again = solve_face_charge(magpy.Collection(sheet.part, drive.copy()), level=1)
+    np.testing.assert_allclose(_charges(again)[0], sheet.charge_densities, rtol=1e-9)
+
+
+def test_a_moved_sheet_gives_the_part_moved_and_a_drag_reuses_the_solve():
+    part = _soft(position=(0, 0, 0))
+    model = magpy.Collection(part, _drive())
+    solved = solve_face_charge(model, level=1, reuse=True)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    drive = next(s for s in solved.sources_all if not isinstance(s, ChargeSheet))
+    drive.move((0.001, 0, 0))
+    again = solve_face_charge(
+        magpy.Collection(sheet.part, drive.copy()), reuse=solved, level=1
+    )
+    assert again.face_charge_info["reused"]
+    sheet.move((0.01, 0, 0))
+    sheet.rotate_from_angax(90, "z", anchor=None)
+    np.testing.assert_allclose(sheet.part.position, sheet.position)
+    np.testing.assert_allclose(
+        sheet.part.orientation.as_matrix(), sheet.orientation.as_matrix()
+    )
+    np.testing.assert_allclose(part.position, (0, 0, 0))
+
+
+def test_a_sheets_part_is_its_own():
+    part = _soft()
+    part.style.label = "plate"
+    solved = solve_face_charge(magpy.Collection(part, _drive()), level=1)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    assert sheet.part.style.label == "plate"
+    part.susceptibility = 1.0
+    assert sheet.part.susceptibility != 1.0
+    sheet.part.susceptibility = 2.0  # a copy each time
+    assert sheet.part.susceptibility != 2.0
+    assert sheet.copy().part.susceptibility == sheet.part.susceptibility
+    assert (
+        pickle.loads(pickle.dumps(sheet)).part.susceptibility
+        == sheet.part.susceptibility
+    )
+
+
+def test_a_part_with_no_faces_left_has_its_part_and_a_changed_sheet_has_none():
+    a, b = _soft(position=(-0.005, 0, 0)), _soft(position=(0.005, 0, 0))
+    solved = solve_face_charge(magpy.Collection(_drive(), a, b), level=1)
+    sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+    assert all(s.part is not None for s in sheets)
+    sheets[0].charge_densities = sheets[0].charge_densities * 2
+    assert sheets[0].part is None
+
+
+def _recipe(solved, **kwargs):
+    """The loop of the face-charge page, as written there."""
+    sources = solved.sources_all
+    sheets = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
+    drives = [s.copy() for s in sources if not any(s is k for k in sheets)]
+    parts = [s.part for s in sheets]
+    level = solved.face_charge_info["level"]
+    return solve_face_charge(magpy.Collection(*parts, *drives), level=level, **kwargs)
+
+
+def test_the_recipe_on_the_page_solves_a_drag():
+    solved = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1, reuse=True
+    )
+    again = _recipe(solved, reuse=solved)
+    assert again.face_charge_info["reused"]
+    assert again.face_charge_info["level"] == 1
+    np.testing.assert_allclose(_charges(again)[0], _charges(solved)[0], rtol=1e-9)
+
+
+def test_a_frozen_sheet_stays_a_drive():
+    """A sheet kept as a fixed source is not what the later solve solved: the
+    recipe took it for a part, with nothing left to drive the other."""
+    first = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    frozen = next(s for s in first.sources_all if isinstance(s, ChargeSheet)).copy()
+    soft = _soft(position=(0.05, 0, 0))
+    with pytest.warns(UserWarning, match="counts twice"):
+        solved = solve_face_charge(magpy.Collection(frozen, soft), level=1)
+    sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+    assert [s.part is not None for s in sheets] == [False, True]
+    assert frozen.part is not None  # the one given stays as it was
+    again = _recipe(solved)
+    point = (0.05, 0.02, 0)
+    assert np.abs(magpy.getB(solved, point)).max() > 0
+    np.testing.assert_allclose(magpy.getB(again, point), magpy.getB(solved, point))
+
+
+def test_a_solve_with_nothing_to_solve_keeps_what_the_sheets_were():
+    first = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    with pytest.warns(UserWarning, match="No magnet has a susceptibility"):
+        again = solve_face_charge(first)
+    assert again.face_charge_info["level"] == 1
+    assert again.solved_by == "face_charge"
+    assert all(s.part is None for s in again.sources_all if isinstance(s, ChargeSheet))
+
+
+def test_a_sheet_beside_its_own_part_warns():
+    solved = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    part = sheet.part
+    part.move((0.05, 0, 0))  # clear of the sheet, whose field it reads
+    with pytest.warns(UserWarning, match="counts twice"):
+        solve_face_charge(magpy.Collection(sheet.copy(), part), level=1)
+
+
+def test_a_part_with_no_polarization_saves_and_a_subclass_warns():
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3)
+    part.susceptibility = 10.0
+    solved = solve_face_charge(magpy.Collection(part, _drive()), level=1)
+    back = from_json(to_json(solved))[0]
+    sheet = next(s for s in back.sources_all if isinstance(s, ChargeSheet))
+    assert sheet.part.polarization is None
+    assert sheet.part.susceptibility == 10.0
+
+    class MyCuboid(magpy.magnet.Cuboid):
+        pass
+
+    part = MyCuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    part.susceptibility = 10.0
+    solved = solve_face_charge(magpy.Collection(part, _drive()), level=1)
+    with pytest.warns(UserWarning, match="MyCuboid"):
+        back = from_json(to_json(solved))[0]
+    sheet = next(s for s in back.sources_all if isinstance(s, ChargeSheet))
+    assert sheet.part is None
+
+
+def test_a_part_given_keeps_what_it_inherits_and_leaves_the_caller_alone():
+    part = _soft()
+    del part.susceptibility
+    parent = magpy.Collection(part)
+    parent.susceptibility = 50.0
+    sheet = _one_face((1, 1, 1), part=part)
+    assert sheet.part.susceptibility == 50.0
+    assert "style" not in part.__dict__ or part._style is None
+    part.move((1, 0, 0))
+    np.testing.assert_allclose(sheet.part.position, (0, 0, 0))
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["vertices", "faces", "charge_densities"],
+)
+def test_a_changed_sheet_has_no_part(change):
+    sheet = _one_face((1, 1, 1), part=_soft())
+    setattr(sheet, change, getattr(sheet, change).copy())
+    assert sheet.part is None
+
+
+def test_a_sheet_built_by_hand_has_no_part_and_takes_only_a_magnet():
+    assert _one_face((1, 1, 1)).part is None
+    with pytest.raises(TypeError, match="must be a magnet"):
+        _one_face((1, 1, 1), part=magpy.current.Circle(current=1, diameter=1))
+
+
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        lambda s: s,
+        lambda s: s.copy(),
+        copy.copy,
+        copy.deepcopy,
+        lambda s: pickle.loads(pickle.dumps(s)),
+    ],
+    ids=["itself", ".copy", "copy.copy", "deepcopy", "pickle"],
+)
+def test_a_sheets_arrays_are_read_only_on_every_copy(duplicate):
+    given = np.array([[1.0, 1.0, 1.0]])
+    sheet = ChargeSheet(TRIANGLE, [[0, 1, 2]], given, panels=[0], part=_soft())
+    sheet = duplicate(sheet)
+    given[0, 0] = 5.0
+    assert sheet.charge_densities[0, 0] == 1.0
+    for name in ("vertices", "faces", "triangles", "charge_densities", "panels"):
+        with pytest.raises(ValueError, match="read-only"):
+            getattr(sheet, name)[0] = 0
+
+
+def test_a_shallow_copy_of_a_sheet_reads_its_own_charge():
+    sheet = _one_face((1, 1, 1), part=_soft())
+    point = (0.1, 0.2, 0.3)
+    shallow = copy.copy(sheet)
+    shallow.charge_densities = sheet.charge_densities * 2
+    np.testing.assert_allclose(magpy.getH(shallow, point), 2 * magpy.getH(sheet, point))

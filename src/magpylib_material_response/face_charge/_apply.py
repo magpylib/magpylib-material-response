@@ -17,6 +17,7 @@ from magpylib_material_response._saturation import curve_of
 from magpylib_material_response.cells import (
     _get_susceptibility_from_hierarchy,
     _has_path,
+    _outside_this_package,
     _report_fixed_magnets,
     get_H_ext,
     warn_if_solved,
@@ -176,7 +177,17 @@ def solve_face_charge(
     info = {"unknowns": 0, "level": level, "rounds": 0, "reused": False}
     if not solved:
         logger.info("Face charge: no part with a susceptibility to solve")
-        out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
+        for src in out.sources_all:  # fixed sources here, as below
+            if isinstance(src, ChargeSheet):
+                src._part = None
+        # a level only if something was solved at it: what the sheets were, if known
+        before = getattr(collection, "face_charge_info", {})
+        out.face_charge_info = {
+            **info,
+            "level": before.get("level", level),
+            "seconds": time.perf_counter() - start,
+        }
+        out.solved_by = "face_charge"
         return out
 
     outlines = [
@@ -340,6 +351,7 @@ def solve_face_charge(
             sheet.style.color, sheet.style.opacity = style.color, style.opacity
             sheet.style.magnetization.show = style.magnetization.show
             sheet.style.magnetization.color = style.magnetization.color.as_dict()
+        sheet._keep_part(obj)
         old = twin[id(obj)]
         replace[id(old)] = sheet
         parents[id(old.parent)] = old.parent
@@ -353,6 +365,11 @@ def solve_face_charge(
             if getattr(above, "sealed", False):
                 above.sealed = False
             above = above.parent
+    # a sheet that was given, a fixed source here, is not what this solve solved
+    new = {id(sheet) for sheet in sheets}
+    for src in out.sources_all:
+        if isinstance(src, ChargeSheet) and id(src) not in new:
+            src._part = None
     out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
     out.solved_by = "face_charge"
     return out
@@ -417,6 +434,24 @@ def _split(collection):
             )
             raise NotImplementedError(msg)
         solved.append((src, float(chi.flat[0])))
+    if solved and any(getattr(s, "solved_by", None) == "fem" for s in fixed):
+        warnings.warn(
+            "This model solves parts beside a FemSolution, which stays a fixed source "
+            "and does not respond to them, and whose field holds its own drives: do not "
+            "add those again.",
+            stacklevel=_outside_this_package(),
+        )
+    if any(
+        isinstance(s, ChargeSheet) and s._came_from(part)
+        for s in fixed
+        for part, _ in solved
+    ):
+        warnings.warn(
+            "This model solves parts beside a solved ChargeSheet, which stays a fixed "
+            "source of its charge. If a part is that sheet's, its response counts twice: "
+            "leave the sheet out.",
+            stacklevel=_outside_this_package(),
+        )
     return solved, fixed
 
 
@@ -797,18 +832,14 @@ def _touch(first, second, tol):
 def _sheet_of(body, c, keep):
     """The ChargeSheet of a solved body, of the panels ``keep`` marks."""
     if isinstance(body, Body):
-        sheet = ChargeSheet._from_body(body, c, keep=None if keep.all() else keep)
-        sheet._solid = bool(keep.all())
-        return sheet
+        return ChargeSheet._from_body(body, c, keep=None if keep.all() else keep)
     if keep.all():
-        sheet = ChargeSheet.from_triangles(
+        return ChargeSheet.from_triangles(
             body.T,
             body.coefficients_at_corners(c),
             position=body.position,
             orientation=Rotation.from_matrix(body.R),
         )
-        sheet._solid = True
-        return sheet
     return ChargeSheet.from_triangles(  # each triangle its own panel, numbered as kept
         body.T[keep],
         body.coefficients_at_corners(c)[keep],

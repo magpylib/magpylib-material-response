@@ -175,7 +175,8 @@ def _serialize_recursive(obj, parent="warn"):
     if solved_by is not None:
         dd["solved_by"] = solved_by
 
-    if isinstance(obj, BaseMagnet):
+    # a soft part may have none
+    if isinstance(obj, BaseMagnet) and obj.polarization is not None:
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
 
     # A scalar, or one value per path step where magpylib allows the property to
@@ -214,6 +215,14 @@ def _serialize_recursive(obj, parent="warn"):
             dd["panels"] = {"value": np.asarray(obj.panels).tolist()}
         if obj._mean is not None:  # of parts solved as one: not its own surface's
             dd["mean_polarization"] = {"value": obj._mean.tolist(), "unit": "T"}
+        if type(obj._part) in type_by_class:
+            dd["part"] = _serialize_recursive(obj._part, parent="ignore")
+        elif obj._part is not None:
+            warnings.warn(
+                f"A sheet's part of type {type(obj._part).__name__} is not saved: "
+                "to_json takes magpylib's own classes.",
+                stacklevel=2,
+            )
     elif isinstance(obj, magpy.current.Circle):
         dd["diameter"] = {"value": np.asarray(obj.diameter).tolist(), "unit": "m"}
     elif isinstance(obj, magpy.Sensor):
@@ -264,7 +273,7 @@ def _deserialize_recursive(inp):
     if inp.get("parent") is not None:
         warnings.warn(f"object parent ({inp['parent']}) ignored", stacklevel=2)
 
-    if issubclass(constr, BaseMagnet):
+    if issubclass(constr, BaseMagnet) and "polarization" in inp:
         _check_unit("Polarization", inp["polarization"], "T")
         kw["polarization"] = inp["polarization"]["value"]
 
@@ -299,7 +308,7 @@ def _deserialize_recursive(inp):
         kw["current_densities"] = inp["current_densities"]["value"]
     elif typ == "UniformField":
         _check_unit("B", inp["B"], "T")
-        kw["B"] = inp["B"]["value"]
+        kw["H"] = (0, 0, 0)
     elif typ == "face_charge.ChargeSheet":
         _check_unit("Vertices", inp["vertices"], "m")
         _check_unit("Charge densities", inp["charge_densities"], "A/m")
@@ -311,6 +320,8 @@ def _deserialize_recursive(inp):
         if "mean_polarization" in inp:
             _check_unit("Mean polarization", inp["mean_polarization"], "T")
             kw["mean_polarization"] = inp["mean_polarization"]["value"]
+        if "part" in inp:
+            kw["part"] = _deserialize_recursive(inp["part"])
     elif constr is magpy.current.Circle:
         _check_unit("Diameter", inp["diameter"], "m")
         kw["diameter"] = inp["diameter"]["value"]
@@ -320,6 +331,8 @@ def _deserialize_recursive(inp):
             kw["pixel"] = inp["pixel"]["value"]
 
     obj = constr(**kw)
+    if constr is UniformField:  # past the warning on B: given as H, it may be strong
+        obj._set(inp["B"]["value"], 1.0)
 
     if inp.get("susceptibility") is not None:
         saved = inp["susceptibility"]

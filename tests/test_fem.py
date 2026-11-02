@@ -209,6 +209,8 @@ def test_a_solution_is_a_magpylib_source(driven_by):
         magpy.getB(magpy.Collection(solution, other), air),
         solution.getB(air) + other.getB(air),
     )
+    with pytest.raises(AttributeError):
+        solution.copy(order=1)  # the solved field belongs to its order
     moved = solution.copy().move((0.03, 0, 0))
     assert moved.solved_by == "fem"
     np.testing.assert_allclose(moved.getB((0.03, 0, 0.02)), solution.getB(air))
