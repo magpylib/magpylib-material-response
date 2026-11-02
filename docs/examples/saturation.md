@@ -23,8 +23,8 @@ a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. 
 `BHCurve` set as `susceptibility` on a part, or on a collection above it,
 replaces the constant: `solve_cells` then puts every cell at the susceptibility
 its own field gives on the curve, repeating the linear solve until none changes.
-The interaction matrix is built once; the fixed point takes about 5 to 40 solves
-with Anderson acceleration.
+The interaction matrix is built once; the fixed point takes about 3 to 40
+solves, more on a sharp knee, with Anderson acceleration.
 
 ## A curve
 
@@ -170,8 +170,8 @@ both methods share it.
 
 ## What it costs, and what it leaves out
 
-- A part on a curve solves about 5 to 40 times, the matrix built once; the
-  sphere above takes 6 to 25 solves.
+- A part on a curve solves about 3 to 40 times, more on a sharp knee, the matrix
+  built once; the sphere above takes 6 to 25 solves.
 - `solve_face_charge` refuses a part on a curve: it needs a uniform
   susceptibility in each part. `solve_fem` follows the curve, and is the check
   on a part that a sphere's exact answer cannot give; it assembles again at each

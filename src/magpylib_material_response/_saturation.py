@@ -65,10 +65,10 @@ class BHCurve:
             raise ValueError(msg)
         J = B - MU0 * H
         # a point on vacuum, written with another value of mu0, is rounding
-        if (-1e-9 * np.maximum(MU0 * H, 1e-300) > J).any():
+        J[np.abs(J) <= 1e-9 * MU0 * H] = 0.0
+        if (J < 0).any():
             msg = "The B-H curve lies below vacuum (B < mu0 H) somewhere: the polarization would be negative."
             raise ValueError(msg)
-        J = np.maximum(J, 0.0)
         if not (J > 0).any():
             msg = "The B-H curve is vacuum everywhere (B = mu0 H): the part would not respond."
             raise ValueError(msg)

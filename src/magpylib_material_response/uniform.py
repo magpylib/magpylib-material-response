@@ -25,6 +25,9 @@ class UniformField(magpy.misc.CustomSource):
         As for any magpylib source. It turns with its orientation; its position
         changes nothing.
 
+    Setting a value on the field of a solved model changes the field and not the
+    response, as moving a magnet of it does: solve again.
+
     Examples
     --------
     >>> import magpylib as magpy
@@ -49,9 +52,10 @@ class UniformField(magpy.misc.CustomSource):
             raise ValueError(msg)
         self._B = None
         if H is None:
-            self.B = B
+            self._set(B, 1.0)
+            self._warn_if_strong()
         else:
-            self.H = H
+            self._set(H, MU0)
         super().__init__(
             position=position, orientation=orientation, style=style, **kwargs
         )
@@ -66,12 +70,7 @@ class UniformField(magpy.misc.CustomSource):
     @B.setter
     def B(self, value):
         self._set(value, 1.0)
-        if np.linalg.norm(self._B) > B_WARN:
-            warnings.warn(
-                f"UniformField of {np.linalg.norm(self._B):.3g} T: is it H in A/m, given "
-                "as B?",
-                stacklevel=2,
-            )
+        self._warn_if_strong()
 
     @property
     def H(self):
@@ -81,6 +80,14 @@ class UniformField(magpy.misc.CustomSource):
     @H.setter
     def H(self, value):
         self._set(value, MU0)
+
+    def _warn_if_strong(self):
+        if np.linalg.norm(self._B) > B_WARN:
+            warnings.warn(
+                f"UniformField of {np.linalg.norm(self._B):.3g} T: is it H in A/m, given "
+                "as B?",
+                stacklevel=3,  # the user's line, from __init__ or the setter
+            )
 
     def _set(self, value, factor):
         field = np.array(value, float)

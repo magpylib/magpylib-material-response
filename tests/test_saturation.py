@@ -365,6 +365,12 @@ def test_remanence_on_a_curve_matches_a_sphere():
 
 
 @pytest.mark.parametrize("mu0", [magpy.mu_0, 4e-7 * np.pi])
+def test_a_curve_on_vacuum_everywhere_is_refused_with_either_mu0(mu0):
+    with pytest.raises(ValueError, match="vacuum everywhere"):
+        BHCurve(H=[0.0, 1e5], B=[0.0, mu0 * 1e5])
+
+
+@pytest.mark.parametrize("mu0", [magpy.mu_0, 4e-7 * np.pi])
 def test_a_point_on_vacuum_is_no_error_with_either_mu0(mu0):
     curve = BHCurve(H=[0.0, 50.0, 100.0, 1000.0], B=[0, mu0 * 50, 0.05, 1.0])
     assert curve.chi_max > 100

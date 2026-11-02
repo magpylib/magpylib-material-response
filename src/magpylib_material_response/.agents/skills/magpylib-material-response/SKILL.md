@@ -41,7 +41,8 @@ mmr.__version__
 
 ## Names before 0.9
 
-Old names warn for one release, and go in the next. Write the new ones.
+Old names warn for one release, and go in the next, except the last two rows,
+which change with no warning. Write the new ones.
 
 | Before 0.9                       | Now                                                      |
 | -------------------------------- | -------------------------------------------------------- |
@@ -164,10 +165,11 @@ models, so a measurement is still the final check.
   another of its material. For B inside, use `solve_cells` or `solve_fem`. The
   mean polarization is on each sheet, `sheet.mean_polarization`.
 - **Solve the original model, not a result.** A result's polarizations hold the
-  response, which a new solve counts as remanence; it warns.
-- **Moving a solved model does not solve it again.** B moves with it, while the
-  response stays that of the old position. Solve per position: paths are
-  refused.
+  response, which a new solve counts as remanence. The returned collection
+  warns; a part taken out of it, or put into a new collection, does not.
+- **Changing a solved model does not solve it again,** moving it or setting a
+  `UniformField` on it. B moves with it, while the response stays that of the
+  old position. Solve per position: paths are refused.
 - **`solved.sources_all` holds the coils and fields too.** Filter before reading
   `.polarization` or `.volume`.
 - **Remanence adds to a curve:** a part's `polarization` stays fixed and the
@@ -180,11 +182,11 @@ models, so a measurement is still the final check.
   it is linear.
 - **Parts closer than 0.5 % of their size:** face charge is 1 to 4 % off near
   the gap, and finite elements cannot judge it either.
-- **Thin sheets** cost face charge about 10 (size / thickness)² unknowns at
-  level 2, so a sheet 40 times wider than thick is near the 20,000 limit. Flat
+- **Thin sheets** cost face charge about 10 area / thickness² unknowns at level
+  2, so a square sheet 40 times wider than thick is near the 20,000 limit. Flat
   cuboid cells with at least 3 layers through the thickness are the alternative.
 - **A sharp knee can stop the iteration:** a curve rising within about 100 A/m
   can raise "did not converge" or "did not settle", at any order. Give it more
-  points or a gentler rise.
+  points or a gentler rise, or beside a strong magnet try `solver="direct"`.
 - **magpylib-studio does not draw a `UniformField` yet:** its field lines leave
   it out, and warn, and there is no arrow.

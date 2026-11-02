@@ -8,10 +8,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-- Solving a result of `solve_cells` warns: its polarizations count as remanence,
-  and the field drifts with each solve
-  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
-
 ### Added
 
 - An Agent Skill ships inside the package, so AI coding assistants write the
@@ -33,6 +29,9 @@ and this project adheres to
 
 ### Changed
 
+- Solving the collection `solve_cells` returned warns: its polarizations count
+  as remanence, and the field drifts with each solve
+  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
 - **Breaking, with a warning for one release:** a uniform applied field is a
   source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in
   place of the attribute `H_ext`. `getB` of a solved model now includes it, as

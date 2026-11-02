@@ -115,8 +115,9 @@ def test_its_value_can_be_set_and_given_to_a_copy():
 
 
 def test_a_field_in_a_unit_of_h_warns():
-    with pytest.warns(UserWarning, match="H in A/m"):
+    with pytest.warns(UserWarning, match="H in A/m") as caught:
         UniformField(B=(0, 0, 1e5))
+    assert caught[0].filename == __file__
     UniformField(H=(0, 0, 1e7))  # 12.6 T, and clearly H: no warning
 
 
