@@ -11,7 +11,11 @@ from magpylib_material_response import from_json, to_json
 from magpylib_material_response._saturation import MU0, Curve, curve_of
 from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.face_charge import solve_face_charge
-from magpylib_material_response.meshing import mesh_Cuboid, mesh_TriangularMesh
+from magpylib_material_response.meshing import (
+    mesh_Cuboid,
+    mesh_TriangularMesh,
+    mesh_uniform,
+)
 
 CHI0, JS = 1000.0, 1.6  # the test curve: J = chi0 mu0 H / (1 + chi0 mu0 H / Js)
 
@@ -25,6 +29,14 @@ def table(H_max=1e6, n=400):
     H = np.geomspace(1e-2, H_max, n)
     H = np.r_[0.0, H]
     return np.c_[H, polarization(H) + MU0 * H]
+
+
+def mesh_uniform_six(model):
+    return mesh_uniform(model, 6)
+
+
+def mesh_cuboid_two(model):
+    return mesh_Cuboid(model.sources_all[0], (2, 2, 2))
 
 
 def icosphere(diameter, splits=3):
@@ -78,7 +90,7 @@ def exact_sphere(B0):
 def test_a_sphere_follows_its_curve(B0):
     pytest.importorskip("tetgen")
     sphere = icosphere(0.01, splits=2)
-    sphere.bh_curve = table()
+    sphere.susceptibility = table()
     model = mesh_TriangularMesh(sphere, 300)
     model.H_ext = (0, 0, B0)
     solved = solve_cells(model, solver="direct")
@@ -95,7 +107,7 @@ def test_a_sphere_follows_its_curve(B0):
 def _plate(curve=None, chi=None):
     plate = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.002), polarization=(0, 0, 0))
     if curve is not None:
-        plate.bh_curve = curve
+        plate.susceptibility = curve
     if chi is not None:
         plate.susceptibility = chi
     magnet = magpy.magnet.Cuboid(
@@ -145,14 +157,14 @@ def test_saturation_lowers_the_field_and_the_rest_stays_linear():
 def test_a_curve_set_on_a_parent_reaches_the_cells_and_survives_json():
     plate = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.002), polarization=(0, 0, 0))
     model = magpy.Collection(mesh_Cuboid(plate, (3, 3, 1)))
-    model.bh_curve = table(n=30)
+    model.susceptibility = table(n=30)
     model.H_ext = (0, 0, 0.5)
     for cell in model.sources_all:
         assert curve_of(cell) is not None
     solved = solve_cells(model)
     assert all(np.linalg.norm(c.polarization) < JS for c in solved.sources_all)
     back = from_json(to_json(model))[0]
-    np.testing.assert_array_equal(back.bh_curve, model.bh_curve)
+    np.testing.assert_array_equal(back.susceptibility, model.susceptibility)
     np.testing.assert_allclose(
         solve_cells(back).sources_all[0].polarization,
         solved.sources_all[0].polarization,
@@ -180,9 +192,57 @@ def test_what_a_curve_cannot_go_with():
     with pytest.raises(ValueError, match="susceptibility argument"):
         solve_cells(model, susceptibility=10.0)
     part = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.002), polarization=(0, 0, 0))
-    part.bh_curve = table(n=30)
+    part.susceptibility = table(n=30)
     with pytest.raises(NotImplementedError, match="B-H curve"):
         solve_face_charge(magpy.Collection(part))
+
+
+@pytest.mark.parametrize("own", ["on the part", "on the parent"])
+def test_the_nearest_susceptibility_wins_between_a_number_and_a_table(own):
+    """As everywhere: a part's own value beats its parent's, either way round."""
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    cells = mesh_Cuboid(part, (2, 2, 2))
+    model = magpy.Collection(cells)
+    model.H_ext = (0, 0, 1.0)
+    if own == "on the part":  # linear: past saturation, as a chi of 1000 goes
+        model.susceptibility = table(n=30)
+        cells.susceptibility = 1000.0
+        assert curve_of(cells.sources_all[0]) is None
+        expected_above = True
+    else:
+        model.susceptibility = 1000.0
+        cells.susceptibility = table(n=30)
+        assert curve_of(cells.sources_all[0]) is not None
+        expected_above = False
+    J = max(np.linalg.norm(c.polarization) for c in solve_cells(model).sources_all)
+    assert bool(J > JS) is expected_above
+
+
+def test_a_linear_part_under_a_table_is_solved_by_face_charge():
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    part.susceptibility = 1000.0
+    model = magpy.Collection(part)
+    model.susceptibility = table(n=30)
+    model.H_ext = (0, 0, 0.01)
+    assert solve_face_charge(model, level=1).solved_by == "face_charge"
+
+
+@pytest.mark.parametrize(
+    "use",
+    [solve_cells, solve_face_charge, mesh_uniform_six, mesh_cuboid_two],
+    ids=["solve_cells", "solve_face_charge", "mesh_uniform", "mesh_Cuboid"],
+)
+def test_the_old_attribute_raises_and_does_not_silently_give_a_linear_part(use):
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    part.bh_curve = table(n=30)
+    with pytest.raises(ValueError, match="bh_curve"):
+        use(magpy.Collection(part))
+
+
+def test_a_table_as_argument_is_refused():
+    plate = _plate()
+    with pytest.raises(ValueError):  # noqa: PT011
+        solve_cells(plate, susceptibility=table(n=30))
 
 
 def test_a_curve_that_starts_flat_solves():
@@ -213,7 +273,7 @@ def test_finite_elements_follow_a_curve(B0):
     from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
-    sphere.bh_curve = table()
+    sphere.susceptibility = table()
     model = magpy.Collection(sphere)
     model.H_ext = (0, 0, B0)
     solved = solve_fem(model, order=4)
@@ -231,11 +291,11 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
 
     H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
     big = magpy.magnet.Sphere(diameter=0.02, polarization=(0, 0, 0))
-    big.bh_curve = np.c_[H, 11 * MU0 * H]  # a straight curve: chi = 10
+    big.susceptibility = np.c_[H, 11 * MU0 * H]  # a straight curve: chi = 10
     tiny = magpy.magnet.Sphere(
         diameter=2e-5, polarization=(0, 0, 0), position=(0.03, 0, 0)
     )
-    tiny.bh_curve = table()
+    tiny.susceptibility = table()
     model = magpy.Collection(big, tiny)
     model.H_ext = (0, 0, 2.0)
     point = np.array([[0.03, 0, 0]])
@@ -265,7 +325,7 @@ def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
 
     points = np.array([[0, 0, 0], [0.003, 0, 0], [0, 0, 0.012]])
     H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
-    on_curve = solved(bh_curve=np.c_[H, 11 * MU0 * H])
+    on_curve = solved(susceptibility=np.c_[H, 11 * MU0 * H])
     linear = solved(susceptibility=10.0)
     np.testing.assert_allclose(
         on_curve.getB(points), linear.getB(points), rtol=1e-4, atol=1e-5
@@ -280,7 +340,7 @@ def test_finite_elements_keep_a_remanent_part_on_its_curve():
     from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
 
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 1.0))
-    sphere.bh_curve = table()
+    sphere.susceptibility = table()
     solved = solve_fem(magpy.Collection(sphere), order=4)
     J = brentq(lambda J: 1.0 - polarization(J / 3 / MU0) - J, 0.0, 1.0)
     assert solved.getB((0, 0, 0))[2] == pytest.approx(2 * J / 3, rel=0.01)
@@ -296,7 +356,7 @@ def test_finite_elements_and_cells_agree_on_a_coil_in_a_saturating_core():
 
     def model():
         bar = magpy.magnet.Cuboid(dimension=(0.04, 0.01, 0.01), polarization=(0, 0, 0))
-        bar.bh_curve = table(n=120)
+        bar.susceptibility = table(n=120)
         coil = magpy.current.Circle(
             current=2e4, diameter=0.03, orientation=None, position=(0, 0, 0)
         ).rotate_from_angax(90, "y")

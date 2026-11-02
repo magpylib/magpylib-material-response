@@ -11,6 +11,7 @@ from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response._saturation import refuse_bh_curve
 from magpylib_material_response.meshing_utils import (
     detached_copy,
     get_volume,
@@ -23,16 +24,16 @@ from magpylib_material_response.meshing_utils import (
 
 
 def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
+    refuse_bh_curve(obj)
     coll = magpy.Collection(cells)
-    for name in ("susceptibility", "bh_curve"):
-        value = getattr(obj, name, None)
+    value = getattr(obj, "susceptibility", None)
+    if value is not None:
+        for cell in cells:
+            cell.susceptibility = copy.deepcopy(value)
+    else:  # from its parents, which the mesh does not have
+        value = inherited(obj, "susceptibility")
         if value is not None:
-            for cell in cells:
-                setattr(cell, name, copy.deepcopy(value))
-        else:  # from its parents, which the mesh does not have
-            value = inherited(obj, name)
-            if value is not None:
-                setattr(coll, name, copy.deepcopy(value))
+            coll.susceptibility = copy.deepcopy(value)
     coll.style.update(obj.style.as_dict(), _match_properties=False)
     coll.style.update(coll._process_style_kwargs(**style_kwargs))
     # A cell inherits its parent's colour and nothing else of its style, and a
@@ -863,9 +864,8 @@ def _responds(src):
     or its nearest parent's, is set and not zero."""
     if isinstance(src, BaseCurrent):
         return False
+    refuse_bh_curve(src)
     while src is not None:
-        if getattr(src, "bh_curve", None) is not None:
-            return True
         chi = getattr(src, "susceptibility", None)
         if chi is not None:
             return bool(np.any(np.asarray(chi, dtype=float) != 0))

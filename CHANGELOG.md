@@ -10,14 +10,15 @@ and this project adheres to
 
 ### Added
 
-- Saturation: a `bh_curve` set on a part or a collection, a table of (H, B)
-  rows, replaces its constant susceptibility in `apply_demag`. Each cell takes
-  the susceptibility its own field gives on the curve, the linear solve repeated
+- Saturation: `susceptibility` takes a table of (H, B) rows, on a part or a
+  collection, in place of a constant, in `solve_cells`. Each cell takes the
+  susceptibility its own field gives on the curve, the linear solve repeated
   until none changes, with the matrix built once and Anderson acceleration: 10
   to 40 solves. A sphere comes out within 1 % of its exact answer along the
-  curve. Meshers and `to_json` carry the curve; `apply_face_charge` refuses it
-  ([#150](https://github.com/magpylib/magpylib-material-response/pull/150))
-- `fem_solve` follows a `bh_curve` too, so a saturated part has an independent
+  curve. Meshers and `to_json` carry the curve; `solve_face_charge` refuses it
+  ([#150](https://github.com/magpylib/magpylib-material-response/pull/150),
+  [#159](https://github.com/magpylib/magpylib-material-response/pull/159))
+- `solve_fem` follows such a curve too, so a saturated part has an independent
   check: a sphere is within 0.2 % of its exact answer at order 4 from 0.05 to 2
   T ([#151](https://github.com/magpylib/magpylib-material-response/pull/151))
 

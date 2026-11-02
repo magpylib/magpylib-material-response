@@ -388,7 +388,7 @@ def detached_copy(obj, **kwargs):
     susceptibility `obj` inherits from its parents are set on the copy, or it
     would lose them."""
     copied = obj.copy(**kwargs)
-    for name in ("H_ext", "susceptibility", "bh_curve"):
+    for name in ("H_ext", "susceptibility"):
         if getattr(obj, name, None) is None:
             value = inherited(obj, name)
             if value is not None:
@@ -400,7 +400,7 @@ def take_place(meshed, part, parent):
     """`meshed` in `part`'s place under `parent`, inheriting from it as `part`
     did: what the mesher read from above stays above, and a later change there
     still reaches the cells."""
-    for name in ("H_ext", "susceptibility", "bh_curve"):
+    for name in ("H_ext", "susceptibility"):
         if getattr(part, name, None) is None and hasattr(meshed, name):
             delattr(meshed, name)
     part.parent = None
