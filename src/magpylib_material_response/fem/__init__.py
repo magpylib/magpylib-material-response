@@ -42,12 +42,12 @@ from magpylib_material_response.fem._study import FemStudy, study_fem
 
 # pylint: disable=undefined-all-variable
 __all__ = [  # the old names too, for `import *`, through __getattr__ below
-    "FemSolution",  # noqa: F822
-    "FemStudy",  # noqa: F822
-    "fem_solve",  # noqa: F822
-    "fem_study",  # noqa: F822
-    "solve_fem",  # noqa: F822
-    "study_fem",  # noqa: F822
+    "FemSolution",
+    "FemStudy",
+    "fem_solve",
+    "fem_study",
+    "solve_fem",
+    "study_fem",
 ]
 
 __getattr__ = old_names(__name__, {"fem_solve": "solve_fem", "fem_study": "study_fem"})
