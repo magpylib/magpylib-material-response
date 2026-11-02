@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import warnings
 
+import magpylib as magpy
 import numpy as np
 from loguru import logger
 from scipy.interpolate import PchipInterpolator
 
-MU0 = 4e-7 * np.pi
+MU0 = magpy.mu_0
 TOL = 1e-4  # relative change of any cell's chi at which the iteration stops
 DEPTH = 6  # Anderson's memory
 DAMPING = 0.7
@@ -63,6 +64,8 @@ class BHCurve:
             msg = "A B-H curve needs H increasing and B not decreasing."
             raise ValueError(msg)
         J = B - MU0 * H
+        # a point on vacuum, written with another value of mu0, is rounding
+        J[np.abs(J) <= 1e-9 * MU0 * H] = 0.0
         if (J < 0).any():
             msg = "The B-H curve lies below vacuum (B < mu0 H) somewhere: the polarization would be negative."
             raise ValueError(msg)
@@ -121,9 +124,18 @@ def _restore(H, B):
     return BHCurve(H=H, B=B)
 
 
+def is_table(value):
+    """Whether a susceptibility has the shape of a table of (H, B) rows."""
+    try:
+        shape = np.shape(value)
+    except ValueError:  # entries of different shapes, as one per cell may be
+        return False
+    return len(shape) == 2 and shape[1] == 2
+
+
 def refuse_table(value):
     """Raise if a susceptibility is a table: columns are easily swapped."""
-    if np.ndim(value) == 2 and np.shape(value)[1] == 2:
+    if is_table(value):
         msg = (
             "A susceptibility cannot be a table: give the B-H curve as "
             "BHCurve(H=H, B=B), with H in A/m and B in T."
@@ -157,14 +169,16 @@ def curve_of(source):
     return None
 
 
-def iterate(solve, on_curve, curves, chi, remanence):
+def iterate(solve, field, on_curve, curves, chi):
     """Solve until every cell on a curve has its chi at its own field.
 
     ``solve(chi)`` returns the polarizations ``(n, 3)`` for the (n, 3, 3) cell
-    susceptibilities ``chi``; ``on_curve`` indexes the cells with a curve, in
-    ``curves``, and ``remanence`` (n, 3) is each cell's own polarization, which
-    the field inside does not include. Returns the polarizations, and the
-    number of solves."""
+    susceptibilities ``chi``, and ``field(J)`` the mu0 H (n, 3) in T they give at
+    each cell; ``on_curve`` indexes the cells with a curve, in ``curves``. The
+    field is read from the operator, not as J / chi: at a small chi, as on a curve
+    that starts flat, J lies below what an iterative solve resolves beside a magnet
+    of 1 T, and a part stayed at J = 0, its field read as 0, converged. Returns the
+    polarizations, and the number of solves."""
     x = np.log(np.array([c.chi0 for c in curves]))
     # within what the curves can give: Anderson's steps can overshoot, and on a
     # steep curve chi then leaves what floating point can solve
@@ -173,8 +187,7 @@ def iterate(solve, on_curve, curves, chi, remanence):
     for solves in range(1, MAX_SOLVES + 1):
         chi[on_curve] = np.exp(x)[:, None, None] * np.eye(3)
         J = solve(chi)
-        induced = np.linalg.norm(J[on_curve] - remanence[on_curve], axis=1)
-        mu0H = induced / np.exp(x)
+        mu0H = np.linalg.norm(field(J)[on_curve], axis=1)
         f = np.log(np.array([c.chi(h) for c, h in zip(curves, mu0H, strict=True)])) - x
         if np.max(np.abs(np.expm1(f))) < TOL:
             logger.info(
@@ -192,6 +205,8 @@ def iterate(solve, on_curve, curves, chi, remanence):
         x = np.clip(x + DAMPING * f - (dX + DAMPING * dF) @ gamma, low, high)
     msg = (
         f"The B-H iteration did not converge in {MAX_SOLVES} solves: the largest "
-        f"change of a cell's susceptibility is still {np.max(np.abs(np.expm1(f))):.1e}."
+        f"change of a cell's susceptibility is still {np.max(np.abs(np.expm1(f))):.1e}. "
+        "A sharp knee can do this: give it more points, or a gentler rise. Beside a "
+        "strong magnet, try solver='direct' or a smaller solver_tol."
     )
     raise RuntimeError(msg)

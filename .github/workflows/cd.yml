@@ -35,6 +35,17 @@ jobs:
           fetch-depth: 0
 
       - uses: hynek/build-and-inspect-python-package@v3.0.2
+        id: baipp
+
+      # The Agent Skill is package data in a dot-directory; check that both
+      # distributions carry every file of it.
+      - name: Check the Agent Skill ships
+        env:
+          DIST: ${{ steps.baipp.outputs.dist }}
+        run: |
+          expected=$(cd src && find magpylib_material_response/.agents -type f | sort)
+          diff <(echo "$expected") <(unzip -Z1 "$DIST"/*.whl | grep '^magpylib_material_response/\.agents/' | sort)
+          diff <(echo "$expected") <(tar -tzf "$DIST"/*.tar.gz | grep -o 'magpylib_material_response/\.agents/.*[^/]$' | sort)
 
   publish:
     needs: [dist]

@@ -101,9 +101,23 @@ def test_a_bad_field_is_refused(bad):
         UniformField(**bad)
 
 
+def test_its_value_can_be_set_and_given_to_a_copy():
+    field = UniformField(B=(0, 0, 0.1))
+    field.B = (0, 0, 0.2)
+    np.testing.assert_allclose(field.getB((1, 1, 1)), (0, 0, 0.2))
+    field.H = (0, 0, 1000.0)
+    np.testing.assert_allclose(field.B, (0, 0, 1000 * magpy.mu_0))
+    other = field.copy(B=(0.3, 0, 0))
+    np.testing.assert_allclose(other.getB((1, 1, 1)), (0.3, 0, 0), atol=1e-15)
+    np.testing.assert_allclose(field.B, (0, 0, 1000 * magpy.mu_0))
+    with pytest.raises(ValueError, match="three finite"):
+        field.B = (1, 2)
+
+
 def test_a_field_in_a_unit_of_h_warns():
-    with pytest.warns(UserWarning, match="H in A/m"):
+    with pytest.warns(UserWarning, match="H in A/m") as caught:
         UniformField(B=(0, 0, 1e5))
+    assert caught[0].filename == __file__
     UniformField(H=(0, 0, 1e7))  # 12.6 T, and clearly H: no warning
 
 

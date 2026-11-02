@@ -25,6 +25,9 @@ class UniformField(magpy.misc.CustomSource):
         As for any magpylib source. It turns with its orientation; its position
         changes nothing.
 
+    Setting a value on the field of a solved model changes the field and not the
+    response, as moving a magnet of it does: solve again.
+
     Examples
     --------
     >>> import magpylib as magpy
@@ -47,18 +50,12 @@ class UniformField(magpy.misc.CustomSource):
         if (B is None) == (H is None):
             msg = "UniformField takes one of B, in T, and H, in A/m."
             raise ValueError(msg)
-        value = np.array(B, float) if H is None else np.array(H, float) * MU0
-        if value.shape != (3,) or not np.isfinite(value).all():
-            msg = f"UniformField needs three finite numbers; got {B if H is None else H!r}."
-            raise ValueError(msg)
-        if H is None and np.linalg.norm(value) > B_WARN:
-            warnings.warn(
-                f"UniformField of {np.linalg.norm(value):.3g} T: is it H in A/m, given "
-                "as B?",
-                stacklevel=2,
-            )
-        value.flags.writeable = False
-        self._B = value
+        self._B = None
+        if H is None:
+            self._set(B, 1.0)
+            self._warn_if_strong()
+        else:
+            self._set(H, MU0)
         super().__init__(
             position=position, orientation=orientation, style=style, **kwargs
         )
@@ -70,10 +67,36 @@ class UniformField(magpy.misc.CustomSource):
         """The flux density in T, in the source's own frame."""
         return self._B
 
+    @B.setter
+    def B(self, value):
+        self._set(value, 1.0)
+        self._warn_if_strong()
+
     @property
     def H(self):
         """The field strength in A/m, in the source's own frame."""
         return self._B / MU0
+
+    @H.setter
+    def H(self, value):
+        self._set(value, MU0)
+
+    def _warn_if_strong(self):
+        if np.linalg.norm(self._B) > B_WARN:
+            warnings.warn(
+                f"UniformField of {np.linalg.norm(self._B):.3g} T: is it H in A/m, given "
+                "as B?",
+                stacklevel=3,  # the user's line, from __init__ or the setter
+            )
+
+    def _set(self, value, factor):
+        field = np.array(value, float)
+        if field.shape != (3,) or not np.isfinite(field).all():
+            msg = f"UniformField needs three finite numbers; got {value!r}."
+            raise ValueError(msg)
+        field = field * factor
+        field.flags.writeable = False
+        self._B = field
 
     def _field(self, field, observers):
         n = len(observers)

@@ -20,6 +20,7 @@ from magpylib_material_response.cells import (
     _has_path,
     get_H_ext,
     get_susceptibilities,
+    warn_if_solved,
 )
 from magpylib_material_response.meshing import _thinnest as _thinnest_part
 from magpylib_material_response.meshing_utils import SOLIDS, mask_inside
@@ -79,7 +80,8 @@ def parts_of(collection):
             "closed Polylines or TriangleStrips."
         )
         raise TypeError(msg)
-    currents = [s for s in sources if isinstance(s, BaseCurrent)]
+    # copies: a solution holds them, and a later change of the coil must not reach it
+    currents = [s.copy() for s in sources if isinstance(s, BaseCurrent)]
     open_paths = sorted({type(c).__name__ for c in currents if not _closed(c)})
     if open_paths:
         msg = (
@@ -90,6 +92,7 @@ def parts_of(collection):
         )
         raise ValueError(msg)
     refuse_both(sources)
+    warn_if_solved(collection)
     others = [
         s
         for s in sources
