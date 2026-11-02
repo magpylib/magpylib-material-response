@@ -19,6 +19,7 @@ from magpylib_material_response.cells import (
     _has_path,
     _report_fixed_magnets,
     get_H_ext,
+    warn_if_solved,
 )
 from magpylib_material_response.face_charge._bodies import (
     CONTACT,
@@ -384,6 +385,7 @@ def _split(collection):
         [src for src in collection.sources_all if isinstance(src, BaseMagnet)]
     )
     refuse_both(collection.sources_all)
+    warn_if_solved(collection)
     solved, fixed = [], []
     for src in collection.sources_all:
         if not isinstance(src, BaseMagnet):

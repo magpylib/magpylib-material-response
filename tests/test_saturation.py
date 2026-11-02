@@ -10,7 +10,12 @@ import numpy as np
 import pytest
 from scipy.optimize import brentq
 
-from magpylib_material_response import from_json, to_json
+from magpylib_material_response import (
+    UniformField,
+    from_json,
+    study_cells,
+    to_json,
+)
 from magpylib_material_response._saturation import MU0, BHCurve, curve_of
 from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.face_charge import solve_face_charge
@@ -287,6 +292,157 @@ def test_a_table_is_refused_and_a_curve_is_shared():
     part.susceptibility = curve
     cells = mesh_Cuboid(part, (2, 2, 2)).sources_all
     assert all(c.susceptibility is curve for c in cells)
+
+
+S_SHAPED = {
+    "S-shaped": {
+        "H": [0, 100, 200, 400, 800, 1600, 5000, 2e4, 1e5],
+        "B": [0, 0.05, 0.4, 1.0, 1.3, 1.5, 1.65, 1.8, 1.95],
+    },
+    "vacuum first": {
+        "H": [0, 500, 1000, 2000, 5000, 1e4, 1e5],
+        "B": [0, MU0 * 500, 0.1, 0.5, 1.1, 1.4, 1.8],
+    },
+}
+
+
+def _big_magnet():
+    return magpy.magnet.Cuboid(
+        dimension=(0.05,) * 3, polarization=(0, 0, 1.3), position=(0, 0, 0.1)
+    )
+
+
+def _in_a_magnets_field(curve):
+    """A part driven by a meshed magnet alone: its own residual is nothing beside
+    the magnet's 1.3 T, so GMRES does not see a part at a small chi."""
+    part = magpy.magnet.Cuboid(dimension=(0.02,) * 3, polarization=(0, 0, 0))
+    part.susceptibility = curve
+    return magpy.Collection(
+        mesh_Cuboid(part, (6, 6, 6)), mesh_Cuboid(_big_magnet(), (10, 10, 10))
+    )
+
+
+@pytest.mark.parametrize("solver", ["auto", "iterative"])
+@pytest.mark.parametrize("curve", S_SHAPED, ids=list(S_SHAPED))
+def test_a_curve_that_starts_flat_responds_beside_a_magnet(curve, solver):
+    """It stayed at J = 0 under GMRES, reported as converged, in the magnet's field."""
+    curve = BHCurve(**S_SHAPED[curve])
+    point = (0, 0.015, 0)
+    reference = magpy.getB(
+        solve_cells(_in_a_magnets_field(curve), solver="direct"), point
+    )
+    got = magpy.getB(solve_cells(_in_a_magnets_field(curve), solver=solver), point)
+    np.testing.assert_allclose(got, reference, atol=1e-5)
+    assert np.abs(got - _big_magnet().getB(point)).max() > 1e-3
+
+
+def test_a_mesh_study_of_a_flat_start_sees_the_part():
+    """Three meshes of a part at J = 0 agreed exactly, and the study said so."""
+    part = magpy.magnet.Cuboid(dimension=(0.02,) * 3, polarization=(0, 0, 0))
+    part.susceptibility = BHCurve(**S_SHAPED["vacuum first"])
+    point = (0, 0.015, 0)
+    magnet = mesh_Cuboid(_big_magnet(), (10, 10, 10))
+    study = study_cells(magpy.Collection(part, magnet), [point], (3, 4, 6))
+    assert np.abs(study.values[-1] - _big_magnet().getB(point)).max() > 1e-3
+
+
+def test_remanence_on_a_curve_matches_a_sphere():
+    """The field read leaves the remanence out of chi, and J adds it."""
+    pytest.importorskip("tetgen")
+    sphere = icosphere(0.01, splits=2)
+    sphere.polarization = (0, 0, 0.5)
+    sphere.susceptibility = table()
+    model = magpy.Collection(
+        mesh_TriangularMesh(sphere, 300), UniformField(B=(0, 0, 0.2))
+    )
+    cells = solve_cells(model, solver="direct").children[0].sources_all
+    volumes = np.array([c.volume for c in cells])
+    mean = (
+        np.array([c.polarization[2] for c in cells]) * volumes
+    ).sum() / volumes.sum()
+    exact = brentq(lambda J: 0.5 + polarization((0.2 - J / 3) / MU0) - J, 0.5, 0.6)
+    assert mean == pytest.approx(exact, rel=0.01)
+
+
+@pytest.mark.parametrize("mu0", [magpy.mu_0, 4e-7 * np.pi])
+def test_a_point_on_vacuum_is_no_error_with_either_mu0(mu0):
+    curve = BHCurve(H=[0.0, 50.0, 100.0, 1000.0], B=[0, mu0 * 50, 0.05, 1.0])
+    assert curve.chi_max > 100
+
+
+@pytest.mark.parametrize(
+    ("given", "same"),
+    [
+        ([1000.0, (1, 2, 3)], [(1000, 1000, 1000), (1, 2, 3)]),
+        ([np.array((1, 2, 3)), 5.0], [(1, 2, 3), (5, 5, 5)]),
+    ],
+)
+def test_a_list_may_mix_numbers_and_vectors(given, same):
+    def model():
+        return magpy.Collection(
+            magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0)),
+            magpy.magnet.Cuboid(
+                dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(0.02, 0, 0)
+            ),
+            UniformField(B=(0, 0, 0.5)),
+        )
+
+    # in the list, one entry per magnet; the field takes none
+    point = (0.01, 0.02, 0.0)
+    np.testing.assert_allclose(
+        magpy.getB(solve_cells(model(), susceptibility=given), point),
+        magpy.getB(solve_cells(model(), susceptibility=same), point),
+    )
+
+
+def test_a_curve_in_a_list_says_to_set_it_on_the_part():
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    with pytest.raises(ValueError, match="set it on the part"):
+        solve_cells(magpy.Collection(part), susceptibility=[table(n=5)])
+
+
+def test_solving_a_result_warns():
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    part.susceptibility = 10.0
+    solved = solve_cells(magpy.Collection(part, UniformField(B=(0, 0, 0.1))))
+    with pytest.warns(UserWarning, match="already solved"):
+        solve_cells(solved)
+
+
+def test_a_fem_solution_keeps_its_own_coil():
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
+
+    sphere = magpy.magnet.Sphere(diameter=0.02, polarization=(0, 0, 0))
+    sphere.susceptibility = 10.0
+    coil = magpy.current.Circle(current=8000, diameter=0.1)
+    solution = solve_fem(magpy.Collection(sphere, coil), order=2)
+    point = (0.03, 0, 0.01)
+    before = solution.getB(point)
+    coil.current = 0
+    coil.move((0, 0, 0.05))
+    np.testing.assert_array_equal(solution.getB(point), before)
+
+
+def test_a_fem_model_with_a_coil_and_a_field_reads_both():
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import solve_fem  # noqa: PLC0415
+
+    sphere = magpy.magnet.Sphere(diameter=0.02, polarization=(0, 0, 0))
+    sphere.susceptibility = 10.0
+    coil = magpy.current.Circle(current=2e5, diameter=2.0)
+    B0 = coil.getB((0, 0, 0))[2]
+    field = UniformField(B=(0, 0, B0))
+    both = solve_fem(magpy.Collection(sphere, coil, field), order=3)
+    J = 10 * 2 * B0 / (1 + 10 / 3)  # the coil and the field add at the sphere
+    np.testing.assert_allclose(magpy.getJ(both, (0, 0, 0)), (0, 0, J), atol=0.02 * J)
+    np.testing.assert_allclose(
+        magpy.getB(both, (0, 0, 0)), (0, 0, 2 * B0 + 2 * J / 3), atol=0.02 * J
+    )
+    far = (0, 0, 0.2)
+    np.testing.assert_allclose(
+        magpy.getB(both, far), coil.getB(far) + field.getB(far), atol=0.02 * B0
+    )
 
 
 def test_a_curve_that_starts_flat_solves():

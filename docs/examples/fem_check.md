@@ -120,7 +120,7 @@ in all.
 
 - **Shapes:** cuboids, cylinders, cylinder segments, spheres, tetrahedra and
   triangular meshes, magnets with remanence and a linear susceptibility, also
-  per axis.
+  per axis, or a `BHCurve`.
 - **Open space:** the air around the model is cut off at a sphere and mapped
   onto a second one by a Kelvin transform, so the boundary is exact, not a
   distant box.

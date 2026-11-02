@@ -361,8 +361,9 @@ point on their shared surface as inside, and return zero on their own edges, so
 the field there is wrong, with no warning: J counts 2, 4 or 8 times, and B can
 be far off. The centre of a part with an even number of cells across is such a
 point, as is any point on a symmetry plane through it: a 10 mm cube with χ = 10
-in 0.1 T, 6 cells across, reads B = 0.007 T at its centre and 0.191 T 1 µm away.
-Read a small step off the boundary, or use an odd number of cells.
+in 0.1 T, 6 cells across, reads B = 0.107 T at its centre and 0.29 T 1 µm off
+it along each axis. Use an odd number of cells, and read off every boundary: a step
+along one axis can stay on another.
 
 ## Solving: direct or iterative
 

@@ -314,6 +314,9 @@ def study_cells(
         msg = "levels must hold at least two values."
         raise ValueError(msg)
     if demag_kwargs is not None:
+        if solve_kwargs is not None:
+            msg = "Give solve_kwargs alone: demag_kwargs is its old name."
+            raise ValueError(msg)
         warnings.warn(
             "demag_kwargs is now solve_kwargs; the old name goes in the next release.",
             DeprecationWarning,

@@ -757,7 +757,8 @@ class Model:
         msg = (
             f"The B-H iteration did not settle in {FEM_SOLVES} solves at order "
             f"{order}: chi still moves by {moved:.1e} on the worst element. Try a "
-            "higher order."
+            "higher order. A sharp knee can do this at any order: give it more points, "
+            "or a gentler rise."
         )
         if not moved <= STALL:
             raise RuntimeError(msg)

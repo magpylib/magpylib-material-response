@@ -52,6 +52,7 @@ Old names warn for one release, and go in the next. Write the new ones.
 | `demag_kwargs=`                  | `solve_kwargs=`               |
 | `part.H_ext = (0, 0, 0.1)`       | `UniformField(B=(0, 0, 0.1))` |
 | `solved_by == "demag"`           | `solved_by == "cells"`        |
+| `fem_solution.getB(one_row)[0]` | `fem_solution.getB(one_row)`: now `(3,)`, so `[0]` is Bx |
 
 `H_ext` left its field out of `getB` of the result; `UniformField` includes it.
 A model with both raises.
@@ -155,12 +156,15 @@ models, so a measurement is still the final check.
   a point as inside each of them: J comes out 2, 4 or 8 times too large, and B
   can be far off, with no warning. The centre of a part with an even number of
   cells across is such a point: a 10 mm cube with χ = 10 in 0.1 T, 6 cells
-  across, reads 0.007 T at its centre and 0.191 T 1 µm away. Use an odd number,
-  or read a small step away.
+  across, reads 0.107 T at its centre and 0.29 T 1 µm off it along each axis. Use
+  an odd number of cells, and read off every boundary: a step along one axis can
+  stay on another, as (0, 0, 1e-6) does.
 - **Inside a part solved by face charge,** `getB` gives µ0 H, not B, and `getJ`
   and `getM` give 0, each with a warning. No warning comes from a part touching
   another of its material. For B inside, use `solve_cells` or `solve_fem`. The
   mean polarization is on each sheet, `sheet.mean_polarization`.
+- **Solve the original model, not a result.** A result's polarizations hold the
+  response, which a new solve counts as remanence; it warns.
 - **Moving a solved model does not solve it again.** B moves with it, while the
   response stays that of the old position. Solve per position: paths are
   refused.
@@ -176,5 +180,11 @@ models, so a measurement is still the final check.
   it is linear.
 - **Parts closer than 0.5 % of their size:** face charge is 1 to 4 % off near
   the gap, and finite elements cannot judge it either.
-- **Thin sheets** cost face charge about (size / thickness)² unknowns. Flat
+- **Thin sheets** cost face charge about 10 (size / thickness)² unknowns at level
+  2, so a sheet 40 times wider than thick is near the 20,000 limit. Flat
   cuboid cells with at least 3 layers through the thickness are the alternative.
+- **A sharp knee can stop the iteration:** a curve rising within about 100 A/m can
+  raise "did not converge" or "did not settle", at any order. Give it more points
+  or a gentler rise.
+- **magpylib-studio does not draw a `UniformField` yet:** its field lines leave it
+  out, and warn, and there is no arrow.

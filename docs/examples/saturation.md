@@ -23,7 +23,7 @@ a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. 
 `BHCurve` set as `susceptibility` on a part, or on a collection above it,
 replaces the constant: `solve_cells` then puts every cell at the susceptibility
 its own field gives on the curve, repeating the linear solve until none changes.
-The interaction matrix is built once; the fixed point takes 6 to 40 solves with
+The interaction matrix is built once; the fixed point takes about 5 to 40 solves with
 Anderson acceleration.
 
 ## A curve
@@ -163,15 +163,15 @@ not repeated on this page, which would take minutes:
 | `solve_cells`, 720 sources   | 1.822 | 7.054 | 13.64 |
 
 At 400 A saturation cuts the field to 0.41 times the linear one, and the two
-methods differ by 2.3 %, the cells still rising. At lower currents the cells'
+methods differ by 2.6 %, the cells still rising. At lower currents the cells'
 gap, 8 % at 25 A, is their own discretization of a part with a high χ, which
 saturation shrinks. No measurement backs these: the curve is a stand-in, and
 both methods share it.
 
 ## What it costs, and what it leaves out
 
-- A part on a curve solves 6 to 40 times, the matrix built once; the sphere
-  above takes about 20 solves at each field.
+- A part on a curve solves about 5 to 40 times, the matrix built once; the sphere
+  above takes 6 to 25 solves.
 - `solve_face_charge` refuses a part on a curve: it needs a uniform
   susceptibility in each part. `solve_fem` follows the curve, and is the check
   on a part that a sphere's exact answer cannot give; it assembles again at each
@@ -184,3 +184,7 @@ both methods share it.
   so a part with both can pass the curve's saturation: 1 T of remanence and a
   curve saturating at 1.5 T reach 2.5 T. For a saturating part, leave
   `polarization` at zero.
+- A sharp knee, rising within about 100 A/m, can stop either iteration with an
+  error, at any order: give it more points or a gentler rise.
+- magpylib-studio does not draw a `UniformField` yet: its field lines leave it out,
+  and warn, and there is no arrow.
