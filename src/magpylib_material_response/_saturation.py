@@ -1,10 +1,7 @@
 """A material's B-H curve, and the iteration that puts each cell on it.
 
-A ``susceptibility`` can be a table of ``(H, B)`` rows in place of a number, on
-a magnet or a parent collection: points in A/m and T, from ``(0, 0)``, with H
-increasing and B not decreasing. Between the points B follows a monotone cubic
-(PCHIP); past the last, the polarization ``J = B - mu0 H`` keeps its last value,
-so B rises with the slope of vacuum. A cell on a curve takes the secant
+A ``susceptibility`` can be a :class:`BHCurve` in place of a number, on a magnet
+or a parent collection. A cell on a curve takes the secant
 susceptibility ``chi = J / (mu0 H)`` at the field inside it, the way Radia
 treats non-linear iron: repeat the linear solve, read each cell's field, move
 its chi onto the curve, until no chi changes by more than ``TOL``. Anderson
@@ -12,6 +9,8 @@ acceleration (depth ``DEPTH``) of that fixed point cuts the solves 3 to 4 times.
 """
 
 from __future__ import annotations
+
+import warnings
 
 import numpy as np
 from loguru import logger
@@ -22,19 +21,42 @@ TOL = 1e-4  # relative change of any cell's chi at which the iteration stops
 DEPTH = 6  # Anderson's memory
 DAMPING = 0.7
 MAX_SOLVES = 200
+J_MAX = 5.0  # T: past any material, so a curve above it has its columns or units wrong
 CHI_MIN = 1e-6  # the least susceptibility a cell on a curve takes: log chi must exist
 
 
-class Curve:
-    """One B-H curve, read from its table."""
+class BHCurve:
+    """A material's B-H curve, to set as a ``susceptibility``, on a magnet or a
+    parent collection.
 
-    def __init__(self, table):
-        table = np.asarray(table, float)
-        if table.ndim != 2 or table.shape[1] != 2 or len(table) < 2:
-            msg = f"A B-H curve must be a table of (H, B) rows, at least two; got shape {table.shape}."
+    Parameters
+    ----------
+    H : array-like, shape (n,)
+        Field strength in A/m, from 0, increasing.
+    B : array-like, shape (n,)
+        Flux density in T, from 0, not decreasing.
+
+    Between the points B follows a monotone cubic (PCHIP). Past the last, the
+    polarization ``J = B - mu0 H`` keeps its last value, so B rises with the
+    slope of vacuum. A curve does not change, so copies of a model share it.
+
+    Examples
+    --------
+    >>> import magpylib_material_response as mmr
+    >>> curve = mmr.BHCurve(H=[0, 100, 1000, 1e5], B=[0, 0.5, 1.4, 1.8])
+    >>> round(float(curve.polarization(1000)), 3)
+    1.399
+    """
+
+    def __init__(self, *, H, B):
+        H, B = np.array(H, float), np.array(B, float)
+        if H.ndim != 1 or H.shape != B.shape or len(H) < 2:
+            msg = (
+                "BHCurve needs H and B of one length, at least two points; got "
+                f"shapes {H.shape} and {B.shape}."
+            )
             raise ValueError(msg)
-        H, B = table.T
-        if not np.isfinite(table).all() or H[0] != 0 or B[0] != 0:
+        if not (np.isfinite(H).all() and np.isfinite(B).all()) or H[0] or B[0]:
             msg = "A B-H curve must start at (0, 0) and hold finite numbers."
             raise ValueError(msg)
         if (np.diff(H) <= 0).any() or (np.diff(B) < 0).any():
@@ -47,7 +69,15 @@ class Curve:
         if not (J > 0).any():
             msg = "The B-H curve is vacuum everywhere (B = mu0 H): the part would not respond."
             raise ValueError(msg)
-        self.table = table
+        if J.max() > J_MAX:
+            warnings.warn(
+                f"This B-H curve reaches a polarization of {J.max():.3g} T, past any "
+                "material: H must be in A/m and B in T. Check that they are not "
+                "swapped, and the units.",
+                stacklevel=2,
+            )
+        H.flags.writeable = B.flags.writeable = False
+        self.H, self.B = H, B
         self._J = PchipInterpolator(H, J, extrapolate=False)
         self.J_last = float(J[-1])
         self.H_last = float(H[-1])
@@ -58,6 +88,18 @@ class Curve:
         with np.errstate(divide="ignore", invalid="ignore"):
             secants = np.where(H > 0, J / (MU0 * H), 0.0)
         self.chi_max = float(max(self.chi0, secants.max()))
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
+
+    def __reduce__(self):  # scipy's interpolator does not pickle
+        return _restore, (self.H, self.B)
+
+    def __repr__(self):
+        return f"BHCurve({len(self.H)} points, J up to {self.J_last:.3g} T)"
 
     def polarization(self, H):
         """``J`` in T at the field strengths ``H`` in A/m."""
@@ -75,13 +117,18 @@ class Curve:
         return np.maximum(chi, CHI_MIN)
 
 
-def is_table(value):
-    """Whether a susceptibility is a table of (H, B) rows."""
-    try:
-        shape = np.shape(value)
-    except ValueError:  # rows of different lengths: no table, and refused later
-        return False
-    return len(shape) == 2 and shape[1] == 2
+def _restore(H, B):
+    return BHCurve(H=H, B=B)
+
+
+def _refuse_table(value):
+    """Raise if a susceptibility is a table: columns are easily swapped."""
+    if np.ndim(value) == 2 and np.shape(value)[1] == 2:
+        msg = (
+            "A susceptibility cannot be a table: give the B-H curve as "
+            "BHCurve(H=H, B=B), with H in A/m and B in T."
+        )
+        raise TypeError(msg)
 
 
 def refuse_bh_curve(source):
@@ -98,13 +145,14 @@ def refuse_bh_curve(source):
 
 
 def curve_of(source):
-    """The :class:`Curve` of `source`, if the nearest susceptibility on it or its
-    parents is a table, or None."""
+    """The :class:`BHCurve` of `source`, if the nearest susceptibility on it or its
+    parents is one, or None."""
     refuse_bh_curve(source)
     while source is not None:
         value = getattr(source, "susceptibility", None)
         if value is not None:
-            return Curve(value) if is_table(value) else None
+            _refuse_table(value)
+            return value if isinstance(value, BHCurve) else None
         source = source.parent
     return None
 
@@ -118,6 +166,9 @@ def iterate(solve, on_curve, curves, chi, remanence):
     the field inside does not include. Returns the polarizations, and the
     number of solves."""
     x = np.log(np.array([c.chi0 for c in curves]))
+    # within what the curves can give: Anderson's steps can overshoot, and on a
+    # steep curve chi then leaves what floating point can solve
+    low, high = np.log(CHI_MIN), np.log(2 * np.array([c.chi_max for c in curves]))
     X, F = [], []
     for solves in range(1, MAX_SOLVES + 1):
         chi[on_curve] = np.exp(x)[:, None, None] * np.eye(3)
@@ -134,11 +185,11 @@ def iterate(solve, on_curve, curves, chi, remanence):
             return J, solves
         X, F = [*X, x.copy()][-DEPTH:], [*F, f.copy()][-DEPTH:]
         if len(F) == 1:
-            x = x + DAMPING * f
+            x = np.clip(x + DAMPING * f, low, high)
             continue
         dF, dX = np.diff(F, axis=0).T, np.diff(X, axis=0).T
         gamma = np.linalg.lstsq(dF, f, rcond=None)[0]
-        x = x + DAMPING * f - (dX + DAMPING * dF) @ gamma
+        x = np.clip(x + DAMPING * f - (dX + DAMPING * dF) @ gamma, low, high)
     msg = (
         f"The B-H iteration did not converge in {MAX_SOLVES} solves: the largest "
         f"change of a cell's susceptibility is still {np.max(np.abs(np.expm1(f))):.1e}."

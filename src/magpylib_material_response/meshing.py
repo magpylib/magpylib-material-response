@@ -11,7 +11,7 @@ from loguru import logger
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response._saturation import refuse_bh_curve
+from magpylib_material_response._saturation import BHCurve, refuse_bh_curve
 from magpylib_material_response.meshing_utils import (
     detached_copy,
     get_volume,
@@ -284,7 +284,8 @@ def mesh_thin_CylinderSegment_with_cuboids(
     r1, r2, h, phi1, phi2 = cyl_seg.dimension
     pol0 = cyl_seg.polarization
     chi = getattr(cyl_seg, "susceptibility", None)
-    chi = np.asarray(0 if chi is None else chi, dtype=float)
+    chi = inherited(cyl_seg, "susceptibility") if chi is None else chi
+    chi = np.asarray(0 if chi is None or isinstance(chi, BHCurve) else chi, float)
     if chi.shape == (3,) and not np.isclose(chi[0], chi[1]):
         msg = (
             "mesh_thin_CylinderSegment_with_cuboids turns each cell about the z axis, "
@@ -867,6 +868,8 @@ def _responds(src):
     refuse_bh_curve(src)
     while src is not None:
         chi = getattr(src, "susceptibility", None)
+        if isinstance(chi, BHCurve):
+            return True
         if chi is not None:
             return bool(np.any(np.asarray(chi, dtype=float) != 0))
         src = src.parent

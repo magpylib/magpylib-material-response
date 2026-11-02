@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 PLAUSIBLE_ORDERS = (0.3, 3.0)
 #: Roache's factor of safety for an error estimated from three meshes (Roache
 #: 1994; Celik et al. 2008, Eq. 7).
+# the old name too, for `import *`, through __getattr__ at the end
+# pylint: disable=undefined-all-variable
+__all__ = ["Comparison", "MeshStudy", "compare", "mesh_study", "study_cells"]  # noqa: F822
+
 SAFETY_FACTOR = 1.25
 #: Share of the last change that entries moving against the trend may carry
 #: before the study counts as unsteady, this package's choice: Celik et al. report

@@ -31,6 +31,24 @@ def test_old_names_warn_and_give_the_new_function(module, old, new):
     assert function is getattr(mmr, new)
 
 
+@pytest.mark.parametrize(
+    ("module", "old"),
+    [
+        ("demag", "apply_demag"),
+        ("face_charge", "apply_face_charge"),
+        ("convergence", "mesh_study"),
+        ("fem", "fem_solve"),
+    ],
+)
+def test_a_star_import_still_gives_the_old_names(module, old):
+    if module == "fem":
+        pytest.importorskip("ngsolve")
+    namespace = {}
+    with pytest.warns(DeprecationWarning, match="goes in the next release"):
+        exec(f"from magpylib_material_response.{module} import *", namespace)  # noqa: S102
+    assert old in namespace
+
+
 def test_the_old_module_keeps_its_other_names():
     from magpylib_material_response import cells, demag  # noqa: PLC0415
 

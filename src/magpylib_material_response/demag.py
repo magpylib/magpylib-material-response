@@ -7,6 +7,10 @@ import warnings
 
 from magpylib_material_response import cells
 
+# what `import *` gave, through __getattr__ below
+# pylint: disable=undefined-all-variable
+__all__ = ["apply_demag", "demag_tensor", "get_H_ext", "get_susceptibilities"]  # noqa: F822
+
 
 def __getattr__(name):
     if name.startswith("_"):

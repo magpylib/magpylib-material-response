@@ -40,6 +40,14 @@ from magpylib_material_response._renamed import old_names
 from magpylib_material_response.fem._solve import FemSolution, solve_fem
 from magpylib_material_response.fem._study import FemStudy, study_fem
 
-__all__ = ["FemSolution", "FemStudy", "solve_fem", "study_fem"]
+# pylint: disable=undefined-all-variable
+__all__ = [  # the old names too, for `import *`, through __getattr__ below
+    "FemSolution",
+    "FemStudy",
+    "fem_solve",
+    "fem_study",
+    "solve_fem",
+    "study_fem",
+]
 
 __getattr__ = old_names(__name__, {"fem_solve": "solve_fem", "fem_study": "study_fem"})
