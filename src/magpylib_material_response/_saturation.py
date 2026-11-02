@@ -206,6 +206,7 @@ def iterate(solve, field, on_curve, curves, chi):
     msg = (
         f"The B-H iteration did not converge in {MAX_SOLVES} solves: the largest "
         f"change of a cell's susceptibility is still {np.max(np.abs(np.expm1(f))):.1e}. "
-        "A sharp knee can do this: give it more points, or a gentler rise."
+        "A sharp knee can do this: give it more points, or a gentler rise. Beside a "
+        "strong magnet, try solver='direct' or a smaller solver_tol."
     )
     raise RuntimeError(msg)
