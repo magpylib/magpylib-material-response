@@ -77,6 +77,7 @@ from magpylib_material_response._saturation import (
     curve_of,
     iterate,
     refuse_bh_curve,
+    refuse_table,
 )
 from magpylib_material_response.demag_fft import (
     MIN_CLUSTER_CELLS,
@@ -91,6 +92,7 @@ from magpylib_material_response.newell import (
     point_block,
     self_demag_factors,
 )
+from magpylib_material_response.uniform import UniformField, refuse_both
 from magpylib_material_response.utils import timelog
 
 #: An applied field ``H_ext`` stronger than this, in tesla, is warned about: it
@@ -173,6 +175,8 @@ def get_susceptibilities(sources, susceptibility=None):
     if susceptibility is None:
         # Get susceptibilities from source attributes
         susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
+        for value in susceptibilities:
+            refuse_table(value)
         susceptibilities = [
             0.0 if isinstance(s, BHCurve) else s for s in susceptibilities
         ]
@@ -343,6 +347,12 @@ def get_H_ext(*sources):
     unique = list({id(o): o for o in owners if o is not None}.values())
     if not unique:
         return [(0.0, 0.0, 0.0)] * len(owners)
+    warnings.warn(
+        "H_ext is now UniformField: add UniformField(B=...) to the model. Its field is "
+        "in getB of the result, which H_ext's is not. H_ext goes in the next release.",
+        DeprecationWarning,
+        stacklevel=_outside_this_package(),
+    )
     values = _checked_H_exts(unique)
     strength = np.linalg.norm(values, axis=1)
     strong = np.flatnonzero(strength > H_EXT_WARN)
@@ -1711,11 +1721,12 @@ def solve_cells(
         raise ValueError(msg)
     magnets_list = [src for src in srcs if isinstance(src, BaseMagnet)]
     originals = [src for src in original.sources_all if isinstance(src, BaseMagnet)]
-    currents_list = [src for src in srcs if isinstance(src, BaseCurrent)]
+    refuse_both(srcs)
+    currents_list = [src for src in srcs if isinstance(src, BaseCurrent | UniformField)]
     others_list = [
         src
         for src in srcs
-        if not isinstance(src, BaseMagnet | BaseCurrent | magpy.Sensor)
+        if not isinstance(src, BaseMagnet | BaseCurrent | UniformField | magpy.Sensor)
     ]
     if others_list:
         counts_others = Counter(s.__class__.__name__ for s in others_list)

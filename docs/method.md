@@ -26,7 +26,7 @@ The field at a cell has three parts, all handled as $\mu_0 \mathbf{H}$ in tesla:
 
 | Part          | Symbol                        | Origin                                                       |
 | ------------- | ----------------------------- | ------------------------------------------------------------ |
-| Applied       | $\mu_0 \mathbf{H}_\text{ext}$ | The uniform `H_ext` of the cell or of a parent `Collection`  |
+| Applied       | $\mu_0 \mathbf{H}_\text{ext}$ | A `UniformField` in the collection |
 | Currents      | $\mu_0 \mathbf{H}_\text{cur}$ | The current sources (`magpylib.current.*`) in the collection |
 | Demagnetizing | $\mu_0 \mathbf{H}_\text{d}$   | The polarization of all cells, the cell itself included      |
 
@@ -226,8 +226,8 @@ rings into enough sectors that it does.
 1. Assemble the full $3N \times 3N$ matrix $\mathbf{Q} = \mathbf{I} -
    \mathbf{S}\,\mathbf{T}$, block by block under the chosen rule (section 5
    gives the shortcuts).
-2. Build the right-hand side from the remanent polarizations, `H_ext`, and the
-   field of the current sources at the cell centroids.
+2. Build the right-hand side from the remanent polarizations and the field of the
+   current sources and any `UniformField` at the cell centroids.
 3. Factor $\mathbf{Q}$ in place with LAPACK (`scipy.linalg.solve`) and write
    each cell's polarization back, expressed in the cell's own frame.
 

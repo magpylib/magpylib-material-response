@@ -7,6 +7,8 @@
 
 .. autoclass:: magpylib_material_response.BHCurve
 
+.. autoclass:: magpylib_material_response.UniformField
+
 .. autofunction:: magpylib_material_response.cells.demag_tensor
 
 .. autofunction:: magpylib_material_response.cells.get_susceptibilities

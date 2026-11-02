@@ -112,8 +112,7 @@ value.
 
 `solve_fem(model, order, observers=...)` solves one model at one polynomial
 order and returns a magpylib source with `moment`: `magpy.getB`, `getH`, `getJ`
-and `getM` read it, and leave out a uniform `H_ext` as on a model solved by
-`solve_cells`. Inside a part with a high susceptibility these are pointwise and
+and `getM` read it, as on a model solved by `solve_cells`. Inside a part with a high susceptibility these are pointwise and
 show the elements, because H there is small next to its error. `study_fem`
 solves it at rising orders on one mesh and takes 1.25 times the last change as
 the error of the highest, per sensor and in all.

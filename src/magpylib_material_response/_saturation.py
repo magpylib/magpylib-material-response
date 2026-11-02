@@ -121,7 +121,7 @@ def _restore(H, B):
     return BHCurve(H=H, B=B)
 
 
-def _refuse_table(value):
+def refuse_table(value):
     """Raise if a susceptibility is a table: columns are easily swapped."""
     if np.ndim(value) == 2 and np.shape(value)[1] == 2:
         msg = (
@@ -137,8 +137,8 @@ def refuse_bh_curve(source):
     while source is not None:
         if getattr(source, "bh_curve", None) is not None:
             msg = (
-                f"{source} has bh_curve: set the table as its susceptibility instead, "
-                "which takes a number, three numbers or a table of (H, B) rows."
+                f"{source} has bh_curve: set its susceptibility to BHCurve(H=H, B=B) "
+                "instead, with H in A/m and B in T."
             )
             raise ValueError(msg)
         source = source.parent
@@ -151,7 +151,7 @@ def curve_of(source):
     while source is not None:
         value = getattr(source, "susceptibility", None)
         if value is not None:
-            _refuse_table(value)
+            refuse_table(value)
             return value if isinstance(value, BHCurve) else None
         source = source.parent
     return None

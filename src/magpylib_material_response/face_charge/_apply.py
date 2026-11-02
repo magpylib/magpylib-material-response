@@ -38,6 +38,7 @@ from magpylib_material_response.face_charge._tribody import (
     add_triangle_contact_lines,
 )
 from magpylib_material_response.meshing_utils import SOLIDS
+from magpylib_material_response.uniform import refuse_both
 from magpylib_material_response.utils import timelog
 
 MARK = 0.5  # a refinement round splits panels above this share of the largest jump
@@ -382,6 +383,7 @@ def _split(collection):
     _report_fixed_magnets(
         [src for src in collection.sources_all if isinstance(src, BaseMagnet)]
     )
+    refuse_both(collection.sources_all)
     solved, fixed = [], []
     for src in collection.sources_all:
         if not isinstance(src, BaseMagnet):

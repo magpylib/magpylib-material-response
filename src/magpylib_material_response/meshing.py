@@ -21,6 +21,7 @@ from magpylib_material_response.meshing_utils import (
     set_values,
     take_place,
 )
+from magpylib_material_response.uniform import UniformField
 
 
 def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
@@ -816,7 +817,7 @@ def mesh_all(
         magpy.magnet.CylinderSegment,
         magpy.magnet.TriangularMesh,
     )
-    allowed = (*supported, BaseCurrent)
+    allowed = (*supported, BaseCurrent, UniformField)
     if not inplace:
         obj = detached_copy(obj, **kwargs)
     children = [obj]
