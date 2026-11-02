@@ -21,9 +21,10 @@ kernelspec:
 With a constant susceptibility, iron can reach any polarization: at 1 T applied,
 a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. A
 table set as `susceptibility` on a part, or on a collection above it, replaces
-the constant: `solve_cells` then puts every cell at the susceptibility its own field gives on
-the curve, repeating the linear solve until none changes. The interaction matrix
-is built once; the fixed point takes 10 to 40 solves with Anderson acceleration.
+the constant: `solve_cells` then puts every cell at the susceptibility its own
+field gives on the curve, repeating the linear solve until none changes. The
+interaction matrix is built once; the fixed point takes 10 to 40 solves with
+Anderson acceleration.
 
 ## A curve
 
