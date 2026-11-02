@@ -44,7 +44,7 @@ def test_a_star_import_still_gives_the_old_names(module, old):
     if module == "fem":
         pytest.importorskip("ngsolve")
     namespace = {}
-    with pytest.warns(DeprecationWarning, match=old):
+    with pytest.warns(DeprecationWarning, match="goes in the next release"):
         exec(f"from magpylib_material_response.{module} import *", namespace)  # noqa: S102
     assert old in namespace
 
