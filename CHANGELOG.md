@@ -8,24 +8,7 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Added
-
-- An Agent Skill ships inside the package, so AI coding assistants write the
-  current names and know where a solved model can be read. Add it to a project
-  with `uvx library-skills`
-  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
-- Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a
-  part or a collection, in place of a constant, in `solve_cells`. Each cell
-  takes the susceptibility its own field gives on the curve, the linear solve
-  repeated until none changes, with the matrix built once and Anderson
-  acceleration: 10 to 40 solves. A sphere comes out within 1 % of its exact
-  answer along the curve. Meshers and `to_json` carry the curve;
-  `solve_face_charge` refuses it
-  ([#150](https://github.com/magpylib/magpylib-material-response/pull/150),
-  [#159](https://github.com/magpylib/magpylib-material-response/pull/159))
-- `solve_fem` follows such a curve too, so a saturated part has an independent
-  check: a sphere is within 0.2 % of its exact answer at order 4 from 0.05 to 2
-  T ([#151](https://github.com/magpylib/magpylib-material-response/pull/151))
+## [0.9.0] - 2026-11-02
 
 ### Changed
 
@@ -65,37 +48,25 @@ and this project adheres to
   with other sources, it moves and copies like one, and it keeps its own copy of
   the coils, so changing one after the solve no longer changes the solution
   ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
-- `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
-  `getB` warns there. The docs say not to read a cell model exactly on a
-  boundary between cells, where the field is wrong with no warning
-  ([#157](https://github.com/magpylib/magpylib-material-response/pull/157),
-  [#158](https://github.com/magpylib/magpylib-material-response/issues/158))
 
 ### Added
 
+- An Agent Skill ships inside the package, so AI coding assistants write the
+  current names and know where a solved model can be read. Add it to a project
+  with `uvx library-skills`
+  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
 - Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a
   part or a collection, in place of a constant, in `solve_cells`. Each cell
   takes the susceptibility its own field gives on the curve, the linear solve
   repeated until none changes, with the matrix built once and Anderson
-  acceleration: 6 to 40 solves. A sphere comes out within 1 % of its exact
-  answer along the curve. A curve past any material warns, as with H and B
-  swapped. Meshers and `to_json` carry it; `solve_face_charge` refuses it
+  acceleration: 10 to 40 solves. A sphere comes out within 1 % of its exact
+  answer along the curve. Meshers and `to_json` carry the curve;
+  `solve_face_charge` refuses it
   ([#150](https://github.com/magpylib/magpylib-material-response/pull/150),
-  [#159](https://github.com/magpylib/magpylib-material-response/pull/159),
-  [#162](https://github.com/magpylib/magpylib-material-response/pull/162))
+  [#159](https://github.com/magpylib/magpylib-material-response/pull/159))
 - `solve_fem` follows such a curve too, so a saturated part has an independent
-  check: a sphere's moment is within 0.08 % of its exact value at order 4 from
-  0.05 to 2 T, and B at its centre within 0.3 %. Start at order 3: order 2 can
-  fail to settle, and says so
-  ([#151](https://github.com/magpylib/magpylib-material-response/pull/151),
-  [#160](https://github.com/magpylib/magpylib-material-response/pull/160))
-
-### Fixed
-
-- `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropic susceptibility
-  set on a parent too: it read only the part's own, and came out 11 times off
-  with no error
-  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
+  check: a sphere is within 0.2 % of its exact answer at order 4 from 0.05 to 2
+  T ([#151](https://github.com/magpylib/magpylib-material-response/pull/151))
 
 ## [0.8.0] - 2026-11-01
 
