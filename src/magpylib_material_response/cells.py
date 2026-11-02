@@ -1721,7 +1721,7 @@ def solve_cells(
         raise ValueError(msg)
     magnets_list = [src for src in srcs if isinstance(src, BaseMagnet)]
     originals = [src for src in original.sources_all if isinstance(src, BaseMagnet)]
-    refuse_both(srcs)
+    refuse_both(original.sources_all)  # the copy has no parents to read
     currents_list = [src for src in srcs if isinstance(src, BaseCurrent | UniformField)]
     others_list = [
         src

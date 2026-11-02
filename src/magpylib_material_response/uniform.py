@@ -51,7 +51,7 @@ class UniformField(magpy.misc.CustomSource):
         if value.shape != (3,) or not np.isfinite(value).all():
             msg = f"UniformField needs three finite numbers; got {B if H is None else H!r}."
             raise ValueError(msg)
-        if np.linalg.norm(value) > B_WARN:
+        if H is None and np.linalg.norm(value) > B_WARN:
             warnings.warn(
                 f"UniformField of {np.linalg.norm(value):.3g} T: is it H in A/m, given "
                 "as B?",
@@ -87,7 +87,7 @@ def applied(sources):
     total = np.zeros(3)
     for source in sources:
         if isinstance(source, UniformField):
-            total += source.orientation.apply(source.B).ravel()
+            total += source.orientation.apply(source.B.copy()).ravel()
     return total
 
 

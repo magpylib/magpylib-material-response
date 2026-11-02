@@ -864,7 +864,7 @@ def mesh_all(
 def _responds(src):
     """Whether `src` responds to fields: a magnet whose susceptibility, its own
     or its nearest parent's, is set and not zero."""
-    if isinstance(src, BaseCurrent):
+    if isinstance(src, BaseCurrent | UniformField):
         return False
     refuse_bh_curve(src)
     while src is not None:

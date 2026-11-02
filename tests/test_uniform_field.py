@@ -55,9 +55,25 @@ def test_it_drives_a_part_as_h_ext_does_and_shows_in_get_b(solve):
 
 
 @pytest.mark.parametrize("solve", SOLVERS, ids=IDS)
-def test_a_field_and_h_ext_together_are_refused(solve):
+def test_several_fields_add_up_also_turned_and_nested(solve):
+    turned = UniformField(B=(0, 0, 0.1))
+    turned.rotate_from_angax(90, "x")  # (0, -0.1, 0) in the global frame
+    other = UniformField(B=(0.05, 0, 0))
+    several = magpy.Collection(_soft(), turned, magpy.Collection(other))
+    one = magpy.Collection(_soft(), UniformField(B=(0.05, -0.1, 0)))
+    new, reference = solve(several), solve(one)
+    scale = np.abs(magpy.getB(reference, POINTS)).max()
+    np.testing.assert_allclose(
+        magpy.getB(new, POINTS), magpy.getB(reference, POINTS), atol=1e-3 * scale
+    )
+
+
+@pytest.mark.parametrize("solve", SOLVERS, ids=IDS)
+@pytest.mark.parametrize("above", [False, True], ids=["on it", "above it"])
+def test_a_field_and_h_ext_together_are_refused(solve, above):
     model = magpy.Collection(_soft(), UniformField(B=B0))
-    model.H_ext = tuple(B0)
+    holder = magpy.Collection(model) if above else model
+    holder.H_ext = tuple(B0)
     with pytest.raises(ValueError, match="count twice"):
         solve(model)
 
@@ -88,12 +104,21 @@ def test_a_bad_field_is_refused(bad):
 def test_a_field_in_a_unit_of_h_warns():
     with pytest.warns(UserWarning, match="H in A/m"):
         UniformField(B=(0, 0, 1e5))
+    UniformField(H=(0, 0, 1e7))  # 12.6 T, and clearly H: no warning
 
 
 def test_meshers_and_reuse_keep_it():
     model = magpy.Collection(_soft(), UniformField(B=B0))
     meshed = mesh_all(model, 27)
     assert sum(isinstance(s, UniformField) for s in meshed.sources_all) == 1
+    # with the susceptibility on the parent, as with a coil
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    parent = magpy.Collection(part, UniformField(B=B0))
+    parent.susceptibility = 50.0
+    assert (
+        sum(isinstance(s, UniformField) for s in mesh_uniform(parent, 2).sources_all)
+        == 1
+    )
     first = solve_face_charge(magpy.Collection(_soft(), UniformField(B=B0)), reuse=True)
     again = solve_face_charge(
         magpy.Collection(_soft(), UniformField(B=2 * B0)), reuse=first
