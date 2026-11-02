@@ -53,6 +53,28 @@ class ChargeSheetStyle(TriangularMeshStyle):
     charge = Nested(ChargeColor, doc="Charge colour properties.")
 
 
+def _read_only(array):
+    """A view that refuses an edit in place, which the charge and the part rest on
+    and which would reach the saved file and not the field. A flag on the array
+    itself would not hold: deepcopy and pickle drop it."""
+    view = array.view()
+    view.flags.writeable = False
+    return view
+
+
+def _reach(part):
+    """How far a magnet reaches from its own centre, in m."""
+    if isinstance(part, magpy.magnet.Cuboid):
+        return np.linalg.norm(part.dimension) / 2
+    if isinstance(part, magpy.magnet.Sphere):
+        return part.diameter / 2
+    if isinstance(part, magpy.magnet.Cylinder):
+        return np.hypot(*part.dimension) / 2
+    if isinstance(part, magpy.magnet.CylinderSegment):
+        return np.hypot(part.dimension[1], part.dimension[2] / 2)
+    return np.linalg.norm(part.vertices, axis=-1).max()
+
+
 def _copy_of(part):
     """A copy of `part` standing alone, under its own label: ``copy`` adds a suffix.
     A style is read only if it has one, as reading creates it, on the caller's
@@ -148,8 +170,9 @@ class ChargeSheet(magpy.misc.CustomSource):
     # ── mesh and charge ───────────────────────────────────────────────────
     @property
     def vertices(self):
-        """Mesh points (n, 3) in m, in the source's own frame."""
-        return self._vertices
+        """Mesh points (n, 3) in m, in the source's own frame. Read-only: set the
+        whole array to change it."""
+        return _read_only(self._vertices)
 
     @vertices.setter
     def vertices(self, value):
@@ -158,8 +181,9 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @property
     def faces(self):
-        """Vertex index triplets (m, 3)."""
-        return self._faces
+        """Vertex index triplets (m, 3). Read-only: set the whole array to change
+        it."""
+        return _read_only(self._faces)
 
     @faces.setter
     def faces(self, value):
@@ -170,9 +194,7 @@ class ChargeSheet(magpy.misc.CustomSource):
     def charge_densities(self):
         """Surface charge density at each face's corners (m, 3), in A/m.
         Read-only: set the whole array to change it."""
-        q = self._q.view()
-        q.flags.writeable = False
-        return q
+        return _read_only(self._q)
 
     @charge_densities.setter
     def charge_densities(self, value):
@@ -183,17 +205,17 @@ class ChargeSheet(magpy.misc.CustomSource):
     def panels(self):
         """The surface element (m,) each face belongs to, or None where each
         face is one."""
-        return self._panels
+        return None if self._panels is None else _read_only(self._panels)
 
     @property
     def triangles(self):
         """Corners of each face (m, 3, 3) in m, in the source's own frame."""
-        return self._V
+        return _read_only(self._V)
 
     def _set(self, vertices, faces, charge_densities, panels=None):
         P = np.array(vertices, float).reshape(-1, 3)
         F = np.array(faces, int).reshape(-1, 3)
-        q = np.asarray(charge_densities, float).reshape(-1, 3)
+        q = np.array(charge_densities, float).reshape(-1, 3)
         if len(q) != len(F):
             msg = (
                 f"charge_densities needs one value per face corner, shape ({len(F)}, 3); "
@@ -213,13 +235,6 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._part = None  # set by solve_face_charge: new charges, no such part
         self._probe = None  # the part at the sheet's own frame, to test observers
         self._V = P[F]
-        # what the charge and the part rest on does not change in place: set it
-        for fixed in (P, F, panels, self._V):
-            if fixed is not None:
-                fixed.flags.writeable = False
-        self._lo, self._hi = (
-            (self._V.min((0, 1)), self._V.max((0, 1))) if len(F) else (0, 0)
-        )
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
         self._center, self._far_from, self._far_rule = np.zeros(3), np.inf, None
@@ -264,6 +279,15 @@ class ChargeSheet(magpy.misc.CustomSource):
             msg = f"part must be a magnet; got {type(part).__name__}."
             raise TypeError(msg)
         self._part = _copy_of(part)
+
+    def _came_from(self, part):
+        """Whether `part` has the shape of the part this sheet was solved from,
+        wherever it is now: a part it was solved from moves."""
+        return (
+            self._part is not None
+            and type(part) is type(self._part)
+            and bool(np.isclose(_reach(part), _reach(self._part)))
+        )
 
     @property
     def mean_polarization(self):
@@ -376,22 +400,21 @@ class ChargeSheet(magpy.misc.CustomSource):
     # ── field ─────────────────────────────────────────────────────────────
     def _warn_if_inside(self, X, field):
         """Warn if observers lie inside the part this sheet was solved from, of a
-        sample of them: it costs a box test unless some lie in its box. Of parts
-        solved as one the sheet has lost faces, so the part says, not the surface;
-        one with none left has no box."""
-        box = X
-        if len(self._V):
-            box = X[((self._lo <= X) & (self._hi >= X)).all(axis=1)]
-        if not box.size:
+        sample of them: it costs a distance test unless some are near. Of parts
+        solved as one the sheet has lost faces, so the part says, not the surface."""
+        reach = _reach(self._part)
+        near = X[(X * X).sum(axis=1) <= reach * reach]
+        if not near.size:
             return
         if self._probe is None:
             self._probe = _copy_of(self._part)
             self._probe.position, self._probe.orientation = (0, 0, 0), None
             self._probe.polarization = (0, 0, 1)
-        sample = box[:: max(1, len(box) // INSIDE_SAMPLE)]
-        # a point on the surface is outside as well: a step to each side tells
-        size = np.linalg.norm(self._hi - self._lo) if len(self._V) else 0.0
-        step = 1e-9 * max(size, np.abs(sample).max())
+        sample = near[:: max(1, len(near) // INSIDE_SAMPLE)]
+        # a point on the surface is outside as well: a step to each side tells. A
+        # mesh's inside test reads a tilted face as inside out to about 1e-10 m,
+        # and 1e-8 of a mesh 1 m wide
+        step = max(1e-6 * reach, 1e-9)
         steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
         points = (sample[:, None] + steps).reshape(-1, 3)
         with np.errstate(divide="ignore", invalid="ignore"):  # on a mesh's own points

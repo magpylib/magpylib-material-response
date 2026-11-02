@@ -1776,6 +1776,40 @@ def test_reading_inside_warns_on_touching_parts_and_from_json_not_by_hand():
     magpy.getB(ChargeSheet(sheet.vertices, sheet.faces, sheet.charge_densities), inside)
 
 
+def test_reading_on_a_surface_is_not_inside_and_a_lone_part_still_tells():
+    """A mesh's inside test reads a tilted face as inside just past it; a part that
+    keeps only flat faces, or none, leaves the sheet no box around itself."""
+    points = np.array(
+        [(1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1)], float
+    )  # a tetrahedron's corners
+    mesh = magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 0), points=0.005 * points
+    )
+    mesh.susceptibility = 100.0
+    solved = solve_face_charge(magpy.Collection(mesh, _drive()), level=1)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    magpy.getB(sheet, sheet.triangles.mean(axis=1))
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(sheet, (0, 0, 0))
+
+    flat = _one_face((1, 1, 1), part=_soft(position=(0, 0, 0)))  # one face of a part
+    far = [(1e6, 0, 0)] * 500 + [(0, 0, 0)]
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(flat, far)
+
+
+def test_a_sheet_beside_a_part_of_another_shape_does_not_warn():
+    first = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    frozen = next(s for s in first.sources_all if isinstance(s, ChargeSheet)).copy()
+    other = magpy.magnet.Sphere(
+        diameter=0.004, polarization=(0, 0, 0), position=(0.05, 0, 0)
+    )
+    other.susceptibility = 10.0
+    solve_face_charge(magpy.Collection(frozen, other), level=1)
+
+
 def _triangular_part():
     corners = np.array(
         [(x, y, z) for x in (-5e-3, 5e-3) for y in (-5e-3, 5e-3) for z in (-5e-3, 5e-3)]
@@ -1987,11 +2021,30 @@ def test_a_sheet_built_by_hand_has_no_part_and_takes_only_a_magnet():
         _one_face((1, 1, 1), part=magpy.current.Circle(current=1, diameter=1))
 
 
-def test_a_sheets_mesh_is_read_only_and_a_shallow_copy_reads_its_own_charge():
-    sheet = _one_face((1, 1, 1), part=_soft())
-    for name in ("vertices", "faces", "triangles", "charge_densities"):
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        lambda s: s,
+        lambda s: s.copy(),
+        copy.copy,
+        copy.deepcopy,
+        lambda s: pickle.loads(pickle.dumps(s)),
+    ],
+    ids=["itself", ".copy", "copy.copy", "deepcopy", "pickle"],
+)
+def test_a_sheets_arrays_are_read_only_on_every_copy(duplicate):
+    given = np.array([[1.0, 1.0, 1.0]])
+    sheet = ChargeSheet(TRIANGLE, [[0, 1, 2]], given, panels=[0], part=_soft())
+    sheet = duplicate(sheet)
+    given[0, 0] = 5.0
+    assert sheet.charge_densities[0, 0] == 1.0
+    for name in ("vertices", "faces", "triangles", "charge_densities", "panels"):
         with pytest.raises(ValueError, match="read-only"):
             getattr(sheet, name)[0] = 0
+
+
+def test_a_shallow_copy_of_a_sheet_reads_its_own_charge():
+    sheet = _one_face((1, 1, 1), part=_soft())
     point = (0.1, 0.2, 0.3)
     shallow = copy.copy(sheet)
     shallow.charge_densities = sheet.charge_densities * 2

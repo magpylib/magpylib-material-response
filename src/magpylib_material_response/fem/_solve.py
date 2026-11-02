@@ -366,7 +366,7 @@ class FemSolution(magpy.misc.CustomSource):
         self._lift = lift
         self._chi = chi
         self.solved_by = "fem"
-        self.order = order
+        self._order = order
         self.ndof = ndof
         self.elements = model.mesh.ne
         self.seconds = seconds
@@ -378,6 +378,11 @@ class FemSolution(magpy.misc.CustomSource):
             gf * normal, model.mesh, definedon=boundary, order=2 * order + 2
         )
         self.moment = 3 / MU0 * model.length**3 * np.asarray(flux)
+
+    @property
+    def order(self):
+        """Polynomial order of the elements, which the solved field belongs to."""
+        return self._order
 
     def __deepcopy__(self, memo):
         """A copy moves on its own and shares the solved field, which no one
@@ -410,7 +415,7 @@ class FemSolution(magpy.misc.CustomSource):
         rho = np.linalg.norm(s, axis=1)
         inside = rho < model.radius
         # a later solve of the same model curves its mesh for another order
-        model.curve(self.order)
+        model.curve(self._order)
         air = ~inside
         if inside.any():
             if field == "B":

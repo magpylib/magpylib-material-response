@@ -104,6 +104,14 @@ def test_a_bad_field_is_refused(bad):
         UniformField(**bad)
 
 
+def test_a_strong_field_given_as_h_loads_without_a_warning_and_a_set_func_copies():
+    strong = UniformField(H=(0, 0, 1e7))
+    back = from_json(to_json(magpy.Collection(strong)))[0].sources_all[0]
+    np.testing.assert_array_equal(back.B, strong.B)
+    strong.field_func = None
+    assert copy.copy(strong).field_func is None
+
+
 def test_its_value_can_be_set_and_given_to_a_copy():
     field = UniformField(B=(0, 0, 0.1))
     field.B = (0, 0, 0.2)

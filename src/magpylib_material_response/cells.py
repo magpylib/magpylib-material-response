@@ -447,9 +447,10 @@ def _report_fixed_magnets(magnets):
         )
     elif any(_does_nothing(src) for src in magnets):
         warnings.warn(
-            "A magnet has no susceptibility and no polarization, so it does nothing. A "
-            "magnet's copy leaves its parent behind, and what it inherits from it: copy "
-            "the collection, or set the susceptibility on the copy.",
+            "A magnet has no susceptibility and no polarization, so it does nothing. If "
+            "it should respond: a magnet's copy leaves its parent behind, and what it "
+            "inherits from it, so copy the collection, or set the susceptibility on the "
+            "copy.",
             stacklevel=_outside_this_package(),
         )
     elif fixed:
@@ -1783,9 +1784,12 @@ def solve_cells(
         )
         msg = (
             "Only Magnet and Current sources and a UniformField are supported. "
-            f"Incompatible objects found: {counts_str}. A solved ChargeSheet gives the "
-            "magnet it was solved from in its part."
+            f"Incompatible objects found: {counts_str}."
         )
+        if "ChargeSheet" in counts_others:
+            msg += (
+                " A solved ChargeSheet gives the magnet it was solved from in its part."
+            )
         raise TypeError(msg)
     n = len(magnets_list)
     if n == 0:

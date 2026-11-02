@@ -18,11 +18,12 @@ and this project adheres to
 ### Changed
 
 - Copies stay consistent: `copy.copy` of a `UniformField` or a `ChargeSheet` no
-  longer reads the original's field, a sheet's mesh is read-only, reading inside
-  a part warns also on touching parts and after `to_json`, and a magnet with
-  neither a susceptibility nor a polarization warns, as a child's copy does when
-  it leaves its parent's value behind. Solving warns also for a result nested in
-  a new collection or taken from one, and beside a `FemSolution`
+  longer reads the original's field, a sheet's arrays and `FemSolution.order`
+  are read-only on every copy, reading inside a part warns also on touching
+  parts and after `to_json`, and a magnet with neither a susceptibility nor a
+  polarization warns, as a child's copy does when it leaves its parent's value
+  behind. Solving warns also for a result nested in a new collection or taken
+  from one, and beside a `FemSolution`
   ([#167](https://github.com/magpylib/magpylib-material-response/pull/167))
 
 ## [0.9.0] - 2026-11-02

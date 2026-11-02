@@ -308,7 +308,7 @@ def _deserialize_recursive(inp):
         kw["current_densities"] = inp["current_densities"]["value"]
     elif typ == "UniformField":
         _check_unit("B", inp["B"], "T")
-        kw["B"] = inp["B"]["value"]
+        kw["H"] = (0, 0, 0)
     elif typ == "face_charge.ChargeSheet":
         _check_unit("Vertices", inp["vertices"], "m")
         _check_unit("Charge densities", inp["charge_densities"], "A/m")
@@ -331,6 +331,8 @@ def _deserialize_recursive(inp):
             kw["pixel"] = inp["pixel"]["value"]
 
     obj = constr(**kw)
+    if constr is UniformField:  # past the warning on B: given as H, it may be strong
+        obj._set(inp["B"]["value"], 1.0)
 
     if inp.get("susceptibility") is not None:
         saved = inp["susceptibility"]

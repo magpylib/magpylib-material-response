@@ -441,8 +441,10 @@ def _split(collection):
             "add those again.",
             stacklevel=_outside_this_package(),
         )
-    if solved and any(
-        isinstance(s, ChargeSheet) and s._part is not None for s in fixed
+    if any(
+        isinstance(s, ChargeSheet) and s._came_from(part)
+        for s in fixed
+        for part, _ in solved
     ):
         warnings.warn(
             "This model solves parts beside a solved ChargeSheet, which stays a fixed "
