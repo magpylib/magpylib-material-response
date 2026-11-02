@@ -113,5 +113,8 @@ solved = solve_cells(model)
 print(magpy.getB(solved, (0, 0, 0.02)))  # the applied 1 T included
 ```
 
+AI coding assistants: the package ships an Agent Skill, which
+`uvx library-skills` adds to a project.
+
 See the [documentation](https://magpylib-material-response.readthedocs.io/) for
 a quickstart, worked examples, and the method description.

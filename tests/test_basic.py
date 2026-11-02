@@ -150,7 +150,7 @@ def test_get_susceptibilities_hierarchy():
                 magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
                 for _ in range(4)
             ],
-            "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection",
+            "solve_cells input susceptibility must be scalar, 3-vector, or same length as input Collection",
             id="wrong_length",
         ),
         pytest.param(
@@ -159,7 +159,7 @@ def test_get_susceptibilities_hierarchy():
                 magpy.magnet.Cuboid(dimension=(1, 1, 1), polarization=(0, 0, 1))
                 for _ in range(3)
             ],
-            "Apply_demag input susceptibility is ambiguous",
+            "solve_cells input susceptibility is ambiguous",
             id="ambiguous_input",
         ),
     ],

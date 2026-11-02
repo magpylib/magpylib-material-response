@@ -75,6 +75,7 @@ from scipy.spatial.transform import Rotation as R
 from magpylib_material_response._saturation import (
     BHCurve,
     curve_of,
+    is_table,
     iterate,
     refuse_bh_curve,
     refuse_table,
@@ -192,10 +193,13 @@ def get_susceptibilities(sources, susceptibility=None):
 
 def _convert_to_array(susceptibility, n, from_hierarchy=False):
     """Convert susceptibility input(s) to (n, 3) array format"""
-    if isinstance(susceptibility, BHCurve) or (
-        not from_hierarchy
-        and np.ndim(susceptibility) == 2
-        and np.shape(susceptibility)[1] == 2
+    if (
+        isinstance(susceptibility, BHCurve)
+        or (not from_hierarchy and is_table(susceptibility))
+        or (
+            isinstance(susceptibility, list | tuple)
+            and any(isinstance(entry, BHCurve) for entry in susceptibility)
+        )
     ):
         msg = "A B-H curve cannot be the susceptibility argument: set it on the part."
         raise ValueError(msg)
@@ -214,7 +218,7 @@ def _convert_to_array(susceptibility, n, from_hierarchy=False):
         susis = np.tile(susceptibility, (n, 1))
         if n == 3:
             msg = (
-                "Apply_demag input susceptibility is ambiguous - either scalar list or vector single entry. "
+                "solve_cells input susceptibility is ambiguous - either scalar list or vector single entry. "
                 "Please choose different means of input or change the number of cells in the Collection."
             )
             raise ValueError(msg)
@@ -226,7 +230,7 @@ def _convert_to_array(susceptibility, n, from_hierarchy=False):
     )
 
     if len(susceptibility_list) != n:
-        msg = "Apply_demag input susceptibility must be scalar, 3-vector, or same length as input Collection."
+        msg = "solve_cells input susceptibility must be scalar, 3-vector, or same length as input Collection."
         raise ValueError(msg)
 
     # Convert each susceptibility to 3-tuple format
@@ -308,6 +312,18 @@ def _subtract_susceptibility_product(T, chi):
     return T
 
 
+def warn_if_solved(collection):
+    """Warn if `collection` is a result of ``solve_cells``: its polarizations hold
+    the response, which a new solve would count as remanence."""
+    if getattr(collection, "solved_by", None) == "cells":
+        warnings.warn(
+            "This model is already solved: its polarizations hold the response, which "
+            "this solve counts as remanence, and the field drifts with each solve. "
+            "Solve the original model.",
+            stacklevel=_outside_this_package(),
+        )
+
+
 def _has_susceptibility(source):
     """Whether `source` or one of its parents sets a susceptibility."""
     refuse_bh_curve(source)
@@ -331,7 +347,8 @@ def _get_susceptibility_from_hierarchy(source):
 
 
 def get_H_ext(*sources):
-    """Return a list of length (len(sources)) with H_ext values.
+    """Return a list of length (len(sources)) with H_ext values. This reads only
+    the attribute, which goes in the next release, and not a ``UniformField``.
 
     `H_ext` is a uniform applied field given as mu_0 * H in tesla. A source's own
     value takes priority; otherwise it is searched up the parent tree, and it is
@@ -1578,6 +1595,13 @@ def _prepare_solver(
             kept["ops"] = kept["T_self"] = None  # free the operator before T
             return _solve_direct(np.array(dense(), order="F"), chi, rhs)
 
+    def demag_field(J):
+        """``T J``, the mu0 H in T of the polarizations ``J``, flat as ``rhs``."""
+        if kept["ops"] is None:
+            return dense() @ J
+        return J - _build_matvec(n, np.tile(np.eye(3), (n, 1, 1)), kept["ops"])(J)
+
+    solve.demag_field = demag_field
     return solve
 
 
@@ -1722,6 +1746,7 @@ def solve_cells(
     magnets_list = [src for src in srcs if isinstance(src, BaseMagnet)]
     originals = [src for src in original.sources_all if isinstance(src, BaseMagnet)]
     refuse_both(original.sources_all)  # the copy has no parents to read
+    warn_if_solved(original)
     currents_list = [src for src in srcs if isinstance(src, BaseCurrent | UniformField)]
     others_list = [
         src
@@ -1740,7 +1765,7 @@ def solve_cells(
         raise TypeError(msg)
     n = len(magnets_list)
     if n == 0:
-        msg = "Apply_demag input collection contains no magnet sources."
+        msg = "solve_cells input collection contains no magnet sources."
         raise ValueError(msg)
     counts = Counter(s.__class__.__name__ for s in magnets_list)
     inplace_str = f"""{" (inplace)" if inplace else ""}"""
@@ -1785,7 +1810,7 @@ def solve_cells(
         H_ext = get_H_ext(*originals)
         H_ext = np.array(H_ext)
         if len(H_ext) != n:
-            msg = "Apply_demag input collection and H_ext must have same length."
+            msg = "solve_cells input collection and H_ext must have same length."
             raise ValueError(msg)
         H_ext = np.reshape(H_ext, (3 * n, 1), order="F")
 
@@ -1832,9 +1857,12 @@ def solve_cells(
                 last["J"] = J
                 return np.reshape(J, (n, 3), order="F")
 
-            remanence = np.reshape(pol_magnets, (n, 3), order="F")
+            def field(J):
+                total = drive.ravel() + linear.demag_field(J.ravel(order="F"))
+                return np.reshape(total, (n, 3), order="F")
+
             pol_new, _ = iterate(
-                solve, on_curve, [curves[i] for i in on_curve], chi, remanence
+                solve, field, on_curve, [curves[i] for i in on_curve], chi
             )
             pol_new = np.reshape(pol_new, (3 * n, 1), order="F")
 

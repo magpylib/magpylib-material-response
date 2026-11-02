@@ -10,6 +10,10 @@ and this project adheres to
 
 ### Added
 
+- An Agent Skill ships inside the package, so AI coding assistants write the
+  current names and know where a solved model can be read. Add it to a project
+  with `uvx library-skills`
+  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
 - Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a
   part or a collection, in place of a constant, in `solve_cells`. Each cell
   takes the susceptibility its own field gives on the curve, the linear solve
@@ -25,6 +29,9 @@ and this project adheres to
 
 ### Changed
 
+- Solving the collection `solve_cells` returned warns: its polarizations count
+  as remanence, and the field drifts with each solve
+  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
 - **Breaking, with a warning for one release:** a uniform applied field is a
   source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in
   place of the attribute `H_ext`. `getB` of a solved model now includes it, as
@@ -42,7 +49,8 @@ and this project adheres to
   importable from the top level: `solve_cells` (`apply_demag`),
   `solve_face_charge` (`apply_face_charge`), `solve_fem` (`fem_solve`),
   `study_cells` (`mesh_study`), `study_fem` (`fem_study`). The module `demag` is
-  now `cells`, `demag_kwargs` is `solve_kwargs`, and `solved_by` says `"cells"`
+  now `cells` and `demag_kwargs` is `solve_kwargs`. With no warning: `solved_by`
+  says `"cells"`, also for files saved by 0.8.0
   ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
 - The fixes of the review before this release:
   `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropy set on a parent
@@ -51,9 +59,11 @@ and this project adheres to
   and B swapped or in the wrong units, warns; and `import *` from an old module
   still gives the old names
   ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
-- `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
-  read it, alone or with other sources, and it moves and copies like one. Its
-  own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`
+- **Breaking, with no warning:** `FemSolution.getB` squeezes a lone observer as
+  magpylib does, `(3,)`, not `(1, 3)`, so `getB(one_row)[0]` is now Bx. It is a
+  magpylib source: `magpy.getB`, `getH`, `getJ` and `getM` read it, alone or
+  with other sources, it moves and copies like one, and it keeps its own copy of
+  the coils, so changing one after the solve no longer changes the solution
   ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
 
 ## [0.8.0] - 2026-11-01
