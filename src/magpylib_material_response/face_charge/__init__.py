@@ -7,7 +7,7 @@ charge ``sigma = M.n`` on its faces, which solves
 
     (1/chi + 1/2) sigma - K' sigma = H0.n + M0.n / chi,
 
-with ``H0`` the applied field (``H_ext`` is ``mu0 H0``, in tesla) and ``K'``
+with ``H0`` the applied field (a ``UniformField``'s ``B`` is ``mu0 H0``, in tesla) and ``K'``
 the adjoint double-layer operator of the surface, which depends on the shape
 only. The faces are cut into panels graded toward the edges, each
 carrying a charge linear across it, with closed-form panel fields, or Gauss

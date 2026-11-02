@@ -25,6 +25,12 @@ and this project adheres to
 
 ### Changed
 
+- **Breaking, with a warning for one release:** a uniform applied field is a
+  source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in
+  place of the attribute `H_ext`. `getB` of a solved model now includes it, as
+  it does a coil's field, and it acts on every part. A model with both raises
+  ([#71](https://github.com/magpylib/magpylib-material-response/issues/71),
+  [#163](https://github.com/magpylib/magpylib-material-response/pull/163))
 - When a B-H curve does not settle, `solve_fem` says to try a higher order; the
   saturation page says to start at order 3
   ([#160](https://github.com/magpylib/magpylib-material-response/pull/160))

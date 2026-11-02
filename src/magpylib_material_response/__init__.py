@@ -21,10 +21,12 @@ if TYPE_CHECKING:  # for editors and linters; at run time, __getattr__ below
     from magpylib_material_response.convergence import compare, study_cells
     from magpylib_material_response.face_charge import solve_face_charge
     from magpylib_material_response.fem import solve_fem, study_fem  # noqa: F401
+    from magpylib_material_response.uniform import UniformField
 
 # loaded when first asked for: import stays fast, and NGSolve optional
 _FUNCTIONS = {
     "BHCurve": "_saturation",
+    "UniformField": "uniform",
     "compare": "convergence",
     "solve_cells": "cells",
     "solve_face_charge": "face_charge",
@@ -43,12 +45,14 @@ _MODULES = (
     "meshing_utils",
     "newell",
     "polyline",
+    "uniform",
     "utils",
 )
 
 # not solve_fem and study_fem: `import *` must not need NGSolve, nor load it
 __all__ = [
     "BHCurve",
+    "UniformField",
     "__version__",
     "compare",
     "configure_logging",

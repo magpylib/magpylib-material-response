@@ -37,7 +37,7 @@ import magpylib as magpy
 import numpy as np
 import plotly.graph_objects as go
 
-from magpylib_material_response import study_cells
+from magpylib_material_response import UniformField, study_cells
 
 MM = 1e-3  # lengths in metres, written in millimetres
 
@@ -66,15 +66,15 @@ at the sensor over the 50 µT around it.
 B0 = 50e-6  # T, the Earth's field, along the bar
 bar = magpy.magnet.Cuboid(dimension=(16 * MM, 2 * MM, 2 * MM), polarization=(0, 0, 0))
 bar.susceptibility = 4000
-bar.H_ext = (B0, 0, 0)
+bar_model = magpy.Collection(bar, UniformField(B=(B0, 0, 0)))
 sensors = np.array([(8.5, 0, 0), (9, 0, 0), (10, 0, 0)]) * MM  # 0.5, 1, 2 mm from the tip
 
 
 def gain(solved):
-    return (magpy.getB(solved, sensors)[:, 0] + B0) / B0
+    return magpy.getB(solved, sensors)[:, 0] / B0
 
 
-concentrator = study_cells(magpy.Collection(bar), gain, (4, 8, 16))
+concentrator = study_cells(bar_model, gain, (4, 8, 16))
 report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
 ```
 
@@ -176,11 +176,11 @@ from magpylib_material_response import compare
 from magpylib_material_response import study_fem
 
 fem = [
-    study_fem(bar.parent, sensors, orders=(3, 4, 5)),
+    study_fem(bar_model, sensors, orders=(3, 4, 5)),
     study_fem(array, profile, orders=(3, 4, 5)),
     study_fem(sheet.parent, behind, orders=(3, 4, 5)),
 ]
-print(f"gains {(fem[0].estimate[:, 0] + B0) / B0}, within {fem[0].errors}")
+print(f"gains {fem[0].estimate[:, 0] / B0}, within {fem[0].errors}")
 for study, reference in zip((halbach, shield), fem[1:], strict=True):
     comparison = compare(study, reference)
     off = comparison.difference / np.linalg.norm(comparison.b, axis=-1)

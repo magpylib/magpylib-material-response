@@ -37,14 +37,18 @@ source like any other.
   reference faster than finite elements on every validation case where both get
   there.
 - **`solve_cells`** cuts the parts into cells and solves for the polarization of
-  every cell at once with the method of moments: for an anisotropic
-  susceptibility, or one that varies inside a part. A dense direct solver, or
-  matrix-free GMRES with FFT products on grids of identical cells; meshing
-  helpers cut cuboids, cylinders and, through TetGen, any closed triangular
-  surface into cells.
+  every cell at once with the method of moments: for a part that saturates on a
+  `BHCurve`, an anisotropic susceptibility, or one that varies inside a part. A
+  dense direct solver, or matrix-free GMRES with FFT products on grids of
+  identical cells; meshing helpers cut cuboids, cylinders and, through TetGen,
+  any closed triangular surface into cells.
 - **`solve_fem`** (the `fem` extra, NGSolve) solves the same model by finite
-  elements, to check the other two; `study_cells`, `study_fem` and `compare`
-  give error bars by refining the mesh or the element order.
+  elements, to check the other two, a saturating part too; `study_cells`,
+  `study_fem` and `compare` give error bars by refining the mesh or the element
+  order.
+
+What drives a part is any other source in the model: magnets, currents and a
+`UniformField`. All of these are importable from the package itself.
 
 ## Installation
 
@@ -90,6 +94,23 @@ magnet.susceptibility = 0.3  # µr = 1.3
 
 mesh_demag = solve_cells(mesh_Cuboid(magnet, target_elems=125))
 print(magpy.getB(mesh_demag, (0, 0, 1.5e-3)))
+```
+
+```python
+import magpylib as magpy
+import numpy as np
+from magpylib_material_response import BHCurve, UniformField, solve_cells
+from magpylib_material_response.meshing import mesh_Cuboid
+
+# an iron cube saturating in an applied field, with a B-H curve in A/m and T
+H = np.r_[0.0, np.geomspace(1e-2, 1e6, 200)]
+mu0H = magpy.mu_0 * H
+cube = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.01, 0.01, 0.01))
+cube.susceptibility = BHCurve(H=H, B=1000 * mu0H / (1 + 1000 * mu0H / 1.6) + mu0H)
+
+model = magpy.Collection(mesh_Cuboid(cube, (4, 4, 4)), UniformField(B=(0, 0, 1)))
+solved = solve_cells(model)
+print(magpy.getB(solved, (0, 0, 0.02)))  # the applied 1 T included
 ```
 
 See the [documentation](https://magpylib-material-response.readthedocs.io/) for

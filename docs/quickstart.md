@@ -29,7 +29,7 @@ the same time.
 ```{code-cell} ipython3
 import magpylib as magpy
 
-from magpylib_material_response import solve_cells
+from magpylib_material_response import UniformField, solve_cells
 from magpylib_material_response.meshing import mesh_Cuboid
 
 # a hard magnet with finite susceptibility, SI units (m, T)
@@ -69,16 +69,17 @@ coll = solve_cells(mesh, susceptibility=0.3)
 An anisotropic value acts along the **magnet's own axes** and turns with it,
 like its polarization (see the [method page](method.md)).
 
-A uniform applied field is set the same way, with the `H_ext` attribute, as
-$\mu_0 \mathbf{H}$ in tesla:
+A uniform applied field is a source in the collection, a `UniformField`, given
+as B in T or H in A/m. `getB` of the solved model includes it, as it does a
+coil's field:
 
 ```{code-cell} ipython3
 soft = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(1e-3, 1e-3, 1e-3))
 soft.susceptibility = 3999  # µr = 4000
-soft.H_ext = (0, 0, 0.1)  # 0.1 T applied along z
+mesh = mesh_Cuboid(soft, target_elems=125)
 
-soft_demag = solve_cells(mesh_Cuboid(soft, target_elems=125))
-Jz = [cell.polarization[2] for cell in soft_demag.sources_all]
+soft_demag = solve_cells(magpy.Collection(mesh, UniformField(B=(0, 0, 0.1))))
+Jz = [cell.polarization[2] for cell in soft_demag.children[0].sources_all]
 print(f"mean induced polarization: {sum(Jz) / len(Jz):.3f} T along z")
 ```
 
