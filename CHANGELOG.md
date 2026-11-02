@@ -16,7 +16,7 @@ and this project adheres to
   mesh whose vertices lie off its origin, and building or loading a sheet no
   longer warns by itself. A part with no size, or one varying along a path, is
   refused at once
-  ([#169](https://github.com/magpylib/magpylib-material-response/pull/169))
+  ([#170](https://github.com/magpylib/magpylib-material-response/pull/170))
 
 ## [0.9.1] - 2026-11-02
 
