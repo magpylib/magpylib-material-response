@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import pickle
 import subprocess
@@ -1761,15 +1762,18 @@ def test_reading_inside_a_solved_part_warns(part):
     magpy.getB(solved, (0, 0, 0.1))
 
 
-def test_only_a_whole_surface_warns_when_read_inside():
-    """Touching parts of one material leave no closed surface to be inside of."""
+def test_reading_inside_warns_on_touching_parts_and_from_json_not_by_hand():
+    """Touching parts of one material leave no closed surface: the part tells. A
+    sheet built by hand has no part to tell."""
     a, b = _soft(position=(-0.005, 0, 0)), _soft(position=(0.005, 0, 0))
     solved = solve_face_charge(magpy.Collection(_drive(), a, b), level=1)
-    magpy.getB(solved, (0.005, 0, 0))
+    inside = (0.005, 0.001, 0)
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(solved, inside)
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        magpy.getB(from_json(to_json(solved))[0], inside)
     sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
-    magpy.getB(
-        ChargeSheet(sheet.vertices, sheet.faces, sheet.charge_densities), (0, 0, 0)
-    )
+    magpy.getB(ChargeSheet(sheet.vertices, sheet.faces, sheet.charge_densities), inside)
 
 
 def _triangular_part():
@@ -1876,12 +1880,11 @@ def test_a_part_with_no_faces_left_has_its_part_and_a_changed_sheet_has_none():
 def _recipe(solved, **kwargs):
     """The loop of the face-charge page, as written there."""
     sources = solved.sources_all
-    parts = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
-    drives = [s.copy() for s in sources if not any(s is p for p in parts)]
+    sheets = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
+    drives = [s.copy() for s in sources if not any(s is k for k in sheets)]
+    parts = [s.part for s in sheets]
     level = solved.face_charge_info["level"]
-    return solve_face_charge(
-        magpy.Collection(*[s.part for s in parts], *drives), level=level, **kwargs
-    )
+    return solve_face_charge(magpy.Collection(*parts, *drives), level=level, **kwargs)
 
 
 def test_the_recipe_on_the_page_solves_a_drag():
@@ -1895,21 +1898,33 @@ def test_the_recipe_on_the_page_solves_a_drag():
 
 
 def test_a_frozen_sheet_stays_a_drive():
-    """It kept its part, so the recipe solved it again as a part: with it the only
-    drive, nothing was left to drive the other, and B was 0 with no warning."""
+    """A sheet kept as a fixed source is not what the later solve solved: the
+    recipe took it for a part, with nothing left to drive the other."""
     first = solve_face_charge(
         magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
     )
     frozen = next(s for s in first.sources_all if isinstance(s, ChargeSheet)).copy()
-    frozen._part = None  # as a user's hand-built drive
     soft = _soft(position=(0.05, 0, 0))
-    solved = solve_face_charge(magpy.Collection(frozen, soft), level=1)
+    with pytest.warns(UserWarning, match="counts twice"):
+        solved = solve_face_charge(magpy.Collection(frozen, soft), level=1)
     sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
     assert [s.part is not None for s in sheets] == [False, True]
+    assert frozen.part is not None  # the one given stays as it was
     again = _recipe(solved)
     point = (0.05, 0.02, 0)
-    np.testing.assert_allclose(magpy.getB(again, point), magpy.getB(solved, point))
     assert np.abs(magpy.getB(solved, point)).max() > 0
+    np.testing.assert_allclose(magpy.getB(again, point), magpy.getB(solved, point))
+
+
+def test_a_solve_with_nothing_to_solve_keeps_what_the_sheets_were():
+    first = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    with pytest.warns(UserWarning, match="No magnet has a susceptibility"):
+        again = solve_face_charge(first)
+    assert again.face_charge_info["level"] == 1
+    assert again.solved_by == "face_charge"
+    assert all(s.part is None for s in again.sources_all if isinstance(s, ChargeSheet))
 
 
 def test_a_sheet_beside_its_own_part_warns():
@@ -1970,3 +1985,14 @@ def test_a_sheet_built_by_hand_has_no_part_and_takes_only_a_magnet():
     assert _one_face((1, 1, 1)).part is None
     with pytest.raises(TypeError, match="must be a magnet"):
         _one_face((1, 1, 1), part=magpy.current.Circle(current=1, diameter=1))
+
+
+def test_a_sheets_mesh_is_read_only_and_a_shallow_copy_reads_its_own_charge():
+    sheet = _one_face((1, 1, 1), part=_soft())
+    for name in ("vertices", "faces", "triangles", "charge_densities"):
+        with pytest.raises(ValueError, match="read-only"):
+            getattr(sheet, name)[0] = 0
+    point = (0.1, 0.2, 0.3)
+    shallow = copy.copy(sheet)
+    shallow.charge_densities = sheet.charge_densities * 2
+    np.testing.assert_allclose(magpy.getH(shallow, point), 2 * magpy.getH(sheet, point))

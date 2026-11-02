@@ -313,9 +313,16 @@ def _subtract_susceptibility_product(T, chi):
 
 
 def warn_if_solved(collection):
-    """Warn if `collection` is a result of ``solve_cells``: its polarizations hold
-    the response, which a new solve would count as remanence."""
-    if getattr(collection, "solved_by", None) == "cells":
+    """Warn if `collection` is, holds or belongs to a result of ``solve_cells``:
+    its polarizations hold the response, which a new solve would count as
+    remanence. Cells copied out of a result one by one carry no sign of it."""
+    around = [*getattr(collection, "children_all", ()), collection]
+    owner = collection.parent
+    while owner is not None:
+        around.append(owner)
+        owner = owner.parent
+    # "demag" in a result pickled by 0.8.0
+    if any(getattr(c, "solved_by", None) in ("cells", "demag") for c in around):
         warnings.warn(
             "This model is already solved: its polarizations hold the response, which "
             "this solve counts as remanence, and the field drifts with each solve. "
@@ -349,6 +356,7 @@ def _get_susceptibility_from_hierarchy(source):
 def get_H_ext(*sources):
     """Return a list of length (len(sources)) with H_ext values. This reads only
     the attribute, which goes in the next release, and not a ``UniformField``.
+    It stays in the global frame, where a ``UniformField`` turns with its parent.
 
     `H_ext` is a uniform applied field given as mu_0 * H in tesla. A source's own
     value takes priority; otherwise it is searched up the parent tree, and it is
@@ -437,6 +445,13 @@ def _report_fixed_magnets(magnets):
             "every one is fixed, and nothing responds.",
             stacklevel=_outside_this_package(),
         )
+    elif any(_does_nothing(src) for src in magnets):
+        warnings.warn(
+            "A magnet has no susceptibility and no polarization, so it does nothing. A "
+            "magnet's copy leaves its parent behind, and what it inherits from it: copy "
+            "the collection, or set the susceptibility on the copy.",
+            stacklevel=_outside_this_package(),
+        )
     elif fixed:
         logger.info(
             "{fixed} of {n} magnets have no susceptibility, on themselves or a "
@@ -444,6 +459,14 @@ def _report_fixed_magnets(magnets):
             fixed=fixed,
             n=len(magnets),
         )
+
+
+def _does_nothing(magnet):
+    """Whether `magnet` is fixed with no polarization: no drive, and no part."""
+    if _has_susceptibility(magnet):
+        return False
+    polarization = getattr(magnet, "polarization", None)
+    return polarization is None or not np.any(polarization)
 
 
 def _outside_this_package():
@@ -1759,8 +1782,9 @@ def solve_cells(
             f"{count} {name}" for name, count in counts_others.items()
         )
         msg = (
-            "Only Magnet and Current sources supported. "
-            f"Incompatible objects found: {counts_str}"
+            "Only Magnet and Current sources and a UniformField are supported. "
+            f"Incompatible objects found: {counts_str}. A solved ChargeSheet gives the "
+            "magnet it was solved from in its part."
         )
         raise TypeError(msg)
     n = len(magnets_list)

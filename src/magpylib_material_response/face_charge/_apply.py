@@ -177,7 +177,17 @@ def solve_face_charge(
     info = {"unknowns": 0, "level": level, "rounds": 0, "reused": False}
     if not solved:
         logger.info("Face charge: no part with a susceptibility to solve")
-        out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
+        for src in out.sources_all:  # fixed sources here, as below
+            if isinstance(src, ChargeSheet):
+                src._part = None
+        # a level only if something was solved at it: what the sheets were, if known
+        before = getattr(collection, "face_charge_info", {})
+        out.face_charge_info = {
+            **info,
+            "level": before.get("level", level),
+            "seconds": time.perf_counter() - start,
+        }
+        out.solved_by = "face_charge"
         return out
 
     outlines = [
@@ -424,6 +434,13 @@ def _split(collection):
             )
             raise NotImplementedError(msg)
         solved.append((src, float(chi.flat[0])))
+    if solved and any(getattr(s, "solved_by", None) == "fem" for s in fixed):
+        warnings.warn(
+            "This model solves parts beside a FemSolution, which stays a fixed source "
+            "and does not respond to them, and whose field holds its own drives: do not "
+            "add those again.",
+            stacklevel=_outside_this_package(),
+        )
     if solved and any(
         isinstance(s, ChargeSheet) and s._part is not None for s in fixed
     ):
@@ -813,18 +830,14 @@ def _touch(first, second, tol):
 def _sheet_of(body, c, keep):
     """The ChargeSheet of a solved body, of the panels ``keep`` marks."""
     if isinstance(body, Body):
-        sheet = ChargeSheet._from_body(body, c, keep=None if keep.all() else keep)
-        sheet._solid = bool(keep.all())
-        return sheet
+        return ChargeSheet._from_body(body, c, keep=None if keep.all() else keep)
     if keep.all():
-        sheet = ChargeSheet.from_triangles(
+        return ChargeSheet.from_triangles(
             body.T,
             body.coefficients_at_corners(c),
             position=body.position,
             orientation=Rotation.from_matrix(body.R),
         )
-        sheet._solid = True
-        return sheet
     return ChargeSheet.from_triangles(  # each triangle its own panel, numbered as kept
         body.T[keep],
         body.coefficients_at_corners(c)[keep],

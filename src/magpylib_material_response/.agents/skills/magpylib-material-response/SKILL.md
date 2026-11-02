@@ -18,7 +18,8 @@ license: BSD-3-Clause
 Official skill for Magpylib-Material-Response 0.x, shipped inside the package
 and versioned with it. Prefer it over recalled API knowledge: the names in this
 skill are from 0.9, and the package is in alpha. For the field computation
-itself (`getB`, sources, paths, sensors), use Magpylib's own skill.
+itself (`getB`, sources, paths, sensors), see Magpylib: its own skill ships from
+its next release.
 
 Check the installed version before writing code:
 
@@ -56,7 +57,8 @@ which change with no warning. Write the new ones.
 | `fem_solution.getB(one_row)[0]`  | `fem_solution.getB(one_row)`: now `(3,)`, so `[0]` is Bx |
 
 `H_ext` left its field out of `getB` of the result; `UniformField` includes it.
-A model with both raises.
+It also stayed in the global frame, where a `UniformField` turns with its
+parent. A model with both raises.
 
 ## A model
 
@@ -164,11 +166,14 @@ models, so a measurement is still the final check.
   and `getM` give 0, each with a warning. No warning comes from a part touching
   another of its material. For B inside, use `solve_cells` or `solve_fem`. The
   mean polarization is on each sheet, `sheet.mean_polarization`.
+- **A magnet's copy leaves its parent behind,** and what it inherits from it: a
+  part under a parent with a `susceptibility` becomes fixed, with a warning only
+  if it has no polarization. `collection.copy()` and `sheet.part` keep it.
 - **Solve the original model, not a result.** A result's polarizations hold the
-  response, which a new solve counts as remanence. The returned collection
-  warns; a part taken out of it, or put into a new collection, does not. A
-  sheet's `part` holds the magnet it was solved from, at the sheet's pose, to
-  rebuild a model from a face-charge result.
+  response, which a new solve counts as remanence. It warns, unless the cells
+  were copied out of it one by one. A sheet's `part` holds the magnet it was
+  solved from, at the sheet's pose, to rebuild a model from a face-charge
+  result.
 - **Changing a solved model does not solve it again,** moving it or setting a
   `UniformField` on it. B moves with it, while the response stays that of the
   old position. Solve per position: paths are refused.

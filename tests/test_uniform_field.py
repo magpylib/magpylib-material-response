@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import copy
+import pickle
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -112,6 +115,26 @@ def test_its_value_can_be_set_and_given_to_a_copy():
     np.testing.assert_allclose(field.B, (0, 0, 1000 * magpy.mu_0))
     with pytest.raises(ValueError, match="three finite"):
         field.B = (1, 2)
+
+
+@pytest.mark.parametrize(
+    "duplicate",
+    [
+        copy.copy,
+        copy.deepcopy,
+        lambda f: pickle.loads(pickle.dumps(f)),
+        lambda f: f.copy(),
+    ],
+    ids=["copy.copy", "deepcopy", "pickle", ".copy"],
+)
+def test_every_copy_reads_its_own_field_and_keeps_it_read_only(duplicate):
+    field = UniformField(B=(0, 0, 0.1))
+    other = duplicate(field)
+    other.B = (0, 0, 0.5)
+    np.testing.assert_allclose(other.getB((1, 1, 1)), (0, 0, 0.5))
+    np.testing.assert_allclose(field.getB((1, 1, 1)), (0, 0, 0.1))
+    with pytest.raises(ValueError, match="read-only"):
+        other.B[0] = 1.0
 
 
 def test_a_field_in_a_unit_of_h_warns():

@@ -68,6 +68,7 @@ from magpylib_material_response.fem._geometry import (
     wire_points,
 )
 from magpylib_material_response.uniform import applied as uniform_field
+from magpylib_material_response.uniform import shallow_copy
 from magpylib_material_response.utils import timelog
 
 MU0 = magpy.mu_0
@@ -389,14 +390,14 @@ class FemSolution(magpy.misc.CustomSource):
         return new
 
     def __copy__(self):
-        return self.__deepcopy__({})
+        return shallow_copy(self)
 
     def __reduce_ex__(self, protocol):
         """Refused: NGSolve pickles the mesh and the solution, and crashes the
         interpreter on the first read of what it loads."""
         msg = (
             "A FemSolution cannot be saved: NGSolve crashes on reading its pickled "
-            "field back. Keep the values, as FemStudy does, or solve again."
+            "field back, and a FemStudy holds one. Keep the values, or solve again."
         )
         raise TypeError(msg)
 

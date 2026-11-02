@@ -23,8 +23,8 @@ from magpylib_material_response.face_charge._triangle import (
     far_points,
     frames,
 )
-from magpylib_material_response.face_charge._tribody import _winding
 from magpylib_material_response.meshing_utils import detached_copy
+from magpylib_material_response.uniform import shallow_copy
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 # an observer this many of a sheet's longest triangle sides past all of it takes
@@ -108,6 +108,7 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     _style_class = ChargeSheetStyle
     _part = None  # also for a sheet pickled before there were parts
+    _probe = None
     _style_family = ("magnet", "triangularmesh")
 
     def __init__(
@@ -140,6 +141,9 @@ class ChargeSheet(magpy.misc.CustomSource):
             self.field_func = self._field
         except MagpylibBadUserInput:
             self._field_func = self._field
+
+    def __copy__(self):
+        return shallow_copy(self)
 
     # ── mesh and charge ───────────────────────────────────────────────────
     @property
@@ -187,8 +191,8 @@ class ChargeSheet(magpy.misc.CustomSource):
         return self._V
 
     def _set(self, vertices, faces, charge_densities, panels=None):
-        P = np.asarray(vertices, float).reshape(-1, 3)
-        F = np.asarray(faces, int).reshape(-1, 3)
+        P = np.array(vertices, float).reshape(-1, 3)
+        F = np.array(faces, int).reshape(-1, 3)
         q = np.asarray(charge_densities, float).reshape(-1, 3)
         if len(q) != len(F):
             msg = (
@@ -200,15 +204,19 @@ class ChargeSheet(magpy.misc.CustomSource):
             msg = f"faces index vertices 0 to {len(P) - 1}; got {F.min()} to {F.max()}."
             raise ValueError(msg)
         if panels is not None:
-            panels = np.asarray(panels, int).reshape(-1)
+            panels = np.array(panels, int).reshape(-1)
             if len(panels) != len(F):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._mean = None  # set by solve_face_charge on parts solved as one
-        self._solid = False  # set by solve_face_charge on a part's whole surface
         self._part = None  # set by solve_face_charge: new charges, no such part
+        self._probe = None  # the part at the sheet's own frame, to test observers
         self._V = P[F]
+        # what the charge and the part rest on does not change in place: set it
+        for fixed in (P, F, panels, self._V):
+            if fixed is not None:
+                fixed.flags.writeable = False
         self._lo, self._hi = (
             (self._V.min((0, 1)), self._V.max((0, 1))) if len(F) else (0, 0)
         )
@@ -367,28 +375,44 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     # ── field ─────────────────────────────────────────────────────────────
     def _warn_if_inside(self, X, field):
-        """Warn if observers lie inside the part, of a sample of them: it costs
-        a box test unless some lie in its box."""
-        box = X[((self._lo <= X) & (self._hi >= X)).all(axis=1)]
-        for point in box[:: max(1, len(box) // INSIDE_SAMPLE)]:
-            if abs(_winding(point, self._V)) > 0.5:
-                gives = (
-                    "mu0 H there, not B, without the part's magnetization"
-                    if field == "B"
-                    else f"{field} = 0 there, as a sheet has no volume"
-                )
-                warnings.warn(
-                    f"Observers inside a solved part: a ChargeSheet gives {gives}. "
-                    f"For {field} inside a part, mesh it and use solve_cells, or use "
-                    "solve_fem.",
-                    stacklevel=2,
-                )
-                return
+        """Warn if observers lie inside the part this sheet was solved from, of a
+        sample of them: it costs a box test unless some lie in its box. Of parts
+        solved as one the sheet has lost faces, so the part says, not the surface;
+        one with none left has no box."""
+        box = X
+        if len(self._V):
+            box = X[((self._lo <= X) & (self._hi >= X)).all(axis=1)]
+        if not box.size:
+            return
+        if self._probe is None:
+            self._probe = _copy_of(self._part)
+            self._probe.position, self._probe.orientation = (0, 0, 0), None
+            self._probe.polarization = (0, 0, 1)
+        sample = box[:: max(1, len(box) // INSIDE_SAMPLE)]
+        # a point on the surface is outside as well: a step to each side tells
+        size = np.linalg.norm(self._hi - self._lo) if len(self._V) else 0.0
+        step = 1e-9 * max(size, np.abs(sample).max())
+        steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
+        points = (sample[:, None] + steps).reshape(-1, 3)
+        with np.errstate(divide="ignore", invalid="ignore"):  # on a mesh's own points
+            J = self._probe.getJ(points).reshape(len(sample), len(steps), 3)
+        if ((J != 0).any(axis=2) & np.isfinite(J).all(axis=2)).all(axis=1).any():
+            gives = (
+                "mu0 H there, not B, without the part's magnetization"
+                if field == "B"
+                else f"{field} = 0 there, as a sheet has no volume"
+            )
+            warnings.warn(
+                f"Observers inside a solved part: a ChargeSheet gives {gives}. "
+                f"For {field} inside a part, mesh it and use solve_cells, or use "
+                "solve_fem.",
+                stacklevel=2,
+            )
 
     def _field(self, field, observers):
         X = np.asarray(observers, float).reshape(-1, 3)
         out = np.zeros((len(X), 3))
-        if field != "H" and self._solid:
+        if field != "H" and self._part is not None:
             self._warn_if_inside(X, field)
         if field in ("M", "J"):
             return out  # the source carries no magnetization of its own

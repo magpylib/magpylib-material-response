@@ -268,14 +268,17 @@ parent:
 
 ```python
 sources = solved.sources_all
-parts = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
-drives = [s.copy() for s in sources if not any(s is p for p in parts)]
+sheets = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
+drives = [s.copy() for s in sources if not any(s is k for k in sheets)]
+parts = [s.part for s in sheets]
 parts[0].move((0.001, 0, 0))  # a drag
 level = solved.face_charge_info["level"]
-again = solve_face_charge(
-    magpy.Collection(*[s.part for s in parts], *drives), level=level
-)
+again = solve_face_charge(magpy.Collection(*parts, *drives), level=level)
 ```
+
+The parts are copies, so `solved` stays as it was. Moving a sheet of `solved`
+instead moves its field too, without solving, and its part with it. Each `copy`
+of a drive adds a suffix to its label, as magpylib's does.
 
 Pass `reuse=solved` as well, if the first solve had `reuse=True`, to keep its
 factorization when only the drives moved. Leave the sheets out: one kept beside
