@@ -20,18 +20,18 @@ kernelspec:
 
 With a constant susceptibility, iron can reach any polarization: at 1 T applied,
 a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. A
-table set as `susceptibility` on a part, or on a collection above it, replaces
-the constant: `solve_cells` then puts every cell at the susceptibility its own
-field gives on the curve, repeating the linear solve until none changes. The
-interaction matrix is built once; the fixed point takes 10 to 40 solves with
+`BHCurve` set as `susceptibility` on a part, or on a collection above it,
+replaces the constant: `solve_cells` then puts every cell at the susceptibility
+its own field gives on the curve, repeating the linear solve until none changes.
+The interaction matrix is built once; the fixed point takes 10 to 40 solves with
 Anderson acceleration.
 
 ## A curve
 
-A curve is a table of (H, B) points in A/m and T, from (0, 0), with H
-increasing. A measured steel's table goes in as it is. Here a simple curve
+A `BHCurve` takes H in A/m and B in T, from (0, 0), with H increasing. A
+measured steel's table goes in as it is, column by column. Here a simple curve
 stands in: J = χ₀ μ₀ H / (1 + χ₀ μ₀ H / Jₛ), with χ₀ = 1000 and Jₛ = 1.6 T, so B
-= J + μ₀ H. Past the table's last point, J keeps its last value.
+= J + μ₀ H. Past its last point, J keeps its last value.
 
 ```{code-cell} ipython3
 import magpylib as magpy
@@ -40,6 +40,7 @@ import numpy as np
 from scipy.optimize import brentq
 
 from magpylib_material_response import solve_cells
+from magpylib_material_response import BHCurve
 from magpylib_material_response.meshing import mesh_Cuboid, mesh_TriangularMesh
 
 MU0 = 4e-7 * np.pi
@@ -51,7 +52,7 @@ def polarization(H):
 
 
 H = np.r_[0.0, np.geomspace(1e-2, 1e6, 400)]  # A/m
-curve = np.c_[H, polarization(H) + MU0 * H]  # (H, B) rows
+curve = BHCurve(H=H, B=polarization(H) + MU0 * H)
 
 fig, ax = plt.subplots(figsize=(5, 3))
 ax.plot(MU0 * H, polarization(H), label="the curve, J(H)")
@@ -179,3 +180,7 @@ both methods share it.
   order 3 in about 20 s.
 - The curve is the material's initial curve: no hysteresis, so a field that
   comes back down returns along the same curve.
+- A part's `polarization` stays a fixed remanence, and the curve's J adds to it,
+  so a part with both can pass the curve's saturation: 1 T of remanence and a
+  curve saturating at 1.5 T reach 2.5 T. For a saturating part, leave
+  `polarization` at zero.

@@ -5,6 +5,8 @@
 ```{eval-rst}
 .. autofunction:: magpylib_material_response.cells.solve_cells
 
+.. autoclass:: magpylib_material_response.BHCurve
+
 .. autofunction:: magpylib_material_response.cells.demag_tensor
 
 .. autofunction:: magpylib_material_response.cells.get_susceptibilities

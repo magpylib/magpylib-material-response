@@ -10,12 +10,13 @@ and this project adheres to
 
 ### Added
 
-- Saturation: `susceptibility` takes a table of (H, B) rows, on a part or a
-  collection, in place of a constant, in `solve_cells`. Each cell takes the
-  susceptibility its own field gives on the curve, the linear solve repeated
-  until none changes, with the matrix built once and Anderson acceleration: 10
-  to 40 solves. A sphere comes out within 1 % of its exact answer along the
-  curve. Meshers and `to_json` carry the curve; `solve_face_charge` refuses it
+- Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a
+  part or a collection, in place of a constant, in `solve_cells`. Each cell
+  takes the susceptibility its own field gives on the curve, the linear solve
+  repeated until none changes, with the matrix built once and Anderson
+  acceleration: 10 to 40 solves. A sphere comes out within 1 % of its exact
+  answer along the curve. Meshers and `to_json` carry the curve;
+  `solve_face_charge` refuses it
   ([#150](https://github.com/magpylib/magpylib-material-response/pull/150),
   [#159](https://github.com/magpylib/magpylib-material-response/pull/159))
 - `solve_fem` follows such a curve too, so a saturated part has an independent
@@ -37,6 +38,13 @@ and this project adheres to
   `study_cells` (`mesh_study`), `study_fem` (`fem_study`). The module `demag` is
   now `cells`, `demag_kwargs` is `solve_kwargs`, and `solved_by` says `"cells"`
   ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
+- The fixes of the review before this release:
+  `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropy set on a parent
+  too, which was 11 times off with no error; a steep B-H curve no longer crashes
+  the iteration, whose log χ is now bounded; a curve past any material, with H
+  and B swapped or in the wrong units, warns; and `import *` from an old module
+  still gives the old names
+  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 - `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
   read it, alone or with other sources, and it moves and copies like one. Its
   own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`

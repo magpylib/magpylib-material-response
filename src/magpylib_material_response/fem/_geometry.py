@@ -14,7 +14,7 @@ import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMagnet
 from netgen import occ
 
-from magpylib_material_response._saturation import Curve, curve_of
+from magpylib_material_response._saturation import BHCurve, curve_of
 from magpylib_material_response.cells import (
     _cell_susceptibilities,
     _has_path,
@@ -44,7 +44,7 @@ class Part:
     #: Smallest extent in m.
     thinnest: float
     #: Its B-H curve, if it follows one; `chi` is then the curve's initial slope.
-    curve: Curve | None = None
+    curve: BHCurve | None = None
 
 
 def parts_of(collection):

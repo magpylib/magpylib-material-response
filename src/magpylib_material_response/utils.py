@@ -14,7 +14,7 @@ from magpylib._src.obj_classes.class_BaseExcitations import BaseCurrent, BaseMag
 from scipy.spatial.transform import Rotation
 
 from magpylib_material_response import logging_config
-from magpylib_material_response._saturation import is_table
+from magpylib_material_response._saturation import BHCurve
 
 
 class ElapsedTimeThread(threading.Thread):
@@ -156,7 +156,12 @@ def _serialize_recursive(obj, parent="warn"):
     # Collection for hierarchy lookup); np.asarray handles scalars, tuples
     # and numpy arrays alike.
     susceptibility = getattr(obj, "susceptibility", None)
-    if susceptibility is not None:
+    if isinstance(susceptibility, BHCurve):
+        dd["susceptibility"] = {
+            "H": {"value": susceptibility.H.tolist(), "unit": "A/m"},
+            "B": {"value": susceptibility.B.tolist(), "unit": "T"},
+        }
+    elif susceptibility is not None:
         dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
     h_ext = getattr(obj, "H_ext", None)
     if h_ext is not None:
@@ -311,8 +316,13 @@ def _deserialize_recursive(inp):
     obj = constr(**kw)
 
     if inp.get("susceptibility") is not None:
-        value = inp["susceptibility"]["value"]
-        obj.susceptibility = np.asarray(value, float) if is_table(value) else value
+        saved = inp["susceptibility"]
+        if "H" in saved:
+            _check_unit("H", saved["H"], "A/m")
+            _check_unit("B", saved["B"], "T")
+            obj.susceptibility = BHCurve(H=saved["H"]["value"], B=saved["B"]["value"])
+        else:
+            obj.susceptibility = saved["value"]
     if inp.get("H_ext") is not None:
         _check_unit("H_ext", inp["H_ext"], "T")
         obj.H_ext = inp["H_ext"]["value"]
