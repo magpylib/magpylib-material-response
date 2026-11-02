@@ -20,7 +20,8 @@ and this project adheres to
   ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
 - `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
   read it, alone or with other sources, and it moves and copies like one. Its
-  own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`
+  own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`.
+  Pickling one raises instead of crashing on reading it back
   ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
 - `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
   `getB` warns there. The docs say not to read a cell model exactly on a
@@ -35,40 +36,23 @@ and this project adheres to
   takes the susceptibility its own field gives on the curve, the linear solve
   repeated until none changes, with the matrix built once and Anderson
   acceleration: 10 to 40 solves. A sphere comes out within 1 % of its exact
-  answer along the curve. Meshers and `to_json` carry the curve;
-  `solve_face_charge` refuses it
+  answer along the curve. A curve past any material warns, as with H and B
+  swapped. Meshers and `to_json` carry it; `solve_face_charge` refuses it
   ([#150](https://github.com/magpylib/magpylib-material-response/pull/150),
-  [#159](https://github.com/magpylib/magpylib-material-response/pull/159))
+  [#159](https://github.com/magpylib/magpylib-material-response/pull/159),
+  [#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 - `solve_fem` follows such a curve too, so a saturated part has an independent
-  check: a sphere is within 0.2 % of its exact answer at order 4 from 0.05 to 2
-  T ([#151](https://github.com/magpylib/magpylib-material-response/pull/151))
+  check: a sphere's moment is within 0.08 % of its exact value at order 4 from
+  0.05 to 2 T, and B at its centre within 0.3 %. Start at order 3: order 2 can
+  fail to settle, and says so
+  ([#151](https://github.com/magpylib/magpylib-material-response/pull/151),
+  [#160](https://github.com/magpylib/magpylib-material-response/pull/160))
 
-### Changed
+### Fixed
 
-- When a B-H curve does not settle, `solve_fem` says to try a higher order; the
-  saturation page says to start at order 3
-  ([#160](https://github.com/magpylib/magpylib-material-response/pull/160))
-- `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
-  `getB` warns there. The docs say not to read a cell model exactly on a
-  boundary between cells, where the field is wrong with no warning
-  ([#157](https://github.com/magpylib/magpylib-material-response/pull/157))
-- **Breaking, with warnings for one release:** the solvers take one form and are
-  importable from the top level: `solve_cells` (`apply_demag`),
-  `solve_face_charge` (`apply_face_charge`), `solve_fem` (`fem_solve`),
-  `study_cells` (`mesh_study`), `study_fem` (`fem_study`). The module `demag` is
-  now `cells`, `demag_kwargs` is `solve_kwargs`, and `solved_by` says `"cells"`
-  ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
-- The fixes of the review before this release:
-  `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropy set on a parent
-  too, which was 11 times off with no error; a steep B-H curve no longer crashes
-  the iteration, whose log χ is now bounded; a curve past any material, with H
-  and B swapped or in the wrong units, warns; and `import *` from an old module
-  still gives the old names
-  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
-- `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
-  read it, alone or with other sources, and it moves and copies like one. Its
-  own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`
-  ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
+- `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropic susceptibility
+  set on a parent too: it read only the part's own, and came out 11 times off
+  with no error ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 
 ## [0.8.0] - 2026-11-01
 
