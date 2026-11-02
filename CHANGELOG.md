@@ -8,43 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Added
-
-- An Agent Skill ships inside the package, so AI coding assistants write the
-  current names and know where a solved model can be read. Add it to a project
-  with `uvx library-skills`
-  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
-- Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a
-  part or a collection, in place of a constant, in `solve_cells`. Each cell
-  takes the susceptibility its own field gives on the curve, the linear solve
-  repeated until none changes, with the matrix built once and Anderson
-  acceleration: 10 to 40 solves. A sphere comes out within 1 % of its exact
-  answer along the curve. Meshers and `to_json` carry the curve;
-  `solve_face_charge` refuses it
-  ([#150](https://github.com/magpylib/magpylib-material-response/pull/150),
-  [#159](https://github.com/magpylib/magpylib-material-response/pull/159))
-- `solve_fem` follows such a curve too, so a saturated part has an independent
-  check: a sphere is within 0.2 % of its exact answer at order 4 from 0.05 to 2
-  T ([#151](https://github.com/magpylib/magpylib-material-response/pull/151))
+## [0.9.0] - 2026-11-02
 
 ### Changed
 
-- Solving the collection `solve_cells` returned warns: its polarizations count
-  as remanence, and the field drifts with each solve
-  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
-- **Breaking, with a warning for one release:** a uniform applied field is a
-  source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in
-  place of the attribute `H_ext`. `getB` of a solved model now includes it, as
-  it does a coil's field, and it acts on every part. A model with both raises
-  ([#71](https://github.com/magpylib/magpylib-material-response/issues/71),
-  [#163](https://github.com/magpylib/magpylib-material-response/pull/163))
-- When a B-H curve does not settle, `solve_fem` says to try a higher order; the
-  saturation page says to start at order 3
-  ([#160](https://github.com/magpylib/magpylib-material-response/pull/160))
-- `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
-  `getB` warns there. The docs say not to read a cell model exactly on a
-  boundary between cells, where the field is wrong with no warning
-  ([#157](https://github.com/magpylib/magpylib-material-response/pull/157))
 - **Breaking, with warnings for one release:** the solvers take one form and are
   importable from the top level: `solve_cells` (`apply_demag`),
   `solve_face_charge` (`apply_face_charge`), `solve_fem` (`fem_solve`),
@@ -52,19 +19,64 @@ and this project adheres to
   now `cells` and `demag_kwargs` is `solve_kwargs`. With no warning: `solved_by`
   says `"cells"`, also for files saved by 0.8.0
   ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
-- The fixes of the review before this release:
-  `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropy set on a parent
-  too, which was 11 times off with no error; a steep B-H curve no longer crashes
-  the iteration, whose log χ is now bounded; a curve past any material, with H
-  and B swapped or in the wrong units, warns; and `import *` from an old module
-  still gives the old names
-  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
+- **Breaking, with a warning for one release:** a uniform applied field is a
+  source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in
+  place of the attribute `H_ext`. `getB` of a solved model now includes it, as
+  it does a coil's field, it acts on every part, and several add up. A model
+  with both raises
+  ([#71](https://github.com/magpylib/magpylib-material-response/issues/71),
+  [#163](https://github.com/magpylib/magpylib-material-response/pull/163))
 - **Breaking, with no warning:** `FemSolution.getB` squeezes a lone observer as
   magpylib does, `(3,)`, not `(1, 3)`, so `getB(one_row)[0]` is now Bx. It is a
   magpylib source: `magpy.getB`, `getH`, `getJ` and `getM` read it, alone or
   with other sources, it moves and copies like one, and it keeps its own copy of
-  the coils, so changing one after the solve no longer changes the solution
-  ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
+  the coils, so changing one after the solve no longer changes the solution.
+  Pickling one raises, where reading it back crashed
+  ([#152](https://github.com/magpylib/magpylib-material-response/pull/152),
+  [#164](https://github.com/magpylib/magpylib-material-response/pull/164))
+- Warnings for what was silent: `getJ` and `getM` inside a solved face-charge
+  part give 0, and solving the collection `solve_cells` returned counts its
+  polarizations as remanence. The docs say not to read a cell model exactly on a
+  boundary between cells, where the field is wrong with no warning
+  ([#157](https://github.com/magpylib/magpylib-material-response/pull/157),
+  [#158](https://github.com/magpylib/magpylib-material-response/issues/158),
+  [#164](https://github.com/magpylib/magpylib-material-response/pull/164))
+
+### Added
+
+- Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a
+  part or a collection, in place of a constant, in `solve_cells`. Each cell
+  takes the susceptibility its own field gives on the curve, the linear solve
+  repeated until none changes, with the matrix built once and Anderson
+  acceleration: about 3 to 40 solves, more on a sharp knee. A sphere comes out
+  within 1 % of its exact answer along the curve. A curve past any material
+  warns, as with H and B swapped. Meshers and `to_json` carry it;
+  `solve_face_charge` refuses it
+  ([#150](https://github.com/magpylib/magpylib-material-response/pull/150),
+  [#159](https://github.com/magpylib/magpylib-material-response/pull/159),
+  [#162](https://github.com/magpylib/magpylib-material-response/pull/162),
+  [#164](https://github.com/magpylib/magpylib-material-response/pull/164))
+- `solve_fem` follows such a curve too, so a saturated part has an independent
+  check: a sphere's moment is within 0.08 % of its exact value at order 4 from
+  0.05 to 2 T, and B at its centre within 0.3 %. Start at order 3: order 2 can
+  fail to settle, and says so
+  ([#151](https://github.com/magpylib/magpylib-material-response/pull/151),
+  [#160](https://github.com/magpylib/magpylib-material-response/pull/160))
+- An Agent Skill ships inside the package, so AI coding assistants write the
+  current names and know where a solved model can be read. Add it to a project
+  with `uvx library-skills`
+  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
+
+### Fixed
+
+- `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropic susceptibility
+  set on a parent too: it read only the part's own, and came out 11 times off
+  with no error
+  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
+- `import *` from an old module gives the old names, and a list of numbers and
+  vectors as the `susceptibility` argument works
+  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162),
+  [#164](https://github.com/magpylib/magpylib-material-response/pull/164))
 
 ## [0.8.0] - 2026-11-01
 
@@ -554,7 +566,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.8.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.0...HEAD
+[0.9.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.8.0...0.9.0
 [0.8.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.7.0...0.8.0
 [0.7.0]:
