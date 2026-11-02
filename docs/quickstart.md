@@ -69,9 +69,9 @@ coll = solve_cells(mesh, susceptibility=0.3)
 An anisotropic value acts along the **magnet's own axes** and turns with it,
 like its polarization (see the [method page](method.md)).
 
-A uniform applied field is a source in the collection, a `UniformField`, given as
-B in T or H in A/m. `getB` of the solved model includes it, as it does a coil's
-field:
+A uniform applied field is a source in the collection, a `UniformField`, given
+as B in T or H in A/m. `getB` of the solved model includes it, as it does a
+coil's field:
 
 ```{code-cell} ipython3
 soft = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(1e-3, 1e-3, 1e-3))
