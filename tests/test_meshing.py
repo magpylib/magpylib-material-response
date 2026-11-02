@@ -761,3 +761,14 @@ def test_a_mesh_draws_as_the_object_it_came_from(mesher):
     assert cells.sources_all[0].style.label is None
     cells.style.color = "red"  # still its parent's
     assert drawn(cells)[1] == "red"
+
+
+def test_mesh_thin_CylinderSegment_with_cuboids_refuses_a_parents_anisotropy():
+    """It read only the part's own value, and the cells took a parent's along their
+    turned axes: 11 times off, with no error."""
+    seg = magpy.magnet.CylinderSegment(
+        dimension=(0.0095, 0.01, 0.01, 0, 360), polarization=(0, 0, 0)
+    )
+    magpy.Collection(seg).susceptibility = (1, 50, 1)
+    with pytest.raises(ValueError, match="same along x and y"):
+        mesh_thin_CylinderSegment_with_cuboids(seg, target_elems=20)

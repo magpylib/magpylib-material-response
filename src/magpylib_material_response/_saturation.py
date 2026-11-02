@@ -118,6 +118,9 @@ def iterate(solve, on_curve, curves, chi, remanence):
     the field inside does not include. Returns the polarizations, and the
     number of solves."""
     x = np.log(np.array([c.chi0 for c in curves]))
+    # within what the curves can give: Anderson's steps can overshoot, and on a
+    # steep curve chi then leaves what floating point can solve
+    low, high = np.log(CHI_MIN), np.log(2 * np.array([c.chi_max for c in curves]))
     X, F = [], []
     for solves in range(1, MAX_SOLVES + 1):
         chi[on_curve] = np.exp(x)[:, None, None] * np.eye(3)
@@ -134,11 +137,11 @@ def iterate(solve, on_curve, curves, chi, remanence):
             return J, solves
         X, F = [*X, x.copy()][-DEPTH:], [*F, f.copy()][-DEPTH:]
         if len(F) == 1:
-            x = x + DAMPING * f
+            x = np.clip(x + DAMPING * f, low, high)
             continue
         dF, dX = np.diff(F, axis=0).T, np.diff(X, axis=0).T
         gamma = np.linalg.lstsq(dF, f, rcond=None)[0]
-        x = x + DAMPING * f - (dX + DAMPING * dF) @ gamma
+        x = np.clip(x + DAMPING * f - (dX + DAMPING * dF) @ gamma, low, high)
     msg = (
         f"The B-H iteration did not converge in {MAX_SOLVES} solves: the largest "
         f"change of a cell's susceptibility is still {np.max(np.abs(np.expm1(f))):.1e}."

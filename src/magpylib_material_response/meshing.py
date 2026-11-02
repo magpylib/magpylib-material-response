@@ -284,6 +284,7 @@ def mesh_thin_CylinderSegment_with_cuboids(
     r1, r2, h, phi1, phi2 = cyl_seg.dimension
     pol0 = cyl_seg.polarization
     chi = getattr(cyl_seg, "susceptibility", None)
+    chi = inherited(cyl_seg, "susceptibility") if chi is None else chi
     chi = np.asarray(0 if chi is None else chi, dtype=float)
     if chi.shape == (3,) and not np.isclose(chi[0], chi[1]):
         msg = (

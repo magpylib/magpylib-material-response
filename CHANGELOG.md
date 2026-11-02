@@ -37,6 +37,11 @@ and this project adheres to
   `study_cells` (`mesh_study`), `study_fem` (`fem_study`). The module `demag` is
   now `cells`, `demag_kwargs` is `solve_kwargs`, and `solved_by` says `"cells"`
   ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
+- The fixes of the review before this release: `mesh_thin_CylinderSegment_with_cuboids`
+  refuses an anisotropy set on a parent too, which was 11 times off with no error;
+  a steep B-H curve no longer crashes the iteration, whose log χ is now bounded;
+  and `import *` from an old module still gives the old names
+  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 - `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
   read it, alone or with other sources, and it moves and copies like one. Its
   own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`

@@ -33,6 +33,11 @@ from magpylib_material_response._renamed import old_names
 from magpylib_material_response.face_charge._apply import solve_face_charge
 from magpylib_material_response.face_charge._sheet import ChargeSheet
 
-__all__ = ["ChargeSheet", "solve_face_charge"]
+# pylint: disable=undefined-all-variable
+__all__ = [  # the old name too, for `import *`, through __getattr__ below
+    "ChargeSheet",  # noqa: F822
+    "apply_face_charge",  # noqa: F822
+    "solve_face_charge",  # noqa: F822
+]
 
 __getattr__ = old_names(__name__, {"apply_face_charge": "solve_face_charge"})

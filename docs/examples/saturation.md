@@ -179,3 +179,7 @@ both methods share it.
   order 3 in about 20 s.
 - The curve is the material's initial curve: no hysteresis, so a field that
   comes back down returns along the same curve.
+- A part's `polarization` stays a fixed remanence, and the curve's J adds to it, so
+  a part with both can pass the curve's saturation: 1 T of remanence and a curve
+  saturating at 1.5 T reach 2.5 T. For a saturating part, leave `polarization` at
+  zero.

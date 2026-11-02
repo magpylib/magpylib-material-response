@@ -245,6 +245,18 @@ def test_a_table_as_argument_is_refused():
         solve_cells(plate, susceptibility=table(n=30))
 
 
+def test_a_steep_curve_solves():
+    """Anderson's steps overshoot on it: unbounded, log chi left what a solve can
+    take, and a raw LinAlgError came out."""
+    sphere = icosphere(0.01, splits=1)
+    sphere.susceptibility = np.array([[0, 0], [100, 1], [1e6, 2.5]])
+    model = mesh_TriangularMesh(sphere, 50)
+    model.H_ext = (0, 0, 1.0)
+    pytest.importorskip("tetgen")
+    J = [np.linalg.norm(c.polarization) for c in solve_cells(model).sources_all]
+    assert 0.9 < max(J) < 2.5
+
+
 def test_a_curve_that_starts_flat_solves():
     """A steel's curve can rise slowly at first: the iteration starts from a
     small susceptibility, not from log(0)."""

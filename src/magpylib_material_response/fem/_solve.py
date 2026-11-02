@@ -348,7 +348,8 @@ class FemSolution(magpy.misc.CustomSource):
         Wall time in s: ``"mesh"`` (geometry, mesh, refinement), ``"assemble"``
         and ``"solve"``.
     moment : ndarray, shape (3,)
-        Magnetic moment in A m² of all magnetization: remanent and induced.
+        Magnetic moment in A m² of all magnetization: remanent and induced, as
+        solved: it does not turn with the source.
     solved_by : str
         ``"fem"``, as ``solve_cells`` and ``solve_face_charge`` name theirs.
     """
@@ -385,6 +386,9 @@ class FemSolution(magpy.misc.CustomSource):
         for name, value in self.__dict__.items():
             new.__dict__[name] = value if name in solved else deepcopy(value, memo)
         return new
+
+    def __copy__(self):
+        return self.__deepcopy__({})
 
     def __reduce_ex__(self, protocol):
         """Refused: NGSolve pickles the mesh and the solution, and crashes the
