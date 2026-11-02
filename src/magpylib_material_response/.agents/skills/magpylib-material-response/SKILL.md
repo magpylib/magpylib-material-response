@@ -8,8 +8,8 @@ description: >-
   choosing between solve_face_charge, solve_cells and solve_fem, setting
   susceptibility and BHCurve, UniformField, reading the solved model and error
   bars. Names changed in 0.9: code written from memory with apply_demag, H_ext
-  or bh_curve warns or fails, and reading a solved model in the wrong place gives
-  a wrong field, so use this skill before writing the code.
+  or bh_curve warns or fails, and reading a solved model in the wrong place
+  gives a wrong field, so use this skill before writing the code.
 license: BSD-3-Clause
 ---
 
@@ -43,15 +43,15 @@ mmr.__version__
 
 Old names warn for one release, and go in the next. Write the new ones.
 
-| Before 0.9                          | Now                                 |
-| ----------------------------------- | ----------------------------------- |
-| `demag.apply_demag`                 | `solve_cells`                       |
-| `face_charge.apply_face_charge`     | `solve_face_charge`                 |
-| `fem.fem_solve`, `fem.fem_study`    | `solve_fem`, `study_fem`            |
-| `convergence.mesh_study`            | `study_cells`                       |
-| `demag_kwargs=`                     | `solve_kwargs=`                     |
-| `part.H_ext = (0, 0, 0.1)`          | `UniformField(B=(0, 0, 0.1))`       |
-| `solved_by == "demag"`              | `solved_by == "cells"`              |
+| Before 0.9                       | Now                           |
+| -------------------------------- | ----------------------------- |
+| `demag.apply_demag`              | `solve_cells`                 |
+| `face_charge.apply_face_charge`  | `solve_face_charge`           |
+| `fem.fem_solve`, `fem.fem_study` | `solve_fem`, `study_fem`      |
+| `convergence.mesh_study`         | `study_cells`                 |
+| `demag_kwargs=`                  | `solve_kwargs=`               |
+| `part.H_ext = (0, 0, 0.1)`       | `UniformField(B=(0, 0, 0.1))` |
+| `solved_by == "demag"`           | `solved_by == "cells"`        |
 
 `H_ext` left its field out of `getB` of the result; `UniformField` includes it.
 A model with both raises.
@@ -77,11 +77,11 @@ B = magpy.getB(solved, [(0, 0, 0.012), (0, 0, 0.02)])  # (2, 3)
 `susceptibility` is set on a part or on a collection above it, and the nearest
 value wins. It takes one of:
 
-| Value                 | Meaning                                              |
-| --------------------- | ---------------------------------------------------- |
-| `1000`                | Constant χ, µr = 1 + χ                               |
-| `(1000, 1000, 19)`    | Along the part's own axes; turns with it             |
-| `BHCurve(H=H, B=B)`   | Follows a curve, H in A/m and B in T, from (0, 0)    |
+| Value               | Meaning                                           |
+| ------------------- | ------------------------------------------------- |
+| `1000`              | Constant χ, µr = 1 + χ                            |
+| `(1000, 1000, 19)`  | Along the part's own axes; turns with it          |
+| `BHCurve(H=H, B=B)` | Follows a curve, H in A/m and B in T, from (0, 0) |
 
 A plain table of (H, B) rows raises: name the columns.
 
@@ -97,11 +97,11 @@ A source outside the collection is not seen.
 
 ## Which solver
 
-| Use                  | When                                                |
-| -------------------- | --------------------------------------------------- |
-| `solve_face_charge`  | Linear, uniform parts: the default choice. No mesh  |
-| `solve_cells`        | A `BHCurve`, per-axis χ, or χ that varies in a part |
-| `solve_fem`          | To check the other two, with the `fem` extra        |
+| Use                 | When                                                |
+| ------------------- | --------------------------------------------------- |
+| `solve_face_charge` | Linear, uniform parts: the default choice. No mesh  |
+| `solve_cells`       | A `BHCurve`, per-axis χ, or χ that varies in a part |
+| `solve_fem`         | To check the other two, with the `fem` extra        |
 
 ```python
 from magpylib_material_response import solve_cells
@@ -162,18 +162,19 @@ models, so a measurement is still the final check.
   another of its material. For B inside, use `solve_cells` or `solve_fem`. The
   mean polarization is on each sheet, `sheet.mean_polarization`.
 - **Moving a solved model does not solve it again.** B moves with it, while the
-  response stays that of the old position. Solve per position: paths are refused.
+  response stays that of the old position. Solve per position: paths are
+  refused.
 - **`solved.sources_all` holds the coils and fields too.** Filter before reading
   `.polarization` or `.volume`.
 - **Remanence adds to a curve:** a part's `polarization` stays fixed and the
-  curve's J adds to it, so 1 T of remanence on a curve saturating at 1.5 T reaches
-  2.5 T. Leave `polarization` at zero on a saturating part.
+  curve's J adds to it, so 1 T of remanence on a curve saturating at 1.5 T
+  reaches 2.5 T. Leave `polarization` at zero on a saturating part.
 - **A curve past 5 T warns:** H and B swapped, or the wrong units. H in kA/m is
   not caught, so check that H is in A/m.
-- **Thin curved cells:** `solve_cells` on a thin ring of cylinder segments at high
-  χ can be far off, and refining does not reliably help. Use face charge if it
-  is linear.
-- **Parts closer than 0.5 % of their size:** face charge is 1 to 4 % off near the
-  gap, and finite elements cannot judge it either.
-- **Thin sheets** cost face charge about (size / thickness)² unknowns. Flat cuboid
-  cells with at least 3 layers through the thickness are the alternative.
+- **Thin curved cells:** `solve_cells` on a thin ring of cylinder segments at
+  high χ can be far off, and refining does not reliably help. Use face charge if
+  it is linear.
+- **Parts closer than 0.5 % of their size:** face charge is 1 to 4 % off near
+  the gap, and finite elements cannot judge it either.
+- **Thin sheets** cost face charge about (size / thickness)² unknowns. Flat
+  cuboid cells with at least 3 layers through the thickness are the alternative.
