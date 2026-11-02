@@ -62,9 +62,9 @@ and this project adheres to
   ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 - **Breaking, with no warning:** `FemSolution.getB` squeezes a lone observer as
   magpylib does, `(3,)`, not `(1, 3)`, so `getB(one_row)[0]` is now Bx. It is a
-  magpylib source: `magpy.getB`, `getH`, `getJ` and `getM` read it, alone or with
-  other sources, it moves and copies like one, and it keeps its own copy of the
-  coils, so changing one after the solve no longer changes the solution
+  magpylib source: `magpy.getB`, `getH`, `getJ` and `getM` read it, alone or
+  with other sources, it moves and copies like one, and it keeps its own copy of
+  the coils, so changing one after the solve no longer changes the solution
   ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
 
 ## [0.8.0] - 2026-11-01

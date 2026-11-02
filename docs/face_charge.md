@@ -90,8 +90,8 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
 - **What it leaves to `solve_cells`:** an anisotropic susceptibility and one
   varying inside a part, which bring back charge inside the part;
   `solve_face_charge` raises for these. So does a part on a `BHCurve`, for
-  saturation: check `mean_polarization` (below). Objects moving along paths are refused by
-  both.
+  saturation: check `mean_polarization` (below). Objects moving along paths are
+  refused by both.
 
 ## Triangle meshes and CAD exports
 
@@ -277,8 +277,8 @@ that moves, since it is then a solved part.
 
 A sheet's `mean_polarization` is the average polarization of the part it
 encloses. While it stays below the knee of the material's B–H curve, the linear
-solve holds. Above it, saturation takes over and the result overstates the part's
-polarization: mesh the part, give it a `BHCurve`, and use `solve_cells`.
+solve holds. Above it, saturation takes over and the result overstates the
+part's polarization: mesh the part, give it a `BHCurve`, and use `solve_cells`.
 
 ## How it works
 
