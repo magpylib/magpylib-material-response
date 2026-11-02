@@ -10,8 +10,8 @@ and this project adheres to
 
 ### Added
 
-- Saturation: `susceptibility` takes a table of (H, B) rows, on a part or a
-  collection, in place of a constant, in `solve_cells`. Each cell takes the
+- Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a part
+  or a collection, in place of a constant, in `solve_cells`. Each cell takes the
   susceptibility its own field gives on the curve, the linear solve repeated
   until none changes, with the matrix built once and Anderson acceleration: 10
   to 40 solves. A sphere comes out within 1 % of its exact answer along the
@@ -40,8 +40,7 @@ and this project adheres to
 - The fixes of the review before this release:
   `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropy set on a parent
   too, which was 11 times off with no error; a steep B-H curve no longer crashes
-  the iteration, whose log χ is now bounded; a table past any material, with its
-  columns swapped or in the wrong units, warns; and `import *` from an old
+  the iteration, whose log χ is now bounded; a curve past any material, with H and B swapped or in the wrong units, warns; and `import *` from an old
   module still gives the old names
   ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 - `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`

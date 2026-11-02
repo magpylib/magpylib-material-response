@@ -73,8 +73,8 @@ from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation as R
 
 from magpylib_material_response._saturation import (
+    BHCurve,
     curve_of,
-    is_table,
     iterate,
     refuse_bh_curve,
 )
@@ -173,7 +173,9 @@ def get_susceptibilities(sources, susceptibility=None):
     if susceptibility is None:
         # Get susceptibilities from source attributes
         susceptibilities = [_get_susceptibility_from_hierarchy(src) for src in sources]
-        susceptibilities = [0.0 if is_table(s) else s for s in susceptibilities]
+        susceptibilities = [
+            0.0 if isinstance(s, BHCurve) else s for s in susceptibilities
+        ]
         _report_fixed_magnets(sources)
 
         susis = _convert_to_array(susceptibilities, n, from_hierarchy=True)
@@ -186,6 +188,13 @@ def get_susceptibilities(sources, susceptibility=None):
 
 def _convert_to_array(susceptibility, n, from_hierarchy=False):
     """Convert susceptibility input(s) to (n, 3) array format"""
+    if isinstance(susceptibility, BHCurve) or (
+        not from_hierarchy
+        and np.ndim(susceptibility) == 2
+        and np.shape(susceptibility)[1] == 2
+    ):
+        msg = "A B-H curve cannot be the susceptibility argument: set it on the part."
+        raise ValueError(msg)
     # Handle single values (scalar or 3-vector) applied to all sources
     if np.isscalar(susceptibility) or (
         isinstance(susceptibility, np.ndarray) and susceptibility.ndim == 0
@@ -1608,9 +1617,7 @@ def solve_cells(
         with its orientation like its polarization. If not defined, values are
         searched at object level or parent level if needed; a cell with none
         there either is fixed, as in ``solve_face_charge``. The value there can
-        be a B-H curve: a table of
-        ``(H, B)`` rows in A/m and T, from ``(0, 0)``, H increasing; past its
-        last row the polarization keeps its last value. Each such cell takes
+        be a :class:`~magpylib_material_response.BHCurve`. Each such cell takes
         the susceptibility its own field gives on the curve, the linear solve
         repeated until none changes by more than 1e-4, with Anderson
         acceleration, the matrix built once; see the saturation example. The

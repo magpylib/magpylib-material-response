@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import copy
+import pickle
+
 import magpylib as magpy
 import numpy as np
 import pytest
 from scipy.optimize import brentq
 
 from magpylib_material_response import from_json, to_json
-from magpylib_material_response._saturation import MU0, Curve, curve_of
+from magpylib_material_response._saturation import MU0, BHCurve, curve_of
 from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import (
@@ -28,7 +31,7 @@ def polarization(H):
 def table(H_max=1e6, n=400):
     H = np.geomspace(1e-2, H_max, n)
     H = np.r_[0.0, H]
-    return np.c_[H, polarization(H) + MU0 * H]
+    return BHCurve(H=H, B=polarization(H) + MU0 * H)
 
 
 def mesh_uniform_six(model):
@@ -121,7 +124,7 @@ def _plate(curve=None, chi=None):
 def test_a_linear_curve_is_a_susceptibility(solver):
     """A straight curve of slope 1 + chi solves as chi does, in one more solve."""
     H = np.array([0.0, 1e7])
-    straight = np.c_[H, (1 + CHI0) * MU0 * H]
+    straight = BHCurve(H=H, B=(1 + CHI0) * MU0 * H)
     on_curve = solve_cells(_plate(straight), solver=solver)
     linear = solve_cells(_plate(chi=CHI0), solver=solver)
     points = np.array([[0.003, 0, 0.0015], [0, 0.006, 0], [0, 0, -0.003]])
@@ -165,7 +168,7 @@ def test_a_curve_set_on_a_parent_reaches_the_cells_and_survives_json():
     solved = solve_cells(model)
     assert all(np.linalg.norm(c.polarization) < JS for c in solved.sources_all)
     back = from_json(to_json(model))[0]
-    np.testing.assert_array_equal(back.susceptibility, model.susceptibility)
+    np.testing.assert_array_equal(back.susceptibility.B, model.susceptibility.B)
     np.testing.assert_allclose(
         solve_cells(back).sources_all[0].polarization,
         solved.sources_all[0].polarization,
@@ -185,7 +188,7 @@ def test_a_curve_set_on_a_parent_reaches_the_cells_and_survives_json():
 )
 def test_a_bad_curve_is_refused(bad, match):
     with pytest.raises(ValueError, match=match):
-        Curve(bad)
+        BHCurve(H=np.asarray(bad)[:, 0], B=np.asarray(bad)[:, 1])
 
 
 def test_what_a_curve_cannot_go_with():
@@ -241,34 +244,49 @@ def test_the_old_attribute_raises_and_does_not_silently_give_a_linear_part(use):
 
 
 def test_a_table_as_argument_is_refused():
-    plate = _plate()
-    with pytest.raises(ValueError):  # noqa: PT011
-        solve_cells(plate, susceptibility=table(n=30))
+    for curve in (table(n=30), np.c_[[0.0, 1e6], [0.0, 2.0]]):
+        with pytest.raises(ValueError, match="set it on the part"):
+            solve_cells(_plate(chi=1.0), susceptibility=curve)
 
 
 def test_a_steep_curve_solves():
     """Anderson's steps overshoot on it: unbounded, log chi left what a solve can
     take, and a raw LinAlgError came out."""
+    pytest.importorskip("tetgen")
     sphere = icosphere(0.01, splits=1)
-    sphere.susceptibility = np.array([[0, 0], [100, 1], [1e6, 2.5]])
+    sphere.susceptibility = BHCurve(H=[0, 100, 1e6], B=[0, 1, 2.5])
     model = mesh_TriangularMesh(sphere, 50)
     model.H_ext = (0, 0, 1.0)
-    pytest.importorskip("tetgen")
     J = [np.linalg.norm(c.polarization) for c in solve_cells(model).sources_all]
     assert 0.9 < max(J) < 2.5
 
 
 @pytest.mark.parametrize(
-    "wrong",
+    "scale",
     [
-        table()[:, ::-1],
-        table() * [1, 1e4],
+        lambda c: {"H": c.B, "B": c.H},
+        lambda c: {"H": c.H, "B": c.B * 1e4},
     ],
-    ids=["columns swapped", "B in gauss"],
+    ids=["swapped", "B in gauss"],
 )
-def test_a_curve_past_any_material_warns(wrong):
+def test_a_curve_past_any_material_warns(scale):
     with pytest.warns(UserWarning, match="past any material"):
-        Curve(wrong)
+        BHCurve(**scale(table()))
+
+
+def test_a_table_is_refused_and_a_curve_is_shared():
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    part.susceptibility = np.c_[[0.0, 1e6], [0.0, 2.0]]
+    with pytest.raises(TypeError, match="BHCurve"):
+        solve_cells(magpy.Collection(mesh_Cuboid(part, (1, 1, 1))))
+    with pytest.raises(TypeError, match=r"keyword|positional"):
+        BHCurve([0, 1], [0, 1])  # pylint: disable=too-many-function-args,missing-kwoa
+    curve = table(n=5)
+    assert copy.deepcopy(curve) is curve
+    assert pickle.loads(pickle.dumps(curve)).B.tolist() == curve.B.tolist()
+    part.susceptibility = curve
+    cells = mesh_Cuboid(part, (2, 2, 2)).sources_all
+    assert all(c.susceptibility is curve for c in cells)
 
 
 def test_a_curve_that_starts_flat_solves():
@@ -276,8 +294,8 @@ def test_a_curve_that_starts_flat_solves():
     small susceptibility, not from log(0)."""
     H = np.r_[0.0, np.geomspace(1.0, 1e6, 200)]
     rise = np.clip((H - 1e3) / 2e3, 0, 1) ** 1.5
-    flat = np.c_[H, 4 * JS * rise / (1 + 3 * rise) + MU0 * H]
-    curve = Curve(flat)
+    flat = BHCurve(H=H, B=4 * JS * rise / (1 + 3 * rise) + MU0 * H)
+    curve = flat
     assert curve.chi0 == 1e-6
     assert curve.chi_max > 100
     model = _plate(flat)
@@ -318,7 +336,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
 
     H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
     big = magpy.magnet.Sphere(diameter=0.02, polarization=(0, 0, 0))
-    big.susceptibility = np.c_[H, 11 * MU0 * H]  # a straight curve: chi = 10
+    big.susceptibility = BHCurve(H=H, B=11 * MU0 * H)  # a straight curve: chi = 10
     tiny = magpy.magnet.Sphere(
         diameter=2e-5, polarization=(0, 0, 0), position=(0.03, 0, 0)
     )
@@ -353,7 +371,7 @@ def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
 
     points = np.array([[0, 0, 0], [0.003, 0, 0], [0, 0, 0.012]])
     H = np.r_[0.0, np.geomspace(1.0, 1e8, 50)]
-    on_curve = solved(susceptibility=np.c_[H, 11 * MU0 * H])
+    on_curve = solved(susceptibility=BHCurve(H=H, B=11 * MU0 * H))
     linear = solved(susceptibility=10.0)
     np.testing.assert_allclose(
         on_curve.getB(points), linear.getB(points), rtol=1e-4, atol=1e-5

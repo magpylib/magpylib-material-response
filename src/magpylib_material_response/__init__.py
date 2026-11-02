@@ -16,6 +16,7 @@ from magpylib_material_response.utils import from_json, to_json
 from ._version import version as __version__
 
 if TYPE_CHECKING:  # for editors and linters; at run time, __getattr__ below
+    from magpylib_material_response._saturation import BHCurve
     from magpylib_material_response.cells import solve_cells
     from magpylib_material_response.convergence import compare, study_cells
     from magpylib_material_response.face_charge import solve_face_charge
@@ -23,6 +24,7 @@ if TYPE_CHECKING:  # for editors and linters; at run time, __getattr__ below
 
 # loaded when first asked for: import stays fast, and NGSolve optional
 _FUNCTIONS = {
+    "BHCurve": "_saturation",
     "compare": "convergence",
     "solve_cells": "cells",
     "solve_face_charge": "face_charge",
@@ -46,6 +48,7 @@ _MODULES = (
 
 # not solve_fem and study_fem: `import *` must not need NGSolve, nor load it
 __all__ = [
+    "BHCurve",
     "__version__",
     "compare",
     "configure_logging",
