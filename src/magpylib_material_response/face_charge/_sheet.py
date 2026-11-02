@@ -10,6 +10,7 @@ import magpylib as magpy
 import numpy as np
 from magpylib._src.defaults.property_tree import Nested, Number, PropertyNode
 from magpylib._src.exceptions import MagpylibBadUserInput
+from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 from magpylib._src.style import TriangularMeshStyle
 from scipy.spatial import cKDTree  # pylint: disable=no-name-in-module
 from scipy.spatial.transform import Rotation
@@ -51,6 +52,14 @@ class ChargeSheetStyle(TriangularMeshStyle):
     charge = Nested(ChargeColor, doc="Charge colour properties.")
 
 
+def _unlabelled_copy(part):
+    """A copy of `part` under its own label, as ``copy`` adds a suffix."""
+    label = part.style.label
+    copied = part.copy()
+    copied.style.label = label
+    return copied
+
+
 class ChargeSheet(magpy.misc.CustomSource):
     """Magnetic surface charge on triangular faces, linear across each face.
 
@@ -79,6 +88,9 @@ class ChargeSheet(magpy.misc.CustomSource):
     mean_polarization : array-like, shape (3,), optional
         What :attr:`mean_polarization` gives, in T, in place of the sheet's own:
         :func:`solve_face_charge` sets it on parts solved as one.
+    part : magpylib magnet, optional
+        The part the sheet was solved from, what :attr:`part` gives. A copy is
+        kept. :func:`solve_face_charge` sets it; ``None`` for a sheet built by hand.
     position, orientation, style, **kwargs
         As for any magpylib source. ``style`` is a TriangularMesh's:
         ``style.magnetization.color`` colours the charge and ``style.mesh.grid``
@@ -102,11 +114,14 @@ class ChargeSheet(magpy.misc.CustomSource):
         style=None,
         *,
         mean_polarization=None,
+        part=None,
         **kwargs,
     ):
         self._set(vertices, faces, charge_densities, panels)
         if mean_polarization is not None:
             self._mean = np.asarray(mean_polarization, float).reshape(3)
+        if part is not None:
+            self._keep_part(part)
         super().__init__(
             position=position, orientation=orientation, style=style, **kwargs
         )
@@ -185,6 +200,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._mean = None  # set by solve_face_charge on parts solved as one
         self._solid = False  # set by solve_face_charge on a part's whole surface
+        self._part = None  # set by solve_face_charge: new charges, no such part
         self._V = P[F]
         self._lo, self._hi = (
             (self._V.min((0, 1)), self._V.max((0, 1))) if len(F) else (0, 0)
@@ -209,6 +225,30 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._c = np.linalg.solve(A, q[..., None])[..., 0]  # charge = c0 + c1 u + c2 v
 
     # ── what a solve tells ────────────────────────────────────────────────
+    @property
+    def part(self):
+        """The magnet this sheet was solved from, or ``None`` for a sheet built by
+        hand or changed since.
+
+        A copy, at the sheet's pose now, standing alone: its susceptibility,
+        inherited or not, is on it, and its polarization is its remanence. Solving
+        the parts of a model again with the same drives reproduces its charges, at
+        the same ``level`` and without ``refine``, whose panels are not kept. A
+        moved sheet gives the part moved, so a drag is solved as:
+        ``solve_face_charge(magpy.Collection(*parts, *drives), reuse=solved)``.
+        """
+        if self._part is None:
+            return None
+        part = _unlabelled_copy(self._part)
+        part.position, part.orientation = self.position, self.orientation
+        return part
+
+    def _keep_part(self, part):
+        if not isinstance(part, BaseMagnet):
+            msg = f"part must be a magnet; got {type(part).__name__}."
+            raise TypeError(msg)
+        self._part = _unlabelled_copy(part)
+
     @property
     def mean_polarization(self):
         """Average polarization (3,) in T of the body a closed sheet encloses,

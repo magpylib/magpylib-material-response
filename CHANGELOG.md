@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- A solved `ChargeSheet` keeps the part it was solved from, in `part`, at the
+  sheet's pose now and through `to_json`, so a solved model can be solved again
+  from what it holds
+  ([#167](https://github.com/magpylib/magpylib-material-response/pull/167))
+
 ## [0.9.0] - 2026-11-02
 
 ### Changed

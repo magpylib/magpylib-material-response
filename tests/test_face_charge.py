@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import pickle
 import subprocess
 import sys
 import time
@@ -1769,3 +1770,110 @@ def test_only_a_whole_surface_warns_when_read_inside():
     magpy.getB(
         ChargeSheet(sheet.vertices, sheet.faces, sheet.charge_densities), (0, 0, 0)
     )
+
+
+def _triangular_part():
+    corners = np.array(
+        [(x, y, z) for x in (-5e-3, 5e-3) for y in (-5e-3, 5e-3) for z in (-5e-3, 5e-3)]
+    )
+    return magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 0), points=corners
+    )
+
+
+PARTS = {
+    "cuboid": lambda: magpy.magnet.Cuboid(
+        dimension=(0.01, 0.012, 0.008), polarization=(0, 0, 0)
+    ),
+    "cylinder": lambda: magpy.magnet.Cylinder(
+        dimension=(0.01, 0.01), polarization=(0, 0, 0)
+    ),
+    "cylinder segment": lambda: magpy.magnet.CylinderSegment(
+        dimension=(0.005, 0.01, 0.01, 0, 180), polarization=(0, 0, 0)
+    ),
+    "sphere": lambda: magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0)),
+    "triangles": _triangular_part,
+}
+
+
+def _solved_with_part(kind):
+    """A turned part beside a magnet, on a susceptibility it inherits."""
+    part = PARTS[kind]()
+    part.move((0.002, 0.001, -0.02))
+    part.rotate_from_angax(30, (1, 2, 3))
+    drive = _drive()
+    model = magpy.Collection(magpy.Collection(part), drive)
+    model.children[0].susceptibility = 100.0
+    return solve_face_charge(model, level=1), drive
+
+
+def _charges(solved):
+    return [
+        s.charge_densities for s in solved.sources_all if isinstance(s, ChargeSheet)
+    ]
+
+
+@pytest.mark.parametrize("round_trip", [False, True], ids=["as solved", "from json"])
+@pytest.mark.parametrize("kind", PARTS)
+def test_a_sheets_part_solves_to_the_same_charges(kind, round_trip):
+    solved, drive = _solved_with_part(kind)
+    if round_trip:
+        solved = from_json(to_json(solved))[0]
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    assert not isinstance(sheet.part, ChargeSheet)
+    assert sheet.part.parent is None
+    assert sheet.part.susceptibility == 100.0
+    again = solve_face_charge(magpy.Collection(sheet.part, drive.copy()), level=1)
+    np.testing.assert_allclose(_charges(again)[0], sheet.charge_densities, rtol=1e-9)
+
+
+def test_a_moved_sheet_gives_the_part_moved_and_a_drag_reuses_the_solve():
+    part = _soft(position=(0, 0, 0))
+    model = magpy.Collection(part, _drive())
+    solved = solve_face_charge(model, level=1, reuse=True)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    drive = next(s for s in solved.sources_all if not isinstance(s, ChargeSheet))
+    drive.move((0.001, 0, 0))
+    again = solve_face_charge(
+        magpy.Collection(sheet.part, drive.copy()), reuse=solved, level=1
+    )
+    assert again.face_charge_info["reused"]
+    sheet.move((0.01, 0, 0))
+    sheet.rotate_from_angax(90, "z", anchor=None)
+    np.testing.assert_allclose(sheet.part.position, sheet.position)
+    np.testing.assert_allclose(
+        sheet.part.orientation.as_matrix(), sheet.orientation.as_matrix()
+    )
+    np.testing.assert_allclose(part.position, (0, 0, 0))
+
+
+def test_a_sheets_part_is_its_own():
+    part = _soft()
+    part.style.label = "plate"
+    solved = solve_face_charge(magpy.Collection(part, _drive()), level=1)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    assert sheet.part.style.label == "plate"
+    part.susceptibility = 1.0
+    assert sheet.part.susceptibility != 1.0
+    sheet.part.susceptibility = 2.0  # a copy each time
+    assert sheet.part.susceptibility != 2.0
+    assert sheet.copy().part.susceptibility == sheet.part.susceptibility
+    assert (
+        pickle.loads(pickle.dumps(sheet)).part.susceptibility
+        == sheet.part.susceptibility
+    )
+
+
+def test_a_part_with_no_faces_left_has_its_part_and_a_changed_sheet_has_none():
+    a, b = _soft(position=(-0.005, 0, 0)), _soft(position=(0.005, 0, 0))
+    solved = solve_face_charge(magpy.Collection(_drive(), a, b), level=1)
+    sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+    assert all(s.part is not None for s in sheets)
+    sheets[0].charge_densities = sheets[0].charge_densities * 2
+    assert sheets[0].part is None
+
+
+def test_a_sheet_built_by_hand_has_no_part_and_takes_only_a_magnet():
+    assert _one_face((1, 1, 1)).part is None
+    with pytest.raises(TypeError, match="must be a magnet"):
+        _one_face((1, 1, 1), part=magpy.current.Circle(current=1, diameter=1))

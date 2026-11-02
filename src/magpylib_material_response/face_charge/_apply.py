@@ -38,7 +38,7 @@ from magpylib_material_response.face_charge._tribody import (
     _triangles,
     add_triangle_contact_lines,
 )
-from magpylib_material_response.meshing_utils import SOLIDS
+from magpylib_material_response.meshing_utils import SOLIDS, detached_copy
 from magpylib_material_response.uniform import refuse_both
 from magpylib_material_response.utils import timelog
 
@@ -340,6 +340,10 @@ def solve_face_charge(
             sheet.style.color, sheet.style.opacity = style.color, style.opacity
             sheet.style.magnetization.show = style.magnetization.show
             sheet.style.magnetization.color = style.magnetization.color.as_dict()
+        # alone: the part keeps what it inherits, and the caller's object its style
+        part = detached_copy(obj)
+        part.style.label = label
+        sheet._part = part  # the copy is the sheet's own
         old = twin[id(obj)]
         replace[id(old)] = sheet
         parents[id(old.parent)] = old.parent
