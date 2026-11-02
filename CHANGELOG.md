@@ -19,14 +19,15 @@ and this project adheres to
   now `cells`, `demag_kwargs` is `solve_kwargs`, and `solved_by` says `"cells"`
   ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
 - **Breaking, with a warning for one release:** a uniform applied field is a
-  source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in place
-  of the attribute `H_ext`. `getB` of a solved model now includes it, as it does a
-  coil's field, it acts on every part, and several add up. A model with both raises
+  source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in
+  place of the attribute `H_ext`. `getB` of a solved model now includes it, as
+  it does a coil's field, it acts on every part, and several add up. A model
+  with both raises
   ([#163](https://github.com/magpylib/magpylib-material-response/pull/163))
 - `FemSolution` is a magpylib source: `magpy.getB`, `getH`, `getJ` and `getM`
   read it, alone or with other sources, and it moves and copies like one. Its
-  own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not `(1, 3)`.
-  Pickling one raises instead of crashing on reading it back
+  own `getB` now squeezes a lone observer as magpylib does: `(3,)`, not
+  `(1, 3)`. Pickling one raises instead of crashing on reading it back
   ([#152](https://github.com/magpylib/magpylib-material-response/pull/152))
 - `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
   `getB` warns there. The docs say not to read a cell model exactly on a
@@ -57,7 +58,8 @@ and this project adheres to
 
 - `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropic susceptibility
   set on a parent too: it read only the part's own, and came out 11 times off
-  with no error ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
+  with no error
+  ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 
 ## [0.8.0] - 2026-11-01
 
