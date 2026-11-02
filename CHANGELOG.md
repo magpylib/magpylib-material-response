@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-02
+
 ### Added
 
 - A solved `ChargeSheet` keeps the part it was solved from, in `part`, at the
@@ -584,7 +586,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.9.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.1...HEAD
+[0.9.1]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.0...0.9.1
 [0.9.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.8.0...0.9.0
 [0.8.0]:
