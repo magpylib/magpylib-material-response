@@ -20,16 +20,16 @@ kernelspec:
 
 With a constant susceptibility, iron can reach any polarization: at 1 T applied,
 a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. A
-`BHCurve` set as `susceptibility` on a part, or on a collection above it, replaces
-the constant: `solve_cells` then puts every cell at the susceptibility its own
-field gives on the curve, repeating the linear solve until none changes. The
-interaction matrix is built once; the fixed point takes 10 to 40 solves with
+`BHCurve` set as `susceptibility` on a part, or on a collection above it,
+replaces the constant: `solve_cells` then puts every cell at the susceptibility
+its own field gives on the curve, repeating the linear solve until none changes.
+The interaction matrix is built once; the fixed point takes 10 to 40 solves with
 Anderson acceleration.
 
 ## A curve
 
-A `BHCurve` takes H in A/m and B in T, from (0, 0), with H increasing. A measured
-steel's table goes in as it is, column by column. Here a simple curve
+A `BHCurve` takes H in A/m and B in T, from (0, 0), with H increasing. A
+measured steel's table goes in as it is, column by column. Here a simple curve
 stands in: J = χ₀ μ₀ H / (1 + χ₀ μ₀ H / Jₛ), with χ₀ = 1000 and Jₛ = 1.6 T, so B
 = J + μ₀ H. Past its last point, J keeps its last value.
 
