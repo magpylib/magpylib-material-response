@@ -130,7 +130,7 @@ def solve_face_charge(
         place in the hierarchy and with its label; the other sources are
         copied as they are. A collection holding a sheet is no longer sealed:
         magpylib-studio lists each sheet. Like a collection solved by ``solve_cells``, its
-        field excludes the applied field ``H_ext``. Fields hold outside the
+        field includes a ``UniformField``, and not an ``H_ext``. Fields hold outside the
         solved parts: inside one, ``getB`` gives mu0 H, without the part's own
         magnetization, which depends on the field of every source at once, and
         warns; for B inside a part, mesh it and use ``solve_cells``. Its
