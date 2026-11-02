@@ -267,6 +267,8 @@ on it. Everything else is a drive, and goes in as a copy, as an object has one
 parent:
 
 ```python
+from magpylib_material_response.face_charge import ChargeSheet
+
 sources = solved.sources_all
 sheets = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
 drives = [s.copy() for s in sources if not any(s is k for k in sheets)]
@@ -287,7 +289,8 @@ its own part counts its response twice, and warns.
 `to_json` keeps it, so a triangle-mesh part holds its mesh twice in the file. A
 result solved with `refine` cannot be reproduced exactly from its parts, as the
 panels it split are not kept. A sheet built without `part=`, with its mesh or
-charge changed, or kept as a fixed source of a later solve has no part.
+charge changed, or kept as a fixed source of a later solve has no part, nor has
+a result solved before version 0.9.1: solve its original model instead.
 
 For the plate under a magnet, a call takes 72 ms at level 3 and then 18 ms, and
 1.15 s at 9,558 unknowns and then 0.12 s. The call that factors takes up to

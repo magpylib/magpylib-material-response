@@ -24,7 +24,7 @@ from magpylib_material_response.face_charge._triangle import (
     frames,
 )
 from magpylib_material_response.meshing_utils import detached_copy
-from magpylib_material_response.uniform import shallow_copy
+from magpylib_material_response.uniform import shallow_copy, unseen
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
 # an observer this many of a sheet's longest triangle sides past all of it takes
@@ -62,17 +62,36 @@ def _read_only(array):
     return view
 
 
-def _reach(part):
-    """How far a magnet reaches from its own centre, in m."""
+def _box(part):
+    """The lowest and highest corner of the box around a magnet, in m, in its own
+    frame. A mesh's vertices can lie far from its origin, as a CAD import's do."""
     if isinstance(part, magpy.magnet.Cuboid):
-        return np.linalg.norm(part.dimension) / 2
-    if isinstance(part, magpy.magnet.Sphere):
-        return part.diameter / 2
-    if isinstance(part, magpy.magnet.Cylinder):
-        return np.hypot(*part.dimension) / 2
-    if isinstance(part, magpy.magnet.CylinderSegment):
-        return np.hypot(part.dimension[1], part.dimension[2] / 2)
-    return np.linalg.norm(part.vertices, axis=-1).max()
+        high = np.asarray(part.dimension, float) / 2
+    elif isinstance(part, magpy.magnet.Sphere):
+        high = np.full(3, part.diameter / 2)
+    elif isinstance(part, magpy.magnet.Cylinder):
+        high = np.array([part.dimension[0], part.dimension[0], part.dimension[1]]) / 2
+    elif isinstance(part, magpy.magnet.CylinderSegment):
+        radius, height = part.dimension[1], part.dimension[2]
+        high = np.array([radius, radius, height / 2])
+    else:
+        vertices = np.asarray(part.vertices, float)
+        return vertices.min(axis=0), vertices.max(axis=0)
+    return -high, high
+
+
+def _inside(part, points):
+    """Of `points` (n, 3), those a step to every side of leaves inside `part` at the
+    origin. A point on the surface is outside as well, and a mesh's inside test
+    reads a tilted face as inside out to about 1e-10 m, and 1e-8 of a mesh 1 m
+    wide, so the step is wider."""
+    low, high = _box(part)
+    step = max(1e-6 * np.linalg.norm(high - low), 1e-9)
+    steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
+    tried = (points[:, None] + steps).reshape(-1, 3)
+    with np.errstate(divide="ignore", invalid="ignore"):  # on a mesh's own points
+        J = part.getJ(tried).reshape(len(points), len(steps), 3)
+    return ((J != 0).any(axis=2) & np.isfinite(J).all(axis=2)).all(axis=1)
 
 
 def _copy_of(part):
@@ -150,8 +169,6 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._set(vertices, faces, charge_densities, panels)
         if mean_polarization is not None:
             self._mean = np.asarray(mean_polarization, float).reshape(3)
-        if part is not None:
-            self._keep_part(part)
         super().__init__(
             position=position, orientation=orientation, style=style, **kwargs
         )
@@ -163,6 +180,9 @@ class ChargeSheet(magpy.misc.CustomSource):
             self.field_func = self._field
         except MagpylibBadUserInput:
             self._field_func = self._field
+        # past the setter, which tries the field out on two points of its own
+        if part is not None:
+            self._keep_part(part)
 
     def __copy__(self):
         return shallow_copy(self)
@@ -270,15 +290,26 @@ class ChargeSheet(magpy.misc.CustomSource):
         """
         if self._part is None:
             return None
-        part = _copy_of(self._part)
-        part.position, part.orientation = self.position, self.orientation
-        return part
+
+        def placed():
+            part = _copy_of(self._part)
+            part.position, part.orientation = self.position, self.orientation
+            return part
+
+        return unseen(placed)
 
     def _keep_part(self, part):
         if not isinstance(part, BaseMagnet):
             msg = f"part must be a magnet; got {type(part).__name__}."
             raise TypeError(msg)
-        self._part = _copy_of(part)
+        try:
+            one_size = np.shape(_box(part)[1]) == (3,)
+        except (TypeError, ValueError, IndexError):
+            one_size = False
+        if not one_size:
+            msg = "part must have one size, not none or one that varies along a path."
+            raise ValueError(msg)
+        self._part = unseen(_copy_of, part)
 
     def _came_from(self, part):
         """Whether `part` has the shape of the part this sheet was solved from,
@@ -286,7 +317,11 @@ class ChargeSheet(magpy.misc.CustomSource):
         return (
             self._part is not None
             and type(part) is type(self._part)
-            and bool(np.isclose(_reach(part), _reach(self._part)))
+            and bool(
+                np.allclose(
+                    np.ptp(_box(part), axis=0), np.ptp(_box(self._part), axis=0)
+                )
+            )
         )
 
     @property
@@ -400,26 +435,23 @@ class ChargeSheet(magpy.misc.CustomSource):
     # ── field ─────────────────────────────────────────────────────────────
     def _warn_if_inside(self, X, field):
         """Warn if observers lie inside the part this sheet was solved from, of a
-        sample of them: it costs a distance test unless some are near. Of parts
+        sample of them: it costs a box test unless some lie in its box. Of parts
         solved as one the sheet has lost faces, so the part says, not the surface."""
-        reach = _reach(self._part)
-        near = X[(X * X).sum(axis=1) <= reach * reach]
+        low, high = _box(self._part)
+        near = X[((low <= X) & (high >= X)).all(axis=1)]
         if not near.size:
             return
+
+        def probe():
+            part = _copy_of(self._part)
+            part.position, part.orientation = (0, 0, 0), None
+            part.polarization = (0, 0, 1)
+            return part
+
         if self._probe is None:
-            self._probe = _copy_of(self._part)
-            self._probe.position, self._probe.orientation = (0, 0, 0), None
-            self._probe.polarization = (0, 0, 1)
+            self._probe = unseen(probe)
         sample = near[:: max(1, len(near) // INSIDE_SAMPLE)]
-        # a point on the surface is outside as well: a step to each side tells. A
-        # mesh's inside test reads a tilted face as inside out to about 1e-10 m,
-        # and 1e-8 of a mesh 1 m wide
-        step = max(1e-6 * reach, 1e-9)
-        steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
-        points = (sample[:, None] + steps).reshape(-1, 3)
-        with np.errstate(divide="ignore", invalid="ignore"):  # on a mesh's own points
-            J = self._probe.getJ(points).reshape(len(sample), len(steps), 3)
-        if ((J != 0).any(axis=2) & np.isfinite(J).all(axis=2)).all(axis=1).any():
+        if unseen(_inside, self._probe, sample).any():
             gives = (
                 "mu0 H there, not B, without the part's magnetization"
                 if field == "B"

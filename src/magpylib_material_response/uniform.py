@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import warnings
 
 import magpylib as magpy
@@ -9,6 +10,13 @@ import numpy as np
 
 MU0 = magpy.mu_0
 B_WARN = 10.0  # T: stronger is most likely H in A/m given as B
+
+
+def unseen(function, *args):
+    """Run `function` out of sight of a recorder of magpylib calls, as in studio's
+    ``@scene``: what this package makes for itself is no object of the scene. A
+    recorder is a context variable, and a new context has none."""
+    return contextvars.Context().run(function, *args)
 
 
 def shallow_copy(source):

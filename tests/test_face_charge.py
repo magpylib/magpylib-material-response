@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import copy
 import os
 import pickle
@@ -1798,6 +1799,64 @@ def test_reading_on_a_surface_is_not_inside_and_a_lone_part_still_tells():
         magpy.getB(flat, far)
 
 
+def test_a_mesh_off_its_origin_warns_on_a_field_map():
+    corners = np.array([(x, y, z) for x in (0, 1) for y in (0, 1) for z in (0, 1)])
+    mesh = magpy.magnet.TriangularMesh.from_ConvexHull(
+        polarization=(0, 0, 0), points=0.01 * corners + (0.2, 0, 0)
+    )
+    mesh.susceptibility = 100.0
+    solved = solve_face_charge(magpy.Collection(mesh, _drive()), level=1)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    axis = np.linspace(-0.3, 0.3, 40)
+    grid = np.stack(np.meshgrid(axis, axis, axis), axis=-1).reshape(-1, 3)
+    with pytest.warns(UserWarning, match="inside a solved part"):  # one point of it
+        magpy.getB(sheet, grid)
+
+
+@pytest.mark.parametrize(
+    "part",
+    [
+        magpy.magnet.Cuboid(polarization=(0, 0, 1)),
+        magpy.magnet.Sphere(polarization=(0, 0, 1), diameter=[0.1, 0.2]),
+        magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=[(1, 1, 1), (2, 2, 2)]),
+    ],
+    ids=["no size", "sphere varies", "cuboid varies"],
+)
+def test_a_part_needs_one_size(part):
+    with pytest.raises(ValueError, match="one size"):
+        _one_face((1, 1, 1), part=part)
+
+
+def test_a_large_part_does_not_warn_when_kept():
+    _one_face((1, 1, 1), part=magpy.magnet.Sphere(diameter=10, polarization=(0, 0, 1)))
+
+
+def test_what_a_sheet_makes_for_itself_is_out_of_a_recorders_sight(monkeypatch):
+    """Studio's @scene records magpylib calls from a context variable."""
+    recording, seen = contextvars.ContextVar("recording", default=False), []
+    made = magpy.magnet.Cuboid.__init__
+
+    def init(self, *args, **kwargs):
+        if recording.get():
+            seen.append(self)
+        made(self, *args, **kwargs)
+
+    solved = solve_face_charge(magpy.Collection(_soft(), _drive()), level=1)
+    text = to_json(solved)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    monkeypatch.setattr(magpy.magnet.Cuboid, "__init__", init)
+    recording.set(True)
+    sheet._keep_part(_soft())
+    seen.clear()  # _soft itself
+    assert sheet.part is not None
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        sheet.getB((0, 0, 0))
+    back = from_json(text)[0]
+    assert len(seen) == 1  # the drive, which is the model's
+    assert seen[0].polarization is not None
+    assert next(s for s in back.sources_all if isinstance(s, ChargeSheet)).part
+
+
 def test_a_sheet_beside_a_part_of_another_shape_does_not_warn():
     first = solve_face_charge(
         magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
@@ -1808,6 +1867,16 @@ def test_a_sheet_beside_a_part_of_another_shape_does_not_warn():
     )
     other.susceptibility = 10.0
     solve_face_charge(magpy.Collection(frozen, other), level=1)
+    # as long a diagonal, along another axis
+    upright = magpy.magnet.Cuboid(
+        dimension=(0.01, 0.02, 0.01), polarization=(0, 0, 0), position=(0.05, 0, 0)
+    )
+    upright.susceptibility = 10.0
+    lying = magpy.magnet.Cuboid(dimension=(0.02, 0.01, 0.01), polarization=(0, 0, 0))
+    lying.susceptibility = 10.0
+    solved = solve_face_charge(magpy.Collection(lying, _drive()), level=1)
+    kept = next(s for s in solved.sources_all if isinstance(s, ChargeSheet)).copy()
+    solve_face_charge(magpy.Collection(kept, upright), level=1)
 
 
 def _triangular_part():
