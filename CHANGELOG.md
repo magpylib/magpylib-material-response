@@ -10,6 +10,10 @@ and this project adheres to
 
 ### Added
 
+- An Agent Skill ships inside the package, so AI coding assistants write the
+  current names and know where a solved model can be read. Add it to a project
+  with `uvx library-skills`
+  ([#164](https://github.com/magpylib/magpylib-material-response/pull/164))
 - Saturation: `susceptibility` takes a `BHCurve(H=H, B=B)`, in A/m and T, on a
   part or a collection, in place of a constant, in `solve_cells`. Each cell
   takes the susceptibility its own field gives on the curve, the linear solve
