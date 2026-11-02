@@ -1873,6 +1873,99 @@ def test_a_part_with_no_faces_left_has_its_part_and_a_changed_sheet_has_none():
     assert sheets[0].part is None
 
 
+def _recipe(solved, **kwargs):
+    """The loop of the face-charge page, as written there."""
+    sources = solved.sources_all
+    parts = [s for s in sources if isinstance(s, ChargeSheet) and s.part is not None]
+    drives = [s.copy() for s in sources if not any(s is p for p in parts)]
+    level = solved.face_charge_info["level"]
+    return solve_face_charge(
+        magpy.Collection(*[s.part for s in parts], *drives), level=level, **kwargs
+    )
+
+
+def test_the_recipe_on_the_page_solves_a_drag():
+    solved = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1, reuse=True
+    )
+    again = _recipe(solved, reuse=solved)
+    assert again.face_charge_info["reused"]
+    assert again.face_charge_info["level"] == 1
+    np.testing.assert_allclose(_charges(again)[0], _charges(solved)[0], rtol=1e-9)
+
+
+def test_a_frozen_sheet_stays_a_drive():
+    """It kept its part, so the recipe solved it again as a part: with it the only
+    drive, nothing was left to drive the other, and B was 0 with no warning."""
+    first = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    frozen = next(s for s in first.sources_all if isinstance(s, ChargeSheet)).copy()
+    frozen._part = None  # as a user's hand-built drive
+    soft = _soft(position=(0.05, 0, 0))
+    solved = solve_face_charge(magpy.Collection(frozen, soft), level=1)
+    sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+    assert [s.part is not None for s in sheets] == [False, True]
+    again = _recipe(solved)
+    point = (0.05, 0.02, 0)
+    np.testing.assert_allclose(magpy.getB(again, point), magpy.getB(solved, point))
+    assert np.abs(magpy.getB(solved, point)).max() > 0
+
+
+def test_a_sheet_beside_its_own_part_warns():
+    solved = solve_face_charge(
+        magpy.Collection(_soft(position=(0, 0, 0)), _drive()), level=1
+    )
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    part = sheet.part
+    part.move((0.05, 0, 0))  # clear of the sheet, whose field it reads
+    with pytest.warns(UserWarning, match="counts twice"):
+        solve_face_charge(magpy.Collection(sheet.copy(), part), level=1)
+
+
+def test_a_part_with_no_polarization_saves_and_a_subclass_warns():
+    part = magpy.magnet.Cuboid(dimension=(0.01,) * 3)
+    part.susceptibility = 10.0
+    solved = solve_face_charge(magpy.Collection(part, _drive()), level=1)
+    back = from_json(to_json(solved))[0]
+    sheet = next(s for s in back.sources_all if isinstance(s, ChargeSheet))
+    assert sheet.part.polarization is None
+    assert sheet.part.susceptibility == 10.0
+
+    class MyCuboid(magpy.magnet.Cuboid):
+        pass
+
+    part = MyCuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    part.susceptibility = 10.0
+    solved = solve_face_charge(magpy.Collection(part, _drive()), level=1)
+    with pytest.warns(UserWarning, match="MyCuboid"):
+        back = from_json(to_json(solved))[0]
+    sheet = next(s for s in back.sources_all if isinstance(s, ChargeSheet))
+    assert sheet.part is None
+
+
+def test_a_part_given_keeps_what_it_inherits_and_leaves_the_caller_alone():
+    part = _soft()
+    del part.susceptibility
+    parent = magpy.Collection(part)
+    parent.susceptibility = 50.0
+    sheet = _one_face((1, 1, 1), part=part)
+    assert sheet.part.susceptibility == 50.0
+    assert "style" not in part.__dict__ or part._style is None
+    part.move((1, 0, 0))
+    np.testing.assert_allclose(sheet.part.position, (0, 0, 0))
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["vertices", "faces", "charge_densities"],
+)
+def test_a_changed_sheet_has_no_part(change):
+    sheet = _one_face((1, 1, 1), part=_soft())
+    setattr(sheet, change, getattr(sheet, change).copy())
+    assert sheet.part is None
+
+
 def test_a_sheet_built_by_hand_has_no_part_and_takes_only_a_magnet():
     assert _one_face((1, 1, 1)).part is None
     with pytest.raises(TypeError, match="must be a magnet"):

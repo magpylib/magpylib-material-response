@@ -166,8 +166,8 @@ models, so a measurement is still the final check.
   mean polarization is on each sheet, `sheet.mean_polarization`.
 - **Solve the original model, not a result.** A result's polarizations hold the
   response, which a new solve counts as remanence. The returned collection
-  warns; a part taken out of it, or put into a new collection, does not.
-  A sheet's `part` holds the magnet it was solved from, at the sheet's pose, to
+  warns; a part taken out of it, or put into a new collection, does not. A
+  sheet's `part` holds the magnet it was solved from, at the sheet's pose, to
   rebuild a model from a face-charge result.
 - **Changing a solved model does not solve it again,** moving it or setting a
   `UniformField` on it. B moves with it, while the response stays that of the

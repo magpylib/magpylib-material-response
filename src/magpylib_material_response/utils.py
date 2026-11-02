@@ -175,7 +175,8 @@ def _serialize_recursive(obj, parent="warn"):
     if solved_by is not None:
         dd["solved_by"] = solved_by
 
-    if isinstance(obj, BaseMagnet):
+    # a soft part may have none
+    if isinstance(obj, BaseMagnet) and obj.polarization is not None:
         dd["polarization"] = {"value": obj.polarization.tolist(), "unit": "T"}
 
     # A scalar, or one value per path step where magpylib allows the property to
@@ -214,8 +215,14 @@ def _serialize_recursive(obj, parent="warn"):
             dd["panels"] = {"value": np.asarray(obj.panels).tolist()}
         if obj._mean is not None:  # of parts solved as one: not its own surface's
             dd["mean_polarization"] = {"value": obj._mean.tolist(), "unit": "T"}
-        if obj._part is not None:
+        if type(obj._part) in type_by_class:
             dd["part"] = _serialize_recursive(obj._part, parent="ignore")
+        elif obj._part is not None:
+            warnings.warn(
+                f"A sheet's part of type {type(obj._part).__name__} is not saved: "
+                "to_json takes magpylib's own classes.",
+                stacklevel=2,
+            )
     elif isinstance(obj, magpy.current.Circle):
         dd["diameter"] = {"value": np.asarray(obj.diameter).tolist(), "unit": "m"}
     elif isinstance(obj, magpy.Sensor):
@@ -266,7 +273,7 @@ def _deserialize_recursive(inp):
     if inp.get("parent") is not None:
         warnings.warn(f"object parent ({inp['parent']}) ignored", stacklevel=2)
 
-    if issubclass(constr, BaseMagnet):
+    if issubclass(constr, BaseMagnet) and "polarization" in inp:
         _check_unit("Polarization", inp["polarization"], "T")
         kw["polarization"] = inp["polarization"]["value"]
 
