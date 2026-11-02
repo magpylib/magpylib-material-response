@@ -23,6 +23,8 @@ from magpylib_material_response.cells import (
 )
 from magpylib_material_response.meshing import _thinnest as _thinnest_part
 from magpylib_material_response.meshing_utils import SOLIDS, mask_inside
+from magpylib_material_response.uniform import UniformField, refuse_both
+from magpylib_material_response.uniform import applied as uniform_field
 
 #: More sharp edges than this meeting at a corner break netgen's geometric
 #: refinement (an icosahedron, five at each corner, fails to assemble, and finer
@@ -87,8 +89,11 @@ def parts_of(collection):
             "TriangleStrip (last two vertices on the first two)."
         )
         raise ValueError(msg)
+    refuse_both(sources)
     others = [
-        s for s in sources if not isinstance(s, BaseMagnet | BaseCurrent | magpy.Sensor)
+        s
+        for s in sources
+        if not isinstance(s, BaseMagnet | BaseCurrent | UniformField | magpy.Sensor)
     ]
     if others:
         names = sorted({type(s).__name__ for s in others})
@@ -136,7 +141,7 @@ def parts_of(collection):
             "finite-element model has one field in all space."
         )
         raise ValueError(msg)
-    return parts, applied[0], currents
+    return parts, applied[0] + uniform_field(sources), currents
 
 
 def _closed(current):

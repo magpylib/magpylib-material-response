@@ -50,9 +50,31 @@ and this project adheres to
 
 ### Fixed
 
-- `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropic susceptibility
-  set on a parent too: it read only the part's own, and came out 11 times off
-  with no error
+- **Breaking, with a warning for one release:** a uniform applied field is a
+  source, `UniformField(B=...)` or `(H=...)`, in the model's collection, in
+  place of the attribute `H_ext`. `getB` of a solved model now includes it, as
+  it does a coil's field, and it acts on every part. A model with both raises
+  ([#71](https://github.com/magpylib/magpylib-material-response/issues/71),
+  [#163](https://github.com/magpylib/magpylib-material-response/pull/163))
+- When a B-H curve does not settle, `solve_fem` says to try a higher order; the
+  saturation page says to start at order 3
+  ([#160](https://github.com/magpylib/magpylib-material-response/pull/160))
+- `getJ` and `getM` inside a solved face-charge part warn that they give 0, as
+  `getB` warns there. The docs say not to read a cell model exactly on a
+  boundary between cells, where the field is wrong with no warning
+  ([#157](https://github.com/magpylib/magpylib-material-response/pull/157))
+- **Breaking, with warnings for one release:** the solvers take one form and are
+  importable from the top level: `solve_cells` (`apply_demag`),
+  `solve_face_charge` (`apply_face_charge`), `solve_fem` (`fem_solve`),
+  `study_cells` (`mesh_study`), `study_fem` (`fem_study`). The module `demag` is
+  now `cells`, `demag_kwargs` is `solve_kwargs`, and `solved_by` says `"cells"`
+  ([#154](https://github.com/magpylib/magpylib-material-response/pull/154))
+- The fixes of the review before this release:
+  `mesh_thin_CylinderSegment_with_cuboids` refuses an anisotropy set on a parent
+  too, which was 11 times off with no error; a steep B-H curve no longer crashes
+  the iteration, whose log χ is now bounded; a curve past any material, with H
+  and B swapped or in the wrong units, warns; and `import *` from an old module
+  still gives the old names
   ([#162](https://github.com/magpylib/magpylib-material-response/pull/162))
 
 ## [0.8.0] - 2026-11-01

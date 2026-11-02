@@ -93,6 +93,8 @@ strict = true
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 filterwarnings = [
   "error",
+  # H_ext goes in the next release, and its tests and validation cases with it
+  "ignore:H_ext is now UniformField:DeprecationWarning",
 ]
 log_level = "INFO"
 testpaths = [

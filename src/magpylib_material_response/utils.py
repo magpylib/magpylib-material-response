@@ -15,6 +15,7 @@ from scipy.spatial.transform import Rotation
 
 from magpylib_material_response import logging_config
 from magpylib_material_response._saturation import BHCurve
+from magpylib_material_response.uniform import UniformField
 
 
 class ElapsedTimeThread(threading.Thread):
@@ -203,6 +204,8 @@ def _serialize_recursive(obj, parent="warn"):
             "value": obj.current_densities.tolist(),
             "unit": "A/m",
         }
+    elif typ == "UniformField":
+        dd["B"] = {"value": obj.B.tolist(), "unit": "T"}
     elif typ == "face_charge.ChargeSheet":
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
         dd["faces"] = {"value": obj.faces.tolist()}
@@ -294,6 +297,9 @@ def _deserialize_recursive(inp):
         kw["vertices"] = inp["vertices"]["value"]
         kw["faces"] = inp["faces"]["value"]
         kw["current_densities"] = inp["current_densities"]["value"]
+    elif typ == "UniformField":
+        _check_unit("B", inp["B"], "T")
+        kw["B"] = inp["B"]["value"]
     elif typ == "face_charge.ChargeSheet":
         _check_unit("Vertices", inp["vertices"], "m")
         _check_unit("Charge densities", inp["charge_densities"], "A/m")
@@ -367,7 +373,11 @@ def _registry():
         ChargeSheet,
     )
 
-    by_type = {**_MAGPYLIB_CLASSES, "face_charge.ChargeSheet": ChargeSheet}
+    by_type = {
+        **_MAGPYLIB_CLASSES,
+        "face_charge.ChargeSheet": ChargeSheet,
+        "UniformField": UniformField,
+    }
     return {cls: tag for tag, cls in by_type.items()}, by_type
 
 

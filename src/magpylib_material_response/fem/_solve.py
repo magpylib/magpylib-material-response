@@ -67,6 +67,7 @@ from magpylib_material_response.fem._geometry import (
     solid,
     wire_points,
 )
+from magpylib_material_response.uniform import applied as uniform_field
 from magpylib_material_response.utils import timelog
 
 MU0 = magpy.mu_0
@@ -330,8 +331,8 @@ class FemSolution(magpy.misc.CustomSource):
     Made by :func:`solve_fem` or :func:`study_fem`. :func:`magpylib.getB`,
     ``getH``, ``getJ`` and ``getM`` read it, alone or with other sources, as on a
     collection solved by :func:`~magpylib_material_response.cells.solve_cells`:
-    the field of the model's magnets, remanent and induced, and of its currents,
-    without the uniform applied field. Moving it moves that field as it is,
+    the field of the model's magnets, remanent and induced, of its currents, and of a
+    ``UniformField``, without an ``H_ext``. Moving it moves that field as it is,
     without solving again. Inside a part with a high susceptibility the values
     are pointwise and show the elements, because H there is small next to its
     error: a part on a curve can read a few percent past its saturation.
@@ -427,6 +428,7 @@ class FemSolution(magpy.misc.CustomSource):
             if model.currents and air.any():
                 # the currents' own field, where the air's reduced potential leaves it
                 out[air] += model.applied(s[air]) - model.B_ext
+            out += model.B_shown
         return out / MU0 if field in ("H", "M") else out
 
     def _kelvin_gradient(self, s):
@@ -459,6 +461,12 @@ class Model:
     ):
         start = time.perf_counter()
         self.parts, self.B_ext, self.currents = parts_of(collection)
+        # in getB of the solution, as a UniformField's is; H_ext's is not
+        self.B_shown = uniform_field(
+            collection.sources_all
+            if hasattr(collection, "sources_all")
+            else [collection]
+        )
         lo = np.min([p.bounds[0] for p in self.parts], axis=0)
         hi = np.max([p.bounds[1] for p in self.parts], axis=0)
         self.center = 0.5 * (lo + hi)
@@ -1083,7 +1091,7 @@ def solve_fem(
         takes it before meshing: Cuboid, Cylinder, CylinderSegment, Sphere,
         Tetrahedron and TriangularMesh magnets with their polarization (the
         remanence) and susceptibility, isotropic or along their own axes (none
-        on a magnet or its parents: fixed), in a uniform applied field ``H_ext`` (mu0 H in T) and the field of current
+        on a magnet or its parents: fixed), in any ``UniformField``, or the older attribute ``H_ext`` (mu0 H in T) and the field of current
         sources, which are not meshed. The magnets must not overlap; a current
         must not run through a magnet or through a hole in one.
     order : int, default 3

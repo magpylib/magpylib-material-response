@@ -23,7 +23,7 @@ a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. 
 `BHCurve` set as `susceptibility` on a part, or on a collection above it,
 replaces the constant: `solve_cells` then puts every cell at the susceptibility
 its own field gives on the curve, repeating the linear solve until none changes.
-The interaction matrix is built once; the fixed point takes 10 to 40 solves with
+The interaction matrix is built once; the fixed point takes 6 to 40 solves with
 Anderson acceleration.
 
 ## A curve
@@ -40,7 +40,7 @@ import numpy as np
 from scipy.optimize import brentq
 
 from magpylib_material_response import solve_cells
-from magpylib_material_response import BHCurve
+from magpylib_material_response import BHCurve, UniformField
 from magpylib_material_response.meshing import mesh_Cuboid, mesh_TriangularMesh
 
 MU0 = 4e-7 * np.pi
@@ -65,7 +65,7 @@ ax.legend()
 
 A sphere stays uniformly polarized while it saturates, so its answer is exact:
 μ₀ H inside is B₀ − J / 3, and J follows the curve at that field. The sphere is
-a triangle mesh cut into tetrahedra, placed in a uniform field `H_ext`.
+a triangle mesh cut into tetrahedra, placed in a `UniformField`.
 
 ```{code-cell} ipython3
 def icosphere(diameter, splits=2):
@@ -103,8 +103,9 @@ volumes = np.array([c.volume for c in cells])
 B0 = np.array([0.05, 0.2, 0.5, 1.0, 1.5, 2.0])
 solved, exact = [], []
 for b in B0:
-    mesh.H_ext = (0, 0, b)
-    J = np.array([c.polarization for c in solve_cells(mesh, solver="direct").sources_all])
+    model = magpy.Collection(mesh.copy(), UniformField(B=(0, 0, b)))
+    answer = solve_cells(model, solver="direct").children[0]
+    J = np.array([c.polarization for c in answer.sources_all])
     solved.append((J[:, 2] * volumes).sum() / volumes.sum())
     exact.append(brentq(lambda J, b=b: polarization((b - J / 3) / MU0) - J, 0, 3 * b))
 
@@ -126,14 +127,13 @@ two pole faces not yet.
 ```{code-cell} ipython3
 cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
 cube.susceptibility = curve
-cells = mesh_Cuboid(cube, (8, 8, 8))
-cells.H_ext = (0, 0, 0.5)
-solved = solve_cells(cells, solver="direct")
+field = UniformField(B=(0, 0, 0.5))
+cells = magpy.Collection(mesh_Cuboid(cube, (8, 8, 8)), field)
+solved = solve_cells(cells, solver="direct").children[0]
 constant = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
 constant.susceptibility = CHI0
-cells_constant = mesh_Cuboid(constant, (8, 8, 8))
-cells_constant.H_ext = (0, 0, 0.5)
-linear = solve_cells(cells_constant, solver="direct")
+cells_constant = magpy.Collection(mesh_Cuboid(constant, (8, 8, 8)), field.copy())
+linear = solve_cells(cells_constant, solver="direct").children[0]
 
 share = np.array([np.linalg.norm(c.polarization) / JS for c in solved.sources_all])
 centres = np.array([c.position for c in solved.sources_all])
@@ -170,7 +170,7 @@ both methods share it.
 
 ## What it costs, and what it leaves out
 
-- A part on a curve solves 10 to 40 times, the matrix built once; the sphere
+- A part on a curve solves 6 to 40 times, the matrix built once; the sphere
   above takes about 20 solves at each field.
 - `solve_face_charge` refuses a part on a curve: it needs a uniform
   susceptibility in each part. `solve_fem` follows the curve, and is the check

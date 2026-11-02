@@ -42,7 +42,7 @@ from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 
 from magpylib_material_response import configure_logging, disable_logging
-from magpylib_material_response import solve_cells
+from magpylib_material_response import UniformField, solve_cells
 from magpylib_material_response.demag_fft import analyze_collection
 from magpylib_material_response.meshing import (
     mesh_Cuboid,
@@ -290,20 +290,25 @@ only.
 ```{code-cell} ipython3
 def soft_cube():
     cube = magpy.magnet.Cuboid(dimension=(10 * MM,) * 3, polarization=(0, 0, 0))
-    cube.susceptibility, cube.H_ext = 1000, (0, 0, 0.01)
+    cube.susceptibility = 1000
     return cube
 
 
 def soft_cube_surface():
     corners = np.array(list(itertools.product((-5 * MM, 5 * MM), repeat=3)))
     body = magpy.magnet.TriangularMesh.from_ConvexHull(polarization=(0, 0, 0), points=corners)
-    body.susceptibility, body.H_ext = 1000, (0, 0, 0.01)
+    body.susceptibility = 1000
     return body
+
+
+def in_field(cells):
+    """The cells in a uniform 10 mT along z."""
+    return magpy.Collection(cells, UniformField(B=(0, 0, 0.01)))
 
 
 def moment(solved):
     """The z-moment of the solved cells, in A m²."""
-    return sum(c.volume * c.orientation.apply(c.polarization)[2] for c in solved.sources_all) / magpy.mu_0
+    return sum(c.volume * c.orientation.apply(c.polarization)[2] for c in solved.children[0].sources_all) / magpy.mu_0
 
 
 EXACT = 0.028880  # A m², this cube's moment by finite elements, orders 3 to 5
@@ -312,12 +317,12 @@ for rule in ("point", "newell"):
     for n in (27, 64, 216, 512, 1728, 4096):
         cells = mesh_Cuboid(soft_cube(), n)
         t0 = time.perf_counter()
-        solved = solve_cells(cells, interaction=rule)
+        solved = solve_cells(in_field(cells), interaction=rule)
         runs.append((f"cuboids, {rule}", len(cells.sources_all), moment(solved), time.perf_counter() - t0))
 for n in (30, 100, 300, 1000):
     cells = mesh_TriangularMesh(soft_cube_surface(), n)
     t0 = time.perf_counter()
-    solved = solve_cells(cells)
+    solved = solve_cells(in_field(cells))
     runs.append(("tetrahedra", len(cells.sources_all), moment(solved), time.perf_counter() - t0))
 ```
 
@@ -377,7 +382,7 @@ with holes; tetrahedra lie on no grid (grey).
 block = soft_cube()
 block.position = (-22 * MM, 0, 0)
 ball = magpy.magnet.Sphere(diameter=12 * MM, polarization=(0, 0, 0))
-ball.susceptibility, ball.H_ext = 1000, (0, 0, 0.01)
+ball.susceptibility = 1000
 cone = magpy.magnet.TriangularMesh.from_ConvexHull(
     polarization=(0, 0, 0),
     points=np.vstack(
@@ -385,9 +390,12 @@ cone = magpy.magnet.TriangularMesh.from_ConvexHull(
         + [[16 * MM, 0, 6 * MM]]
     ),
 )
-cone.susceptibility, cone.H_ext = 1000, (0, 0, 0.01)
+cone.susceptibility = 1000
 model = magpy.Collection(
-    mesh_Cuboid(block, 1000), voxelize(ball, 1500), mesh_TriangularMesh(cone, 250)
+    mesh_Cuboid(block, 1000),
+    voxelize(ball, 1500),
+    mesh_TriangularMesh(cone, 250),
+    UniformField(B=(0, 0, 0.01)),
 )
 
 configure_logging(sink=lambda message: print(message.record["message"]), min_log_time=60)
@@ -399,9 +407,9 @@ disable_logging()
 :tags: [hide-input]
 
 kinds = {"grid": ("grids (FFT)", BLUE), "loose": ("other cuboids", ORANGE), "generic": ("tetrahedra", GREY)}
-cells = [c.copy() for c in solved.sources_all]
+cells = [c.copy() for c in solved.sources_all[:-1]]  # the last is the field
 groups = {kind: [] for kind in kinds}
-for cluster in analyze_collection(solved.sources_all)[1]:
+for cluster in analyze_collection(solved.sources_all[:-1])[1]:
     for i in cluster["indices"]:
         cells[i].style.color = kinds[cluster["kind"]][1]
         cells[i].style.magnetization.show = False

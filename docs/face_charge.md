@@ -44,8 +44,8 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
 - **What it solves:** cuboids, alone or touching, placed and turned freely,
   cylinders, cylinder segments and spheres (below), and closed triangle meshes
   such as CAD exports (below), each with a uniform isotropic susceptibility and
-  a uniform remanence, driven by any other magpylib sources and by the applied
-  field `H_ext`.
+  a uniform remanence, driven by any other magpylib sources, a `UniformField`
+  among them.
 - **How well:** on the six documented examples it lands within each reference's
   own uncertainty, 0.64 % at worst, where `solve_cells` at the documented
   settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
@@ -245,8 +245,8 @@ mT if the magnet moves after one solve, as if the plate were not there. So a
 tolerance study needs a solve per sample.
 
 The matrix of a solve depends only on the solved parts, so a loop that changes
-only what drives them, such as a magnet's pose, `H_ext` or a part's remanence,
-or moves all solved parts as one, can keep its factorization:
+only what drives them, such as a magnet's pose, a `UniformField` or a part's
+remanence, or moves all solved parts as one, can keep its factorization:
 
 ```python
 solved = True
@@ -291,17 +291,17 @@ $$
 (1/\chi + 1/2)\,\sigma - K'\sigma = H_0\cdot n + M_0\cdot n / \chi ,
 $$
 
-with `H_0` the applied field (the attribute `H_ext` is `mu0 H_0`, in tesla) and
-`K'` the adjoint double-layer operator of the surface, which depends on the
-shape only. The faces are cut into panels graded toward the edges, where a soft
-part's charge is singular. Each panel carries a charge linear across it, with
-fields in closed form, and the equation is solved in its Galerkin form. In large
-models, cuboid panels at least 3 panel sides apart take a few Gauss points
-instead, which moves answers by under 1e-6. Far from a solved part, its field
-takes six points on each triangle, as the closed form cancels there. Touching
-parts are coupled exactly, even when their panels do not match. From 2,000
-unknowns on, the dense system is factorized in single precision and refined to
-double's accuracy, three times faster. Assembly and fields run on
+with `H_0` the applied field (a `UniformField`, whose `B` is `mu0 H_0`) and `K'`
+the adjoint double-layer operator of the surface, which depends on the shape
+only. The faces are cut into panels graded toward the edges, where a soft part's
+charge is singular. Each panel carries a charge linear across it, with fields in
+closed form, and the equation is solved in its Galerkin form. In large models,
+cuboid panels at least 3 panel sides apart take a few Gauss points instead,
+which moves answers by under 1e-6. Far from a solved part, its field takes six
+points on each triangle, as the closed form cancels there. Touching parts are
+coupled exactly, even when their panels do not match. From 2,000 unknowns on,
+the dense system is factorized in single precision and refined to double's
+accuracy, three times faster. Assembly and fields run on
 `magpy.defaults.threads` threads where magpylib has that setting, otherwise on
 the CPUs the process may use, up to 8. On a cube the method reproduces the
 polarizability of Helsing and Perfekt (2013) from below, as a Galerkin method
