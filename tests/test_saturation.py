@@ -347,6 +347,19 @@ def test_finite_elements_keep_a_remanent_part_on_its_curve():
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=0.01)
 
 
+def test_finite_elements_say_what_to_do_when_a_curve_does_not_settle(monkeypatch):
+    pytest.importorskip("ngsolve")
+    from magpylib_material_response.fem import _solve  # noqa: PLC0415
+
+    monkeypatch.setattr(_solve, "FEM_SOLVES", 1)
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
+    sphere.susceptibility = table(n=30)
+    model = magpy.Collection(sphere)
+    model.H_ext = (0, 0, 1.0)
+    with pytest.raises(RuntimeError, match="higher order"):
+        _solve.solve_fem(model, order=1)
+
+
 def test_finite_elements_and_cells_agree_on_a_coil_in_a_saturating_core():
     """A coil at a current that saturates the bar: the reduced and the total
     potential both take chi from the curve, and the two methods agree."""
