@@ -80,6 +80,15 @@ def _box(part):
     return -high, high
 
 
+def _shape(magnet):
+    """What sets a magnet's shape in its own frame: its dimension, diameter or
+    vertices."""
+    for name in ("dimension", "diameter", "vertices"):
+        if hasattr(magnet, name):
+            return np.asarray(getattr(magnet, name), float)
+    return np.full(1, np.nan)
+
+
 def _inside(part, points):
     """Of `points` (n, 3), those a step to every side of leaves inside `part` at the
     origin. A point on the surface is outside as well, and a mesh's inside test
@@ -315,14 +324,10 @@ class ChargeSheet(magpy.misc.CustomSource):
     def _came_from(self, part):
         """Whether `part` has the shape of the part this sheet was solved from,
         wherever it is now: a part it was solved from moves."""
-        return (
-            self._part is not None
-            and type(part) is type(self._part)
-            and bool(
-                np.allclose(
-                    np.ptp(_box(part), axis=0), np.ptp(_box(self._part), axis=0)
-                )
-            )
+        if self._part is None or type(part) is not type(self._part):
+            return False
+        mine, given = _shape(self._part), _shape(part)
+        return bool(mine.shape == given.shape and np.allclose(mine, given))
         )
 
     @property

@@ -1877,6 +1877,18 @@ def test_a_sheet_beside_a_part_of_another_shape_does_not_warn():
     solved = solve_face_charge(magpy.Collection(lying, _drive()), level=1)
     kept = next(s for s in solved.sources_all if isinstance(s, ChargeSheet)).copy()
     solve_face_charge(magpy.Collection(kept, upright), level=1)
+    # the same box, another opening
+    wide, narrow = (
+        magpy.magnet.CylinderSegment(
+            dimension=(0.002, 0.005, 0.004, 0, angle), polarization=(0, 0, 0)
+        )
+        for angle in (300, 270)
+    )
+    wide.susceptibility = narrow.susceptibility = 10.0
+    narrow.position = (0.05, 0, 0)
+    solved = solve_face_charge(magpy.Collection(wide, _drive()), level=1)
+    kept = next(s for s in solved.sources_all if isinstance(s, ChargeSheet)).copy()
+    solve_face_charge(magpy.Collection(kept, narrow), level=1)
 
 
 def _triangular_part():
