@@ -89,7 +89,8 @@ def _inside(part, points):
     step = max(1e-6 * np.linalg.norm(high - low), 1e-9)
     steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
     tried = (points[:, None] + steps).reshape(-1, 3)
-    with np.errstate(divide="ignore", invalid="ignore"):  # on a mesh's own points
+    # in its own context, without the caller's settings: only J's sign is read
+    with np.errstate(all="ignore"):
         J = part.getJ(tried).reshape(len(points), len(steps), 3)
     return ((J != 0).any(axis=2) & np.isfinite(J).all(axis=2)).all(axis=1)
 
