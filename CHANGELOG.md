@@ -8,12 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-11-04
+
 ### Fixed
 
 - `solve_cells` and `solve_face_charge` results keep a `susceptibility` the
   model inherited from a parent collection, so `to_json` saves it and studio
   finds the parts that respond
-  ([#172](https://github.com/magpylib/magpylib-material-response/issues/172))
+  ([#173](https://github.com/magpylib/magpylib-material-response/pull/173))
 
 ## [0.9.2] - 2026-11-03
 
@@ -608,7 +610,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.9.2...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.3...HEAD
+[0.9.3]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.2...0.9.3
 [0.9.2]:
   https://github.com/magpylib/magpylib-material-response/compare/0.9.1...0.9.2
 [0.9.1]:
