@@ -39,7 +39,7 @@ from magpylib_material_response.face_charge._tribody import (
     _triangles,
     add_triangle_contact_lines,
 )
-from magpylib_material_response.meshing_utils import SOLIDS
+from magpylib_material_response.meshing_utils import SOLIDS, detached_copy
 from magpylib_material_response.uniform import refuse_both
 from magpylib_material_response.utils import timelog
 
@@ -172,7 +172,7 @@ def solve_face_charge(
         raise ValueError(msg)
     start = time.perf_counter()
     solved, fixed = _split(collection)
-    out = collection.copy()
+    out = detached_copy(collection)  # keeps what it inherits from above
     out._kept_matrix = None  # a copy of an earlier result's is not this solve's
     info = {"unknowns": 0, "level": level, "rounds": 0, "reused": False}
     if not solved:

@@ -88,6 +88,7 @@ from magpylib_material_response.demag_fft import (
     canonical_quats,
     demag_fft_matvec,
 )
+from magpylib_material_response.meshing_utils import detached_copy
 from magpylib_material_response.newell import (
     demag_block_general,
     point_block,
@@ -1752,10 +1753,10 @@ def solve_cells(
         msg = f"interaction must be one of {INTERACTIONS}; got {interaction!r}"
         raise ValueError(msg)
     # The copy has no parent, so material attributes a cell inherits from above
-    # `collection` are read from the original.
+    # `collection` are read from the original, and set on the copy.
     original = collection
     if not inplace:
-        collection = collection.copy()
+        collection = detached_copy(collection)
     if style is not None:
         collection.style = style
     srcs = collection.sources_all

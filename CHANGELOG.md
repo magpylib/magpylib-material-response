@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- `solve_cells` and `solve_face_charge` results keep a `susceptibility` the
+  model inherited from a parent collection, so `to_json` saves it and studio
+  finds the parts that respond
+  ([#172](https://github.com/magpylib/magpylib-material-response/issues/172))
+
 ## [0.9.2] - 2026-11-03
 
 ### Fixed
