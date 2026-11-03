@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import importlib.metadata
 import os
 import re
@@ -13,7 +13,7 @@ from typing import Any
 os.environ["PLOTLY_RENDERER"] = "sphinx_gallery"
 
 project = "magpylib-material-response"
-copyright = f"{datetime.datetime.now(tz=datetime.UTC).year}, Alexandre Boisselet"
+copyright = f"{dt.datetime.now(tz=dt.UTC).year}, Alexandre Boisselet"
 author = "Alexandre Boisselet"
 version = release = importlib.metadata.version("magpylib_material_response")
 
