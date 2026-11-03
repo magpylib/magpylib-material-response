@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-03
+
 ### Fixed
 
 - Inside a studio `@scene` function, `from_json` no longer records a
@@ -599,7 +601,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.9.1...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.2...HEAD
+[0.9.2]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.1...0.9.2
 [0.9.1]:
   https://github.com/magpylib/magpylib-material-response/compare/0.9.0...0.9.1
 [0.9.0]:
