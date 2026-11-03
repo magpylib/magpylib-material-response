@@ -8,6 +8,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Inside a studio `@scene` function, `from_json` no longer records a
+  `UniformField` as zero, and a sheet's part is no longer recorded as a source
+  that adds its field. Reading inside a part warns again on a field map around a
+  mesh whose vertices lie off its origin, and building or loading a sheet no
+  longer warns by itself. A part with no size, or one varying along a path, is
+  refused at once
+  ([#170](https://github.com/magpylib/magpylib-material-response/pull/170))
+
 ## [0.9.1] - 2026-11-02
 
 ### Added
@@ -24,8 +34,11 @@ and this project adheres to
   are read-only on every copy, reading inside a part warns also on touching
   parts and after `to_json`, and a magnet with neither a susceptibility nor a
   polarization warns, as a child's copy does when it leaves its parent's value
-  behind. Solving warns also for a result nested in a new collection or taken
-  from one, and beside a `FemSolution`
+  behind. Reading exactly on a part's face, or inside a sheet kept as a fixed
+  source of a later solve, no longer warns. Solving warns also for a result
+  nested in a new collection or taken from one, beside a `FemSolution`, and
+  beside a sheet of a part's own shape. A result with nothing to solve has
+  `solved_by` set
   ([#167](https://github.com/magpylib/magpylib-material-response/pull/167))
 
 ## [0.9.0] - 2026-11-02

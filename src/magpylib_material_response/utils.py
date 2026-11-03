@@ -15,7 +15,7 @@ from scipy.spatial.transform import Rotation
 
 from magpylib_material_response import logging_config
 from magpylib_material_response._saturation import BHCurve
-from magpylib_material_response.uniform import UniformField
+from magpylib_material_response.uniform import LOADING, UniformField, unseen
 
 
 class ElapsedTimeThread(threading.Thread):
@@ -308,7 +308,7 @@ def _deserialize_recursive(inp):
         kw["current_densities"] = inp["current_densities"]["value"]
     elif typ == "UniformField":
         _check_unit("B", inp["B"], "T")
-        kw["H"] = (0, 0, 0)
+        kw["B"] = inp["B"]["value"]
     elif typ == "face_charge.ChargeSheet":
         _check_unit("Vertices", inp["vertices"], "m")
         _check_unit("Charge densities", inp["charge_densities"], "A/m")
@@ -321,7 +321,7 @@ def _deserialize_recursive(inp):
             _check_unit("Mean polarization", inp["mean_polarization"], "T")
             kw["mean_polarization"] = inp["mean_polarization"]["value"]
         if "part" in inp:
-            kw["part"] = _deserialize_recursive(inp["part"])
+            kw["part"] = unseen(_deserialize_recursive, inp["part"])
     elif constr is magpy.current.Circle:
         _check_unit("Diameter", inp["diameter"], "m")
         kw["diameter"] = inp["diameter"]["value"]
@@ -330,9 +330,11 @@ def _deserialize_recursive(inp):
             _check_unit("Pixel", inp["pixel"], "m")
             kw["pixel"] = inp["pixel"]["value"]
 
-    obj = constr(**kw)
-    if constr is UniformField:  # past the warning on B: given as H, it may be strong
-        obj._set(inp["B"]["value"], 1.0)
+    token = LOADING.set(True)
+    try:
+        obj = constr(**kw)
+    finally:
+        LOADING.reset(token)
 
     if inp.get("susceptibility") is not None:
         saved = inp["susceptibility"]

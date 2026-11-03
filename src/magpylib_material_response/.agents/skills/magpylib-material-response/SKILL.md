@@ -163,9 +163,9 @@ models, so a measurement is still the final check.
   Use an odd number of cells, and read off every boundary: a step along one axis
   can stay on another, as (0, 0, 1e-6) does.
 - **Inside a part solved by face charge,** `getB` gives µ0 H, not B, and `getJ`
-  and `getM` give 0, each with a warning. No warning comes from a part touching
-  another of its material. For B inside, use `solve_cells` or `solve_fem`. The
-  mean polarization is on each sheet, `sheet.mean_polarization`.
+  and `getM` give 0, each with a warning. For B inside, use `solve_cells` or
+  `solve_fem`. The mean polarization is on each sheet,
+  `sheet.mean_polarization`.
 - **A magnet's copy leaves its parent behind,** and what it inherits from it: a
   part under a parent with a `susceptibility` becomes fixed, with a warning only
   if it has no polarization. `collection.copy()` and `sheet.part` keep it.
