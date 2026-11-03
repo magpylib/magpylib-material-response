@@ -1833,7 +1833,7 @@ def test_a_large_part_does_not_warn_when_kept():
 
 def test_what_a_sheet_makes_for_itself_is_out_of_a_recorders_sight(monkeypatch):
     """Studio's @scene records magpylib calls from a context variable."""
-    recording, seen = contextvars.ContextVar("recording", default=False), []
+    recording, seen = contextvars.ContextVar("magpylib_recorder", default=None), []
     made = magpy.magnet.Cuboid.__init__
 
     def init(self, *args, **kwargs):

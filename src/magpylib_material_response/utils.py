@@ -15,7 +15,7 @@ from scipy.spatial.transform import Rotation
 
 from magpylib_material_response import logging_config
 from magpylib_material_response._saturation import BHCurve
-from magpylib_material_response.uniform import UniformField, unseen
+from magpylib_material_response.uniform import LOADING, UniformField, unseen
 
 
 class ElapsedTimeThread(threading.Thread):
@@ -330,10 +330,11 @@ def _deserialize_recursive(inp):
             _check_unit("Pixel", inp["pixel"], "m")
             kw["pixel"] = inp["pixel"]["value"]
 
-    with warnings.catch_warnings():
-        # a field saved as B may have been given as H, and be strong
-        warnings.filterwarnings("ignore", message="UniformField of")
+    token = LOADING.set(True)
+    try:
         obj = constr(**kw)
+    finally:
+        LOADING.reset(token)
 
     if inp.get("susceptibility") is not None:
         saved = inp["susceptibility"]

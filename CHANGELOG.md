@@ -34,7 +34,7 @@ and this project adheres to
   are read-only on every copy, reading inside a part warns also on touching
   parts and after `to_json`, and a magnet with neither a susceptibility nor a
   polarization warns, as a child's copy does when it leaves its parent's value
-  behind. Reading exactly on a part's surface, or inside a sheet kept as a fixed
+  behind. Reading exactly on a part's face, or inside a sheet kept as a fixed
   source of a later solve, no longer warns. Solving warns also for a result
   nested in a new collection or taken from one, beside a `FemSolution`, and
   beside a sheet of a part's own shape. A result with nothing to solve has

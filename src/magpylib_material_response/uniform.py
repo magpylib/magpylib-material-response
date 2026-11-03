@@ -10,13 +10,23 @@ import numpy as np
 
 MU0 = magpy.mu_0
 B_WARN = 10.0  # T: stronger is most likely H in A/m given as B
+#: Context variables of recorders of magpylib calls, by name: magpylib's hook
+#: and studio's ``@scene``. Their default is None, recording nothing.
+RECORDERS = ("magpylib_recorder", "magpylib_studio_building")
+#: Set while from_json loads: a field saved as B may have been given as H.
+LOADING = contextvars.ContextVar("magpylib_material_response_loading", default=False)
 
 
 def unseen(function, *args):
     """Run `function` out of sight of a recorder of magpylib calls, as in studio's
-    ``@scene``: what this package makes for itself is no object of the scene. A
-    recorder is a context variable, and a new context has none."""
-    return contextvars.Context().run(function, *args)
+    ``@scene``: what this package makes for itself is no object of the scene. The
+    caller's context without its recorders, so warnings filters, numpy's error
+    settings and log context still hold."""
+    context = contextvars.copy_context()
+    for variable in context:
+        if variable.name in RECORDERS:
+            context.run(variable.set, None)
+    return context.run(function, *args)
 
 
 def shallow_copy(source):
@@ -105,7 +115,7 @@ class UniformField(magpy.misc.CustomSource):
         self._set(value, MU0)
 
     def _warn_if_strong(self):
-        if np.linalg.norm(self._B) > B_WARN:
+        if np.linalg.norm(self._B) > B_WARN and not LOADING.get():
             warnings.warn(
                 f"UniformField of {np.linalg.norm(self._B):.3g} T: is it H in A/m, given "
                 "as B?",

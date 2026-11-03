@@ -84,9 +84,7 @@ compare: it is each sheet's `style.charge.level`, which `to_json` keeps.
 - **Fields outside the parts:** inside a solved part, `getB` gives μ0 H without
   the part's own magnetization, and `getJ` and `getM` give 0, each with a
   warning. For B inside a part, such as the flux in a yoke, mesh it and use
-  `solve_cells`, and for its mean polarization read `mean_polarization`. No
-  warning comes from a part that touches another of its material, whose surface
-  is not closed, or from a sheet loaded with `from_json`.
+  `solve_cells`, and for its mean polarization read `mean_polarization`.
 - **What it leaves to `solve_cells`:** an anisotropic susceptibility and one
   varying inside a part, which bring back charge inside the part;
   `solve_face_charge` raises for these. So does a part on a `BHCurve`, for
@@ -290,7 +288,9 @@ its own part counts its response twice, and warns.
 result solved with `refine` cannot be reproduced exactly from its parts, as the
 panels it split are not kept. A sheet built without `part=`, with its mesh or
 charge changed, or kept as a fixed source of a later solve has no part, nor has
-a result solved before version 0.9.1: solve its original model instead.
+a result solved before version 0.9.1: solve its original model instead. Inside a
+studio `@scene` function, build the parts with their class: a part read from
+`part` is not recorded, and the scene refuses it.
 
 For the plate under a magnet, a call takes 72 ms at level 3 and then 18 ms, and
 1.15 s at 9,558 unknowns and then 0.12 s. The call that factors takes up to
