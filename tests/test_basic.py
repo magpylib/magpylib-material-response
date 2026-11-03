@@ -503,3 +503,24 @@ def test_a_magnet_without_susceptibility_is_fixed_everywhere(solver):
         solved = solve_fem(model, order=2)
     reference = solve_face_charge(model, level=2).getB((0, 0, 0.02))[2]
     np.testing.assert_allclose(solved.getB((0, 0, 0.02))[2], reference, rtol=0.05)
+
+
+@pytest.mark.parametrize(
+    "solve",
+    [solve_cells, lambda model: solve_face_charge(model, level=1)],
+    ids=["cells", "face charge"],
+)
+def test_a_result_keeps_the_susceptibility_inherited_from_above(solve):
+    """The result has no parent, so it carries what the model read from above
+    (#172), and the model itself is left alone."""
+    magnet = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 1.2))
+    core = magpy.magnet.Cuboid(
+        dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(0.02, 0, 0)
+    )
+    inner = magpy.Collection(magnet, core)
+    holder = magpy.Collection(inner)
+    holder.susceptibility = 0.05
+    given = solve(inner)
+    assert given.parent is None
+    assert given.susceptibility == 0.05
+    assert getattr(inner, "susceptibility", None) is None
