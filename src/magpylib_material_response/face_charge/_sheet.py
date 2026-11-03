@@ -328,7 +328,6 @@ class ChargeSheet(magpy.misc.CustomSource):
             return False
         mine, given = _shape(self._part), _shape(part)
         return bool(mine.shape == given.shape and np.allclose(mine, given))
-        )
 
     @property
     def mean_polarization(self):
