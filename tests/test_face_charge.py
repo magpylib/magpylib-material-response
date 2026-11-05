@@ -2154,7 +2154,9 @@ def _solved_sheets(kind, magnet_z=0.0045):
     solved = solve_face_charge(model, level=1)
     sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
     if kind == "cuboid":
-        return sheets, 3 * sum(len(set(s.panels)) for s in sheets)
+        # with a part inside parts of its material, whose sheet has no faces
+        empty = ChargeSheet(np.zeros((0, 3)), np.zeros((0, 3), int), np.zeros((0, 3)))
+        return [*sheets, empty], 3 * sum(len(set(s.panels)) for s in sheets)
     return sheets, 3 * sum(len(s.faces) for s in sheets)
 
 
@@ -2222,7 +2224,7 @@ def _on_a_path():
     ("built", "used", "error", "match"),
     [
         (
-            lambda: _solved_sheets("cuboid")[0],
+            lambda: _solved_sheets("cuboid")[0][:1],
             lambda _: solve_face_charge(_plate_under_magnet(), level=2).sources_all[:1],
             ValueError,
             "another mesh or pose",

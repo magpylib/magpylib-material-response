@@ -237,7 +237,8 @@ def field_matrix(sources, observers, field="B", dtype=np.float64):
     dtype : numpy dtype, default float64
         Of the matrix. ``float32`` halves its memory, within about 1e-6 of the
         largest field around the sheets. Far away their charges' fields
-        cancel, and its rounding shows: 6e-5 at 2,000 times a plate's size.
+        cancel, and its rounding shows: up to 4e-3 of the field there at 2,000
+        times a plate's size. Use float64 for observers far away.
 
     Returns
     -------
@@ -295,13 +296,14 @@ def field_matrix(sources, observers, field="B", dtype=np.float64):
     for sheet, (position, rotation), u, a, b in zip(
         sheets, poses, unknowns, offsets[:-1], offsets[1:], strict=True
     ):
-        if field != "H" and sheet._part is not None:
-            # in the sheet's frame, as getB gives it
-            sheet._warn_if_inside((X - position) @ rotation, field)
+        if not u.faces:  # a part inside parts of its material: no field
+            continue
         # in the sheet's own frame, as getB computes it, so that observers on a
         # face fall on the same side of it in both; the field turned back after
         turn = sheet.orientation if sheet.orientation.single else sheet.orientation[-1]
         XL = turn.apply(X - position, inverse=True)
+        if field != "H" and sheet._part is not None:
+            sheet._warn_if_inside(XL, field)
         V, fr = sheet._V, sheet._frames
         with np.errstate(over="ignore"):  # past 1e154 m: inf, and so far
             far = np.linalg.norm(XL - sheet._center, axis=1) >= sheet._far_from
@@ -332,5 +334,5 @@ def field_matrix(sources, observers, field="B", dtype=np.float64):
         ]
         run(fill, jobs, work=len(X) * u.faces)
     return FieldMatrix(
-        sheets, unknowns, poses, shape, matrix.reshape(-1, offsets[-1]), field
+        sheets, unknowns, poses, shape, matrix.reshape(3 * len(X), offsets[-1]), field
     )

@@ -13,6 +13,7 @@ and this project adheres to
 - `face_charge.field_matrix`: the field of solved sheets at fixed observers as
   one matrix, so that later solves of the same parts give their field by one
   product (a plate's field at 2,601 points: 25 ms to 0.4 ms)
+  ([#176](https://github.com/magpylib/magpylib-material-response/pull/176))
 
 ## [0.9.3] - 2026-11-04
 
