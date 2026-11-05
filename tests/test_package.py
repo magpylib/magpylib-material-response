@@ -76,3 +76,36 @@ def test_agent_skill_examples_run():
 def test_agent_skill_uses_old_names_only_in_its_table(name):
     """Past the frontmatter they appear once, as what was before 0.9."""
     assert _prose(SKILL_DIR / "SKILL.md").split("---\n", 2)[2].count(name) == 1
+
+
+#: Public names the skill leaves out, each with its reason. Every other name a
+#: public module exports must appear in the skill, so that a release cannot ship
+#: a function the skill does not know.
+NOT_IN_SKILL = {
+    "configure_logging": "logging setup, not modelling",
+    "disable_logging": "logging setup, not modelling",
+    "get_dataset": "the docs' example data",
+    "Comparison": "what compare returns",
+    "MeshStudy": "what study_cells returns",
+    "FemSolution": "what solve_fem returns",
+    "FemStudy": "what study_fem returns",
+}
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "magpylib_material_response",
+        "magpylib_material_response.face_charge",
+        "magpylib_material_response.convergence",
+        "magpylib_material_response.fem",
+    ],
+)
+def test_agent_skill_names_every_public_name(module):
+    """Each name a public module exports is in the skill, or in NOT_IN_SKILL."""
+    if module.endswith(".fem"):
+        pytest.importorskip("ngsolve")
+    text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+    names = set(importlib.import_module(module).__all__) - set(NOT_IN_SKILL)
+    missing = sorted(n for n in names if not re.search(rf"\b{re.escape(n)}\b", text))
+    assert not missing, f"name them in the skill, or in NOT_IN_SKILL: {missing}"

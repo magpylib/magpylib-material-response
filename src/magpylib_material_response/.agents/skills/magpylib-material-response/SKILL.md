@@ -6,10 +6,11 @@ description: >-
   pole pieces, susceptibility, demagnetization, saturation, B-H curves — on top
   of Magpylib, even when the user never says "material response". Covers
   choosing between solve_face_charge, solve_cells and solve_fem, setting
-  susceptibility and BHCurve, UniformField, reading the solved model and error
-  bars. Names changed in 0.9: code written from memory with apply_demag, H_ext
-  or bh_curve warns or fails, and reading a solved model in the wrong place
-  gives a wrong field, so use this skill before writing the code.
+  susceptibility and BHCurve, UniformField, reading the solved model, error
+  bars, and field_matrix for many solves read at the same points. Names changed
+  in 0.9: code written from memory with apply_demag, H_ext or bh_curve warns or
+  fails, and reading a solved model in the wrong place gives a wrong field, so
+  use this skill before writing the code.
 license: BSD-3-Clause
 ---
 
@@ -17,7 +18,7 @@ license: BSD-3-Clause
 
 Official skill for Magpylib-Material-Response 0.x, shipped inside the package
 and versioned with it. Prefer it over recalled API knowledge: the names in this
-skill are from 0.9, and the package is in alpha. For the field computation
+skill are from 0.10, and the package is in alpha. For the field computation
 itself (`getB`, sources, paths, sensors), see Magpylib: its own skill ships from
 its next release.
 
@@ -38,6 +39,10 @@ mmr.__version__
   returns a solved model that `magpy.getB` reads.
 - A uniform applied field is a [`UniformField`](#a-model) in the collection.
 - Check the answer with an error bar, see [How accurate](#how-accurate).
+- Many solves of the same parts, read at the same points: build a
+  [`field_matrix`](#many-solves-read-at-the-same-points) once.
+- `to_json(*objects)` saves models and results as a JSON string, and
+  `from_json(text)` reads them back.
 - Read [Gotchas](#gotchas) before reading a field inside a part.
 
 ## Names before 0.9
@@ -132,6 +137,41 @@ J = [c.polarization for c in solved.sources_all if hasattr(c, "polarization")]
   order 2 can stop with "did not settle". It refuses a coil through a hole in a
   magnet, and pass `observers=` to refine the mesh where you read. Its result
   cannot be pickled or saved.
+
+## Many solves, read at the same points
+
+In a loop that solves the same parts again with only their drive changed, a
+`field_matrix` gives the sheets' field at fixed points by one product instead of
+a `getB`: 0.4 ms against 25 ms for a plate at 2,601 points. Build the
+`FieldMatrix` once, from the first solve's sheets, and add the other sources'
+field with `getB`.
+
+```python
+from magpylib_material_response.face_charge import ChargeSheet, field_matrix
+
+
+def sheets_of(solved):
+    return [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+
+
+points = np.column_stack([np.linspace(-0.02, 0.02, 9), np.zeros(9), np.full(9, 0.015)])
+first = solve_face_charge(model, reuse=True)
+fm = field_matrix(sheets_of(first), points)
+magnet.polarization = (0, 0, 1.0)  # only a drive changes
+later = solve_face_charge(model, reuse=first)
+sheets = sheets_of(later)
+others = [s for s in later.sources_all if not any(s is k for k in sheets)]
+B = fm(sheets) + magpy.getB(others, points, sumup=True)  # (9, 3)
+```
+
+- It refuses sheets with another mesh or pose, never giving a wrong field: a
+  part that moved, another `level`, `refine`, or a magnet closer than about 20 %
+  of a part's half-side, whose panels then follow it. Build a new one then.
+- It holds `3 × points × unknowns` numbers: 62 MB for 2,601 points around a
+  plate at level 1. `dtype=np.float32` halves that, within 1e-6 of the peak near
+  the sheets but up to 4e-3 of the field far away.
+- It keeps no sheets and no solve: `fm()` reads the build's sheets only while
+  they exist, so pass the sheets.
 
 ## How accurate
 
