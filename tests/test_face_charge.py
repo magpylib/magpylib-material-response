@@ -28,6 +28,7 @@ from magpylib_material_response.face_charge import (
     _panels,
     _parallel,
     _sheet,
+    field_matrix,
     solve_face_charge,
 )
 from magpylib_material_response.face_charge._apply import _closed_surface
@@ -2130,3 +2131,122 @@ def test_a_shallow_copy_of_a_sheet_reads_its_own_charge():
     shallow = copy.copy(sheet)
     shallow.charge_densities = sheet.charge_densities * 2
     np.testing.assert_allclose(magpy.getH(shallow, point), 2 * magpy.getH(sheet, point))
+
+
+def _solved_sheets(kind, magnet_z=0.0045):
+    """Sheets of one kind, and their unknowns, with the charge a magnet at
+    `magnet_z` gives them; or, by hand, a charge scaled by it."""
+    if kind.startswith("by hand"):
+        square = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]]) * 0.004
+        last = 2.0 if kind == "by hand, linear" else 5.0  # 2 is 1 + x + y
+        charge = np.array([[1, 2, 3], [1, 3, last]]) * 1e5 * magnet_z / 0.0045
+        sheet = ChargeSheet(square, [[0, 1, 2], [0, 2, 3]], charge, panels=[0, 0])
+        return [sheet], 3 if kind == "by hand, linear" else 6
+    model = _plate_under_magnet()
+    magnet = model.sources_all[1]
+    if kind == "mesh":
+        part = _mesh_cube()
+        part.susceptibility = 1000.0
+        model = magpy.Collection(part, magnet.copy(position=(0, 0, magnet_z + 0.0005)))
+    else:
+        magnet.position = (0, 0, magnet_z)
+        model.rotate_from_angax(25, (1, 2, 0)).move((0.003, -0.002, 0.001))
+    solved = solve_face_charge(model, level=1)
+    sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+    if kind == "cuboid":
+        # with a part inside parts of its material, whose sheet has no faces
+        empty = ChargeSheet(np.zeros((0, 3)), np.zeros((0, 3), int), np.zeros((0, 3)))
+        return [*sheets, empty], 3 * sum(len(set(s.panels)) for s in sheets)
+    return sheets, 3 * sum(len(s.faces) for s in sheets)
+
+
+@pytest.mark.parametrize("dtype", [np.float64, np.float32])
+@pytest.mark.parametrize("field", ["B", "H"])
+@pytest.mark.parametrize(
+    "kind", ["cuboid", "mesh", "by hand, linear", "by hand, not linear"]
+)
+def test_field_matrix_gives_the_field_of_later_solves(kind, field, dtype):
+    """Built from one solve, the matrix gives a later solve's field on the same
+    mesh, near and, in double, far, in the solve's unknowns: three per panel
+    of a cuboid or one a hand-built sheet's charge is linear across, three
+    per face otherwise. Far away the charges' fields cancel, and float32's
+    rounding with them; double is as close as the far rule (1e-10)."""
+    sheets, unknowns = _solved_sheets(kind)
+    later, _ = _solved_sheets(kind, magnet_z=0.0055)
+    get = magpy.getB if field == "B" else magpy.getH
+    shell = R.random(40, random_state=5).apply([0.015, 0, 0])  # round every part
+    cases = [(shell, 1e-12 if dtype == np.float64 else 1e-6)]
+    if dtype == np.float64:
+        cases.append((shell * 2000, 1e-10))
+    for points, tol in cases:
+        fm = field_matrix(sheets, points, field, dtype)
+        assert fm.matrix.shape == (3 * len(points), unknowns)
+        assert fm.matrix.dtype == dtype
+        for each in (sheets, later):
+            assert _relative(fm(each), get(each, points, sumup=True)) < tol
+
+
+@pytest.mark.filterwarnings("ignore:Observers inside a solved part")
+def test_field_matrix_gives_getB_on_a_face_away_from_the_origin():
+    """Built in each sheet's own frame, as getB computes it: in global
+    coordinates, rounding put a point on a face of a cube 15 mm off the
+    origin on the other side of it, 5 % of the cube's peak off."""
+    magnet = magpy.magnet.Cuboid(
+        polarization=(0, 0, 1.2),
+        dimension=(0.01, 0.01, 0.005),
+        position=(-0.024, 0, 0.008),
+    )
+    plate = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.06, 0.03, 0.004))
+    plate.susceptibility = 1000.0
+    cube = magpy.magnet.Cuboid(
+        polarization=(0, 0, 0), dimension=(0.01,) * 3, position=(0.015, 0, 0.016)
+    )
+    cube.susceptibility = 50.0
+    solved = solve_face_charge(magpy.Collection(magnet, plate, cube), level=1)
+    sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+    on_face = [(0.01, 0, 0.015), (0.01, 0, 0.018)]  # the cube's -x face
+    expected = magpy.getB(sheets, on_face, sumup=True)
+    got = field_matrix(sheets, on_face)(sheets)
+    assert _relative(got, expected) < 1e-12
+
+
+def _hand_sheet(kind="by hand, linear"):
+    return _solved_sheets(kind)[0]
+
+
+def _on_a_path():
+    sheet = _hand_sheet()[0]
+    sheet.move([(0, 0, 0), (1e-3, 0, 0)], start=0)
+    return [sheet]
+
+
+@pytest.mark.parametrize(
+    ("built", "used", "error", "match"),
+    [
+        (
+            lambda: _solved_sheets("cuboid")[0][:1],
+            lambda _: solve_face_charge(_plate_under_magnet(), level=2).sources_all[:1],
+            ValueError,
+            "another mesh or pose",
+        ),
+        (
+            _hand_sheet,
+            lambda built: [built[0].copy().move((1e-3, 0, 0))],
+            ValueError,
+            "another mesh or pose",
+        ),
+        (_on_a_path, None, ValueError, "path"),
+        (_plate_under_magnet, None, TypeError, "getB"),
+        (
+            _hand_sheet,
+            lambda _: _hand_sheet("by hand, not linear"),
+            ValueError,
+            "not linear",
+        ),
+    ],
+    ids=["another mesh", "moved", "a path", "a magnet", "charge no longer linear"],
+)
+def test_field_matrix_refuses_what_it_was_not_built_for(built, used, error, match):
+    sources = built()
+    with pytest.raises(error, match=match):
+        field_matrix(sources, [(0, 0, 0.02)])(used(sources))

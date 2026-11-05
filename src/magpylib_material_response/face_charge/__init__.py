@@ -31,12 +31,15 @@ from __future__ import annotations
 
 from magpylib_material_response._renamed import old_names
 from magpylib_material_response.face_charge._apply import solve_face_charge
+from magpylib_material_response.face_charge._matrix import FieldMatrix, field_matrix
 from magpylib_material_response.face_charge._sheet import ChargeSheet
 
 # pylint: disable=undefined-all-variable
 __all__ = [  # the old name too, for `import *`, through __getattr__ below
     "ChargeSheet",
+    "FieldMatrix",
     "apply_face_charge",
+    "field_matrix",
     "solve_face_charge",
 ]
 

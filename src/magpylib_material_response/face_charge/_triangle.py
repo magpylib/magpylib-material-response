@@ -79,6 +79,48 @@ def _dot(a, b):
     return a[..., 0] * b[..., 0] + a[..., 1] * b[..., 1] + a[..., 2] * b[..., 2]
 
 
+def _in_plane(X, V, fr):
+    """Each observer in each triangle's plane coordinates, what both
+    :func:`charge_field` and :func:`charge_terms` start from: the corners
+    ``(0, 0), (ub, 0), (uc, vc)``, the observers' ``u, v, w`` from the first
+    corner, their offsets to the corners and distances, and ``sum beta``."""
+    _, n, e1, e2, s, area = fr
+    a = V[:, 0]
+    ub = _dot(V[:, 1] - a, e1)
+    uc, vc = _dot(V[:, 2] - a, e1), _dot(V[:, 2] - a, e2)
+    corners = ((0.0, 0.0), (ub, 0.0), (uc, vc))
+    u, v, w = (
+        np.matmul(X, np.stack([e1, e2, n]).transpose(0, 2, 1))
+        - np.stack([_dot(a, e1), _dot(a, e2), _dot(a, n)])[:, None]
+    )
+    # lifted off the plane as in `normal_field`
+    w = np.where(w == 0, 1e-12 * s, w)
+    w2 = w * w
+    du = [pu - u for pu, _ in corners]
+    dv = [pv - v for _, pv in corners]
+    R = [np.sqrt(du[k] * du[k] + dv[k] * dv[k] + w2) for k in range(3)]
+    den = R[0] * R[1] * R[2]
+    for (i, j), k in zip(_EDGES, (2, 0, 1), strict=True):
+        den = den + (du[i] * du[j] + dv[i] * dv[j] + w2) * R[k]
+    omega = 2 * np.arctan2(2 * area * np.abs(w), den)  # sum beta
+    return (ub, uc, vc), corners, u, v, w, w2, du, dv, R, omega
+
+
+def _edge_terms(corners, du, dv, R, w2):
+    """Per edge: its direction ``tu, tv``, and ``P0 f``, ``f`` and ``R+ - R-``
+    at each observer. Called within ``np.errstate(divide, invalid)``."""
+    for i, j in _EDGES:
+        (pu, pv), (qu, qv) = corners[i], corners[j]
+        L = np.sqrt((qu - pu) ** 2 + (qv - pv) ** 2)
+        tu, tv = (qu - pu) / L, (qv - pv) / L
+        l_minus = du[i] * tu + dv[i] * tv
+        l_plus = du[j] * tu + dv[j] * tv
+        P0 = du[i] * tv - dv[i] * tu
+        R02 = P0 * P0 + w2
+        f = np.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+        yield tu, tv, P0 * f, f, R[j] - R[i]
+
+
 def charge_field(X, V, fr, c):
     """``sum_n sum_k c[n, k] int phi_k (x - y) / R^3 dS`` over the triangles:
     the field, times ``4 pi``, of charge ``c0 + c1 u + c2 v`` on each, (M, 3).
@@ -100,53 +142,75 @@ def charge_field(X, V, fr, c):
     c : ndarray, shape (N, 3)
         Each triangle's coefficients of ``1, u, v``.
     """
-    _, n, e1, e2, s, area = fr
-    a = V[:, 0]
-    ub = _dot(V[:, 1] - a, e1)
-    uc, vc = _dot(V[:, 2] - a, e1), _dot(V[:, 2] - a, e2)
-    corners = ((0.0, 0.0), (ub, 0.0), (uc, vc))
-    u, v, w = (
-        np.matmul(X, np.stack([e1, e2, n]).transpose(0, 2, 1))
-        - np.stack([_dot(a, e1), _dot(a, e2), _dot(a, n)])[:, None]
-    )
-    # lifted off the plane as in `normal_field`
-    w = np.where(w == 0, 1e-12 * s, w)
-    w2, abs_w = w * w, np.abs(w)
-    du = [pu - u for pu, _ in corners]
-    dv = [pv - v for _, pv in corners]
-    R = [np.sqrt(du[k] * du[k] + dv[k] * dv[k] + w2) for k in range(3)]
-    den = R[0] * R[1] * R[2]
-    for (i, j), k in zip(_EDGES, (2, 0, 1), strict=True):
-        den = den + (du[i] * du[j] + dv[i] * dv[j] + w2) * R[k]
-    omega = 2 * np.arctan2(2 * area * abs_w, den)  # sum beta
+    _, n, e1, e2, s, _ = fr
+    (ub, uc, vc), corners, u, v, w, w2, du, dv, R, omega = _in_plane(X, V, fr)
     c0, c1, c2 = c[:, 0], c[:, 1], c[:, 2]
     # E0 = sum m f + n sign(w) sum beta, Phi = sum P0 f - |w| sum beta, and
     # sum (g.m) L_e with g = c1 e1 + c2 e2, L_e = d_e f - t (R+ - R-)
     E0u = E0v = Phi = SLu = SLv = SLw = 0.0
     with np.errstate(divide="ignore", invalid="ignore"):
-        for i, j in _EDGES:
-            (pu, pv), (qu, qv) = corners[i], corners[j]
-            L = np.sqrt((qu - pu) ** 2 + (qv - pv) ** 2)
-            tu, tv = (qu - pu) / L, (qv - pv) / L
-            l_minus = du[i] * tu + dv[i] * tv
-            l_plus = du[j] * tu + dv[j] * tv
-            P0 = du[i] * tv - dv[i] * tu
-            R02 = P0 * P0 + w2
-            f = np.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
-            P0f, dR, gm = P0 * f, R[j] - R[i], c1 * tv - c2 * tu
+        for tu, tv, P0f, f, dR in _edge_terms(corners, du, dv, R, w2):
+            gm = c1 * tv - c2 * tu
             E0u = E0u + tv * f
             E0v = E0v - tu * f
             Phi = Phi + P0f
             SLu = SLu - gm * (P0f * tv + dR * tu)
             SLv = SLv + gm * (P0f * tu - dR * tv)
             SLw = SLw + gm * f
-    Phi = Phi - abs_w * omega
+    Phi = Phi - np.abs(w) * omega
     # the density at the projection, from the centroid (ub + uc, vc) / 3
     psi = c0 + (c1 * (u - (ub + uc) / 3) + c2 * (v - vc / 3)) / s
     Fu = psi * E0u - (SLu + c1 * Phi) / s
     Fv = psi * E0v - (SLv + c2 * Phi) / s
     Fw = psi * np.sign(w) * omega - w * SLw / s
     return Fu @ e1 + Fv @ e2 + Fw @ n
+
+
+def charge_terms(X, V, fr):
+    """:func:`charge_field`'s terms before the sum: the field, times ``4 pi``,
+    of each triangle's ``1, u, v`` alone, (M, 3, 3, N) by observer, component,
+    coefficient and triangle. So that ``charge_field(X, V, fr, c)`` is
+    ``terms.reshape(3 M, 3 N) @ c.T.ravel()``, to rounding: the coefficients
+    enter :func:`charge_field` linearly, by ``psi`` and ``g``."""
+    _, n, e1, e2, s, _ = fr
+    (ub, uc, vc), corners, u, v, w, w2, du, dv, R, omega = _in_plane(X, V, fr)
+    # E0 and Phi as in `charge_field`, and sum (g.m) L_e split by g's two
+    # coefficients: ``g.m = c1 tv - c2 tu``
+    E0u = E0v = Phi = 0.0
+    Lu1 = Lu2 = Lv1 = Lv2 = Lw1 = Lw2 = 0.0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        for tu, tv, P0f, f, dR in _edge_terms(corners, du, dv, R, w2):
+            E0u = E0u + tv * f
+            E0v = E0v - tu * f
+            Phi = Phi + P0f
+            Lu, Lv = P0f * tv + dR * tu, P0f * tu - dR * tv
+            Lu1, Lu2 = Lu1 - tv * Lu, Lu2 + tu * Lu
+            Lv1, Lv2 = Lv1 + tv * Lv, Lv2 - tu * Lv
+            Lw1, Lw2 = Lw1 + tv * f, Lw2 - tu * f
+    Phi = Phi - np.abs(w) * omega
+    solid = np.sign(w) * omega
+    psi1, psi2 = (u - (ub + uc) / 3) / s, (v - vc / 3) / s
+    out = np.empty((len(X), 3, 3, len(V)))
+    for k, (Fu, Fv, Fw) in enumerate(
+        (
+            (E0u, E0v, solid),
+            (
+                psi1 * E0u - (Lu1 + Phi) / s,
+                psi1 * E0v - Lv1 / s,
+                psi1 * solid - w * Lw1 / s,
+            ),
+            (
+                psi2 * E0u - Lu2 / s,
+                psi2 * E0v - (Lv2 + Phi) / s,
+                psi2 * solid - w * Lw2 / s,
+            ),
+        )
+    ):
+        for d in range(3):
+            np.multiply(Fu, e1[:, d], out=out[:, d, k])
+            out[:, d, k] += Fv * e2[:, d]
+            out[:, d, k] += Fw * n[:, d]
+    return out
 
 
 def far_points(V, fr, c):
@@ -170,6 +234,27 @@ def charge_field_far(X, y, charge):
         r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
         scale = charge / (r2 * np.sqrt(r2))
         return np.stack([(scale * dk).sum((1, 2)) for dk in d], axis=1)
+
+
+def far_terms(X, V, fr):
+    """:func:`charge_field_far`'s terms before the sum, as :func:`charge_terms`
+    gives :func:`charge_field`'s: (M, 3, 3, N)."""
+    centroid, _, e1, e2, s, area = fr
+    y = np.einsum("gk,nkd->gnd", _FAR_POINTS, V)
+    u, v = _dot(y - centroid, e1), _dot(y - centroid, e2)
+    weight = _FAR_WEIGHTS[:, None] * area  # (6, N)
+    basis = np.stack([weight, weight * u / s, weight * v / s], axis=1)  # (6, 3, N)
+    out = np.zeros((len(X), 3, 3, len(V)))
+    with np.errstate(over="ignore", invalid="ignore"):
+        for g in range(len(_FAR_WEIGHTS)):
+            d = X[:, None, :] - y[g][None]  # (M, N, 3)
+            r2 = _dot(d, d)
+            scale = 1 / (r2 * np.sqrt(r2))
+            for k in range(3):
+                weighted = scale * basis[g, k]
+                for j in range(3):
+                    out[:, j, k] += weighted * d[..., j]
+    return out
 
 
 def normal_field(X, V, fr, pairs=False):
