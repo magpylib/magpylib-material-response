@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- Reading a solved sheet near its part is faster: the check for observers inside
+  the part tests each observer before the steps around it, and a sheet remembers
+  the observers it has tested. Next to a triangle-mesh part, the check took a
+  third of each `getB`; it takes a sixth on new observers and nothing on the
+  same ones again, and warns as before
+  ([#181](https://github.com/magpylib/magpylib-material-response/pull/181))
+
 ## [0.10.1] - 2026-11-05
 
 ### Fixed
