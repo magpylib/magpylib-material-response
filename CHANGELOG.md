@@ -8,12 +8,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-05
+
 ### Fixed
 
 - A `FieldMatrix` no longer keeps the sheets it was built from, nor with them
   their solve and its kept factorization (`8 n²` bytes for `n` unknowns), and
   building one takes half the memory it did, about what `getB` takes on the same
   observers, in the same time
+  ([#178](https://github.com/magpylib/magpylib-material-response/pull/178))
+- The shipped Agent Skill covers `field_matrix`, missing from 0.10.0, and
+  `to_json`; a test now fails when a public name is missing from the skill
+  ([#179](https://github.com/magpylib/magpylib-material-response/pull/179))
 
 ## [0.10.0] - 2026-11-05
 
@@ -626,7 +632,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.10.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.10.1...HEAD
+[0.10.1]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.10.0...0.10.1
 [0.10.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.9.3...0.10.0
 [0.9.3]:
