@@ -304,6 +304,44 @@ against each other, a length that changes, a magnet that comes within 20 % of a
 part's half-side, which grades its panels, or a magnet with a susceptibility
 that moves, since it is then a solved part.
 
+## A field map in a loop
+
+Each solve of the loop above gives sheets with the same mesh and a new charge,
+as long as the parts stay where they are. Their field at a fixed set of
+observers, a field map or the points field lines start from, is then the same
+matrix times a new charge each time. `field_matrix` builds that matrix once, and
+each later field is one product:
+
+```python
+from magpylib_material_response.face_charge import ChargeSheet, field_matrix
+
+
+def sheets_of(solved):
+    return [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
+
+
+solved = solve_face_charge(model_at(poses[0]), reuse=True)
+fm = field_matrix(sheets_of(solved), points)  # B at points = fm.matrix @ charges
+for pose in poses:
+    solved = solve_face_charge(model_at(pose), reuse=solved)
+    sheets = sheets_of(solved)
+    others = [s for s in solved.sources_all if not any(s is k for k in sheets)]
+    B = fm(sheets) + magpy.getB(others, points, sumup=True)
+```
+
+Only the sheets are in the matrix: add the field of the magnets and other
+sources with `getB`. For a plate under a magnet, 664 triangles solved at level
+1, B at 2,601 points takes 25 ms with `getB` and 0.4 ms from the matrix, which
+took 43 ms to build: the build is paid back by the second field. The two agree
+to 3e-15 of the largest field.
+
+The matrix holds `3 M n` numbers for M observers and n unknowns, three per
+panel: 62 MB for those 2,601 points and 996 unknowns, or 31 MB with
+`dtype=np.float32`, which stays within 1e-6 of the largest field around the
+sheets. A sheet whose mesh or pose differs from the matrix's is refused, so a
+magnet close enough to grade a part's panels, or a part that moves, needs a new
+matrix.
+
 ## Whether saturation matters
 
 A sheet's `mean_polarization` is the average polarization of the part it
