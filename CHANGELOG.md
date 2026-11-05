@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-05
+
 ### Changed
 
 - Reading a solved sheet near its part is faster: the check for observers inside
@@ -641,7 +643,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.10.1...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.10.2...HEAD
+[0.10.2]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.10.1...0.10.2
 [0.10.1]:
   https://github.com/magpylib/magpylib-material-response/compare/0.10.0...0.10.1
 [0.10.0]:
