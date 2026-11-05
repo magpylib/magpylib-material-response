@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-05
+
 ### Added
 
 - `face_charge.field_matrix`: the field of solved sheets at fixed observers as
@@ -617,7 +619,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.9.3...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.10.0...HEAD
+[0.10.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.9.3...0.10.0
 [0.9.3]:
   https://github.com/magpylib/magpylib-material-response/compare/0.9.2...0.9.3
 [0.9.2]:
