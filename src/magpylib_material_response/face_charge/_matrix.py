@@ -3,6 +3,7 @@ then one product for each new charge on the same mesh."""
 
 from __future__ import annotations
 
+import copy
 import weakref
 
 import magpylib as magpy
@@ -179,13 +180,38 @@ class FieldMatrix:
         self.matrix = matrix
         self.field = field
 
+    def _refs(self):
+        """The weak references to the build's sheets, None for those gone."""
+        return list(self._sheets or [None] * len(self._kinds))
+
+    def __copy__(self):
+        new = object.__new__(type(self))
+        new.__dict__.update(self.__dict__)
+        new._sheets = self._refs()  # the same sheets, still not kept
+        return new
+
+    def __deepcopy__(self, memo):
+        new = object.__new__(type(self))
+        memo[id(self)] = new
+        for name, value in self.__dict__.items():
+            kept = self._refs() if name == "_sheets" else copy.deepcopy(value, memo)
+            setattr(new, name, kept)
+        return new
+
+    def __getstate__(self):
+        """Without the build's sheets, which a weak reference cannot carry:
+        a matrix read back takes the sheets to give the field of."""
+        state = self.__dict__.copy()
+        state["_sheets"] = [None] * len(self._kinds)
+        return state
+
     def charges(self, sources=None):
         """The unknowns of the charge of `sources`, the sheets the matrix was
         built from by default, while they exist: ``matrix @ charges`` is their
         field. The matrix does not keep those sheets, nor the solve they
         belong to."""
         if sources is None:
-            sheets = [ref() for ref in self._sheets]
+            sheets = [None if ref is None else ref() for ref in self._refs()]
             if any(sheet is None for sheet in sheets):
                 msg = (
                     "The sheets the matrix was built from are gone: pass the "

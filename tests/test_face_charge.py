@@ -2256,11 +2256,14 @@ def test_field_matrix_refuses_what_it_was_not_built_for(built, used, error, matc
 
 def test_field_matrix_does_not_keep_its_sheets():
     """Nor, through them, their solve and its kept factorization: once they
-    are gone, the matrix asks for sheets and still gives later ones' field."""
+    are gone, the matrix asks for sheets and still gives later ones' field,
+    pickled too."""
     solved = solve_face_charge(_plate_under_magnet(), level=1, reuse=True)
     sheets = [s for s in solved.sources_all if isinstance(s, ChargeSheet)]
     points = [(0, 0, 0.02), (0.01, 0, -0.01)]
     fm = field_matrix(sheets, points)
+    for each in (copy.copy(fm), copy.deepcopy(fm)):  # still the same sheets
+        assert _relative(each(), magpy.getB(sheets, points, sumup=True)) < 1e-12
     gone = weakref.ref(solved)
     del solved, sheets
     gc.collect()
@@ -2272,4 +2275,5 @@ def test_field_matrix_does_not_keep_its_sheets():
         for s in solve_face_charge(_plate_under_magnet(), level=1).sources_all
         if isinstance(s, ChargeSheet)
     ]
-    assert _relative(fm(later), magpy.getB(later, points, sumup=True)) < 1e-12
+    for each in (fm, pickle.loads(pickle.dumps(fm))):  # read back, too
+        assert _relative(each(later), magpy.getB(later, points, sumup=True)) < 1e-12
