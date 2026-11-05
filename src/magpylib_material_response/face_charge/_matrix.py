@@ -3,6 +3,8 @@ then one product for each new charge on the same mesh."""
 
 from __future__ import annotations
 
+import weakref
+
 import magpylib as magpy
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -21,6 +23,11 @@ LINEAR_TOL = 1e-9
 # a sheet's mesh and pose are the matrix's when they are within this share of its
 # size: rounding, not a move
 SAME_TOL = 1e-12
+# the build holds the kernel's evaluations of a chunk and their terms, 9 numbers
+# each: in chunks half getB's, it holds about as much memory at once as getB, in
+# the same time (a plate at level 1, 2,601 points: 762 -> 373 MB, getB 363 MB;
+# a third took 1.2 times as long)
+BUILD_SHARE = 2
 
 
 def _sheets_of(sources):
@@ -166,15 +173,27 @@ class FieldMatrix:
     def __init__(self, sheets, unknowns, poses, shape, matrix, field):
         self._kinds = [(s._V.copy(), *p) for s, p in zip(sheets, poses, strict=True)]
         self._unknowns = unknowns
-        self._sheets = sheets
+        # not the sheets: each holds its solve, and that solve's kept factorization
+        self._sheets = [weakref.ref(s) for s in sheets]
         self._shape = shape
         self.matrix = matrix
         self.field = field
 
     def charges(self, sources=None):
         """The unknowns of the charge of `sources`, the sheets the matrix was
-        built from by default: ``matrix @ charges`` is their field."""
-        sheets = self._sheets if sources is None else _sheets_of(sources)
+        built from by default, while they exist: ``matrix @ charges`` is their
+        field. The matrix does not keep those sheets, nor the solve they
+        belong to."""
+        if sources is None:
+            sheets = [ref() for ref in self._sheets]
+            if any(sheet is None for sheet in sheets):
+                msg = (
+                    "The sheets the matrix was built from are gone: pass the "
+                    "sheets whose field you want."
+                )
+                raise ValueError(msg)
+        else:
+            sheets = _sheets_of(sources)
         if len(sheets) != len(self._kinds):
             msg = (
                 f"The matrix was built for {len(self._kinds)} sheets; got "
@@ -251,7 +270,7 @@ def field_matrix(sources, observers, field="B", dtype=np.float64):
     -----
     The matrix takes ``3 M n`` numbers: 31 MB in float32 for 2,601 observers
     around a plate solved at level 1 (996 unknowns). Building it costs under two
-    ``getB`` calls of the same observers.
+    ``getB`` calls of the same observers, and about as much memory at once.
 
     Examples
     --------
@@ -310,7 +329,7 @@ def field_matrix(sources, observers, field="B", dtype=np.float64):
         # the kernel's chunks: the terms add 72 bytes an evaluation to its 250 or
         # so, and a third of them took 1.3 times as long, the threads waiting on
         # one another between small arrays
-        step = max(1, CHUNK // (max(u.faces, 1) * threads()))
+        step = max(1, CHUNK // (BUILD_SHARE * max(u.faces, 1) * threads()))
 
         turned = not np.array_equal(rotation, np.eye(3))
 
@@ -322,7 +341,8 @@ def field_matrix(sources, observers, field="B", dtype=np.float64):
             block = np.asarray(block).reshape(len(rows), 3, -1)
             if turned:  # back to the global frame; a sheet not turned is in it
                 block = np.einsum("ij,kjn->kin", rotation, block)
-            matrix[rows, :, a:b] = factor * block
+            block *= factor
+            matrix[rows, :, a:b] = block
 
         jobs = [
             (terms, rows[k : k + step])
