@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- A `FieldMatrix` no longer keeps the sheets it was built from, nor with them
+  their solve and its kept factorization (`8 n²` bytes for `n` unknowns), and
+  building one takes half the memory it did, about what `getB` takes on the same
+  observers, in the same time
+
 ## [0.10.0] - 2026-11-05
 
 ### Added
