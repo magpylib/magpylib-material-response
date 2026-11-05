@@ -2277,3 +2277,67 @@ def test_field_matrix_does_not_keep_its_sheets():
     ]
     for each in (fm, pickle.loads(pickle.dumps(fm))):  # read back, too
         assert _relative(each(later), magpy.getB(later, points, sumup=True)) < 1e-12
+
+
+def _inside_by_seven(part, points):
+    """The inside test before #180: every point and its six steps, at once."""
+    low, high = _sheet._box(part)
+    step = max(1e-6 * np.linalg.norm(high - low), 1e-9)
+    steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
+    with np.errstate(all="ignore"):
+        J = part.getJ((points[:, None] + steps).reshape(-1, 3)).reshape(-1, 7, 3)
+    return ((J != 0).any(axis=2) & np.isfinite(J).all(axis=2)).all(axis=1)
+
+
+@pytest.mark.parametrize(
+    "part",
+    [
+        magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.006, 0.004)),
+        magpy.magnet.TriangularMesh.from_ConvexHull(
+            polarization=(0, 0, 1),
+            points=0.005 * np.array([(1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1)]),
+        ),
+        magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(0.01, 0.004)),
+    ],
+    ids=["cuboid", "mesh", "cylinder"],
+)
+def test_the_inside_test_steps_only_from_points_inside(part):
+    """Same answers as trying every step, near, on and just off the surfaces."""
+    rng = np.random.default_rng(3)
+    low, high = _sheet._box(part)
+    points = np.concatenate(
+        [
+            rng.uniform(1.2 * low, 1.2 * high, (300, 3)),
+            np.clip(rng.uniform(low, high, (100, 3)), low, high) * [1, 1, 0]
+            + [0, 0, high[2]],  # on the top of the box
+            np.array([low, high, (low + high) / 2]) * (1 - 1e-9),
+        ]
+    )
+    np.testing.assert_array_equal(
+        _sheet._inside(part, points), _inside_by_seven(part, points)
+    )
+
+
+def test_a_sheet_tests_the_same_observers_once(monkeypatch):
+    """Field lines and sensor arrays read the same points again: the sheet
+    remembers them, warns each time, and tests them again once it moves."""
+    tested = []
+    inside = _sheet._inside
+    monkeypatch.setattr(
+        _sheet, "_inside", lambda part, points: tested.append(1) or inside(part, points)
+    )
+    solved = solve_face_charge(magpy.Collection(_soft(), _drive()), level=1)
+    sheet = next(s for s in solved.sources_all if isinstance(s, ChargeSheet))
+    middle = [(0, 0, 0), (0.001, 0, 0)]
+    for _ in range(3):
+        with pytest.warns(UserWarning, match="inside a solved part"):
+            sheet.getB(middle)
+    assert len(tested) == 1
+    sheet.getB([(0.1, 0, 0), (0.005, 0, 0)])  # on a face: in its box, not in it
+    sheet.getB([(0.1, 0, 0), (0.005, 0, 0)])
+    assert len(tested) == 2
+    sheet.move((1, 0, 0))
+    sheet.getB(middle)  # now far outside, and not in its box
+    with pytest.warns(UserWarning, match="inside a solved part"):
+        sheet.getB((1, 0, 0))  # its middle now: tested again
+    assert len(tested) == 3

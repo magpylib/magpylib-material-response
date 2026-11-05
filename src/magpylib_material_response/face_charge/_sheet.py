@@ -32,6 +32,9 @@ SATURATE = 0.95  # the colour saturates at the charge this share of the area sta
 # nothing: choosing per pair made fields 2 mm above six bars 1.3 times as slow
 FAR_SIDES = 64.0
 INSIDE_SAMPLE = 64  # observers tested for lying inside a part, at most
+# sets of observers a sheet remembers it has tested: field lines, sensor arrays
+# and sweeps read the same points again
+INSIDE_REMEMBERED = 8
 
 
 class ChargeColor(PropertyNode):
@@ -96,12 +99,21 @@ def _inside(part, points):
     wide, so the step is wider."""
     low, high = _box(part)
     step = max(1e-6 * np.linalg.norm(high - low), 1e-9)
-    steps = np.vstack([np.zeros(3), step * np.eye(3), -step * np.eye(3)])
-    tried = (points[:, None] + steps).reshape(-1, 3)
-    # in its own context, without the caller's settings: only J's sign is read
-    with np.errstate(all="ignore"):
-        J = part.getJ(tried).reshape(len(points), len(steps), 3)
-    return ((J != 0).any(axis=2) & np.isfinite(J).all(axis=2)).all(axis=1)
+    steps = np.vstack([step * np.eye(3), -step * np.eye(3)])
+
+    def lies_in(tried):
+        # in its own context, without the caller's settings: only J's sign is read
+        with np.errstate(all="ignore"):
+            J = part.getJ(tried).reshape(len(tried), 3)
+        return (J != 0).any(axis=1) & np.isfinite(J).all(axis=1)
+
+    # a point outside is not inside, whatever its steps: only the others take them
+    inside = lies_in(points)
+    rows = np.flatnonzero(inside)
+    if len(rows):
+        tried = (points[rows, None] + steps).reshape(-1, 3)
+        inside[rows] = lies_in(tried).reshape(len(rows), len(steps)).all(axis=1)
+    return inside
 
 
 def _copy_of(part):
@@ -160,6 +172,7 @@ class ChargeSheet(magpy.misc.CustomSource):
     _style_class = ChargeSheetStyle
     _part = None  # also for a sheet pickled before there were parts
     _probe = None
+    _inside_seen = None  # observers tested, and whether any lay inside
     _style_family = ("magnet", "triangularmesh")
 
     def __init__(
@@ -264,6 +277,7 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._mean = None  # set by solve_face_charge on parts solved as one
         self._part = None  # set by solve_face_charge: new charges, no such part
         self._probe = None  # the part at the sheet's own frame, to test observers
+        self._inside_seen = None
         self._V = P[F]
         self._frames = frames(self._V)
         cen, _, e1, e2, s, _ = self._frames
@@ -320,6 +334,7 @@ class ChargeSheet(magpy.misc.CustomSource):
             msg = "part must have one size, not none or one that varies along a path."
             raise ValueError(msg)
         self._part = unseen(_copy_of, part)
+        self._probe = self._inside_seen = None
 
     def _came_from(self, part):
         """Whether `part` has the shape of the part this sheet was solved from,
@@ -453,10 +468,19 @@ class ChargeSheet(magpy.misc.CustomSource):
             part.polarization = (0, 0, 1)
             return part
 
-        if self._probe is None:
-            self._probe = unseen(probe)
-        sample = near[:: max(1, len(near) // INSIDE_SAMPLE)]
-        if unseen(_inside, self._probe, sample).any():
+        # the observers in the sheet's frame: a sheet that moves tests them again
+        key = (near.shape, hash(near.tobytes()))
+        seen = self._inside_seen or {}
+        found = seen.get(key)
+        if found is None:
+            if self._probe is None:
+                self._probe = unseen(probe)
+            sample = near[:: max(1, len(near) // INSIDE_SAMPLE)]
+            found = bool(unseen(_inside, self._probe, sample).any())
+            seen = dict(list(seen.items())[1 - INSIDE_REMEMBERED :] if seen else [])
+            seen[key] = found
+            self._inside_seen = seen
+        if found:
             gives = (
                 "mu0 H there, not B, without the part's magnetization"
                 if field == "B"
