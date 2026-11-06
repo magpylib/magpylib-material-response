@@ -19,8 +19,8 @@ license: BSD-3-Clause
 Official skill for Magpylib-Material-Response 0.x, shipped inside the package
 and versioned with it. Prefer it over recalled API knowledge: the names in this
 skill are from 0.10, and the package is in alpha. For the field computation
-itself (`getB`, sources, paths, sensors), see Magpylib: its own skill ships from
-its next release.
+itself (`getB`, sources, paths, sensors), use Magpylib's own skill, shipped in
+the `magpylib` package from 6.2.
 
 Check the installed version before writing code:
 
