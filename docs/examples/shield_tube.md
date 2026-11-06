@@ -73,6 +73,8 @@ good to 0.02 % on every line: the stored reference of the repository's
 validation case `shield_tube`.
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 reference = json.loads(Path("../../validation/references/shield_tube.json").read_text())["groups"]
 lines = {
     "between magnet and wall": np.linspace((-18.45, 0, 0), (-18.45, 0, 100), 21) * MM,

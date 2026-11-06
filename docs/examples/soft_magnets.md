@@ -28,6 +28,8 @@ the unsolved collection included to show how much the material response matters.
 ## Define magnetic sources with their susceptibilities
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 import magpylib as magpy
 import numpy as np
 import pandas as pd
@@ -109,6 +111,8 @@ element order 5, converged to under 0.001 mT; `scripts/fem_references.py`
 recomputes it.
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 # template dataframe with the right index/path structure; the FEM values
 # from the reference dataset are filled into a copy of it below
 B_template_df = magpy.getB(coll_meshed, sensors, output="dataframe")
@@ -146,6 +150,8 @@ df["Distance [m]"] -= df["Distance [m]"].min()
 ```
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 # the mesh sweep in one hue, darker when finer; the reference in black
 ref = reference["results"][0]["computation"]
 sweep = [c.style.label for c in colls[1:]]

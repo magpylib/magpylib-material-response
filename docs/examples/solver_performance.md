@@ -42,6 +42,8 @@ This example verifies the agreement on typical use cases and measures the
 performance crossover.
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 import time
 import tracemalloc
 
@@ -174,6 +176,8 @@ records = [measure_solve(s, "direct") for s in sizes_direct]
 ```
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 records += [measure_solve(s, "iterative") for s in sizes_iterative]
 
 perf_df = pd.DataFrame(records)
@@ -186,6 +190,8 @@ perf_df.pivot(index="cells", columns="solver", values=["rel_time", "peak_mb"]).r
 ```
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 series_style = {
     "direct": {"color": "#2a78d6", "symbol": "circle"},
     "iterative": {"color": "#1baf7a", "symbol": "square"},
@@ -347,6 +353,8 @@ magpy.show(
 ```
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 topo_rows = [
     bench_topology(label, coll)
     for label, coll in topologies.items()
@@ -355,6 +363,8 @@ topo_rows = [
 ```
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 topo_rows.append(bench_topology("meshed cylinder", topologies["meshed cylinder"]))
 
 pd.DataFrame(topo_rows)

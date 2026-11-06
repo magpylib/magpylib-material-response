@@ -68,6 +68,7 @@ docs = [
   "sphinx_autodoc_typehints",
   "sphinxcontrib-bibtex>=2.6",
   "sphinx-design",
+  "sphinx-llm",
   "pandas",
   "plotly>=6.7",
   "magpylib-material-response[tetgen,fem]",

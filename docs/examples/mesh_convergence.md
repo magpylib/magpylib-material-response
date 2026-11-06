@@ -33,6 +33,8 @@ seconds; finite elements on the same models, run separately, show how good its
 estimate is.
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 import magpylib as magpy
 import numpy as np
 import plotly.graph_objects as go

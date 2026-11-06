@@ -61,7 +61,25 @@ extensions = [
     "sphinx_copybutton",
     "sphinxcontrib.bibtex",
     "sphinx_design",
+    "sphinx_llm.txt",
 ]
+
+# a Markdown twin of every page, and llms.txt / llms-full.txt, for coding
+# agents. After the HTML build, not beside it: the Markdown build then reuses
+# its doctrees, and no notebook runs twice.
+llms_txt_build_parallel = False
+llms_txt_full_build = True  # llms-full.txt too: the whole site in one file
+# nodes its Markdown writer has no rule for: they are left out of the Markdown
+llms_txt_suppress_unknown_node_warnings = [
+    "abbreviation",
+    "citation",
+    "PassthroughTextElement",
+]
+llms_txt_description = (
+    "magpylib-material-response computes the response of magnetic materials for "
+    "Magpylib: soft-magnetic parts and the demagnetization of magnets, solved by "
+    "face charge, cells (method of moments) or finite elements."
+)
 
 # one bibliography for every page: {cite}`key` checks the key at build time
 bibtex_bibfiles = ["references.bib"]

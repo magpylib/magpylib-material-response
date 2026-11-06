@@ -39,6 +39,8 @@ susceptibility is set on the parent collection and inherited by all children
 (and later by their mesh cells). All quantities are SI (m, T, A).
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 import time
 
 import magpylib as magpy
@@ -124,6 +126,8 @@ The field is evaluated on a plane 30 mm above the pole faces, normal to the legs
 visualize where the field will be evaluated.
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 system = magpy.Collection(core, coil, style_label="U-core electromagnet")
 
 x = np.linspace(-0.08, 0.08, 161)  # 1 mm grid step
@@ -180,6 +184,8 @@ already quick; the structure the solver found and the agreement are what to look
 at, the gain grows with the cell count.
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 from magpylib_material_response.demag_fft import analyze_collection
 
 cells = [s for s in system_meshed.sources_all if isinstance(s, magpy.magnet.Cuboid)]
@@ -205,6 +211,8 @@ gives the total field. The normal component $B_z$ maps the two pole footprints â
 positive above one leg, negative above the other:
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 B_full = plane.getB(system_demag)  # shape (161, 81, 3)
 
 fig = px.imshow(
@@ -227,6 +235,8 @@ Without the core the same 400 ampere-turns produce a field roughly fifty times
 weaker on this plane: the high-permeability core guides the flux to the poles:
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 B_coil = plane.getB(coil)  # bare coil, no core
 
 iy = np.argmin(np.abs(y))  # index of the y=0 line
@@ -260,6 +270,8 @@ drives [TetGen](https://tetgen.org) (optional dependency,
 [tetrahedral example](tetrahedral_meshes.md)):
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 u_profile = np.array(
     [  # U outline in the xâ€“z plane, counterclockwise
         (-0.05, -0.01),
@@ -325,6 +337,8 @@ family. Side by side, the cell colors show the direction of the induced
 magnetization: along +x through the yoke, up one leg and down the other.
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 magpy.show(
     {"objects": [demag_cub], "col": 1},
     {"objects": [demag_tet], "col": 2},
@@ -338,6 +352,8 @@ the right panel follows the peak field of each family as its cells get finer.
 Hover a curve for its cell count and solve time:
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 ramp = np.linspace(0.3, 1, len(targets))
 shades = {
     "cuboids": px.colors.sample_colorscale("Blues", ramp),

@@ -24,6 +24,26 @@ response**, and hands back a model that Magpylib reads like any other.
 
 ```
 
+````{tip}
+**Start with an AI assistant.** The package ships an Agent Skill, and these
+pages exist as Markdown for agents ([llms.txt](https://magpylib-material-response.readthedocs.io/en/latest/llms.txt)).
+Paste this into Claude Code, Cursor or any coding agent, with your model in
+place of the brackets:
+
+```text
+I use magpylib-material-response to compute magnetic fields of
+magnets near soft-magnetic parts. Install it with `uv add
+magpylib-material-response` (or pip), then run `uvx
+library-skills` to add its Agent Skill to this project, and
+read it. The documentation is at
+https://magpylib-material-response.readthedocs.io/en/latest/llms.txt.
+My model: [the parts and their materials, the magnets or
+coils, where I read the field]. Choose the solver as the skill
+says, solve, and report the field at my sensors with its error
+estimate. Check one result with solve_fem.
+```
+````
+
 ## A magnet on an iron plate
 
 Every length is in metres and every polarization in tesla, as in Magpylib. A

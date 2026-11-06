@@ -19,6 +19,9 @@
 - **How it works, in detail:** [Inside the solvers](inside/index.md), with an
   interactive map of each solver and the papers behind every step.
 - **Worked models against finite elements:** the [examples](examples/index.md).
+- **With a coding agent:** [Getting started](getting_started.md) has a prompt to
+  paste; every page also exists as Markdown, indexed in
+  [llms.txt](https://magpylib-material-response.readthedocs.io/en/latest/llms.txt).
 
 ```{toctree}
 :maxdepth: 1
