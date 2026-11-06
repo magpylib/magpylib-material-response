@@ -12,24 +12,21 @@ kernelspec:
   name: python3
 ---
 
-# Saving and loading a demagnetized collection
+# Saving and loading a solved model
 
-Demagnetization can be expensive to compute. Once the result is obtained it is
-useful to persist the demagnetized state to disk so that further field analyses
-can be run later without repeating the simulation.
+A solve can take seconds to minutes. Save the solved model, and read fields from
+it later without solving again.
 
-`to_json` serializes any supported magpylib collection to a JSON string;
-`from_json` reconstructs the objects from that string. Supported types are
-`magnet.Cuboid`, `magnet.Cylinder`, `magnet.CylinderSegment`, `magnet.Sphere`,
-`magnet.Tetrahedron`, `magnet.TriangularMesh`, `current.Polyline`,
-`current.Circle`, `current.TriangleStrip`, `current.TriangleSheet`, `Sensor`,
-the `ChargeSheet` of `solve_face_charge`, and arbitrarily nested `Collection`
-objects — in particular, demagnetized tetrahedral meshes from
-`mesh_TriangularMesh` and face-charge solutions can be persisted. All geometry
-(position, orientation, paths), magnetic polarizations and susceptibilities are
-preserved exactly.
+`to_json` writes a Magpylib collection to a JSON string, and `from_json` reads
+it back. It takes the magnets (`Cuboid`, `Cylinder`, `CylinderSegment`,
+`Sphere`, `Tetrahedron`, `TriangularMesh`), the currents (`Polyline`, `Circle`,
+`TriangleStrip`, `TriangleSheet`), `Sensor`, `UniformField`, the `ChargeSheet`
+of `solve_face_charge`, and nested collections: solved cells and solved sheets
+alike. Geometry, paths, polarizations and susceptibilities come back exactly.
 
-## Define sources, mesh and apply demagnetization
+A `FemSolution` cannot be saved: save the values you read from it.
+
+## Solve and save a model
 
 ```{code-cell} ipython3
 from pathlib import Path

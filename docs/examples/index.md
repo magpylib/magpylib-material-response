@@ -1,32 +1,202 @@
 # Examples
 
-Executable examples, in suggested reading order:
+Worked models, each run when the documentation is built. Most compare against a
+reference: finite elements, or an exact solution. The pictures are drawn by
+magpylib-studio from each example's model (`docs/gallery_thumbnails.py`).
 
-- [Cuboid demagnetization](cuboids_demagnetization.md) — two hard cuboid
-  magnets; mesh-refinement convergence against FEM reference data.
-- [Soft magnets](soft_magnets.md) — a hard magnet next to a high-permeability
-  soft cuboid; field comparison against FEM.
-- [U-core electromagnet](ucore_electromagnet.md) — current sources driving a
-  soft core: a swept multi-turn coil built with the polyline helpers, the field
-  on a plane above the poles, and a cuboid- vs tetrahedral-mesh comparison.
-- [Solvers and performance](solver_performance.md) — the direct and the
-  iterative solver: their agreement, their time and memory as meshes grow, and
-  which interactions take the fast paths.
-- [Mesh convergence](mesh_convergence.md) — how fine a mesh must be, and the
-  error of the finest, with `study_cells` on a flux concentrator, a Halbach
-  array on back iron and a steel shield.
-- [Checking a result with finite elements](fem_check.md) — `study_fem` and
-  `compare` against `study_cells` on a magnet beside a soft cube: where the two
-  methods disagree, and whose error bar is too short.
-- [A magnet in a steel tube](shield_tube.md) — a tube meshed into cylinder
-  segments: inside it the method of moments converges, behind the shield it
-  takes face charge or finite elements.
-- [Arbitrary shapes with tetrahedral meshes](tetrahedral_meshes.md) — meshing a
-  `TriangularMesh` magnet with TetGen, checked against the exact solution for a
-  magnetized sphere.
-- [Saturation](saturation.md) — a B-H curve in place of a constant
-  susceptibility: a sphere against its exact answer, and where a cube in 0.5 T
-  saturates.
+`````{grid} 1 2 3 3
+:gutter: 2
+
+````{grid-item-card}
+:link: cuboids_demagnetization
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/cuboids_demagnetization-light.jpg
+:alt: Cuboid demagnetization
+:class: only-light
+```
+
+```{image} ../_static/gallery/cuboids_demagnetization-dark.jpg
+:alt: Cuboid demagnetization
+:class: only-dark
+```
+
+**Cuboid demagnetization**
+
+Three hard cuboid magnets demagnetizing each other, refined against finite elements.
+
+````
+
+````{grid-item-card}
+:link: soft_magnets
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/soft_magnets-light.jpg
+:alt: Soft magnets
+:class: only-light
+```
+
+```{image} ../_static/gallery/soft_magnets-dark.jpg
+:alt: Soft magnets
+:class: only-dark
+```
+
+**Soft magnets**
+
+A hard magnet beside a turned soft-iron cube, against finite elements.
+
+````
+
+````{grid-item-card}
+:link: ucore_electromagnet
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/ucore_electromagnet-light.jpg
+:alt: U-core electromagnet
+:class: only-light
+```
+
+```{image} ../_static/gallery/ucore_electromagnet-dark.jpg
+:alt: U-core electromagnet
+:class: only-dark
+```
+
+**U-core electromagnet**
+
+A coil built with the polyline helpers drives a soft core; cuboid cells against tetrahedra.
+
+````
+
+````{grid-item-card}
+:link: solver_performance
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/solver_performance-light.jpg
+:alt: Solvers and performance
+:class: only-light
+```
+
+```{image} ../_static/gallery/solver_performance-dark.jpg
+:alt: Solvers and performance
+:class: only-dark
+```
+
+**Solvers and performance**
+
+The direct and the iterative solver: their agreement, time and memory, and which paths are fast.
+
+````
+
+````{grid-item-card}
+:link: mesh_convergence
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/mesh_convergence-light.jpg
+:alt: Mesh convergence
+:class: only-light
+```
+
+```{image} ../_static/gallery/mesh_convergence-dark.jpg
+:alt: Mesh convergence
+:class: only-dark
+```
+
+**Mesh convergence**
+
+`study_cells` error bars on a flux concentrator, a Halbach array on back iron and a steel shield.
+
+````
+
+````{grid-item-card}
+:link: fem_check
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/fem_check-light.jpg
+:alt: Checking with finite elements
+:class: only-light
+```
+
+```{image} ../_static/gallery/fem_check-dark.jpg
+:alt: Checking with finite elements
+:class: only-dark
+```
+
+**Checking with finite elements**
+
+`study_fem` and `compare` against `study_cells`, sensor by sensor: whose error bar is too short.
+
+````
+
+````{grid-item-card}
+:link: shield_tube
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/shield_tube-light.jpg
+:alt: A magnet in a steel tube
+:class: only-light
+```
+
+```{image} ../_static/gallery/shield_tube-dark.jpg
+:alt: A magnet in a steel tube
+:class: only-dark
+```
+
+**A magnet in a steel tube**
+
+Inside the tube cells converge; behind the shield it takes face charge or finite elements.
+
+````
+
+````{grid-item-card}
+:link: tetrahedral_meshes
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/tetrahedral_meshes-light.jpg
+:alt: Any shape as tetrahedra
+:class: only-light
+```
+
+```{image} ../_static/gallery/tetrahedral_meshes-dark.jpg
+:alt: Any shape as tetrahedra
+:class: only-dark
+```
+
+**Any shape as tetrahedra**
+
+A `TriangularMesh` cut into tetrahedra by TetGen, against the exact sphere.
+
+````
+
+````{grid-item-card}
+:link: saturation
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/saturation-light.jpg
+:alt: Saturation
+:class: only-light
+```
+
+```{image} ../_static/gallery/saturation-dark.jpg
+:alt: Saturation
+:class: only-dark
+```
+
+**Saturation**
+
+A B–H curve in place of a constant susceptibility: a sphere against its exact answer, and a cube.
+
+````
+
+`````
 
 ```{toctree}
 :maxdepth: 1

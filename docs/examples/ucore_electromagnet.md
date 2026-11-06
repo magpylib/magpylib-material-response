@@ -14,7 +14,7 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# U-Core Electromagnet
+# U-core electromagnet
 
 +++
 

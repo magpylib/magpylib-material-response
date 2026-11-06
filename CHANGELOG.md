@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- The documentation is rewritten for engineers: getting started with the three
+  solvers on one model, a guide to choosing between them, a user guide per
+  solver, an "Inside the solvers" section with an interactive map of each
+  solver, and one bibliography that credits the papers behind every step. The
+  docs build caps its threads at the CPUs a container allows
+
 ## [0.10.2] - 2026-11-05
 
 ### Changed

@@ -14,17 +14,13 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# How it works
+# Inside cells
 
-Magpylib computes the field of magnets whose polarization is fixed. Real parts
-answer back: an iron plate near a magnet becomes a magnet itself, and a
-permanent magnet loses a little polarization in the field of its neighbours.
-This package computes that answer. It cuts each part into small cells, finds the
-polarization of every cell, and hands back ordinary magpylib magnets that you
-use like any other.
-
-This page shows what happens on the way, with 3D views you can turn and charts
-you can drag. The [method page](method.md) has the equations.
+`solve_cells` cuts each part into small cells, finds the polarization of every
+cell, and hands back ordinary Magpylib magnets. This is the magnetostatic moment
+method {cite}`chadebec2006`. This page shows what happens on the way, with 3D
+views you can turn and charts you can drag;
+[the cell equations](cells_equations.md) has the maths.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -281,11 +277,10 @@ hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
 Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
 elements give it, `study_fem(cube, lambda s: s.moment[2], orders=(3, 4, 5))`, in
-seconds ([Checking a result with finite elements](examples/fem_check.md)). The
-polarizability of a cube of infinite susceptibility, 3.6443 times its volume
-(Helsing and Perfekt 2013), gives 0.028895 A m² through
-$m=VH/(1/3.6443+1/\chi)$, 0.05 % high: that formula is exact for ellipsoids
-only.
+seconds ([Checking a result with finite elements](../examples/fem_check.md)).
+The polarizability of a cube of infinite susceptibility, 3.6443 times its volume
+{cite}`helsing2013`, gives 0.028895 A m² through $m=VH/(1/3.6443+1/\chi)$, 0.05
+% high: that formula is exact for ellipsoids only.
 
 ```{code-cell} ipython3
 def soft_cube():
@@ -350,11 +345,11 @@ Tetrahedra reach the same error with fewer cells. A cuboid grid, though, solves
 far faster per cell, with FFT products the next section explains, so on this
 cube the cuboids win per second of solving below about 1 %. On other parts the
 balance shifts: on the core of the
-[U-core example](examples/ucore_electromagnet.md), a few hundred tetrahedra come
-closer than thousands of cuboids. The two interaction rules sit almost on top of
-each other. In practice: start coarse, multiply the cells by four to eight, and
-stop when the quantity you need, a force or a field at a sensor, changes by less
-than you can accept.
+[U-core example](../examples/ucore_electromagnet.md), a few hundred tetrahedra
+come closer than thousands of cuboids. The two interaction rules sit almost on
+top of each other. In practice: start coarse, multiply the cells by four to
+eight, and stop when the quantity you need, a force or a field at a sensor,
+changes by less than you can accept.
 
 **Do not read exactly on a boundary between cells.** Touching cells each count a
 point on their shared surface as inside, and return zero on their own edges, so
@@ -425,20 +420,14 @@ them. It takes the iterative solver once FFT products cover a tenth of the
 interaction matrix, the cells of each grid among themselves and large grids of
 one spacing between each other. Below that, many small bodies or cells off any
 grid make the iterative solver slower, and it takes the direct one. Both give
-the same answer, to about `solver_tol`; the {ref}`method page <auto-solver>` has
-the measurements behind the rule.
+the same answer, to about `solver_tol`; the {ref}`cell equations <auto-solver>`
+have the measurements behind the rule.
 
 ## Where to go next
 
-- The [quickstart](quickstart.md) sets susceptibilities and applied fields.
-- The [examples](examples/index.md) compare with FEM, drive a core with a coil
-  and mesh any shape with tetrahedra.
-- The [method page](method.md) has the equations, the two interaction rules and
-  the fast paths.
-
-## References
-
-1. Helsing, J., & Perfekt, K.-M. (2013). _On the polarizability and capacitance
-   of the cube._ Applied and Computational Harmonic Analysis, 34(3), 445–468.
-   [doi:10.1016/j.acha.2012.07.006](https://doi.org/10.1016/j.acha.2012.07.006).
-   The limit polarizability of a cube, 3.6443 times its volume, is in Table 1.
+- [The cell equations](cells_equations.md): the linear system, the two
+  interaction rules, the solvers and their fast paths, in full.
+- [Cells](../guide/cells.md) in the user guide: meshing and the solver's
+  settings.
+- The [examples](../examples/index.md) compare with FEM, drive a core with a
+  coil and mesh any shape with tetrahedra.

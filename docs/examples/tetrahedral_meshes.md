@@ -14,7 +14,7 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# Arbitrary Shapes with Tetrahedral Meshes
+# Any shape as tetrahedra
 
 +++
 

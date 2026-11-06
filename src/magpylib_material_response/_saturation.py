@@ -30,16 +30,16 @@ class BHCurve:
     """A material's B-H curve, to set as a ``susceptibility``, on a magnet or a
     parent collection.
 
+    Between the points B follows a monotone cubic (PCHIP). Past the last, the
+    polarization ``J = B - mu0 H`` keeps its last value, so B rises with the
+    slope of vacuum. A curve does not change, so copies of a model share it.
+
     Parameters
     ----------
     H : array-like, shape (n,)
         Field strength in A/m, from 0, increasing.
     B : array-like, shape (n,)
         Flux density in T, from 0, not decreasing.
-
-    Between the points B follows a monotone cubic (PCHIP). Past the last, the
-    polarization ``J = B - mu0 H`` keeps its last value, so B rises with the
-    slope of vacuum. A curve does not change, so copies of a model share it.
 
     Examples
     --------

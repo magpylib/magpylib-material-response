@@ -1,4 +1,4 @@
-# Logging Configuration
+# Logging
 
 The magpylib-material-response package uses
 [Loguru](https://loguru.readthedocs.io/) to emit informative messages about
@@ -138,6 +138,6 @@ solve_cells(meshed, inplace=True)
 
 ## See Also
 
-- {doc}`examples/index` - Working examples that demonstrate logging output
+- {doc}`../examples/index` - Working examples that demonstrate logging output
 - [Loguru Documentation](https://loguru.readthedocs.io/) - Complete reference
   for the underlying logging library

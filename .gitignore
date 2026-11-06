@@ -192,6 +192,6 @@ __marimo__/
 
 
 # Generated files from doc examples
-docs/demag_collection.json
+docs/**/demag_collection.json
 
 #

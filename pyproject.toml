@@ -66,6 +66,8 @@ docs = [
   "myst_nb>=1.4",
   "sphinx_copybutton",
   "sphinx_autodoc_typehints",
+  "sphinxcontrib-bibtex>=2.6",
+  "sphinx-design",
   "pandas",
   "plotly>=6.7",
   "magpylib-material-response[tetgen,fem]",
@@ -196,5 +198,6 @@ messages_control.disable = [
 
 
 [tool.codespell]
-# netgen's name for a face's inner region (FaceDescriptor.domin)
-ignore-words-list = "domin"
+# netgen's name for a face's inner region (FaceDescriptor.domin); journal
+# abbreviations in the references (J. Magn. Magn. Mater., Int. J. Numer. ...)
+ignore-words-list = "domin,mater,numer"

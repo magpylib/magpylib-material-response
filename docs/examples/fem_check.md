@@ -14,7 +14,7 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# Checking a Result with Finite Elements
+# Checking with finite elements
 
 `study_cells` says how far the finest mesh is from what the method of moments
 converges to ([Mesh convergence](mesh_convergence.md)). It cannot say whether

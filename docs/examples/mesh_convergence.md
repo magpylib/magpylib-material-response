@@ -14,16 +14,16 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# Mesh Convergence
+# Mesh convergence
 
 The method of moments gives one answer per mesh and no error bar. `study_cells`
 solves a model on meshes four to eight times apart and estimates the error of
 the finest from how the results change between them. The estimate is the grid
-convergence index (Roache 1994), set out as a procedure by Celik et al. (2008):
-Richardson extrapolation (Richardson 1911) over the three finest meshes, the
-error relative to the finest value, times a factor of safety of 1.25. It gives
-one error for the whole quantity and one per sensor, and none while the results
-do not yet change steadily.
+convergence index {cite}`roache1994`, set out as a procedure by
+{cite:t}`celik2008`: Richardson extrapolation {cite}`richardson1911` over the
+three finest meshes, the error relative to the finest value, times a factor of
+safety of 1.25. It gives one error for the whole quantity and one per sensor,
+and none while the results do not yet change steadily.
 
 Three parts from sensor and actuator design follow. The levels passed to
 `study_cells`, such as `(4, 8, 16)`, are cells across the thinnest part that
@@ -88,9 +88,9 @@ and 0.11 % off; `study_cells` said 0.44 %, 0.13 % and 0.17 %.
 ## A Halbach array on back iron
 
 Five 6 mm NdFeB cubes, their polarizations turning by 90° from one to the next
-(a Halbach array; Halbach 1980), sit on a steel plate. Such arrays drive linear
-motors and magnetic encoders, and the field profile above them is what the
-design is judged by.
+(a Halbach array {cite}`halbach1980`), sit on a steel plate. Such arrays drive
+linear motors and magnetic encoders, and the field profile above them is what
+the design is judged by.
 
 ```{code-cell} ipython3
 turns = [(1.3, 0, 0), (0, 0, 1.3), (-1.3, 0, 0), (0, 0, -1.3), (1.3, 0, 0)]
@@ -193,7 +193,7 @@ for study, reference in zip((halbach, shield), fem[1:], strict=True):
 
 - **Choose meshes 4 to 8 times apart.** Meshes closer than that change little
   without being converged. `study_cells` warns when the cell count grows by less
-  than 2.2 times, cells 1.3 times smaller, the least Celik et al. (2008)
+  than 2.2 times, cells 1.3 times smaller, the least {cite:t}`celik2008`
   recommend. The finest solve takes most of the time.
 - **No estimate** means the three finest results do not change steadily yet: the
   coarsest is too coarse for the error to follow a power law. Refine once more.
@@ -205,24 +205,3 @@ for study, reference in zip((halbach, shield), fem[1:], strict=True):
 - **One physical quantity per study:** the entries of a function's result share
   one norm, so a force and a field in one array would be weighed against each
   other.
-
-## References
-
-1. Richardson, L. F. (1911). _The approximate arithmetical solution by finite
-   differences of physical problems involving differential equations, with an
-   application to the stresses in a masonry dam._ Philosophical Transactions of
-   the Royal Society A, 210, 307–357.
-   [doi:10.1098/rsta.1911.0009](https://doi.org/10.1098/rsta.1911.0009)
-
-2. Roache, P. J. (1994). _Perspective: a method for uniform reporting of grid
-   refinement studies._ Journal of Fluids Engineering, 116(3), 405–413.
-   [doi:10.1115/1.2910291](https://doi.org/10.1115/1.2910291)
-
-3. Celik, I. B., Ghia, U., Roache, P. J., & Freitas, C. J. (2008). _Procedure
-   for estimation and reporting of uncertainty due to discretization in CFD
-   applications._ Journal of Fluids Engineering, 130(7), 078001.
-   [doi:10.1115/1.2960953](https://doi.org/10.1115/1.2960953)
-
-4. Halbach, K. (1980). _Design of permanent multipole magnets with oriented rare
-   earth cobalt material._ Nuclear Instruments and Methods, 169(1), 1–10.
-   [doi:10.1016/0029-554X(80)90094-4](<https://doi.org/10.1016/0029-554X(80)90094-4>)

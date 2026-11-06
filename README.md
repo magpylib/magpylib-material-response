@@ -50,6 +50,8 @@ source like any other.
 What drives a part is any other source in the model: magnets, currents and a
 `UniformField`. All of these are importable from the package itself.
 
+<!-- SPHINX-END -->
+
 ## Installation
 
 ```bash
@@ -117,4 +119,5 @@ AI coding assistants: the package ships an Agent Skill, which
 `uvx library-skills` adds to a project.
 
 See the [documentation](https://magpylib-material-response.readthedocs.io/) for
-a quickstart, worked examples, and the method description.
+getting started, a guide to choosing a solver, how each solver works, and worked
+examples against finite elements.

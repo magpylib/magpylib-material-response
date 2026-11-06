@@ -12,7 +12,7 @@ kernelspec:
   name: python3
 ---
 
-# Cuboid Demagnetization
+# Cuboid demagnetization
 
 Three hard cuboid magnets with different susceptibilities, positions, and
 orientations are meshed at increasing resolution and solved with `solve_cells`.

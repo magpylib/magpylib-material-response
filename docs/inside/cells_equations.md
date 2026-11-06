@@ -1,9 +1,8 @@
-# Method of Moments for Demagnetization
+# The cell equations
 
-This page describes the physics and numerical method behind `solve_cells`, from
-the material model to the linear system and the two solvers. For the ideas
-first, with 3D views and charts to play with, see
-[How it works](how_it_works.md).
+This page describes the numerical method behind `solve_cells`, from the material
+model to the linear system and the two solvers. For the ideas first, with 3D
+views and charts to play with, see [Inside cells](cells.md).
 
 ---
 
@@ -115,8 +114,8 @@ decides it, so turning a body never switches it.
 
 Each block $\mathsf{T}_{ij}$ is $\mu_0$ times the field $\mathbf{H}$ that cell
 $j$, carrying a unit polarization along $x$, $y$ or $z$, produces at the
-**centroid** of cell $i$ (Chadebec 2006), from magpylib's closed-form field of
-the cell type. For cuboid source cells this is
+**centroid** of cell $i$ {cite}`chadebec2006`, from Magpylib's closed-form field
+of the cell type. For cuboid source cells this is
 {func}`~magpylib_material_response.newell.point_block`: the tensor depends only
 on the displacement and the source shape, so cells sharing a shape and
 orientation get the same fast paths as volume averaging (section 5). Beyond 50
@@ -146,9 +145,9 @@ crosses 1, the two schemes' difference on a coarse mesh.
 ### Volume averaging (Newell)
 
 For **identical, axis-aligned** rectangular prisms of sides $(a, b, c)$, the
-field averaged over the observer cell has a closed form (Newell, Williams and
-Dunlop 1993). The six independent components follow from two auxiliary functions
-$f(x,y,z)$ and $g(x,y,z)$ through a 27-point second difference:
+field averaged over the observer cell has a closed form {cite}`newell1993`. The
+six independent components follow from two auxiliary functions $f(x,y,z)$ and
+$g(x,y,z)$ through a 27-point second difference:
 
 $$
 N_{xx}(\mathbf{r};\,a,b,c) =
@@ -209,7 +208,7 @@ magnetometric factors) under volume averaging. Either way its trace is 1. The
 tensor at a point is $\mathsf{N} = -\nabla\nabla\psi$ with $\psi(\mathbf{r}) =
 \frac{1}{4\pi}\int_V \frac{\mathrm{d}V'}{|\mathbf{r} - \mathbf{r}'|}$, and
 Poisson's equation gives $\nabla^2\psi = -1$ inside the cell; the average over
-the cell keeps the trace (Moskowitz and Della Torre 1966):
+the cell keeps the trace {cite}`moskowitz1966`:
 
 $$N_{xx}^{(i)} + N_{yy}^{(i)} + N_{zz}^{(i)} = 1$$
 
@@ -228,8 +227,9 @@ rings into enough sectors that it does.
    gives the shortcuts).
 2. Build the right-hand side from the remanent polarizations and the field of
    the current sources and any `UniformField` at the cell centroids.
-3. Factor $\mathbf{Q}$ in place with LAPACK (`scipy.linalg.solve`) and write
-   each cell's polarization back, expressed in the cell's own frame.
+3. Factor $\mathbf{Q}$ in place with LAPACK {cite}`lapack1999`
+   (`scipy.linalg.solve`) and write each cell's polarization back, expressed in
+   the cell's own frame.
 
 The solve is direct, exact up to floating-point rounding. Memory grows with
 $N^2$ — the matrix alone takes $(3N)^2 \times 8$ bytes, 650 MB for 3,000 cells —
@@ -240,10 +240,10 @@ the matrix in memory).
 
 ### 4.2 Iterative solver (`solver="iterative"`)
 
-GMRES (Saad and Schultz 1986) never assembles $\mathbf{Q}$: it only needs the
-product $\mathbf{v} \mapsto \mathbf{Q}\,\mathbf{v}$, which the FFT kernels and
-the stored blocks of section 5 provide. Both solvers apply the same entries, so
-they solve the same system.
+GMRES {cite}`saad1986`, as SciPy implements it {cite}`scipy2020`, never
+assembles $\mathbf{Q}$: it only needs the product $\mathbf{v} \mapsto
+\mathbf{Q}\,\mathbf{v}$, which the FFT kernels and the stored blocks of section
+5 provide. Both solvers apply the same entries, so they solve the same system.
 
 GMRES stops when the residual falls below `solver_tol` relative to the
 right-hand side, which bounds the residual, not the error. Measured against the
@@ -315,17 +315,17 @@ When cells share one shape and orientation and their centres fill a regular grid
 of shape $(N_x, N_y, N_z)$, the interaction depends only on the offset between
 cells, $\mathsf{T}_{ij} = \mathsf{T}(\mathbf{r}_j - \mathbf{r}_i)$, and the
 product $\mathbf{T}\,\mathbf{J}$ is a 3-D discrete convolution: an FFT on the
-grid zero-padded to twice its size computes it in $O(N \log N)$. The kernel, the
-six independent components of the chosen rule's tensor, is built once by
-`build_fft_kernel` and reused at every GMRES iteration (`demag_fft_matvec`). The
-grid spacing may exceed the cell size. A body on one lattice that does not fill
-its box, such as a voxelized sphere, runs the same way when its cells fill at
-least an eighth of the box (`MIN_LATTICE_FILL`) and it is at least four cells
-deep along every axis (`MIN_LATTICE_LAYERS`): the empty places hold zero
-polarization, and the box holds at most eight times as many sites as cells. A
-thinner body with holes, such as a voxelized washer one to three cells thick,
-keeps full boxes and loose cells: FFTs over its flat, mostly empty box are
-slower.
+grid zero-padded to twice its size computes it in $O(N \log N)$
+{cite}`hayashi1996`. The kernel, the six independent components of the chosen
+rule's tensor, is built once by `build_fft_kernel` and reused at every GMRES
+iteration (`demag_fft_matvec`). The grid spacing may exceed the cell size. A
+body on one lattice that does not fill its box, such as a voxelized sphere, runs
+the same way when its cells fill at least an eighth of the box
+(`MIN_LATTICE_FILL`) and it is at least four cells deep along every axis
+(`MIN_LATTICE_LAYERS`): the empty places hold zero polarization, and the box
+holds at most eight times as many sites as cells. A thinner body with holes,
+such as a voxelized washer one to three cells thick, keeps full boxes and loose
+cells: FFTs over its flat, mostly empty box are slower.
 
 ### 5.2 Clusters
 
@@ -438,25 +438,3 @@ matching): the iterative solver is about 10 times faster than the direct one at
 $N = 3{,}375$, 0.2 s against 2.0 s, and solves $N = 27{,}000$ in under 2 s,
 where the dense matrix alone would take 52 GB. Several separate bodies are
 slower: their blocks against each other are not convolutions.
-
----
-
-## 8. References
-
-1. Newell, A. J., Williams, W., & Dunlop, D. J. (1993). _A generalization of the
-   demagnetizing tensor for nonuniform magnetization._ Journal of Geophysical
-   Research: Solid Earth, 98(B6), 9551–9555.
-   [doi:10.1029/93JB00694](https://doi.org/10.1029/93JB00694)
-
-2. Chadebec, O., Coulomb, J.-L., & Janet, F. (2006). _A review of magnetostatic
-   moment method._ IEEE Transactions on Magnetics, 42(4), 515–520.
-   [doi:10.1109/TMAG.2006.870929](https://doi.org/10.1109/TMAG.2006.870929)
-
-3. Moskowitz, R., & Della Torre, E. (1966). _Theoretical aspects of
-   demagnetization tensors._ IEEE Transactions on Magnetics, 2(4), 739–744.
-   [doi:10.1109/TMAG.1966.1065973](https://doi.org/10.1109/TMAG.1966.1065973)
-
-4. Saad, Y., & Schultz, M. H. (1986). _GMRES: a generalized minimal residual
-   algorithm for solving nonsymmetric linear systems._ SIAM Journal on
-   Scientific and Statistical Computing, 7(3), 856–869.
-   [doi:10.1137/0907058](https://doi.org/10.1137/0907058)

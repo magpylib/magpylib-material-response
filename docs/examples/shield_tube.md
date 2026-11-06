@@ -14,7 +14,7 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# A Magnet in a Steel Tube
+# A magnet in a steel tube
 
 A disc magnet sits inside an open steel tube, near one end: a shield, as around
 a sensor or a motor's magnet. The model comes from a contribution by Aaditya
@@ -124,7 +124,7 @@ across: the flux turns into the wall near the magnet, within a few cells. Cells
 of one size fine enough there would number in the thousands, and curved cells
 cost more than cuboids. For the field a shield lets through, take face charge
 with `refine=1`, within 1.0 % of the finite-element value outside this tube
-([face charge](../face_charge.md)), or finite elements.
+([face charge](../guide/face_charge.md)), or finite elements.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
