@@ -28,20 +28,36 @@ and none while the results do not yet change steadily.
 Three parts from sensor and actuator design follow. The levels passed to
 `study_cells`, such as `(4, 8, 16)`, are cells across the thinnest part that
 responds: its default mesher, `mesh_uniform`, cuts every such part into cells of
-that one size, which the solver multiplies by FFT. Each study runs here in
-seconds; finite elements on the same models, run separately, show how good its
-estimate is.
+that one size, which the solver multiplies by FFT. Finite elements on the same
+models, run separately, show how good the estimate is.
+
+The models and the studies are in `mesh_convergence_studies.py`, next to this
+page. The studies take about 40 s on a laptop, so they run once and are stored;
+the page rebuilds each with `MeshStudy.from_values`, which gives the estimate
+`study_cells` gives.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
+
+import json
+from pathlib import Path
 
 import magpylib as magpy
 import numpy as np
 import plotly.graph_objects as go
 
-from magpylib_material_response import UniformField, study_cells
+from mesh_convergence_studies import B0, flux_concentrator, halbach_array, steel_shield
+
+from magpylib_material_response.convergence import MeshStudy
 
 MM = 1e-3  # lengths in metres, written in millimetres
+STORED = json.loads(Path("mesh_convergence.json").read_text())
+
+
+def stored(name):
+    """The study `mesh_convergence_studies.py` ran and stored."""
+    run = STORED[name]
+    return MeshStudy.from_values(run["cells"], [np.asarray(v) for v in run["values"]], run["seconds"])
 
 
 def report(study, labels, unit, scale=1.0):
@@ -64,19 +80,12 @@ A bar of soft nickel–iron (susceptibility 4,000), 16 × 2 × 2 mm, gathers the
 Earth's field into a sensor beside its tip. What matters is the gain: the field
 at the sensor over the 50 µT around it.
 
+```{literalinclude} mesh_convergence_studies.py
+:pyobject: flux_concentrator
+```
+
 ```{code-cell} ipython3
-B0 = 50e-6  # T, the Earth's field, along the bar
-bar = magpy.magnet.Cuboid(dimension=(16 * MM, 2 * MM, 2 * MM), polarization=(0, 0, 0))
-bar.susceptibility = 4000
-bar_model = magpy.Collection(bar, UniformField(B=(B0, 0, 0)))
-sensors = np.array([(8.5, 0, 0), (9, 0, 0), (10, 0, 0)]) * MM  # 0.5, 1, 2 mm from the tip
-
-
-def gain(solved):
-    return magpy.getB(solved, sensors)[:, 0] / B0
-
-
-concentrator = study_cells(bar_model, gain, (4, 8, 16))
+concentrator = stored("concentrator")  # study_cells(*flux_concentrator(), (4, 8, 16))
 report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
 ```
 
@@ -94,23 +103,14 @@ Five 6 mm NdFeB cubes, their polarizations turning by 90° from one to the next
 linear motors and magnetic encoders, and the field profile above them is what
 the design is judged by.
 
-```{code-cell} ipython3
-turns = [(1.3, 0, 0), (0, 0, 1.3), (-1.3, 0, 0), (0, 0, -1.3), (1.3, 0, 0)]
-magnets = [
-    magpy.magnet.Cuboid(dimension=(6 * MM,) * 3, position=(x * MM, 0, 0), polarization=p)
-    for x, p in zip((-12, -6, 0, 6, 12), turns, strict=True)
-]
-for magnet in magnets:
-    magnet.susceptibility = 0.05  # NdFeB answers a little
-plate = magpy.magnet.Cuboid(
-    dimension=(30 * MM, 6 * MM, 3 * MM), position=(0, 0, -4.5 * MM), polarization=(0, 0, 0)
-)
-plate.susceptibility = 1000
-array = magpy.Collection(*magnets, plate)
-x = np.linspace(-15, 15, 21)
-profile = np.column_stack([x, 0 * x, np.full(21, 5.0)]) * MM  # 2 mm above the magnets
+```{literalinclude} mesh_convergence_studies.py
+:pyobject: halbach_array
+```
 
-halbach = study_cells(array, profile, (2, 4, 8))
+```{code-cell} ipython3
+array, profile = halbach_array()
+x = profile[:, 0] / MM
+halbach = stored("halbach")  # study_cells(array, profile, (2, 4, 8))
 print(f"cells {halbach.cells.tolist()}, order {halbach.order:.2f}, solve of the finest {halbach.seconds[-1]:.1f} s")
 print(f"error of the whole profile {halbach.error:.3%}, of the worst point {np.nanmax(halbach.errors):.3%}")
 magpy.show(array, backend="widget")
@@ -145,16 +145,12 @@ magnet and shields three sensors 2 mm behind it. The field there is what is left
 after the shield, so the coarse meshes overestimate it: the error has to be
 measured against the finest value, not against the larger coarse ones.
 
-```{code-cell} ipython3
-magnet = magpy.magnet.Cuboid(dimension=(6 * MM,) * 3, polarization=(0, 0, 1.3))
-magnet.susceptibility = 0  # only the sheet answers
-sheet = magpy.magnet.Cuboid(
-    dimension=(24 * MM, 24 * MM, 1 * MM), position=(0, 0, 6.5 * MM), polarization=(0, 0, 0)
-)
-sheet.susceptibility = 1000
-behind = np.array([(0, 0, 9), (6, 0, 9), (12, 0, 9)]) * MM
+```{literalinclude} mesh_convergence_studies.py
+:pyobject: steel_shield
+```
 
-shield = study_cells(magpy.Collection(magnet, sheet), behind, (1, 2, 4))
+```{code-cell} ipython3
+shield = stored("shield")  # study_cells(*steel_shield(), (1, 2, 4))
 report(shield, ["axis", "6 mm out", "12 mm out"], "mT", 1e3)
 ```
 
@@ -177,10 +173,12 @@ The same models are cases of the repository's validation suite
 from magpylib_material_response import compare
 from magpylib_material_response import study_fem
 
+bar_model, _ = flux_concentrator()
+sensors = np.array([(8.5, 0, 0), (9, 0, 0), (10, 0, 0)]) * MM
 fem = [
     study_fem(bar_model, sensors, orders=(3, 4, 5)),
-    study_fem(array, profile, orders=(3, 4, 5)),
-    study_fem(sheet.parent, behind, orders=(3, 4, 5)),
+    study_fem(*halbach_array(), orders=(3, 4, 5)),
+    study_fem(*steel_shield(), orders=(3, 4, 5)),
 ]
 print(f"gains {fem[0].estimate[:, 0] / B0}, within {fem[0].errors}")
 for study, reference in zip((halbach, shield), fem[1:], strict=True):

@@ -411,6 +411,15 @@ a.cite { text-decoration: none; border-bottom: 1px dotted var(--accent); white-s
 </div>
 
 <script>
+/* embedded in the docs' own page, which carries the title: drop the page's
+   header, keeping its legend */
+if (window.self !== window.top) {
+  for (const sel of ['header .eyebrow', 'header h1', 'header .lead']) {
+    const node = document.querySelector(sel);
+    if (node) node.remove();
+  }
+}
+
 (() => {
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {

@@ -314,7 +314,7 @@ for rule in ("point", "newell"):
         t0 = time.perf_counter()
         solved = solve_cells(in_field(cells), interaction=rule)
         runs.append((f"cuboids, {rule}", len(cells.sources_all), moment(solved), time.perf_counter() - t0))
-for n in (30, 100, 300, 1000):
+for n in (30, 100, 300):
     cells = mesh_TriangularMesh(soft_cube_surface(), n)
     t0 = time.perf_counter()
     solved = solve_cells(in_field(cells))
@@ -341,10 +341,11 @@ fig
 
 +++ {"user_expressions": []}
 
-Tetrahedra reach the same error with fewer cells. A cuboid grid, though, solves
-far faster per cell, with FFT products the next section explains, so on this
-cube the cuboids win per second of solving below about 1 %. On other parts the
-balance shifts: on the core of the
+Tetrahedra reach the same error with fewer cells: 1.3 % with 199 of them, where
+cuboids need about 1,700. A cuboid grid, though, solves far faster per cell,
+with FFT products the next section explains: per second of solving, the
+tetrahedra lead down to about 1.3 % on this cube, and the cuboids go on to 0.8 %
+in half a second. On other parts the balance shifts: on the core of the
 [U-core example](../examples/ucore_electromagnet.md), a few hundred tetrahedra
 come closer than thousands of cuboids. The two interaction rules sit almost on
 top of each other. In practice: start coarse, multiply the cells by four to
@@ -388,9 +389,9 @@ cone = magpy.magnet.TriangularMesh.from_ConvexHull(
 )
 cone.susceptibility = 1000
 model = magpy.Collection(
-    mesh_Cuboid(block, 1000),
-    voxelize(ball, 1500),
-    mesh_TriangularMesh(cone, 250),
+    mesh_Cuboid(block, 512),
+    voxelize(ball, 800),
+    mesh_TriangularMesh(cone, 120),
     UniformField(B=(0, 0, 0.01)),
 )
 

@@ -4,7 +4,6 @@ import datetime as dt
 import importlib.metadata
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 # Make plotly output self-contained HTML (text/html) instead of
@@ -13,38 +12,6 @@ from typing import Any
 # See: https://github.com/executablebooks/MyST-NB/issues/667
 os.environ["PLOTLY_RENDERER"] = "sphinx_gallery"
 
-
-def _cpu_quota():
-    """CPUs a container's quota allows, or None: os.cpu_count() and the affinity
-    mask see the host's CPUs, so thread pools sized from them oversubscribe a
-    build limited to a few."""
-    cgroup = Path("/sys/fs/cgroup")
-    try:  # cgroup v2, then v1
-        quota, period = (cgroup / "cpu.max").read_text().split()
-    except (OSError, ValueError):
-        try:
-            quota = (cgroup / "cpu" / "cpu.cfs_quota_us").read_text().strip()
-            period = (cgroup / "cpu" / "cpu.cfs_period_us").read_text().strip()
-        except OSError:
-            return None
-    if quota in ("max", "-1"):
-        return None
-    return max(1, int(int(quota) / int(period)))
-
-
-# The notebooks run in kernels that inherit this environment. Cap every pool
-# at the quota: magpylib's threads follow os.process_cpu_count(), which
-# PYTHON_CPU_COUNT sets from Python 3.13; BLAS and OpenMP read their own.
-_visible, _quota = os.cpu_count(), _cpu_quota()
-if _quota is not None and _quota < (_visible or 1):
-    for _name in (
-        "PYTHON_CPU_COUNT",
-        "OMP_NUM_THREADS",
-        "OPENBLAS_NUM_THREADS",
-        "MKL_NUM_THREADS",
-    ):
-        os.environ.setdefault(_name, str(_quota))
-print(f"docs build: {_visible} CPUs visible, quota {_quota}")  # noqa: T201
 
 project = "magpylib-material-response"
 copyright = f"{dt.datetime.now(tz=dt.UTC).year}, Alexandre Boisselet"
@@ -193,6 +160,8 @@ html_js_files = [
 
 # Static files (CSS/JS)
 html_static_path = ["_static"]
+# the solver map takes the whole width
+html_sidebars = {"inside/map": []}
 html_css_files = ["fullwidth.css"]
 
 # ── Fix MathJax on pages with plotly figures ────────────────────────────────

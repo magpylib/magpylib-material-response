@@ -49,14 +49,15 @@ soft part solved by face charge is lit. In the interactive map you pick any of
 the papers it rests on.
 
 ```{raw} html
-<p><a href="../_static/map/index.html"><img src="../_static/images/solver_map.png"
+<p><a href="map.html"><img src="../_static/images/solver_map.png"
   alt="The map of the three solvers, with the path of a soft part through solve_face_charge lit: surface panels, the kept-LU check, the Galerkin operator, assembly, LU, surface charge, ChargeSheet, fields."
   style="width: 100%; border: 1px solid var(--pst-color-border); border-radius: 6px;"></a></p>
-<p><a href="../_static/map/index.html"><b>Open the interactive map →</b></a></p>
+<p><a href="map.html"><b>Open the interactive map →</b></a></p>
 ```
 
 ## The pages
 
+- [The solver map](map.md): the interactive map, full width.
 - [Inside cells](cells.md) and [the cell equations](cells_equations.md): the
   moment method, its interaction rules, solvers and fast paths.
 - [Inside face charge](face_charge.md): the surface-charge equation, panels,
@@ -72,6 +73,7 @@ the papers it rests on.
 :maxdepth: 1
 :hidden:
 
+map
 cells
 cells_equations
 face_charge

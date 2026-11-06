@@ -44,9 +44,6 @@ performance crossover.
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-import time
-import tracemalloc
-
 import magpylib as magpy
 import numpy as np
 import pandas as pd
@@ -143,48 +140,27 @@ count. Absolute seconds depend heavily on the machine, so times are reported
 portable. Peak memory is measured with `tracemalloc` (which tracks NumPy
 allocations) in a separate run, since tracing skews wall time.
 
-```{code-cell} ipython3
-def measure_solve(target_elems, solver):
-    cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3))
-    coll = magpy.Collection(mesh_Cuboid(cube, target_elems=target_elems))
-    n = len(coll.sources_all)
-    t0 = time.perf_counter()
-    solve_cells(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
-    dt = time.perf_counter() - t0
+The timings are measured once on a quiet machine by
+`solver_performance_bench.py`, next to this page, and stored in
+`solver_performance.json`: the docs are built on 2 shared CPUs, whose timings
+would say little. Each point is one solve of a meshed cube, timed, then solved
+again with memory tracing on:
 
-    # separate traced run (tracing skews wall time); solve_cells works on a
-    # copy, so the same collection can be reused
-    tracemalloc.start()
-    solve_cells(coll, susceptibility=3.0, solver=solver, solver_tol=1e-8)
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    return {"solver": solver, "cells": n, "time": dt, "peak_mb": peak / 1e6}
-
-
-# warm-up both solvers once, so one-time costs (imports, BLAS/FFT
-# initialisation) do not leak into the first timed measurement
-warmup = magpy.Collection(
-    mesh_Cuboid(magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3)), 64)
-)
-solve_cells(warmup, susceptibility=3.0, solver="direct")
-solve_cells(warmup, susceptibility=3.0, solver="iterative", solver_tol=1e-8)
-
-sizes_direct = [216, 512, 1000, 1728]
-sizes_iterative = [216, 512, 1000, 1728, 4096, 8000]
-
-records = [measure_solve(s, "direct") for s in sizes_direct]
+```{literalinclude} solver_performance_bench.py
+:pyobject: measure_solve
 ```
 
 ```{code-cell} ipython3
-:tags: [hide-input]
+import json
+from pathlib import Path
 
-records += [measure_solve(s, "iterative") for s in sizes_iterative]
+bench = json.loads(Path("solver_performance.json").read_text())
+print(f"Measured on {bench['machine']}, {bench['date']}, "
+      f"magpylib-material-response {bench['versions']['magpylib-material-response']}")
 
-perf_df = pd.DataFrame(records)
+perf_df = pd.DataFrame(bench["scaling"])
 n_ref = int(perf_df["cells"].min())
-t_ref = perf_df[(perf_df["solver"] == "direct") & (perf_df["cells"] == n_ref)][
-    "time"
-].iloc[0]
+t_ref = perf_df[(perf_df["solver"] == "direct") & (perf_df["cells"] == n_ref)]["time"].iloc[0]
 perf_df["rel_time"] = perf_df["time"] / t_ref
 perf_df.pivot(index="cells", columns="solver", values=["rel_time", "peak_mb"]).round(2)
 ```
@@ -275,99 +251,21 @@ cuboids sharing a shape and orientation → blocks computed once per distinct
 displacement; every other cell → one `magpy.getH` per pair. So the model
 topology decides which paths do the work — and how much the solver choice
 matters. Here the same comparison runs on characteristic topologies of similar
-total cell count, the cylinder aside (single-run timings — indicative, not
-statistics).
+total cell count, the cylinder aside (single-run timings, from the same stored
+measurement: indicative, not statistics).
 
 ```{code-cell} ipython3
-from collections import Counter
+from solver_performance_bench import topologies
 
-from magpylib_material_response.demag_fft import analyze_collection
-from magpylib_material_response.meshing import mesh_Cylinder
-
-
-def structure_kinds(coll):
-    """Summarize the structure clusters the solvers will work with."""
-    _, clusters = analyze_collection(coll.sources_all)
-    kinds = Counter(c["kind"] for c in clusters)
-    return " + ".join(f"{v} {k}" for k, v in sorted(kinds.items()))
-
-
-def bench_topology(label, coll):
-    n = len(coll.sources_all)
-    sus = [0.5] * n
-    t0 = time.perf_counter()
-    coll_direct = solve_cells(coll, susceptibility=sus, solver="direct")
-    t_direct = time.perf_counter() - t0
-    t0 = time.perf_counter()
-    coll_iter = solve_cells(coll, susceptibility=sus, solver="iterative", solver_tol=1e-8)
-    t_iter = time.perf_counter() - t0
-    return {
-        "topology": label,
-        "cells": n,
-        "structure": structure_kinds(coll),
-        "iter / direct time": round(t_iter / t_direct, 2),
-        "agreement": f"{max_rel_diff(coll_direct, coll_iter):.0e}",
-    }
-
-
-def block(pos=(0, 0, 0)):
-    return magpy.magnet.Cuboid(
-        polarization=(0, 0, 1), dimension=(1e-3, 1e-3, 1e-3), position=pos
-    )
-
-
-def grid_positions(k, pitch=1.8e-3):
-    side = int(np.ceil(np.sqrt(k)))
-    return [(i * pitch, j * pitch, 0) for i in range(side) for j in range(side)][:k]
-
-
-topologies = {
-    "single body": magpy.Collection(mesh_Cuboid(block(), 1000)),
-    "4 bodies": magpy.Collection(
-        *(mesh_Cuboid(block(p), 250) for p in grid_positions(4))
-    ),
-    "24 bodies": magpy.Collection(
-        *(mesh_Cuboid(block(p), 48) for p in grid_positions(24))
-    ),
-}
-
-meshes = []
-for i, p in enumerate(grid_positions(24, pitch=2.2e-3)):
-    m = mesh_Cuboid(block(p), 48)
-    m.rotate_from_angax(i * 15.0, (0, 0, 1), anchor=p)
-    meshes.append(m)
-topologies["24 bodies, individually rotated"] = magpy.Collection(*meshes)
-
-cyl = magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(1e-3, 1e-3))
-topologies["meshed cylinder"] = magpy.Collection(mesh_Cylinder(cyl, 100))
-
-for label, coll in topologies.items():
+models = topologies()
+for label, coll in models.items():
     coll.style.label = label
 
-magpy.show(
-    *(
-        {"objects": coll, "row": i // 3 + 1, "col": i % 3 + 1}
-        for i, coll in enumerate(topologies.values())
-    ),
-)
+magpy.show(*({"objects": coll, "row": i // 3 + 1, "col": i % 3 + 1} for i, coll in enumerate(models.values())))
 ```
 
 ```{code-cell} ipython3
-:tags: [hide-input]
-
-topo_rows = [
-    bench_topology(label, coll)
-    for label, coll in topologies.items()
-    if label != "meshed cylinder"
-]
-```
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-topo_rows.append(bench_topology("meshed cylinder", topologies["meshed cylinder"]))
-
-pd.DataFrame(topo_rows)
+pd.DataFrame(bench["topology"])
 ```
 
 +++ {"user_expressions": []}
@@ -375,15 +273,15 @@ pd.DataFrame(topo_rows)
 What the rows show:
 
 - **Single body / a few parallel bodies** — everything runs on the FFT paths;
-  the iterative solver is ahead (about a third of the direct time for one body,
-  a bit over half for four, on this machine) and scales far better (previous
-  section). Bodies that touch count as separate grids too: a yoke with its legs
-  is three grids, not one connected component.
+  the iterative solver is ahead (0.7 of the direct time for one body, 0.6 for
+  four, on the machine above) and scales far better (previous section). Bodies
+  that touch count as separate grids too: a yoke with its legs is three grids,
+  not one connected component.
 - **Dozens of bodies** — the pairwise cross-blocks (one per body pair) start to
   dominate the operator build; between small bodies they are dense blocks from
   one table of displacements, between large ones FFT products. The iterative
-  solver still wins (about 0.7 of the direct time here), but its advantage
-  shrinks as the body count grows at fixed total cells.
+  solver still wins (0.7 of the direct time here), but its advantage shrinks as
+  the body count grows at fixed total cells.
 - **Bodies rotated individually** — cross-blocks between differently oriented
   bodies share no displacements, so they are computed pair by pair in both
   directions, by both solvers alike: expect near parity. The self-blocks of each

@@ -96,7 +96,7 @@ def icosphere(diameter, splits=2):
 
 sphere = icosphere(0.01)
 sphere.susceptibility = curve
-mesh = mesh_TriangularMesh(sphere, 300)
+mesh = mesh_TriangularMesh(sphere, 150)
 cells = mesh.sources_all
 volumes = np.array([c.volume for c in cells])
 
