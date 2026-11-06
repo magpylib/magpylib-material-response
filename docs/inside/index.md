@@ -21,9 +21,10 @@ own polarization. That last term makes the problem self-consistent: each part's
 polarization depends on all the others', its own included.
 
 Magpylib gives the field of a uniformly polarized cuboid, cylinder, sphere or
-tetrahedron in closed form {cite}`ortner2020,engelherbert2005,slanovc2022`. All
-three solvers use it: for the field of the fixed sources at the parts, and two
-of them for the field of their own unknowns.
+tetrahedron in closed form {cite}`ortner2020,engelherbert2005,slanovc2022`.
+Cells use it for the field of every cell; face charge for the field of the fixed
+sources at its panels, its own panels having closed forms of their own; finite
+elements only for the field of currents, as they mesh the magnets.
 
 ## Three discretizations
 

@@ -117,7 +117,7 @@ Galerkin method should: 4.5e-4 off at level 4.
 - **A part close to another** (`NEAR`), within 20 % of the largest half-side of
   the smaller of the two, is graded toward the other's outline, as for touching
   parts. A magnet without susceptibility counts too, when it is a cuboid: the
-  panels follow its footprint, and the load near it takes a finer rule.
+  panels follow its footprint. Near any magnet, the load takes a finer rule.
 
 ## Solving
 

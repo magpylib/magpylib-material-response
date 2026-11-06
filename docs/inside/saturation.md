@@ -7,11 +7,11 @@ field inside it, which depends on every cell's polarization. `solve_cells` and
 
 ## The curve
 
-`BHCurve(H, B)` takes the measured curve, H in A/m and B in T, both from 0. The
-polarization is $J = B - \mu_0 H$. Between the points B follows a monotone cubic
-(PCHIP), so the curve never wiggles between measurements; past the last point J
-keeps its last value, and B rises with the slope of vacuum. A curve whose J
-passes 5 T warns: its columns are swapped or its units wrong.
+`BHCurve(H=…, B=…)` takes the measured curve, H in A/m and B in T, both from 0.
+The polarization is $J = B - \mu_0 H$. Between the points B follows a monotone
+cubic (PCHIP), so the curve never wiggles between measurements; past the last
+point J keeps its last value, and B rises with the slope of vacuum. A curve
+whose J passes 5 T warns: its columns are swapped or its units wrong.
 
 ## The fixed point
 

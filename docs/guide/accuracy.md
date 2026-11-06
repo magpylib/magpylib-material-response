@@ -61,8 +61,9 @@ concentrator, a Halbach array and a steel shield.
 ## Finite elements: `study_fem`
 
 `study_fem(model, sensors)` raises the order, 2, 3 and 4 by default, on one
-mesh, and takes 1.25 times the last change as the error of the highest. The
-error falls geometrically with the order on a mesh refined toward the edges
+mesh, and takes 1.25 times the last change as the error of the highest. It needs
+three orders whose changes shrink; otherwise the error is NaN, with a warning.
+The error falls geometrically with the order on a mesh refined toward the edges
 {cite}`babuska1996`, so the estimate is an overestimate while it still falls.
 
 ## Two solvers against each other: `compare`

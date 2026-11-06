@@ -61,8 +61,9 @@ magnets' own and the drives', and the solve's `order`, `ndof` (unknowns),
 
 `study_fem(model, quantity, orders=(2, 3, 4))` solves at rising orders on one
 mesh, and takes the last change, times 1.25, as the error of the highest order,
-per entry and in all. `quantity` is a set of positions or sensors, or a function
-of the solution such as `lambda s: s.moment`. On a cube of infinite
+per entry and in all: with three orders whose changes shrink, otherwise the
+error is NaN, with a warning. `quantity` is a set of positions or sensors, or a
+function of the solution such as `lambda s: s.moment`. On a cube of infinite
 susceptibility it finds the known polarizability to 2e-5 at order 5; it reaches
 0.1 % on every validation case in 24 s at most.
 [How accurate is a result?](accuracy.md) shows how to set it beside the other

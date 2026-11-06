@@ -82,16 +82,19 @@ a `BHCurve`. Those bring back charge inside the part: use `solve_cells`.
   the field near it is integrated finely. A disc magnet, or a cuboid turned
   against the part, has a footprint the panels cannot follow. The solve warns,
   and a disc on a soft cube stays 3 to 4 % off near it from level 4 on.
-- **Many magnets on a part** each grade its face when they are within 20 % of
-  the part's half-side, so they cost unknowns: 25 cube magnets on a yoke take
-  6,048 unknowns at level 2 and 13,608 at level 3. Start such arrays at
-  `level=2`, within 7 % of level 3 or 4 close to the magnets.
-- **Two parts close together.** A part within 20 % of its half-side of another
-  is graded toward it, and parts closer than 0.1 % of that couple as touching.
-  Down to a gap of 0.5 % of the half-side, the field near the gap stays within 1
-  % of finite elements from level 3. Below that, with χ 1000 on both sides,
-  expect 1 to 4 % near the gap: the panels cannot follow a gap far below their
-  size, and neither can finite elements, so that error cannot be measured yet.
+- **Many cuboid magnets on a part** each grade its face when they come within 20
+  % of the largest half-side of the smaller of the two, so they cost unknowns:
+  25 cube magnets on a yoke take 6,048 unknowns at level 2 and 13,608 at
+  level 3. Start such arrays at `level=2`, within 7 % of level 3 or 4 close to
+  the magnets.
+- **Two parts close together.** A part within 20 % of the largest half-side of
+  the smaller of the two is graded toward the other, and parallel faces closer
+  than 0.01 % of it couple exactly, as touching ones do (0.1 % for a turned
+  cuboid). Down to a gap of 0.5 % of the half-side, the field near the gap stays
+  within 1 % of finite elements from level 3. Below that, with χ 1000 on both
+  sides, expect 1 to 4 % near the gap: the panels cannot follow a gap far below
+  their size, and neither can finite elements, so that error cannot be measured
+  yet.
 
 ## Fields inside a part
 

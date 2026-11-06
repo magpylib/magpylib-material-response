@@ -21,8 +21,8 @@ kernelspec:
 Shapes that cannot be meshed into cuboid or cylinder cells are handled through
 `magpylib.magnet.TriangularMesh`: any closed triangular surface can be
 discretized into conforming `Tetrahedron` cells with `mesh_TriangularMesh`,
-which drives [TetGen](https://tetgen.org) under the hood. TetGen is an optional
-dependency:
+which drives [TetGen](https://wias-berlin.de/software/tetgen/) under the hood.
+TetGen is an optional dependency:
 
 ```bash
 pip install "magpylib-material-response[tetgen]"

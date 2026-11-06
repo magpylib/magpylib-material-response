@@ -265,7 +265,7 @@ fig
 The three-cuboid core is convenient, but nothing forces cuboid cells. The same
 solid can be built as a **single closed `TriangularMesh`** — the U profile in
 the x–z plane, extruded along y — and handed to `mesh_TriangularMesh`, which
-drives [TetGen](https://tetgen.org) (optional dependency,
+drives [TetGen](https://wias-berlin.de/software/tetgen/) (optional dependency,
 `pip install "magpylib-material-response[tetgen]"`, see the
 [tetrahedral example](tetrahedral_meshes.md)):
 

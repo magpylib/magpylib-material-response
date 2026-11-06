@@ -72,7 +72,8 @@ it is:
 - **a `UniformField`**, given as `B` in T or `H` in A/m, such as the Earth's
   field or the field of a large coil far away. Several add up, and each turns
   with its orientation;
-- any other Magpylib source, such as a `Dipole`.
+- in `solve_face_charge` only, any other Magpylib source, such as a `Dipole`:
+  `solve_cells` and `solve_fem` refuse it.
 
 ```{code-cell} ipython3
 coil = magpy.current.Circle(current=50, diameter=20 * MM, position=(0, 0, -8 * MM))
@@ -91,9 +92,11 @@ Each solver returns a copy of the model, as a Magpylib source:
 | `solve_cells`       | the collection of cells, each with its solved polarization                            | B, H, J, M                           |
 | `solve_fem`         | a `FemSolution`: the field of the whole model, its `moment` and the cost of the solve | B, H, J, M, pointwise                |
 
-Each result's `solved_by` names its solver. `magpy.getB`, `getH`, `show()` and
-`to_json` read all three. The drives are in the result too: `getB` of a solved
-model includes the field of its magnets, coils and `UniformField`.
+Each result's `solved_by` names its solver. `magpy.getB`, `getH` and `show()`
+read all three; `to_json` saves the results of `solve_cells` and
+`solve_face_charge`, not a `FemSolution`. The drives are in the result too:
+`getB` of a solved model includes the field of its magnets, coils and
+`UniformField`.
 
 A solved model is a snapshot. Moving a magnet of it afterwards moves that
 magnet's field, not the response of the parts: solve again.
@@ -105,10 +108,10 @@ magnet's field, not the response of the parts: solve again.
   one configuration. Loop over the steps
   ([#184](https://github.com/magpylib/magpylib-material-response/issues/184)
   records what a path solve would take).
-- **Overlapping parts.** Magnets must not overlap. Parts may touch: face charge
-  couples touching faces exactly.
-- **A current through a part**, or through the hole of a ring magnet, in
-  `solve_fem`.
+- **Overlapping parts**, in `solve_fem`. The other solvers don't check, so keep
+  magnets apart. Parts may touch: face charge couples touching faces exactly.
+- **In `solve_fem`:** a current through a part or through the hole of a ring
+  magnet, an open current path, and a `TriangleSheet`.
 
 ## Reading near a boundary
 

@@ -22,7 +22,7 @@ reads. Start from what your parts are made of and what you need to read.
 | Material            | linear, isotropic, uniform in each part                                            | linear or a `BHCurve`; per axis; per cell                                                                                         | linear or a `BHCurve`; per axis                |
 | Field inside a part | μ0 H only, with a warning                                                          | B, H, J, M                                                                                                                        | B, H, J, M                                     |
 | Error estimate      | `jump_indicator`, free with each solve                                             | `study_cells`, several meshes                                                                                                     | `study_fem`, several orders                    |
-| Extra install       | none                                                                               | none; `[tetgen]` for any shape                                                                                                    | `[fem]`, NGSolve                               |
+| Extra install       | none                                                                               | none; `[tetgen]` for `mesh_TriangularMesh`                                                                                        | `[fem]`, NGSolve                               |
 
 ## How they compare
 
@@ -57,9 +57,10 @@ where finite elements come closest, is in
   level 2.
 - **Thin sheets**: the panels are sized to the thickness over the whole sheet.
   Start at `level=2`.
-- **More than `max_unknowns`**, 20,000 by default, a 3.2 GB system: face charge
-  refuses before it assembles. Lower the `level`, or mesh the parts for
-  `solve_cells`.
+- **More than `max_unknowns`**, 20,000 by default, a 3.2 GB system: without a
+  `level`, face charge takes the highest level that fits, and warns; with one,
+  or if even level 1 is too large, it refuses before it assembles. Then mesh the
+  parts for `solve_cells`.
 
 ## What none of them does
 

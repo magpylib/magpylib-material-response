@@ -119,7 +119,7 @@ results["face charge"] = solve_face_charge(model)
 results["face charge", "s"] = time.perf_counter() - t0
 
 t0 = time.perf_counter()
-results["cells"] = solve_cells(mesh_uniform(model, 4))  # 4 cells across the plate
+results["cells"] = solve_cells(mesh_uniform(model, 4))  # 4 cells across the plate's thickness
 results["cells", "s"] = time.perf_counter() - t0
 
 t0 = time.perf_counter()
@@ -157,7 +157,7 @@ fig
 
 The three solvers agree. Face charge and finite elements are 0.08 % apart, the
 error left in finite elements at order 4: at order 5 the two agree to 0.01 %.
-Cells, with 4 cells across the plate, are within 0.6 %.
+Cells, with 4 cells across the plate's thickness, are within 0.6 %.
 
 - **`solve_face_charge`** is the default choice. A part that is linear and
   uniform inside, like soft iron below saturation, carries its whole response as

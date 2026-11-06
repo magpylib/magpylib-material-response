@@ -100,7 +100,7 @@ mesh = mesh_TriangularMesh(sphere, 150)
 cells = mesh.sources_all
 volumes = np.array([c.volume for c in cells])
 
-B0 = np.array([0.05, 0.2, 0.5, 1.0, 1.5, 2.0])
+B0 = np.array([0.05, 0.5, 1.0, 2.0])
 solved, exact = [], []
 for b in B0:
     model = magpy.Collection(mesh.copy(), UniformField(B=(0, 0, b)))

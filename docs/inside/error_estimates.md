@@ -44,7 +44,8 @@ On a mesh refined geometrically toward the edges, the finite-element error falls
 geometrically with the polynomial order {cite}`babuska1996`, until the finest
 layer limits it. The error of an order is then about its difference to the next.
 `study_fem` takes the last change, times the same factor of 1.25, as the error
-of the highest order, per entry and in all.
+of the highest order, per entry and in all. With two orders, or when the last
+change is not smaller than the one before, the error is NaN, with a warning.
 
 It extrapolates nothing: the rate slows as the layers start to limit, so an
 extrapolation would claim too much. On a cube at orders 3, 4 and 5, the last
