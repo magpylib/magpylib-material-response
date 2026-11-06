@@ -4,6 +4,7 @@ import datetime as dt
 import importlib.metadata
 import os
 import re
+import time
 from typing import Any
 
 # Make plotly output self-contained HTML (text/html) instead of
@@ -127,6 +128,10 @@ myst_enable_extensions = [
 # so that links to a page's sections by their titles resolve
 myst_heading_anchors = 3
 
+# a slow or unreachable inventory must not hold the build: docs.scipy.org has
+# failed with SSL errors
+intersphinx_timeout = 10
+
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable", None),
@@ -185,7 +190,22 @@ def _strip_plotly_mathjax(_app, _pagename, _templatename, context, _doctree):
         context["body"] = _PLOTLY_MATHJAX_SCRIPTS.sub("", body)
 
 
+_STARTED = time.monotonic()
+
+
+def _phase(name):
+    """Log how long the build has run when it reaches `name`: the build must
+    stay under five minutes on Read the Docs."""
+
+    def log(*_args):
+        print(f"docs build: {name} after {time.monotonic() - _STARTED:.0f} s")  # noqa: T201
+
+    return log
+
+
 def setup(app):
+    for event, name in (("env-updated", "pages read"), ("build-finished", "done")):
+        app.connect(event, _phase(name))
     app.connect("html-page-context", _strip_plotly_mathjax)
     # Fit plotly figures to their container and follow the dark theme.
     app.add_js_file("webcode/plotlySync.js")
