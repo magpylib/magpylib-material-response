@@ -69,6 +69,10 @@ rounded corners, and a winding pack moved along it.
 .. autoclass:: magpylib_material_response.convergence.MeshStudy
    :members: from_values
 
+.. autofunction:: magpylib_material_response.face_charge.study_face_charge
+
+.. autoclass:: magpylib_material_response.face_charge.FaceChargeStudy
+
 .. autofunction:: magpylib_material_response.fem.study_fem
 
 .. autoclass:: magpylib_material_response.fem.FemStudy

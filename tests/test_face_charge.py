@@ -10,6 +10,7 @@ import pickle
 import subprocess
 import sys
 import time
+import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 
@@ -22,7 +23,7 @@ from scipy.linalg import LinAlgError, LinAlgWarning
 from scipy.spatial import ConvexHull, Delaunay
 from scipy.spatial.transform import Rotation as R
 
-from magpylib_material_response import from_json, to_json
+from magpylib_material_response import UniformField, compare, from_json, to_json
 from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.face_charge import (
     ChargeSheet,
@@ -32,6 +33,7 @@ from magpylib_material_response.face_charge import (
     _sheet,
     field_matrix,
     solve_face_charge,
+    study_face_charge,
 )
 from magpylib_material_response.face_charge._apply import _closed_surface
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
@@ -2341,3 +2343,49 @@ def test_a_sheet_tests_the_same_observers_once(monkeypatch):
     with pytest.warns(UserWarning, match="inside a solved part"):
         sheet.getB((1, 0, 0))  # its middle now: tested again
     assert len(tested) == 3
+
+
+def test_study_face_charge_bounds_the_error_on_a_cylinder():
+    """The error bar of the highest level covers the error against a far finer
+    solve, and compare takes the study."""
+    cylinder = magpy.magnet.Cylinder(dimension=(0.01, 0.01), polarization=(0, 0, 0))
+    cylinder.susceptibility = 1000
+    model = magpy.Collection(cylinder, UniformField(B=(0.006, 0, 0.008)))
+    directions = (
+        np.array([(1, 0, 0), (0, 0, 1), (1, 1, 1)]) / np.sqrt([1, 1, 3])[:, None]
+    )
+    observers = 0.0085 * directions
+    reference = magpy.getB(
+        solve_face_charge(model, level=7, max_unknowns=40_000), observers
+    )
+    study = study_face_charge(model, observers, (1, 2, 3))
+    true = np.linalg.norm(study.values[-1] - reference) / np.linalg.norm(reference)
+    assert study.ratio < 1
+    assert true <= study.error < 0.01
+    assert compare(study, study_face_charge(model, observers, (2, 3, 4))).agree.all()
+
+
+def test_study_face_charge_warns_on_a_sphere():
+    """A sphere's facets change with the level: its estimate can fall short."""
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
+    sphere.susceptibility = 10
+    model = magpy.Collection(sphere, UniformField(B=(0, 0, 0.01)))
+    with pytest.warns(UserWarning, match="sphere"):
+        study_face_charge(model, [(0, 0, 0.008)], (1, 2, 3))
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 1))  # fixed
+    cube = magpy.magnet.Cuboid(
+        dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(0.02, 0, 0)
+    )
+    cube.susceptibility = 100
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        study_face_charge(magpy.Collection(sphere, cube), [(0.02, 0, 0.01)], (1, 2, 3))
+
+
+@pytest.mark.parametrize("levels", [(2,), (3, 2), (0, 1, 2), (1.5, 2, 3)])
+def test_study_face_charge_refuses_levels_it_cannot_climb(levels):
+    """At least two positive integer levels, increasing."""
+    cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+    cube.susceptibility = 100
+    with pytest.raises(ValueError, match="levels must"):
+        study_face_charge(magpy.Collection(cube), [(0, 0, 0.01)], levels)

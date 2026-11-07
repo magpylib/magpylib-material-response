@@ -8,8 +8,22 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `study_face_charge` puts an error bar on a face-charge result, as `study_fem`
+  does on finite elements: it solves at levels 2, 3 and 4 and takes 1.25 times
+  the last change as the error of the highest. `compare` takes it. On the
+  validation cases it covered the error wherever the reference could tell; on a
+  sphere it can fall short, and warns
+  ([#186](https://github.com/magpylib/magpylib-material-response/pull/186))
+
 ### Changed
 
+- `solve_cells` on meshed cylinders is several times faster: alike pairs of
+  cylinder-segment cells, turned about a shared axis or shifted along it, share
+  one cell average. A 96-cell pin solves in 0.7 s instead of 3.5 s, to the same
+  polarization within 1e-13
+  ([#186](https://github.com/magpylib/magpylib-material-response/pull/186))
 - The documentation is rewritten for engineers: a landing page that tells what
   the package does as you scroll, on real solves; getting started with the three
   solvers on one model, a guide to choosing between them, a user guide per

@@ -7,9 +7,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from magpylib_material_response.convergence import (
-    SAFETY_FACTOR,
-    _relative,
-    _sizes,
+    _increasing_integers,
+    _last_change_estimate,
     _warn_no_estimate,
 )
 from magpylib_material_response.fem._solve import Model, _are_sensors
@@ -127,13 +126,7 @@ def study_fem(
       version of the finite element method. Comput. Methods Appl. Mech. Eng.
       133(3-4), 319-346.
     """
-    if len(orders) < 2 or any(int(p) != p or p < 1 for p in orders):
-        msg = f"orders must be at least two positive integers; got {orders}."
-        raise ValueError(msg)
-    if np.any(np.diff(orders) <= 0):
-        msg = f"orders must increase; got {orders}."
-        raise ValueError(msg)
-    orders = [int(p) for p in orders]
+    orders = _increasing_integers("orders", orders)
     if len(orders) < 3:  # said before the solves, which may take minutes
         _warn_no_estimate("orders", 2, "a higher order", stacklevel=2)
     if callable(quantity):
@@ -168,7 +161,7 @@ def study_fem(
         seconds.append(solution.seconds["assemble"] + solution.seconds["solve"])
     values = np.asarray(values)
     last = values[-1]
-    ratio, change, error, errors = _estimate(values)
+    ratio, change, error, errors = _last_change_estimate(values)
     if ratio is not None and np.isnan(error):
         _warn_no_estimate("orders", len(orders), "a higher order", stacklevel=2)
     return FemStudy(
@@ -184,23 +177,3 @@ def study_fem(
         last_change=change,
         solution=solution,
     )
-
-
-def _estimate(values):
-    """(ratio, last change, error, errors) from the two last changes: the last
-    change, relative to the last value, as the error when it is smaller than the
-    one before; NaN errors otherwise, and with two values a ratio of None."""
-    last, step = values[-1], values[-1] - values[-2]
-    change = float(_relative(np.linalg.norm(step), np.linalg.norm(last)))
-    errors = SAFETY_FACTOR * _relative(_sizes(step), _sizes(last))
-    nan = np.full(np.shape(errors), np.nan)
-    if len(values) < 3:
-        return None, change, np.nan, nan
-    before = np.linalg.norm(values[-2] - values[-3])
-    if before == 0:  # no change at all: exact, or exactly converged
-        ratio = 0.0 if np.linalg.norm(step) == 0 else np.inf
-    else:
-        ratio = float(np.linalg.norm(step) / before)
-    if ratio >= 1:
-        return ratio, change, np.nan, nan
-    return ratio, change, SAFETY_FACTOR * change, errors

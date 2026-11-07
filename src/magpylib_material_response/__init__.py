@@ -19,7 +19,10 @@ if TYPE_CHECKING:  # for editors and linters; at run time, __getattr__ below
     from magpylib_material_response._saturation import BHCurve
     from magpylib_material_response.cells import solve_cells
     from magpylib_material_response.convergence import compare, study_cells
-    from magpylib_material_response.face_charge import solve_face_charge
+    from magpylib_material_response.face_charge import (
+        solve_face_charge,
+        study_face_charge,
+    )
     from magpylib_material_response.fem import solve_fem, study_fem  # noqa: F401
     from magpylib_material_response.uniform import UniformField
 
@@ -32,6 +35,7 @@ _FUNCTIONS = {
     "solve_face_charge": "face_charge",
     "solve_fem": "fem",
     "study_cells": "convergence",
+    "study_face_charge": "face_charge",
     "study_fem": "fem",
 }
 _MODULES = (
@@ -62,6 +66,7 @@ __all__ = [
     "solve_cells",
     "solve_face_charge",
     "study_cells",
+    "study_face_charge",
     "to_json",
 ]
 

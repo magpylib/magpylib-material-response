@@ -755,7 +755,7 @@ const S = [
     nums: ['Moving such a magnet changes the matrix: see the recoil Monte Carlo.'], src: 'face-charge validation, case A' },
   { g: 'check', id: 'nmr', t: 'Two NMR pole-piece designs (#85)', r: [['a difference'], ['two levels']], n: FC, e: FCE,
     sk: [{ cyl: [0, 0, 0], r: 8, h: 2.4, tone: 'magnet' }, { cyl: [0, 0, 2.4], r: 8, h: 2.4, tone: 'iron' }, { cyl: [0, 0, 9.4], r: 8, h: 2.4, tone: 'iron' }, { cyl: [0, 0, 11.8], r: 8, h: 2.4, tone: 'magnet' }],
-    body: 'Ø120 mm ferrite discs (0.38 T) with iron pole pieces of 20 mm (A) or 24 mm (B) across a 40 mm gap. The question is a difference: is B more uniform than A? Face charge has no study function: solve each at two levels and compare.',
+    body: 'Ø120 mm ferrite discs (0.38 T) with iron pole pieces of 20 mm (A) or 24 mm (B) across a 40 mm gap. The question is a difference: is B more uniform than A? study_face_charge gives each an error bar from levels 2, 3 and 4.',
     nums: ['B − A: +9.5, −2.5 and −5.6 ppm at levels 1, 2 and 3. The verdict flips and still moves, while Bz at the centre settled to 0.03 % by level 2.', 'Level 3 of A needs 20,640 unknowns, past the 20,000 default, and 6.7 GB.'], src: 'explore/use-cases, s4_nmr_pole_pieces.py' },
   { g: 'check', id: 'femcheck', t: 'A finite-element check', r: [['solve_fem'], ['study_fem']], n: FEMS, e: FEMSE,
     sk: [{ box: [0, 0, 0], s: [14, 8, 3], c: [7, 4, 1], tone: 'tet', tri: true }, { box: [0, 0, 3], s: [3, 8, 9], c: [1, 4, 3], tone: 'tet', tri: true }],

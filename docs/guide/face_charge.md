@@ -83,9 +83,10 @@ result overstates the part's polarization; give the part a `BHCurve` and use
 - **`reuse`** keeps the factorization for the next solve: see
   [Many solves](loops.md).
 
-To check a result, solve at two levels and compare the field you read. Each
-sheet's `jump_indicator` gives a first estimate from a single solve:
-[How accurate is a result?](accuracy.md) explains it and what `refine` gains.
+To check a result, `study_face_charge(model, sensors)` solves at levels 2, 3 and
+4 and puts an error bar on the highest. Each sheet's `jump_indicator` gives a
+first estimate from a single solve: [How accurate is a result?](accuracy.md)
+explains it and what `refine` gains.
 
 ## Parts that touch or come close
 

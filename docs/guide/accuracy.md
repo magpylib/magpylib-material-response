@@ -35,9 +35,21 @@ To check a result, solve it again at a higher level: where the field you read
 changes less than you can accept, it has converged. The change is a guide, not a
 bound. On the validation case of a magnet on a soft plate, 1.25 times the change
 from level 3 to level 4 fell short of the level-4 error at 1 of the 16 sensors,
-by a factor of 1.3. Face charge has no study for `compare`:
-`MeshStudy.from_values` expects a volume mesh refined throughout, and on that
-plate levels 1 to 5 give it no estimate.
+by a factor of 1.3. `study_face_charge` does that for you:
+
+```python
+from magpylib_material_response import study_face_charge
+
+study = study_face_charge(model, sensors)  # levels 2, 3 and 4
+print(f"{study.error:.2%}", study.errors)  # whole and per sensor
+```
+
+It takes 1.25 times the change from the second-highest level to the highest as
+the error of the highest, as `study_fem` does with the order. On the validation
+cases that face charge solves, that bar covered the error over all sensors
+wherever the finite-element reference was accurate enough to tell; per sensor it
+is indicative. A sphere's facets are cut anew at each level: there it fell short
+by up to 2.6 times, and the study warns.
 
 ## Cells: `study_cells`
 
@@ -96,12 +108,12 @@ print(comparison.agree)  # per sensor: do the error bars overlap?
 ```
 
 `compare` takes any two studies of the same quantity: from `study_cells`,
-`study_fem`, or `MeshStudy.from_values(cells, values)` for results of another
-volume mesh. Two values agree when they are no farther apart than their two
-error bars together. `agree` says it per sensor, `agreement` gives the share of
-sensors that agree, and `relative_difference` the difference over the whole
-quantity. Where they disagree, at least one bar is too short: refine there, or
-take the finite-element value.
+`study_face_charge`, `study_fem`, or `MeshStudy.from_values(cells, values)` for
+results of another volume mesh. Two values agree when they are no farther apart
+than their two error bars together. `agree` says it per sensor, `agreement`
+gives the share of sensors that agree, and `relative_difference` the difference
+over the whole quantity. Where they disagree, at least one bar is too short:
+refine there, or take the finite-element value.
 [Checking a result with finite elements](../examples/fem_check.md) shows a case
 where the cells' bar is the short one.
 
@@ -118,7 +130,7 @@ made again.
 ## In short
 
 One solve gives an indicator at best. For a design decision, check one
-configuration with `study_cells` or `study_fem`, or two solvers with `compare`,
-and trust the cheaper solver for the sweep.
+configuration with `study_face_charge`, `study_cells` or `study_fem`, or two
+solvers with `compare`, and trust the cheaper solver for the sweep.
 [Inside the error estimates](../inside/error_estimates.md) shows how each
 estimate works and where it holds.

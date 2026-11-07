@@ -1,11 +1,11 @@
 # Inside the error estimates
 
 A solve gives an answer, not its error. Face charge reads an indicator of its
-error off the solve, the jump of its charge between panels; cells and finite
-elements estimate theirs from several solves: `study_cells` over meshes,
-`study_fem` over orders. How does each estimate work, when does it hold, and
-when do two estimates agree? [How accurate is a result?](../guide/accuracy.md)
-shows how to call them.
+error off the solve, the jump of its charge between panels. All three solvers
+estimate their error from several solves: `study_cells` over meshes,
+`study_face_charge` over panel levels, `study_fem` over orders. How does each
+estimate work, when does it hold, and when do two estimates agree?
+[How accurate is a result?](../guide/accuracy.md) shows how to call them.
 
 ## `study_cells`: the grid convergence index
 
@@ -59,6 +59,21 @@ where it is 2e-5. The last change itself, 1.25 times over, stays above the
 remaining error while the error still falls. The
 [finite-element check](../examples/fem_check.md) runs it.
 
+## `study_face_charge`: rising panel levels
+
+Each level adds a layer of panels graded toward the faces' edges, so the error
+falls faster with the level than a power of the panel size that the grid
+convergence index could fit: it declines every face-charge series.
+`study_face_charge` therefore takes the rule of `study_fem`, the last change
+times 1.25 as the error of the highest level. On the 18 validation cases face
+charge solves, at levels 1–3, 2–4 and 3–5, that bar stayed above the error over
+all sensors wherever the finite-element reference was accurate enough to tell.
+
+A sphere is the exception. Its facets are cut anew at each level, not split, so
+its error does not fall steadily: against the exact field of a soft sphere the
+bar fell short by up to 2.6 times at levels 3–5. The study warns when the model
+holds a sphere.
+
 ## `compare`: two estimates against each other
 
 `compare(a, b)` takes the last value of each study, the one its error is for,
@@ -78,11 +93,11 @@ the worst error of B 0.25 mm above the plate is 1 to 3 times it.
 
 ## In short
 
-Face charge gives an indicator with every solve; cells and finite elements give
-an error bar from three solves or more. The grid convergence index extrapolates
-over meshes and needs steady changes; the order study extrapolates nothing and
-overestimates while the error falls. Two error bars that do not overlap mean one
-of them is too small.
+Face charge gives an indicator with every solve; all three solvers give an error
+bar from three solves or more. The grid convergence index extrapolates over
+meshes and needs steady changes; the order and level studies extrapolate nothing
+and overestimate while the error falls. Two error bars that do not overlap mean
+one of them is too small.
 
 Code: `study_cells` in `src/magpylib_material_response/convergence.py`,
-`study_fem` in `fem/_study.py`.
+`study_face_charge` in `face_charge/_study.py`, `study_fem` in `fem/_study.py`.
