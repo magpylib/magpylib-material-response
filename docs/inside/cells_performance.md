@@ -200,12 +200,13 @@ little. The share of the matrix that FFT covers decides it:
 | cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
 
 Seven of the 39 models on which `"auto"`'s rule was set, single runs with
-magpylib 6.0; the row of tetrahedra with magpylib 6.1, whose threads make it
-about 2.7 times faster. The rows with one cube, three cubes and the sphere are
-measured as the direct solver now builds its matrix; in the other rows with
-grids it now peaks somewhat lower. Where FFT covers a tenth of the matrix or
-more, the iterative solver is as fast or faster and lighter; below, many small
-bodies or cells of many sizes make it slower.
+magpylib 6.0; the row of tetrahedra with magpylib 6.1, whose threads make such a
+solve about 3 times faster (1,842 tetrahedra: 3.1 s on 8 threads, 9.5 s on one).
+The rows with one cube, three cubes and the sphere are measured as the direct
+solver now builds its matrix; in the other rows with grids it now peaks somewhat
+lower. Where FFT covers a tenth of the matrix or more, the iterative solver is
+as fast or faster and lighter; below, many small bodies or cells of many sizes
+make it slower.
 
 ## When is it worth choosing by hand?
 

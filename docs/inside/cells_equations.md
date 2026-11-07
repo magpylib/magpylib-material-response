@@ -82,19 +82,18 @@ with `interaction` and applied to **every pair**:
 positive susceptibility in a uniform applied field, the induced moment along the
 field is then a **lower bound**: it never exceeds the converged value and rises
 each time every cell is split into smaller cells, so a convergence study knows
-which side the answer lies on. Point matching gives no such guarantee: on a thin
-soft plate its moment overshoots and then falls back as the mesh is refined.
+which side the answer lies on. Point matching gives no such guarantee.
 
 At equal cell count neither rule is more accurate in general. On cubic cells
 they agree to fourth order in cell size over distance. On a soft cube of 1,728
-cells, point matching is closer on the field above it (0.43 % against 0.52 %)
+cells, point matching is closer on the field above it (0.28 % against 0.33 %)
 and volume averaging on its moment (1.1 % against 1.2 %), as the
 [moment study in Inside cells](cells.md) shows. Both converge to the same
 answer.
 
 One rule holds for every pair of a solve. A mix would switch a pair's rule when
 one of two touching bodies turns by any angle, however small: the result would
-jump (0.28 % for a magnet and an iron block turned by a millionth of a degree),
+jump (0.26 % for a magnet on an iron block turned by a millionth of a degree),
 and the lower bound would be lost. `interaction="newell"` therefore raises when
 the cells are not all cuboids with one orientation.
 
@@ -110,8 +109,9 @@ unsolvable at a high χ: curved cells give $\mathsf{T}$ positive eigenvalues,
 which no demagnetizing field has. A tube with a 1 mm wall at χ = 1000 came out
 −68 % off its moment with two cells across the wall. Those pairs are therefore
 averaged over cell $i$ by Gauss quadrature, which holds the tube at −11 %, an
-error that falls as more cells go around the ring. Pairs with both
-susceptibilities below 1, or farther apart than twice the sum of their
+error that falls as more cells go around the ring
+([#92](https://github.com/magpylib/magpylib-material-response/issues/92)). Pairs
+with both susceptibilities below 1, or farther apart than twice the sum of their
 half-diagonals, keep the centroid.
 
 ### Averaged over the cell (Newell)
@@ -216,8 +216,8 @@ $$
 with $\boldsymbol{\chi}_i$ the cell's susceptibility tensor and $\mathsf{N}_i$
 its self-demagnetizing tensor, in the global frame. Cells other than cuboids
 take $\mathsf{N}_i = \mathbf{I}/3$, the isotropic part of their own block: a
-grid with 650 tetrahedra at χ = 1000 converges in 80 iterations this way, and
-not in 1,000 without a preconditioner on them.
+grid with 902 tetrahedra beside it at χ = 1000 converges in 69 iterations this
+way, and not in 1,000 without a preconditioner on them.
 
 ### FFT products on a grid
 

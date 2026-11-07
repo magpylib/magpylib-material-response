@@ -134,7 +134,7 @@ print(f"torque about the magnet's centre: {np.linalg.norm(torque):.1e} N m")
 The magnet rests on the plate, and a force at contact needs a finer solve than a
 field. The default face-charge level converges for a block aligned with the
 plate; 3 cells across the plate are far from it. A run for this page put 6 cells
-across at 32.1 N. The pull also moves with `meshing`, by about 0.4 % per
+across at 32.1 N. The pull also moves with `meshing`, by 0.1 to 0.4 % per
 doubling from 2,000 on.
 [A holding magnet on a steel plate](../examples/holding_magnet.md) shows how all
 three solvers converge on a disc at contact and with a gap.

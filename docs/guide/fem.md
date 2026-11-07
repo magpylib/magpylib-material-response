@@ -78,9 +78,9 @@ it.
 ## What it costs
 
 Memory is the limit, not time. The
-[magnet in a steel tube](../examples/shield_tube.md) takes 2.0 million unknowns
-and 8.4 GB at order 4, in 50 s. On the validation cases finite elements reach
-1 % in 0.5 to 11 s, 3 to over 100 times later than face charge
+[magnet in a steel tube](../examples/shield_tube.md) takes 1.9 million unknowns
+and 8.7 GB at order 4, in 46 s. On the validation cases finite elements reach
+1 % in 0.6 to 13 s, 2.6 to over 100 times later than face charge
 ([Choosing a solver](choosing.md)).
 
 ## In short

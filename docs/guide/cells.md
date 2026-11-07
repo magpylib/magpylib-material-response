@@ -93,9 +93,9 @@ has the data.
 ## Saturation
 
 A `BHCurve` as `susceptibility` puts every cell on the curve at its own field.
-The linear solve repeats until no cell's susceptibility changes, 3 to 40 solves
-on one matrix. [Saturation](saturation.md) shows how to enter a curve and check
-the result.
+The linear solve repeats on one matrix until no cell's susceptibility changes:
+15 to 32 solves on the saturating pin and holding magnet of these pages.
+[Saturation](saturation.md) shows how to enter a curve and check the result.
 
 ## How many cells
 

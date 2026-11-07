@@ -132,7 +132,7 @@ short one: the finite-element bars there are all below 0.03 %.
 What to do with a disagreement depends on its size against the accuracy you
 need. Below 0.1 %, as on the left, it rarely changes a design. At the edge, take
 the finite-element value, or refine the cells and run the study again. In a run
-not repeated on this page, 16 cells across the cube (12,288 cells, 50 s on an
+not repeated on this page, 16 cells across the cube (12,288 cells, 38 s on an
 Apple M4 Pro) brought the cells' value at x = 1.5 mm within 0.45 % of finite
 elements, inside the two bars together. Here finite elements are the cheaper way
 to the accurate value.
