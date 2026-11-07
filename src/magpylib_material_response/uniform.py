@@ -7,11 +7,16 @@ import warnings
 
 import magpylib as magpy
 import numpy as np
+from magpylib._src.style import DipoleStyle
+from scipy.spatial.transform import Rotation
 
 MU0 = magpy.mu_0
 B_WARN = 10.0  # T: stronger is most likely H in A/m given as B
 #: Context variables of recorders of magpylib calls, by name: magpylib's hook
 #: and studio's ``@scene``. Their default is None, recording nothing.
+#: The arrow's length, in tenths of the scene (magpylib's autosize) per unit of
+#: ``style.size``: a dipole's is one.
+ARROW_LENGTH = 3
 RECORDERS = ("magpylib_recorder", "magpylib_studio_building")
 #: Set while from_json loads: a field saved as B may have been given as H.
 LOADING = contextvars.ContextVar("magpylib_material_response_loading", default=False)
@@ -56,7 +61,8 @@ class UniformField(magpy.misc.CustomSource):
         frame. Give one of them: in vacuum ``B = mu0 H``.
     position, orientation, style, **kwargs
         As for any magpylib source. It turns with its orientation; its position
-        changes nothing.
+        changes nothing. The style is a dipole's: ``show`` draws an arrow above
+        the scene, ``style.size`` times three tenths of the scene long.
 
     Examples
     --------
@@ -66,6 +72,11 @@ class UniformField(magpy.misc.CustomSource):
     >>> soft.susceptibility = 1000
     >>> model = magpy.Collection(soft, UniformField(B=(0, 0, 0.1)))
     """
+
+    _style_class = DipoleStyle
+    _style_family = ("dipole",)
+    _autosize = True  # show() passes the scene's size to get_trace
+    _scene_box = True  # and, from magpylib 6.3, the box the scene fills
 
     def __init__(
         self,
@@ -133,6 +144,49 @@ class UniformField(magpy.misc.CustomSource):
 
     def __copy__(self):
         return shallow_copy(self)
+
+    @property
+    def _default_style_description(self):
+        return f"B={np.linalg.norm(self._B):.3g} T"
+
+    def get_trace(self, autosize=None, scene_box=None, path_index=-1, **kwargs):
+        """An arrow along B above the scene's centre, ``style.size`` times
+        three tenths of the scene long, or ``style.size`` metres with
+        ``style.sizemode="absolute"``. A field of zero is a dot. Without the
+        scene's box, shown alone or by a magpylib before 6.3, it is drawn at the
+        field's position."""
+        style = self.style
+        size = style.size
+        if autosize is not None and style.sizemode == "scaled":
+            size *= ARROW_LENGTH * autosize
+        # magpylib places the trace at the pose it is drawn at: undo that pose
+        # to put it above the scene, clear of it for any direction. Not past a
+        # corner: the default views of plotly and pyvista look along the
+        # diagonal, and put it in front of the corner
+        offset = np.zeros(3)
+        if scene_box is not None:
+            box = np.asarray(scene_box, float)
+            anchor = np.append(box[:2].mean(axis=1), box[2, 1] + 1.5 * size)
+            position = self._position[path_index]
+            offset = self._orientation[path_index].inv().apply(anchor - position)
+        norm = np.linalg.norm(self._B)
+        if norm == 0:
+            trace = {"type": "scatter3d", "mode": "markers", "marker_size": 10}
+            trace |= dict(zip("xyz", offset[:, None], strict=True))
+            return {**trace, "marker_color": style.color, **kwargs}
+        # the arrow is built along z: turn z onto B
+        turn = Rotation.align_vectors(self._B[None] / norm, [[0, 0, 1]])[0]
+        arrow = magpy.graphics.model3d.make_Arrow(
+            "plotly-dict",
+            base=10,
+            diameter=0.3 * size,
+            height=size,
+            pivot=style.pivot,
+            position=offset,
+            orientation=turn,
+            color=style.color,
+        )
+        return {**arrow, **kwargs}
 
     def _field(self, field, observers):
         n = len(observers)

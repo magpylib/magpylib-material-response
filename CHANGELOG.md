@@ -10,6 +10,11 @@ and this project adheres to
 
 ### Added
 
+- `magpy.show` draws a `UniformField` as an arrow along its field, above the
+  scene, instead of a dot at the origin; `style.size` sets its length. Above the
+  scene needs a Magpylib with
+  [magpylib#1079](https://github.com/magpylib/magpylib/pull/1079); before, the
+  arrow is at the field's position
 - `study_face_charge` puts an error bar on a face-charge result, as `study_fem`
   does on finite elements: it solves at levels 2, 3 and 4 and takes 1.25 times
   the last change as the error of the highest. `compare` takes it. On the
