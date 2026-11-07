@@ -79,10 +79,21 @@ html[data-theme="light"] .mrl {
   --mrl-title-to: #4a5263;
   --mrl-code-key: #c2185b;
   --mrl-code-num: #6f42c1;
-  --mrl-code-note: #7a808c;
+  --mrl-code-note: #626875;
   --mrl-fc: #e0701a;
   --mrl-cells: #1a6fd1;
   --mrl-fem: #3a3f4a;
+}
+
+/* the story's colour runs into the page's below it */
+.mrl::after {
+  content: "";
+  display: block;
+  height: 16vh;
+  background: linear-gradient(
+    var(--mrl-bg),
+    var(--pst-color-background, var(--mrl-bg))
+  );
 }
 
 /* the pinned stage needs every box around it to let it overflow */
@@ -131,6 +142,8 @@ section#magpylib-material-response > h1:first-child {
 
 .mrl-beats {
   position: relative;
+  /* the last beat stays pinned while it is read */
+  padding-bottom: 35vh;
   margin-top: calc(-1 * (100vh - var(--mrl-header)));
   pointer-events: none;
 }
@@ -143,12 +156,18 @@ section#magpylib-material-response > h1:first-child {
   gap: 1rem;
   box-sizing: border-box;
   padding: 0 0 0 max(6vw, 2rem);
-  width: min(38vw, 34rem);
+  width: min(40vw, 36rem);
   will-change: opacity, transform;
 }
 
 .mrl-beat > * {
   pointer-events: auto;
+}
+
+.mrl-beat h3,
+.mrl-agree h3,
+.mrl-code h3 {
+  text-wrap: balance;
 }
 
 .mrl-beat h3 {
@@ -220,6 +239,19 @@ section#magpylib-material-response > h1:first-child {
 
 .mrl-hero > :nth-child(4) {
   animation-delay: 0.45s;
+}
+
+/* past the story, for a reader who knows it */
+.mrl-skip {
+  display: inline-block;
+  padding: 0.7rem 0.5rem;
+  color: var(--mrl-dim) !important;
+  font-size: 0.9rem;
+  text-decoration: none !important;
+}
+
+.mrl-skip:hover {
+  color: var(--mrl-ink) !important;
 }
 
 @keyframes mrl-rise {
@@ -303,6 +335,8 @@ section#magpylib-material-response > h1:first-child {
 }
 
 .mrl-link {
+  display: inline-block;
+  padding: 0.75rem 0.4rem;
   color: var(--mrl-line) !important;
   text-decoration: none !important;
   font-weight: 500;
@@ -346,8 +380,8 @@ section#magpylib-material-response > h1:first-child {
 /* the read-outs, beside the drawing */
 .mrl-hud {
   position: absolute;
-  right: max(3vw, 1rem);
-  bottom: max(4vh, 1rem);
+  left: 0;
+  top: 0;
   display: grid;
   gap: 0.35rem;
   min-width: 15rem;
@@ -563,8 +597,9 @@ section#magpylib-material-response > h1:first-child {
 }
 
 .mrl-replay {
+  min-height: 44px;
   margin-left: 0.6rem;
-  padding: 0.3rem 0.8rem;
+  padding: 0.3rem 1rem;
   border: 1px solid var(--mrl-rule);
   border-radius: 999px;
   background: none;
@@ -648,10 +683,18 @@ section#magpylib-material-response > h1:first-child {
   }
 
   .mrl-hud {
-    top: 1rem;
-    bottom: auto;
-    right: 1rem;
     min-width: 0;
+  }
+
+  /* the words on a band of the page's colour, over the drawing's last lines */
+  .mrl-beat:not(.mrl-hero) {
+    background: linear-gradient(
+        to top,
+        var(--mrl-bg) 0,
+        var(--mrl-bg) 70%,
+        transparent 100%
+      )
+      bottom / 100% 42% no-repeat;
   }
 
   .mrl-hud > div {
@@ -678,7 +721,7 @@ section#magpylib-material-response > h1:first-child {
   }
 
   .mrl-code pre {
-    font-size: 0.72rem;
+    font-size: max(12px, 0.8rem);
     padding: 1rem;
   }
 }

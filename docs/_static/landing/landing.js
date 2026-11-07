@@ -19,6 +19,7 @@
   const canvas = stage.querySelector("canvas");
   const ctx = canvas.getContext("2d");
   const beats = [...root.querySelectorAll(".mrl-beat")];
+  const hudBox = root.querySelector(".mrl-hud");
   const hud = Object.fromEntries(
     [...root.querySelectorAll("[data-hud]")].map((el) => [el.dataset.hud, el]),
   );
@@ -388,18 +389,26 @@
   function elements(v, alpha, reveal) {
     if (alpha <= 0) return;
     const edge = lerp(-33, 33, reveal);
-    const path = new Path2D();
+    // the mesh fades out toward the edge of the window, which cuts the air's
+    // largest elements
+    const RINGS = 5;
+    const paths = Array.from({ length: RINGS }, () => new Path2D());
     for (const poly of data.solvers["finite elements"]) {
       if (poly[0] / 100 > edge) continue;
+      const r = Math.hypot(poly[0] / 100 / 30, (poly[1] / 100 - 4) / 17);
+      const ring = Math.floor(clamp((r - 0.55) / 0.5) * (RINGS - 1) + 0.5);
+      const path = paths[ring];
       path.moveTo(v.X(poly[0] / 100), v.Z(poly[1] / 100));
       for (let j = 2; j < poly.length; j += 2)
         path.lineTo(v.X(poly[j] / 100), v.Z(poly[j + 1] / 100));
       path.closePath();
     }
-    ctx.globalAlpha = alpha * 0.55;
     ctx.strokeStyle = C.fem;
     ctx.lineWidth = 0.6;
-    ctx.stroke(path);
+    paths.forEach((path, ring) => {
+      ctx.globalAlpha = alpha * 0.55 * (1 - ring / RINGS);
+      ctx.stroke(path);
+    });
     ctx.globalAlpha = 1;
   }
 
@@ -560,6 +569,15 @@
     );
 
     // the read-outs
+    // the read-outs under the plate, or under the drawing on a phone
+    const box = hudBox;
+    if (w >= 900) {
+      box.style.left = `${v.X(0) - box.offsetWidth / 2}px`;
+      box.style.top = `${v.Z(-6.5)}px`;
+    } else {
+      box.style.left = `${(w - box.offsetWidth) / 2}px`;
+      box.style.top = `${v.Z(-14) + 6}px`;
+    }
     hud.chi.classList.toggle("on", T > 2.85 && T < 5.0);
     hud.bz.classList.toggle("on", s.sensor > 0.5);
     hud.gap.classList.toggle("on", s.lifting && T < 5.85);
@@ -598,13 +616,20 @@
   function chart() {
     const svg = root.querySelector(".mrl-chart");
     const NS = "http://www.w3.org/2000/svg";
-    const a = data.axis;
+    // up to 20 mm above the plate's centre, 12 above the magnet: further up
+    // the curves only run on, parallel
+    const keep = data.axis.z
+      .map((z, i) => (z <= 20.01 ? i : -1))
+      .filter((i) => i >= 0);
+    const a = Object.fromEntries(
+      Object.entries(data.axis).map(([k, v]) => [k, keep.map((i) => v[i])]),
+    );
     // a narrower drawing on a phone, so that its words stay readable
     const narrow = root.clientWidth < 600;
-    const W = narrow ? 420 : 800;
-    const H = narrow ? 340 : 400;
+    const W = narrow ? Math.max(320, root.clientWidth - 40) : 800;
+    const H = narrow ? 360 : 400;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    const m = { l: 44, r: narrow ? 104 : 150, t: 20, b: 46 };
+    const m = { l: 44, r: 16, t: 20, b: 46 };
     const zs = a.z;
     const all = [...a["magnet alone"], ...a["finite elements"]];
     const lo = Math.log10(Math.min(...all) * 0.9);
@@ -619,7 +644,7 @@
       return e;
     };
     // the grid
-    for (const b of [20, 50, 100, 200, 500]) {
+    for (const b of [30, 50, 100, 200, 500]) {
       if (Math.log10(b) < lo || Math.log10(b) > hi) continue;
       el("line", {
         x1: m.l,
@@ -634,7 +659,7 @@
         "text-anchor": "end",
       }).textContent = `${b}`;
     }
-    for (const z of [10, 15, 20, 25, 30]) {
+    for (const z of [10, 12, 14, 16, 18, 20]) {
       el("text", {
         x: X(z),
         y: H - m.b + 22,
@@ -675,32 +700,38 @@
         "stroke-opacity": key === "finite elements" ? 0.35 : 1,
         "clip-path": `url(#mrl-clip-${i})`,
       });
-      // each name at the end of its line; stacked apart further down
-      const t = el("text", {
-        x: W - m.r + 10,
-        y: Y(a[key].at(-1)) + 5,
-        class: narrow ? "mrl-label mrl-small" : "mrl-label",
-        style: `fill: var(${stroke})`,
-        opacity: 0,
-      });
-      t.textContent = name;
+      // a legend in the empty top right, each line drawn as on the chart
+      const row = [1, 2, 3, 0].indexOf(i);
+      const lx = W - m.r - (narrow ? 132 : 170);
+      const ly = m.t + 14 + row * (narrow ? 20 : 24);
+      const t = el("g", { opacity: 0 });
+      el(
+        "line",
+        {
+          x1: lx,
+          x2: lx + 30,
+          y1: ly,
+          y2: ly,
+          style: `stroke: var(${stroke})`,
+          "stroke-width": width,
+          "stroke-dasharray": dash,
+          "stroke-linecap": "round",
+          "stroke-opacity": key === "finite elements" ? 0.35 : 1,
+        },
+        t,
+      );
+      el(
+        "text",
+        {
+          x: lx + 40,
+          y: ly + 5,
+          class: narrow ? "mrl-label mrl-small" : "mrl-label",
+          style: `fill: var(${stroke === "--mrl-alone" ? "--mrl-dim" : "--mrl-ink"})`,
+        },
+        t,
+      ).textContent = name;
       return { r, t };
     });
-    // the solvers end on one line, the magnet alone just below it: push the
-    // names apart, in the order of the legend
-    const gap = narrow ? 14 : 18;
-    const order = [1, 2, 3, 0];
-    const top = Y(a["finite elements"].at(-1)) + 5 - gap;
-    let y = -Infinity;
-    for (const i of order) {
-      const t = clips[i].t;
-      y = Math.max(
-        Number(t.getAttribute("y")),
-        y + gap,
-        i === 1 ? top : -Infinity,
-      );
-      t.setAttribute("y", String(y));
-    }
     const sect = root.querySelector(".mrl-agree");
     const windows = [
       [0.0, 0.25],
