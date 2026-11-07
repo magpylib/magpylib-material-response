@@ -651,7 +651,7 @@
     const defs = el("defs", {});
     const curves = [
       // the colours as CSS variables, so that they follow the theme
-      ["magnet alone", "--mrl-alone", "2", "2 5", "the magnet alone"],
+      ["magnet alone", "--mrl-alone", "2", "2 5", "magnet alone"],
       ["finite elements", "--mrl-fem", "6", "", "finite elements"],
       ["face charge", "--mrl-fc", "2.5", "9 6", "face charge"],
       ["cells", "--mrl-cells", "2.5", "1.5 5", "cells"],
@@ -675,19 +675,32 @@
         "stroke-opacity": key === "finite elements" ? 0.35 : 1,
         "clip-path": `url(#mrl-clip-${i})`,
       });
-      // the solvers' names stacked at the end of their one line, the
-      // magnet's under its own
-      const end = a[key].at(-1);
+      // each name at the end of its line; stacked apart further down
       const t = el("text", {
-        x: W - m.r + 12,
-        y: Y(end) + 5 + (key === "magnet alone" ? 0 : 18 * (i - 2)),
-        class: "mrl-label",
+        x: W - m.r + 10,
+        y: Y(a[key].at(-1)) + 5,
+        class: narrow ? "mrl-label mrl-small" : "mrl-label",
         style: `fill: var(${stroke})`,
         opacity: 0,
       });
       t.textContent = name;
       return { r, t };
     });
+    // the solvers end on one line, the magnet alone just below it: push the
+    // names apart, in the order of the legend
+    const gap = narrow ? 14 : 18;
+    const order = [1, 2, 3, 0];
+    const top = Y(a["finite elements"].at(-1)) + 5 - gap;
+    let y = -Infinity;
+    for (const i of order) {
+      const t = clips[i].t;
+      y = Math.max(
+        Number(t.getAttribute("y")),
+        y + gap,
+        i === 1 ? top : -Infinity,
+      );
+      t.setAttribute("y", String(y));
+    }
     const sect = root.querySelector(".mrl-agree");
     const windows = [
       [0.0, 0.25],
@@ -730,6 +743,56 @@
     io.observe(el);
   }
 
+  const secs = (x) => `${fmt(x, x < 1 ? 2 : 1)} s`;
+
+  // the solve times as a race, in real time: every bar grows at one pace and
+  // stops at its solver's time, so the slowest takes as long as its solve did
+  function race() {
+    const box = root.querySelector(".mrl-race");
+    const rows = [...box.querySelectorAll(".mrl-race-row")].map((row) => ({
+      row,
+      bar: row.querySelector(".mrl-race-bar"),
+      time: row.querySelector(".mrl-race-time"),
+      t: data.solvers.seconds[row.dataset.solver],
+    }));
+    const longest = Math.max(...rows.map((r) => r.t));
+    let start = null;
+    let frame = 0;
+    const show = (elapsed) => {
+      for (const r of rows) {
+        const e = Math.min(elapsed, r.t);
+        r.bar.style.width = `${((100 * e) / longest).toFixed(2)}%`;
+        r.time.textContent = secs(e);
+        r.row.classList.toggle("done", elapsed >= r.t);
+      }
+      box.classList.toggle("done", elapsed >= longest);
+    };
+    const tick = (now) => {
+      start ??= now;
+      const elapsed = (now - start) / 1000;
+      show(elapsed);
+      if (elapsed < longest) frame = requestAnimationFrame(tick);
+    };
+    const run = () => {
+      cancelAnimationFrame(frame);
+      start = null;
+      if (reduced) show(longest);
+      else frame = requestAnimationFrame(tick);
+    };
+    show(reduced ? longest : 0);
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          run();
+          io.disconnect();
+        }
+      },
+      { threshold: 0.6 },
+    );
+    io.observe(box);
+    box.querySelector(".mrl-replay").addEventListener("click", run);
+  }
+
   function fill() {
     const sv = data.solvers;
     const a = data.axis;
@@ -738,9 +801,9 @@
       Math.max(
         ...a[key].map((b, i) => Math.abs(b - ref[i]) / Math.abs(ref[i])),
       ) * 100;
-    const secs = (x) => `${fmt(x, x < 1 ? 2 : 1)} s`;
     const values = {
       gain: `+${fmt(data.gain)}`,
+      speedup: `${fmt(sv.seconds["finite elements"] / sv.seconds["face charge"])}×`,
       "bz-plate": `${fmt(data.chi.at(-1).bz)} mT`,
       "bz-alone": `${fmt(data.chi[0].bz)} mT`,
       "force-contact": `${fmt(data.lift[0].force)} N`,
@@ -823,7 +886,7 @@
     data.gain = (100 * (d.chi.at(-1).bz - d.chi[0].bz)) / d.chi[0].bz;
     fill();
     updateChart = chart();
-    seen(".mrl-agree");
+    race();
     seen(".mrl-code");
     resize();
     if (!reduced && clock() < 0.3) intro = performance.now();

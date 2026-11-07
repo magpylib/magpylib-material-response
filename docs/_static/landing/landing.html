@@ -123,28 +123,43 @@
       role="img"
       aria-label="Bz above the magnet: the three solvers give one curve, well above the magnet's alone"
     ></svg>
-    <div class="mrl-stats">
-      <div>
-        <span class="mrl-swatch mrl-fc"></span><b>Face charge</b>
-        <span><i data-fill="t-face charge">0.17 s</i></span>
-        <span
+    <div class="mrl-race" aria-label="Solve time of each solver on this model">
+      <p class="mrl-race-title">Each solve, at its real pace</p>
+      <div class="mrl-race-row" data-solver="face charge">
+        <b class="mrl-race-name">Face charge</b>
+        <span class="mrl-race-track"
+          ><span class="mrl-race-bar mrl-fc"></span
+        ></span>
+        <span class="mrl-race-time">0.00 s</span>
+        <span class="mrl-race-acc"
           >within <i data-fill="err-face charge">0.08 %</i> of finite
           elements</span
         >
       </div>
-      <div>
-        <span class="mrl-swatch mrl-cells"></span><b>Cells</b>
-        <span><i data-fill="t-cells">0.8 s</i></span>
-        <span
+      <div class="mrl-race-row" data-solver="cells">
+        <b class="mrl-race-name">Cells</b>
+        <span class="mrl-race-track"
+          ><span class="mrl-race-bar mrl-cells"></span
+        ></span>
+        <span class="mrl-race-time">0.00 s</span>
+        <span class="mrl-race-acc"
           >within <i data-fill="err-cells">0.6 %</i>, 4 cells across the
           plate</span
         >
       </div>
-      <div>
-        <span class="mrl-swatch mrl-fem"></span><b>Finite elements</b>
-        <span><i data-fill="t-finite elements">4.3 s</i></span>
-        <span>the reference, order 4</span>
+      <div class="mrl-race-row" data-solver="finite elements">
+        <b class="mrl-race-name">Finite elements</b>
+        <span class="mrl-race-track"
+          ><span class="mrl-race-bar mrl-fem"></span
+        ></span>
+        <span class="mrl-race-time">0.00 s</span>
+        <span class="mrl-race-acc">the reference, order 4</span>
       </div>
+      <p class="mrl-race-head">
+        Face charge is done <b data-fill="speedup">26×</b> sooner than finite
+        elements.
+        <button class="mrl-replay" type="button">Run again</button>
+      </p>
     </div>
     <p class="mrl-note">
       Timed on <span data-fill="machine">an Apple M4 Pro</span>.

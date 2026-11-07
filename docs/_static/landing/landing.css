@@ -440,76 +440,141 @@ section#magpylib-material-response > h1:first-child {
   font-family: inherit;
 }
 
+.mrl-chart .mrl-label.mrl-small {
+  font-size: 12px;
+}
+
 .mrl-chart .mrl-label {
   font-size: 15px;
   font-weight: 600;
 }
 
-.mrl-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-top: 1.5rem;
-  text-align: left;
-}
-
-.mrl-stats > div {
-  display: grid;
-  gap: 0.3rem;
-  padding: 1.1rem 1.2rem;
-  border-radius: 1rem;
-  background: var(--mrl-panel);
-  opacity: 0;
-  transform: translateY(24px);
-  transition:
-    opacity 0.7s ease,
-    transform 0.7s ease;
-}
-
-.mrl-stats > div:nth-child(2) {
-  transition-delay: 0.12s;
-}
-
-.mrl-stats > div:nth-child(3) {
-  transition-delay: 0.24s;
-}
-
-.mrl-agree.seen .mrl-stats > div,
 .mrl-code.seen .mrl-line {
   opacity: 1;
   transform: none;
 }
 
-.mrl-stats i {
-  font-style: normal;
-  font-size: 1.9rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  color: var(--mrl-ink);
+/* the solve times as a race: the bars grow at one pace, the real one */
+.mrl-race {
+  display: grid;
+  gap: 1.3rem;
+  max-width: 52rem;
+  margin: 3rem auto 0;
+  text-align: left;
 }
 
-.mrl-stats span {
-  color: var(--mrl-dim);
+.mrl-race-title {
+  color: var(--mrl-dim) !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
-.mrl-swatch {
-  display: inline-block;
-  width: 1.6rem;
-  height: 3px;
-  border-radius: 2px;
-  margin-bottom: 0.2rem;
+.mrl-race-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr 4.5rem;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  align-items: center;
 }
 
-.mrl-swatch.mrl-fc {
+.mrl-race-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.mrl-race-track {
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--mrl-panel);
+  overflow: hidden;
+}
+
+.mrl-race-bar {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.mrl-race-bar.mrl-fc {
   background: var(--mrl-fc);
 }
 
-.mrl-swatch.mrl-cells {
+.mrl-race-bar.mrl-cells {
   background: var(--mrl-cells);
 }
 
-.mrl-swatch.mrl-fem {
+.mrl-race-bar.mrl-fem {
   background: var(--mrl-fem);
+}
+
+.mrl-race-time {
+  text-align: right;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mrl-dim);
+}
+
+.mrl-race-row.done .mrl-race-time {
+  color: var(--mrl-ink);
+  font-weight: 650;
+}
+
+.mrl-race-acc {
+  grid-column: 2 / 4;
+  font-size: 0.9rem;
+  color: var(--mrl-dim);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.mrl-race-row.done .mrl-race-acc {
+  opacity: 1;
+}
+
+.mrl-race-acc i {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--mrl-ink);
+}
+
+.mrl-race-head {
+  margin-top: 0.8rem !important;
+  font-size: clamp(1.3rem, 2.4vw, 2rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+
+.mrl-race.done .mrl-race-head {
+  opacity: 1;
+  transform: none;
+}
+
+.mrl-race-head b {
+  color: var(--mrl-fc);
+}
+
+.mrl-replay {
+  margin-left: 0.6rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--mrl-rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--mrl-dim);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  vertical-align: middle;
+  cursor: pointer;
 }
 
 .mrl-code {
@@ -594,8 +659,13 @@ section#magpylib-material-response > h1:first-child {
     padding: 0.3rem 0.6rem;
   }
 
-  .mrl-stats {
-    grid-template-columns: 1fr;
+  .mrl-race-row {
+    grid-template-columns: 1fr 4.5rem;
+  }
+
+  .mrl-race-name,
+  .mrl-race-acc {
+    grid-column: 1 / 3;
   }
 
   .mrl-hero {
@@ -619,7 +689,6 @@ section#magpylib-material-response > h1:first-child {
     animation: none;
   }
 
-  .mrl-stats > div,
   .mrl-line {
     opacity: 1;
     transform: none;
