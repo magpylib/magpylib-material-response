@@ -219,69 +219,6 @@ A B–H curve in place of a constant susceptibility: a sphere against its exact 
 
 ````
 
-````{grid-item-card}
-:link: cuboids_demagnetization
-:link-type: doc
-:class-card: magpy-gallery-card
-
-```{image} ../_static/gallery/cuboids_demagnetization-light.jpg
-:alt: Cuboid demagnetization
-:class: only-light
-```
-
-```{image} ../_static/gallery/cuboids_demagnetization-dark.jpg
-:alt: Cuboid demagnetization
-:class: only-dark
-```
-
-**Cuboid demagnetization**
-
-Three hard cuboid magnets demagnetizing each other, refined against finite elements.
-
-````
-
-````{grid-item-card}
-:link: soft_magnets
-:link-type: doc
-:class-card: magpy-gallery-card
-
-```{image} ../_static/gallery/soft_magnets-light.jpg
-:alt: Soft magnets
-:class: only-light
-```
-
-```{image} ../_static/gallery/soft_magnets-dark.jpg
-:alt: Soft magnets
-:class: only-dark
-```
-
-**Soft magnets**
-
-A hard magnet beside a turned soft-iron cube, against finite elements.
-
-````
-
-````{grid-item-card}
-:link: solver_performance
-:link-type: doc
-:class-card: magpy-gallery-card
-
-```{image} ../_static/gallery/solver_performance-light.jpg
-:alt: Solvers and performance
-:class: only-light
-```
-
-```{image} ../_static/gallery/solver_performance-dark.jpg
-:alt: Solvers and performance
-:class: only-dark
-```
-
-**Solvers and performance**
-
-The direct and the iterative solver: their agreement, time and memory, and which paths are fast.
-
-````
-
 `````
 
 ```{toctree}
@@ -298,7 +235,4 @@ ucore_electromagnet
 saturation
 mesh_convergence
 fem_check
-cuboids_demagnetization
-soft_magnets
-solver_performance
 ```

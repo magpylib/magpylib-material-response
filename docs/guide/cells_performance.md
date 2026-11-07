@@ -14,7 +14,7 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# Solvers and performance
+# Cells: the direct and the iterative solver
 
 +++
 
@@ -141,12 +141,12 @@ portable. Peak memory is measured with `tracemalloc` (which tracks NumPy
 allocations) in a separate run, since tracing skews wall time.
 
 The timings are measured once on a quiet machine by
-`solver_performance_bench.py`, next to this page, and stored in
-`solver_performance.json`: the docs are built on 2 shared CPUs, whose timings
+`cells_performance_bench.py`, next to this page, and stored in
+`cells_performance.json`: the docs are built on 2 shared CPUs, whose timings
 would say little. Each point is one solve of a meshed cube, timed, then solved
 again with memory tracing on:
 
-```{literalinclude} solver_performance_bench.py
+```{literalinclude} cells_performance_bench.py
 :pyobject: measure_solve
 ```
 
@@ -154,7 +154,7 @@ again with memory tracing on:
 import json
 from pathlib import Path
 
-bench = json.loads(Path("solver_performance.json").read_text())
+bench = json.loads(Path("cells_performance.json").read_text())
 print(f"Measured on {bench['machine']}, {bench['date']}, "
       f"magpylib-material-response {bench['versions']['magpylib-material-response']}")
 
@@ -255,7 +255,7 @@ total cell count, the cylinder aside (single-run timings, from the same stored
 measurement: indicative, not statistics).
 
 ```{code-cell} ipython3
-from solver_performance_bench import topologies
+from cells_performance_bench import topologies
 
 models = topologies()
 for label, coll in models.items():
@@ -288,13 +288,13 @@ What the rows show:
   body still use their own rotated FFT grid.
 - **Meshed cylinder** — non-cuboid cells (here Cylinder and CylinderSegment,
   likewise tetrahedra from `mesh_TriangularMesh` — see the
-  [current sensor](hall_current_sensor.md)) take the generic path, one field
-  evaluation per pair, so this row has about a hundred cells, not a thousand.
-  Both solvers spend nearly all time evaluating the cells' analytical fields, so
-  the solver choice barely matters — the cell _type_ is the cost driver. Cuboid
-  cells are the cheapest per cell, but at high permeability tetrahedra reach the
-  same accuracy with far fewer cells (see the
-  [U-core example](ucore_electromagnet.md)).
+  [current sensor](../examples/hall_current_sensor.md)) take the generic path,
+  one field evaluation per pair, so this row has about a hundred cells, not a
+  thousand. Both solvers spend nearly all time evaluating the cells' analytical
+  fields, so the solver choice barely matters — the cell _type_ is the cost
+  driver. Cuboid cells are the cheapest per cell, but at high permeability
+  tetrahedra reach the same accuracy with far fewer cells (see the
+  [U-core example](../examples/ucore_electromagnet.md)).
 
 ## Choosing a solver
 

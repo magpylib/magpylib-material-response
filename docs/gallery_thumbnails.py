@@ -51,17 +51,6 @@ def soft(obj, chi=1000):
     return obj
 
 
-def cuboids_demagnetization():
-    c1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1 * MM,) * 3)
-    c1.move((-1.5 * MM, 0, 0))
-    c2 = magpy.magnet.Cuboid(polarization=(0.9, 0, 0), dimension=(1 * MM,) * 3)
-    c2.rotate_from_angax(-45, "y").move((0, 0, 0.2 * MM))
-    p = 0.6 * np.array([np.sin(np.pi / 6), np.cos(np.pi / 6), 0])
-    c3 = magpy.magnet.Cuboid(polarization=p, dimension=(1 * MM, 1 * MM, 2 * MM))
-    c3.move((1.6 * MM, 0, 0.5 * MM)).rotate_from_angax(30, "z")
-    return [c1, c2, c3]
-
-
 def soft_magnets():
     magnet = magpy.magnet.Cuboid(
         polarization=(0, 0, 1), dimension=(1 * MM, 1 * MM, 2 * MM)
@@ -93,22 +82,6 @@ def ucore_electromagnet():
         turns += [(x, -h, -h), (x, h, -h), (x, h, h), (x, -h, h), (x, -h, -h)]
     coil = magpy.current.Polyline(current=1, vertices=turns)
     return list(solve_face_charge(magpy.Collection(core, coil), level=2).children)
-
-
-def solver_performance():
-    cube = soft(magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(1 * MM,) * 3), 3)
-    cube.move((-1.5 * MM, 0, 0))
-    cyl = soft(
-        magpy.magnet.Cylinder(polarization=(0, 0, 1), dimension=(1 * MM, 1 * MM)), 3
-    )
-    turned = soft(
-        magpy.magnet.Cuboid(
-            polarization=(0, 0, 1), dimension=(1 * MM, 1 * MM, 0.5 * MM)
-        ),
-        3,
-    )
-    turned.rotate_from_angax(30, "y").move((1.5 * MM, 0, 0))
-    return list(solve_face_charge(magpy.Collection(cube, cyl, turned)).children)
 
 
 def mesh_convergence():
@@ -244,10 +217,7 @@ def saturation():
 EXAMPLES = [
     holding_magnet,
     gear_tooth_sensor,
-    cuboids_demagnetization,
-    soft_magnets,
     ucore_electromagnet,
-    solver_performance,
     mesh_convergence,
     fem_check,
     shield_tube,

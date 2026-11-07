@@ -30,7 +30,7 @@ ORDERS = (3, 4, 5)
 
 
 def docs_cuboids():
-    """docs/examples/cuboids_demagnetization.md"""
+    """The three cuboids of the validation case `cuboids`."""
     cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     cube1.move((-0.0015, 0, 0))
     cube1.susceptibility = 0.3
@@ -50,8 +50,9 @@ def docs_cuboids():
 
 
 def docs_soft_magnets():
-    """docs/examples/soft_magnets.md. Three sensor lines, stored point by
-    point across the lines, the row order of the page's dataframe."""
+    """The magnet and soft cube of the validation case `soft_magnets`. Three
+    sensor lines, stored point by point across the lines, the row order of the
+    former docs page's dataframe."""
     cube1 = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.002))
     cube1.move((0, 0, 0.0005))
     cube1.susceptibility = 0.5

@@ -33,9 +33,8 @@ musl.
 
 ## A magnet beside a soft cube
 
-The model of [Soft magnets](soft_magnets.md): a magnet (χ = 0.5) beside a cube
-of soft iron (χ = 3999) turned by 45°, with 41 sensors on a line 1 mm below
-them.
+A magnet (χ = 0.5) beside a cube of soft iron (χ = 3999) turned by 45°, with 41
+sensors on a line 1 mm below them.
 
 ```{code-cell} ipython3
 import magpylib as magpy

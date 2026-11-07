@@ -8,7 +8,9 @@ answer.
 - [Building a model](model.md): susceptibilities, fixed magnets, coils, applied
   fields, and what a solve returns.
 - [Face charge](face_charge.md), [Cells](cells.md) and
-  [Finite elements](fem.md): each solver's settings and limits.
+  [Finite elements](fem.md): each solver's settings and limits;
+  [the direct and the iterative cells solver](cells_performance.md): their
+  agreement, time and memory.
 - [How accurate is a result?](accuracy.md): each solver's error estimate, and
   how to check one against another.
 - [Many solves](loops.md): moving magnets, sweeps and Monte Carlo, fast.
@@ -22,6 +24,7 @@ choosing
 model
 face_charge
 cells
+cells_performance
 fem
 accuracy
 loops

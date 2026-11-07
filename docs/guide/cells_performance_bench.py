@@ -1,8 +1,8 @@
-"""The measurements behind `solver_performance.md`, stored in
-`solver_performance.json`. The docs are built on a machine with 2 CPUs, whose
+"""The measurements behind `cells_performance.md`, stored in
+`cells_performance.json`. The docs are built on a machine with 2 CPUs, whose
 timings would say little, so the page plots these instead.
 
-    uv run --group docs python docs/examples/solver_performance_bench.py
+    uv run --group docs python docs/guide/cells_performance_bench.py
 
 Run it on a quiet machine after a change to the solvers, and commit the JSON.
 """
@@ -142,7 +142,7 @@ def main():
             bench_topology(label, coll) for label, coll in topologies().items()
         ],
     }
-    Path(__file__).with_name("solver_performance.json").write_text(
+    Path(__file__).with_name("cells_performance.json").write_text(
         json.dumps(out, indent=1) + "\n"
     )
 
