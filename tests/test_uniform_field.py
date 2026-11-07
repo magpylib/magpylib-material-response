@@ -8,6 +8,7 @@ import pickle
 import magpylib as magpy
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 
 from magpylib_material_response import UniformField, from_json, to_json
 from magpylib_material_response.cells import solve_cells
@@ -192,3 +193,26 @@ def test_h_ext_warns_that_it_goes():
     model.H_ext = tuple(B0)
     with pytest.warns(DeprecationWarning, match="UniformField"):
         solve_cells(model)
+
+
+@pytest.mark.parametrize("box", [None, [[-1, 1], [-2, 2], [-3, 3]]])
+def test_show_draws_an_arrow_along_the_global_field_past_the_corner(box):
+    """At the pose magpylib places it, the arrow points along the global field,
+    above the scene, or at the field's position without a box."""
+    turn = Rotation.from_euler("xy", (30, 60), degrees=True)
+    field = UniformField(B=(0, 0, 0.1), position=(5, 0, 0), orientation=turn)
+    # as show() resolves it from the dipole defaults
+    field.style.update(size=1, sizemode="scaled", pivot="middle")
+    arrow = field.get_trace(autosize=1, scene_box=box)
+    local = np.column_stack([arrow[k] for k in "xyz"])
+    drawn = turn.apply(local) + field.position
+    direction = turn.apply((0, 0, 1))
+    along = drawn @ direction
+    tip = drawn[along.argmax()]
+    tail = drawn[np.isclose(along, along.min())].mean(axis=0)  # the base's centre
+    np.testing.assert_allclose(tip - tail, 3 * direction, atol=1e-12)
+    if box is None:
+        np.testing.assert_allclose((tip + tail) / 2, field.position, atol=1e-12)
+    else:
+        assert (drawn[:, 2] > box[2][1]).all()
+        np.testing.assert_allclose((tip + tail)[:2] / 2, (0, 0), atol=1e-12)
