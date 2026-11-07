@@ -22,14 +22,18 @@ size of a surface need higher ones.
 Each solved sheet reports its `jump_indicator`: the largest jump of the charge
 between neighbouring panels, weighted by panel size. The true charge is
 continuous across a flat face, so a jump is discretization error, read off the
-solve for free. It indicates the error; it does not bound it. For a plate under
-a magnet, the worst error of B 0.25 mm above the plate is 1 to 3 times it.
+solve for free. It indicates the error; it does not bound it. For the
+validation's magnet on a soft plate, the worst error of B 0.25 mm off the plate
+is 0.3 to 1.2 times it from level 1 to level 6.
 
 `refine=k` uses the same jumps: each of k rounds splits the panels where they
-are largest and solves again. For the plate, `refine=2` from level 3 (2,688
-unknowns, under 2 s) puts B 0.25 mm above the plate within 0.04 %, where uniform
-panels need 10,350 unknowns and 20 s for 0.13 %. A thin wall that shields needs
-it: [the magnet in a steel tube](../examples/shield_tube.md).
+are largest and solves again. It helps where the error sits at those jumps, as
+on a thin wall that shields: one round takes the field outside
+[the magnet in a steel tube](../examples/shield_tube.md) from 5.6 % to 1.0 %. It
+does not help where the charge is smooth: on the plate, B 0.25 mm above it 7 mm
+from the magnet stays 2.0 % off after two rounds from level 3, while uniform
+panels at level 6 (10,044 unknowns, 2 s) bring it within the finite-element
+reference's own 0.4 %.
 
 To check a result, solve it again at a higher level: where the field you read
 changes less than you can accept, it has converged. The change is a guide, not a

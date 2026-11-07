@@ -117,8 +117,8 @@ Saturation cuts the field at the tip by a tenth. Each cell takes the
 susceptibility its own field gives on the curve, and the solve repeats until
 none of them changes. `solve_fem(model)` takes the same model, with the
 susceptibility per element. A run for this page, at order 3 with the tip as
-observer, gave 346 mT there in 90 s. Start finite elements at order 3: at order
-2 the iteration can stop with "did not settle".
+observer, gave 346 mT there in 61 s, and order 4 the same. Start finite elements
+at order 3: at order 2 the iteration can stop with "did not settle".
 
 ## How do you check the result?
 
@@ -143,7 +143,7 @@ holds J at its last value.
 
 The field on the curve converges with the cells as a linear one does. A finer
 mesh moves it a little: 16 cells across gave 348 mT, 1 % below the 8 across, in
-13 s. [How accurate is a result?](accuracy.md) shows how to estimate that error
+12 s. [How accurate is a result?](accuracy.md) shows how to estimate that error
 with `study_cells`, and `study_fem` with `orders=(3, 4, 5)` for a part on a
 curve.
 
@@ -166,7 +166,7 @@ for name, chi in (("linear", 1000), ("on the curve", steel)):
 print(f"the curve takes {seconds['on the curve'] / seconds['linear']:.0f} times as long")
 ```
 
-`solve_fem` assembles its matrix again at each of its 5 to 40 solves; a
+`solve_fem` assembles its matrix again at each of its solves, 18 to 21 here; a
 saturating part may need `solver_tol` of about 1e-7 ([Finite elements](fem.md)).
 A sharp knee, rising within about 100 A/m, can stop either iteration with an
 error: give it more points, or a gentler rise. [Logging](logging.md) reports how

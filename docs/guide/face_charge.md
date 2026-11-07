@@ -72,8 +72,8 @@ result overstates the part's polarization; give the part a `BHCurve` and use
   level. Fields far from the parts converge at low levels; fields within a
   panel's size of a surface need higher ones.
 - **`max_unknowns`**, 20,000 by default, caps the system at 3.2 GB. It peaks at
-  about twice that while one large part is assembled and solved (6.6 GB at
-  19,452 unknowns). A solve above the cap is refused before it is assembled.
+  about twice that while one large part is assembled and solved (6.2 GB at
+  18,432 unknowns). A solve above the cap is refused before it is assembled.
   Without a `level`, the highest level up to 3 that fits is taken instead, with
   a warning.
 - **`refine=k`** splits, k times, the panels where the charge jumps most and
@@ -93,13 +93,13 @@ explains it and what `refine` gains.
 **A magnet on a part**, or close above it, converges like the rest when it is a
 cuboid aligned with the part: the panels follow its footprint. A disc magnet, or
 a cuboid turned against the part, has a footprint the panels cannot follow. The
-solve warns, and a disc on a soft cube stays 3 to 4 % off near it from level 4
-on.
+solve warns, and 0.5 mm from the rim of a disc on a soft cube the field stays 10
+to 16 % off finite elements at levels 3 to 5.
 
 **Many cuboid magnets on one part** each make its panels follow their footprint,
-so they cost unknowns: 25 cube magnets on a yoke take 6,048 unknowns at level 2
-and 13,608 at level 3. Start such arrays at `level=2`, within 7 % of level 3 or
-4 close to the magnets.
+so they cost unknowns: 25 cube magnets of 5 mm on a 50 mm yoke take 7,068
+unknowns at level 2 and 15,519 at level 3. Start such arrays at `level=2`,
+within 0.1 % of level 3 and 4 between the magnets, 0.5 mm over the yoke.
 
 **Two parts close together** are treated by the gap between them, measured in
 the smaller part's largest half-side.
@@ -141,9 +141,9 @@ solved = solve_face_charge(magpy.Collection(part, magnet), level=2)
 ![The validation's CAD part in a 10 mT field along a direction no symmetry helps with, and the U-core as one closed mesh with its coil, each solved at level 2 and drawn by show() with its graded triangles.](../_static/images/face_charge_triangles.png)
 
 - **How well:** the validation's CAD part, a plate with filleted corners and a
-  round hole, is 0.69 % off its finite-element reference at level 1 in 0.20 s,
-  0.15 % at level 2 in 0.50 s, and at the reference's own 0.07 % from level 3,
-  in 1.0 s. The U-core as one closed mesh is within its reference's 0.25 % from
+  round hole, is 0.69 % off its finite-element reference at level 1 in 0.25 s,
+  0.15 % at level 2 in 0.54 s, and at the reference's own 0.07 % from level 3,
+  in 1.1 s. The U-core as one closed mesh is within its reference's 0.25 % from
   level 2.
 - **Cuboids stay cuboids:** a box given as triangles needs twice the unknowns of
   its rectangle panels for the same accuracy. On the nine validation cases that
@@ -154,7 +154,7 @@ solved = solve_face_charge(magpy.Collection(part, magnet), level=2)
   facets keeps a charge per facet, so a fine export costs unknowns; give a
   cylinder or a sphere as itself (next section).
 
-![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 0.02 to 2.9 s on ten cases, triangles 31 ms to 14 s on nine, the thin sheet refused as too many unknowns.](../_static/images/face_charge_rect_vs_tri.png)
+![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 17 ms to 2.8 s on ten cases, triangles 31 ms to 14 s on nine, the thin sheet refused as too many unknowns.](../_static/images/face_charge_rect_vs_tri.png)
 
 ## Cylinders, cylinder segments and spheres
 
@@ -166,13 +166,13 @@ field of a sphere, on one Apple M4 Pro:
 | Part                                   | Error, time                                                | `solve_cells`, finest run |
 | -------------------------------------- | ---------------------------------------------------------- | ------------------------- |
 | Soft cylinder, 1 mm off its surface    | 0.41 % in 0.12 s at level 2, 0.12 % in 0.3 s at level 3    | 2.4 %                     |
-| Soft sphere, 1 mm off its surface      | 1.4 % in 0.09 s at level 1, 0.35 % in 0.5 s at level 3 ¹   |                           |
-| Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.85 % in 4.8 s with `refine=1` | 395 %                     |
+| Soft sphere, 1 mm off its surface      | 0.79 % in 0.10 s at level 1, 0.19 % in 0.55 s at level 3 ¹ |                           |
+| Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.85 % in 4.6 s with `refine=1` | 395 %                     |
 | Steel tube around a magnet, outside it | 5.6 % in 9.4 s at level 3, 1.0 % in 22 s with `refine=1` ² | 64 % ²                    |
 | Soft rod 1 mm across, 20 mm long       | 0.07 % in 2.7 s at level 2, the default here               |                           |
 
-¹ In the worst of 2,000 directions, against the exact field; 0.19 and 0.05 % on
-its axes.
+¹ A 10 mm sphere, in the worst of 2,000 directions, against the exact field;
+0.02 % along the field and 0.05 % across it.
 
 ² From [the shield tube](../examples/shield_tube.md).
 
@@ -187,9 +187,9 @@ its axes.
 ## Where it costs more
 
 - **Thin sheets.** The panels are sized to the thickness across the whole sheet,
-  so they are many, and the result converges early: take `level=2`. A 0.5 mm
-  plate under a magnet is within 0.03 % of level 3 there, in 0.5 s instead of
-  1.7 s.
+  so they are many, and the result converges early: take `level=2`. A 10 × 10 ×
+  0.5 mm plate under a 5 mm magnet is within 0.02 % of level 3 there, in 0.37 s
+  instead of 1.1 s.
 - **Many parts.** They form one dense system: 100 small cubes take 7,200
   unknowns at level 1 and four times as many at level 2.
 - **A few weak magnets on their own.** `solve_cells` reaches the same accuracy
@@ -206,20 +206,20 @@ Finite elements are `solve_fem` at orders 2 to 5.
 
 | Case                          | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
 | ----------------------------- | -----------------: | ---------: | -------------------: | -----------: |
-| Three cuboids, turned         |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
-| Magnet beside a soft cube     |             0.02 s |      2.3 s |               0.10 s |        2.3 s |
-| U-core driven by a coil       |             0.07 s |      4.5 s |                  – ¹ |          – ¹ |
-| Flux concentrator             |             0.04 s |     0.83 s |               0.05 s |        3.3 s |
-| Halbach array on back iron    |             0.06 s |      1.5 s |               0.06 s |        6.3 s |
-| Iron cube in 10 mT            |             0.04 s |     0.52 s |               0.04 s |        2.0 s |
-| Magnet 4 mm tall on a plate   |             0.09 s |      3.1 s |               0.40 s |        5.0 s |
-| Magnet 4.4 mm tall on a plate |             0.09 s |      2.8 s |               0.40 s |        2.8 s |
-| Thin shielding sheet          |             0.28 s |      2.7 s |               0.91 s |         10 s |
-| CAD part, a triangle mesh     |             0.20 s |       11 s |                1.0 s |         21 s |
-| Cuboids of many sizes         |              2.9 s |      8.3 s |                  – ² |          – ² |
-| Aligned cube just off a plate |             0.11 s |      1.3 s |               0.44 s |        5.1 s |
-| Turned cube just off a plate  |             0.23 s |      1.6 s |               0.97 s |         15 s |
-| Small cube just off a plate   |             0.11 s |      1.1 s |                  – ⁴ |        6.5 s |
+| Three cuboids, turned         |             0.03 s |      3.0 s |               0.03 s |        3.0 s |
+| Magnet beside a soft cube     |             0.02 s |      2.5 s |               0.11 s |        2.5 s |
+| U-core driven by a coil       |             0.07 s |      4.3 s |                  – ¹ |          – ¹ |
+| Flux concentrator             |             0.04 s |     0.96 s |               0.06 s |        3.6 s |
+| Halbach array on back iron    |             0.07 s |      1.8 s |               0.07 s |        6.4 s |
+| Iron cube in 10 mT            |             0.05 s |     0.62 s |               0.05 s |        2.6 s |
+| Magnet 4 mm tall on a plate   |             0.10 s |      3.2 s |               0.43 s |        5.3 s |
+| Magnet 4.4 mm tall on a plate |             0.10 s |      2.9 s |               0.39 s |        2.9 s |
+| Thin shielding sheet          |             0.30 s |      3.0 s |               0.77 s |         11 s |
+| CAD part, a triangle mesh     |             0.25 s |       13 s |                1.1 s |         22 s |
+| Cuboids of many sizes         |              3.4 s |      8.7 s |                  – ² |          – ² |
+| Aligned cube just off a plate |             0.10 s |      1.1 s |               0.46 s |        4.9 s |
+| Turned cube just off a plate  |             0.24 s |      1.6 s |                1.0 s |         14 s |
+| Small cube just off a plate   |             0.05 s |      1.1 s |                  – ⁴ |         23 s |
 | 100 small cubes               |                – ³ |        – ² |                    – |            – |
 
 ¹ The reference, from an independent finite-element solve, is good to 0.25 %.
@@ -227,18 +227,18 @@ Finite elements are `solve_fem` at orders 2 to 5.
 ² The references are good to 0.2 % for the cuboids of many sizes and 1.5 % for
 the 100 cubes.
 
-³ 1.8 % at level 2, in 27 s and 11 GB, with `max_unknowns` raised to its 28,800
+³ 1.8 % at level 2, in 23 s and 10 GB, with `max_unknowns` raised to its 28,800
 unknowns.
 
 ⁴ 0.15 % at level 5, in 1.1 s.
 
 Face charge reaches 1 % faster than finite elements on all fourteen cases that
-both reach it on: 13 to over 100 times faster on nine, 3 to 12 times on the
-other five. Finite elements come closest where many parts form one large dense
-system (the cuboids of many sizes, 3 times), where two parts nearly touch (the
-cubes just off a plate, 7 to 15 times), on the thin sheet (10 times) and where
-fields close to a surface need fine panels (the 4.4 mm magnet, 7 times at
-0.1 %).
+both reach it on: 13 to over 100 times faster on ten, 2.6 to 11 times on the
+other four. Finite elements come closest where many parts form one large dense
+system (the cuboids of many sizes, 2.6 times), where two parts nearly touch (the
+turned and the aligned cube just off a plate, 7 and 11 times), on the thin sheet
+(10 times) and where fields close to a surface need fine panels (the 4.4 mm
+magnet, 7 times at 0.1 %).
 
 ## In short
 

@@ -1088,7 +1088,7 @@ def solve_fem(
     on the same objects: the magnets keep their shapes, not cells, and the
     field is a polynomial of degree `order` on each element. A part whose
     susceptibility is a B-H curve follows it: the linear solve repeats until its susceptibility,
-    a polynomial on each element, stops moving, 5 to 40 solves. Each assembles
+    a polynomial on each element, stops moving, about 20 solves on the docs' parts. Each assembles
     again, and a saturating part can need ``solver_tol`` loosened to about 1e-7.
 
     Parameters

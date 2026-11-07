@@ -41,17 +41,17 @@ run each on an Apple M4 Pro:
 
 | Case                        | Face charge | Finite elements |
 | --------------------------- | ----------: | --------------: |
-| Magnet beside a soft cube   |      0.02 s |           2.3 s |
-| Iron cube in 10 mT          |      0.04 s |          0.52 s |
-| Flux concentrator           |      0.04 s |          0.83 s |
-| Halbach array on back iron  |      0.06 s |           1.5 s |
-| U-core driven by a coil     |      0.07 s |           4.5 s |
-| Magnet 4 mm tall on a plate |      0.09 s |           3.1 s |
-| CAD part, a triangle mesh   |      0.20 s |            11 s |
-| Thin shielding sheet        |      0.28 s |           2.7 s |
+| Magnet beside a soft cube   |      0.02 s |           2.5 s |
+| Iron cube in 10 mT          |      0.05 s |          0.62 s |
+| Flux concentrator           |      0.04 s |          0.96 s |
+| Halbach array on back iron  |      0.07 s |           1.8 s |
+| U-core driven by a coil     |      0.07 s |           4.3 s |
+| Magnet 4 mm tall on a plate |      0.10 s |           3.2 s |
+| CAD part, a triangle mesh   |      0.25 s |            13 s |
+| Thin shielding sheet        |      0.30 s |           3.0 s |
 
 Face charge reaches 1 % first on all 14 cases where both methods reach it: 13 to
-over 100 times sooner on nine of them, 3 to 12 times on the other five. The
+over 100 times sooner on ten of them, 2.6 to 11 times on the other four. The
 table shows eight; [Face charge](face_charge.md) has all 14, and the times to
 0.1 %.
 

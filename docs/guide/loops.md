@@ -9,11 +9,12 @@ elements keep between calls.
 
 ## A solved model is a snapshot
 
-Moving a magnet after the solve leaves the parts' response where it was. For a
-plate under a magnet, B at the sensor changes by 218 mT per mm of magnet shift,
-in face charge and in finite elements alike. Moving the magnet in the solved
-model gives 146 mT per mm, as if the plate were not there. So a tolerance study
-needs a solve per sample.
+Moving a magnet after the solve leaves the parts' response where it was. For a 5
+mm cube magnet 1 mm above a 20 × 20 × 2 mm plate with χ = 1000, Bz 0.5 mm above
+the plate beside the magnet changes by 17 mT per mm of sideways magnet shift in
+face charge, and by 16 mT per mm in finite elements. Moving the magnet in the
+solved model gives 1.9 mT per mm, the change of the magnet's own field, as if
+the plate were not there. So a tolerance study needs a solve per sample.
 
 A model whose objects move along a Magpylib path is refused
 ([Building a model](model.md#what-is-refused)): loop over the steps instead,
@@ -67,15 +68,15 @@ magnet. Measured on a 20 × 20 × 2 mm plate with χ = 1000 at level 2:
 
 ### What it saves
 
-For a plate under a magnet, the time per call:
+For the plate under the magnet at levels 2 and 5, the time per call:
 
 | Unknowns | Plain solve | First call with `reuse` | Later calls |
 | -------: | ----------: | ----------------------: | ----------: |
-|    1,518 |       72 ms |                   75 ms |       18 ms |
-|    9,558 |      1.15 s |                   1.9 s |      0.12 s |
+|    1,848 |       95 ms |                   95 ms |       21 ms |
+|    8,526 |      0.90 s |                   1.3 s |      0.11 s |
 
 The first call keeps the factorization, which from about 2,000 unknowns takes up
-to twice as long as a plain solve; the first match pays that back. A loop in
+to 1.5 times as long as a plain solve; the first match pays that back. A loop in
 which every call changes the matrix, the rows marked "no" above, gains nothing
 from `reuse` and pays that extra on every call.
 
@@ -108,16 +109,16 @@ for pose in poses:
 ```
 
 Only the sheets are in the matrix: add the field of the magnets and other
-sources with `getB`. For a plate under a magnet, 664 triangles solved at level
-1, B at 2,601 points takes 25 ms with `getB` and 0.4 ms from the matrix, which
-took 43 ms to build: the build is paid back by the second field. The two agree
-to 3e-15 of the largest field.
+sources with `getB`. For the plate under the magnet, 560 triangles solved at
+level 1, B at 2,601 points takes 21 ms with `getB` and 0.3 ms from the matrix,
+which took 46 ms to build: the build is paid back by the third field. The two
+agree to 2e-15 of the largest field.
 
 The matrix holds `3 M n` numbers for M observers and n unknowns, three per
-panel: 62 MB for those 2,601 points and 996 unknowns. With `dtype=np.float32` it
-takes 31 MB and stays within 1e-6 of the largest field around the sheets, but
-far away, at 2,000 times a plate's size, it is up to 4e-3 off: keep float64 for
-observers far away. A sheet whose mesh or pose differs from the matrix's is
+panel: 52 MB for those 2,601 points and 840 unknowns. With `dtype=np.float32` it
+takes 26 MB and stays within 2e-7 of the largest field around the sheets, but
+far away, at 2,000 times the plate's size, it is up to 3e-4 off: keep float64
+for observers far away. A sheet whose mesh or pose differs from the matrix's is
 refused, so a magnet close enough to grade a part's panels, or a part that
 moves, needs a new matrix.
 
