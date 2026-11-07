@@ -267,7 +267,7 @@ solid can be built as a **single closed `TriangularMesh`** — the U profile in
 the x–z plane, extruded along y — and handed to `mesh_TriangularMesh`, which
 drives [TetGen](https://wias-berlin.de/software/tetgen/) (optional dependency,
 `pip install "magpylib-material-response[tetgen]"`, see the
-[tetrahedral example](tetrahedral_meshes.md)):
+[current sensor](hall_current_sensor.md)):
 
 ```{code-cell} ipython3
 :tags: [hide-input]

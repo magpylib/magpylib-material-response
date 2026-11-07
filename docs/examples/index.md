@@ -157,23 +157,23 @@ A B–H curve in place of a constant susceptibility: a sphere against its exact 
 ````
 
 ````{grid-item-card}
-:link: tetrahedral_meshes
+:link: hall_current_sensor
 :link-type: doc
 :class-card: magpy-gallery-card
 
-```{image} ../_static/gallery/tetrahedral_meshes-light.jpg
-:alt: Any shape as tetrahedra
+```{image} ../_static/gallery/hall_current_sensor-light.jpg
+:alt: A Hall current sensor
 :class: only-light
 ```
 
-```{image} ../_static/gallery/tetrahedral_meshes-dark.jpg
-:alt: Any shape as tetrahedra
+```{image} ../_static/gallery/hall_current_sensor-dark.jpg
+:alt: A Hall current sensor
 :class: only-dark
 ```
 
-**Any shape as tetrahedra**
+**A Hall current sensor**
 
-A `TriangularMesh` cut into tetrahedra by TetGen, against the exact sphere.
+A slotted ferrite ring from CAD around a busbar: sensitivity, slot width, position error, where it saturates.
 
 ````
 
@@ -253,7 +253,7 @@ ucore_electromagnet
 saturation
 mesh_convergence
 fem_check
-tetrahedral_meshes
+hall_current_sensor
 cuboids_demagnetization
 soft_magnets
 solver_performance

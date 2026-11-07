@@ -14,10 +14,11 @@ kernelspec:
 
 # A holding magnet on a steel plate
 
-How hard does a disc magnet hold on a steel plate, and how fast does the pull
-fall with a gap: paint, a plastic cover, a bracket that doesn't sit flat?
-Magpylib alone has no answer here. Without the plate's response there is no
-force at all, since a plate that doesn't magnetize pulls on nothing.
+How hard does a disc magnet hold on a steel plate? How fast does the pull fall
+with a gap: paint, a plastic cover, a bracket that doesn't sit flat? How fine a
+solve does the answer need, and how thin can the plate be? Magpylib alone has no
+answer here. Without the plate's response there is no force at all, since a
+plate that doesn't magnetize pulls on nothing.
 
 One face-charge solve gives the plate's answer. The result is a Magpylib source,
 so `magpy.getFT` reads the force on the magnet off it.
@@ -68,7 +69,7 @@ section.
 magpy.show(solved, backend="widget")
 ```
 
-## Pull against the gap
+## How fast does the pull fall with a gap?
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -90,7 +91,7 @@ fig
 The pull halves by 0.7 mm and falls tenfold by 3.3 mm. A tenth of a millimetre
 of paint takes an eighth of it away.
 
-## How fine for a force
+## How fine a solve does a force need?
 
 A force converges more slowly than a field: at 0.5 mm the default level puts the
 field beside the magnet 1 % off and the pull 4 %. The three solvers converge on
@@ -137,7 +138,7 @@ which `refine=2` changes by under 0.1 %. For a disc or any other shape, give
 face charge `refine=2`, and check that one more round, or a higher `level`,
 moves it by less than you need.
 
-## When the plate saturates
+## How thin can the plate be?
 
 The steel here is linear: it carries any flux at the same permeability. A real
 steel saturates near 1.6 to 2 T. The magnet's flux closes through the plate,
@@ -158,7 +159,16 @@ only an upper bound. Give the plate a `BHCurve` and solve it with `solve_cells`,
 which follows saturation ([Saturation](saturation.md)). Face charge refuses a
 part on a curve.
 
-## Next
+## The answers
+
+- **Pull:** about 32 N at contact, 19 N at 0.5 mm; halved by 0.7 mm, a tenth by
+  3.3 mm.
+- **Solve:** for a disc, `refine=2`; the default is 14 % low at contact. A block
+  aligned with the plate is right at the default.
+- **Plate:** the linear pull holds down to about 2 mm here; at 1 mm the steel
+  saturates and the pull is only an upper bound.
+
+Next:
 
 - [Many solves](../guide/loops.md): a sweep over gaps is a solve per gap, as
   here. A sweep that moves only what drives the plate can keep its factorization

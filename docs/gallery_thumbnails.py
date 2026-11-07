@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import pathlib
+import sys
 import tempfile
 import time
 
@@ -24,9 +25,9 @@ from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from magpylib_material_response import UniformField, solve_face_charge
-from magpylib_material_response.meshing import mesh_TriangularMesh
 
-OUT = pathlib.Path(__file__).parent / "_static" / "gallery"
+HERE = pathlib.Path(__file__).parent
+OUT = HERE / "_static" / "gallery"
 WIDTH, HEIGHT = 400, 300
 MM = 1e-3
 
@@ -190,22 +191,30 @@ def shield_tube():
     return [magnet, tube]
 
 
-def tetrahedral_meshes():
-    k = np.arange(200) + 0.5  # points spread evenly on a sphere
-    z, phi = 1 - 2 * k / 200, np.pi * (1 + 5**0.5) * k
-    points = (
-        0.5
-        * MM
-        * np.column_stack(
-            [np.sqrt(1 - z**2) * np.cos(phi), np.sqrt(1 - z**2) * np.sin(phi), z]
-        )
+def hall_current_sensor():
+    sys.path.insert(0, str(HERE / "examples"))
+    from hall_core import core_mesh  # noqa: PLC0415
+
+    vertices, faces = core_mesh()
+    core = soft(
+        magpy.magnet.TriangularMesh(
+            vertices=vertices * MM, faces=faces, polarization=(0, 0, 0)
+        ),
+        2000,
     )
-    sphere = magpy.magnet.TriangularMesh.from_ConvexHull(
-        polarization=(0, 0, 0), points=points
+    busbar = magpy.current.Polyline(current=100, vertices=[(0, 0, -0.02), (0, 0, 0.02)])
+    closed = magpy.current.Polyline(
+        current=100,
+        vertices=[
+            (0, 0, -0.5),
+            (0, 0, 0.5),
+            (0.5, 0, 0.5),
+            (0.5, 0, -0.5),
+            (0, 0, -0.5),
+        ],
     )
-    sphere.susceptibility = 3
-    cells = mesh_TriangularMesh(sphere, 300)
-    return [cells]
+    solved = solve_face_charge(magpy.Collection(core, closed), level=2)
+    return [solved.children[0], busbar, magpy.Sensor(position=(10.5 * MM, 0, 0))]
 
 
 def saturation():
@@ -224,7 +233,7 @@ EXAMPLES = [
     mesh_convergence,
     fem_check,
     shield_tube,
-    tetrahedral_meshes,
+    hall_current_sensor,
     saturation,
 ]
 

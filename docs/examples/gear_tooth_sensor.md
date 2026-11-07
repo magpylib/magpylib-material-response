@@ -20,8 +20,8 @@ through the sensor, a gap between two teeth lets it spread, and the swing
 between the two is the signal. Magpylib alone sees no gear: its field at the
 sensor is a flat line.
 
-This page sweeps the sensor past the teeth, one face-charge solve per position,
-and keeps the factorization from one solve to the next.
+Two questions: how large is the signal, and how does the air gap set it? And one
+for the engineer running the study: how fast is a sweep of solves?
 
 ## The model
 
@@ -67,12 +67,10 @@ sensor = magpy.Sensor(position=(0, 0, sensor_z))
 magpy.show(solve_face_charge(magpy.Collection(make_rack(), magnet), level=2), sensor, backend="widget")
 ```
 
-## Sweep past the teeth
+## How large is the signal?
 
-The rack stays where it is and the head moves along it, over two tooth pitches.
-Only the magnet moves, and the magnet is not a solved part, so every solve has
-the same matrix: `reuse=` keeps the factorization of the first solve and each
-later one is a new load and a back-substitution.
+The rack stays where it is and the head moves along it, over two tooth pitches,
+at air gaps of 1 and 2 mm: one face-charge solve per position.
 
 ```{code-cell} ipython3
 positions = np.linspace(-4, 4, 33)  # mm
@@ -135,9 +133,20 @@ Level 2 is enough here. At level 4, with 15,984 unknowns, the field over a tooth
 and over a gap changes the swing at 1 mm by 0.6 % (from a run not repeated on
 this page).
 
-## What keeps the factorization
+## How fast is a sweep?
 
-Two changes would lose it. A cuboid magnet close to a part regrades the part's
+Only the magnet moves, and the magnet is not a solved part, so every solve has
+the same matrix: `reuse=` keeps the factorization of the first solve, and each
+later one is a new load and a back-substitution, as the timings above show. Two
+changes would lose it. A cuboid magnet close to a part regrades the part's
 panels toward its footprint. A magnet with its own susceptibility is a solved
 part moving against the rack. Each step then solves afresh.
 [Many solves](../guide/loops.md) lists what keeps the matrix and what doesn't.
+
+## The answers
+
+- **Signal:** a swing of 62 mT on top of 478 mT at a 1 mm air gap; Magpylib
+  alone sees none.
+- **Air gap:** at 2 mm the swing is 8.5 mT, seven times less.
+- **Sweep:** 0.8 s for the first solve, then about 50 ms each, the factorization
+  kept.

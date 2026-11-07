@@ -288,12 +288,12 @@ What the rows show:
   body still use their own rotated FFT grid.
 - **Meshed cylinder** — non-cuboid cells (here Cylinder and CylinderSegment,
   likewise tetrahedra from `mesh_TriangularMesh` — see the
-  [tetrahedral mesh example](tetrahedral_meshes.md)) take the generic path, one
-  field evaluation per pair, so this row has about a hundred cells, not a
-  thousand. Both solvers spend nearly all time evaluating the cells' analytical
-  fields, so the solver choice barely matters — the cell _type_ is the cost
-  driver. Cuboid cells are the cheapest per cell, but at high permeability
-  tetrahedra reach the same accuracy with far fewer cells (see the
+  [current sensor](hall_current_sensor.md)) take the generic path, one field
+  evaluation per pair, so this row has about a hundred cells, not a thousand.
+  Both solvers spend nearly all time evaluating the cells' analytical fields, so
+  the solver choice barely matters — the cell _type_ is the cost driver. Cuboid
+  cells are the cheapest per cell, but at high permeability tetrahedra reach the
+  same accuracy with far fewer cells (see the
   [U-core example](ucore_electromagnet.md)).
 
 ## Choosing a solver

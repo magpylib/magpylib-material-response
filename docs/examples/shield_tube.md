@@ -23,9 +23,11 @@ the magnet is 25 mm across and 10 mm tall, polarized along the axis at 1.22 T,
 with a susceptibility of 0.05; the tube (χ = 100) has radii of 22.5 and 25 mm
 and runs 130 mm, from 15 mm behind the magnet's centre to 115 mm in front of it.
 
-The question a shield asks is how much field it lets through. That field is
-small, the difference of the magnet's and the tube's, and it is where solvers
-part ways.
+Two questions: how much field does the tube let through, and which solve can be
+trusted there? The field that gets through is small, the difference of the
+magnet's and the tube's, and that is where solvers part ways.
+
+## The model
 
 ```{literalinclude} shield_tube_study.py
 :pyobject: shield_tube
@@ -57,14 +59,37 @@ magpy.show(solved, backend="widget")
 
 +++ {"user_expressions": []}
 
+## How much gets through?
+
 The field is read on three lines: inside the tube, 18.45 mm off the axis and
 along it, where #36 compared it with FEMM; on the axis in front of the magnet;
-and outside the tube, beside the magnet, where the tube has taken most of the
-field away. The reference is this package's finite elements at orders 2 to 4,
-good to 0.02 % on every line: the stored reference of the repository's
-validation case `shield_tube`. The finer face-charge solves take 9 and 22 s
-here, so [`shield_tube_study.py`](shield_tube_study.py) stores them; the cells
-run on this page.
+and outside the tube, beside the magnet. The reference is this package's finite
+elements at orders 2 to 4, good to 0.02 % on every line: the stored reference of
+the repository's validation case `shield_tube`.
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+reference = json.loads(Path("../../validation/references/shield_tube.json").read_text())["groups"]
+for name, coordinate, label in (("outside the tube", 0, "x"), ("on the axis", 2, "z")):
+    points = LINES[name]
+    alone = np.linalg.norm(magpy.getB(magnet, points), axis=1)
+    shielded = np.linalg.norm(np.array(reference[name]["B"]), axis=1)
+    print(f"{name}: the tube cuts the field by " + ", ".join(
+        f"{a / b:.1f}x at {label} = {p[coordinate] / 1e-3:.0f} mm" for p, a, b in zip(points[::3], alone[::3], shielded[::3])))
+```
+
+Beside the magnet the tube cuts the field sevenfold, from 21 to 3 mT at 30 mm
+from the axis, and threefold at 60 mm. On the axis in front of the magnet,
+nothing changes within 10 mm; the cut grows to 4.5-fold at 70 mm and falls back
+toward the open end. Inside the tube, near its wall, the field changes by less
+than half.
+
+## Which solve can be trusted there?
+
+The finer face-charge solves take 9 and 22 s here, so
+[`shield_tube_study.py`](shield_tube_study.py) stores them; the cells run on
+this page.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -73,7 +98,6 @@ from magpylib_material_response import solve_cells
 from magpylib_material_response.meshing import mesh_Cylinder
 
 MM = 1e-3
-reference = json.loads(Path("../../validation/references/shield_tube.json").read_text())["groups"]
 stored = json.loads(Path("shield_tube.json").read_text())
 
 
@@ -166,3 +190,11 @@ fig.update_yaxes(title_text="mT", type="log", row=1, col=2)
 fig.update_layout(height=400, margin={"l": 60, "r": 20, "t": 40, "b": 40}, legend={"orientation": "h", "y": -0.2})
 fig
 ```
+
+## The answers
+
+- **What gets through:** beside the magnet, a seventh to a third of its field,
+  falling with distance; on the axis in front of it, under a fourth at 70 mm,
+  less toward the open end.
+- **Which solve:** face charge with `refine=1`, within 1.0 % of finite elements
+  outside the tube in 22 s. Cells converge inside the tube and fail outside it.
