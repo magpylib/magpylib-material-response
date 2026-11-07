@@ -28,7 +28,7 @@ reads. Start from what your parts are made of and what you need to read.
 
 The repository's validation suite solves its cases with each method against
 stored finite-element references. The time to bring the worst group of sensors
-within 1 % of the reference, solve and `getB` together, one run each on an Apple
+within 1 % of the reference, solve and `getB` together, one run each on an Apple
 M4 Pro:
 
 | Case                       | Face charge | Finite elements |
@@ -42,7 +42,7 @@ M4 Pro:
 | CAD part, a triangle mesh  |      0.20 s |            11 s |
 | Thin shielding sheet       |      0.28 s |           2.7 s |
 
-Face charge reaches 1 % faster than finite elements on all fourteen cases where
+Face charge reaches 1 % faster than finite elements on all fourteen cases where
 both reach it, 13 to 104 times faster on nine of them. On soft iron it is 20 to
 40 times more accurate than `solve_cells` in the same time. The full table, and
 where finite elements come closest, is in

@@ -93,8 +93,8 @@ report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
 
 The gain 0.5 mm from the tip falls from 4.34 to 4.27 as the cells shrink, while
 the gain 2 mm out rises. Finite elements put the gains at 4.259, 3.347 and
-2.168, to within 0.001 %. Against these, the finest mesh here is 0.29 %, 0.06 %
-and 0.11 % off; `study_cells` said 0.44 %, 0.13 % and 0.17 %.
+2.168, to within 0.001 %. Against these, the finest mesh here is 0.29 %, 0.06 %
+and 0.11 % off; `study_cells` said 0.44 %, 0.13 % and 0.17 %.
 
 ## A Halbach array on back iron
 
@@ -133,9 +133,9 @@ fig
 +++ {"user_expressions": []}
 
 The bars are the estimated error at each point, too small to see on the scale of
-the field: 0.03 % for the whole profile, 0.1 % at the worst point, at the end of
-the array. Against finite elements, good to 0.001 %, the finest mesh here is
-0.02 % off overall and 0.08 % at that point, under the estimate at all 21
+the field: 0.03 % for the whole profile, 0.1 % at the worst point, at the end of
+the array. Against finite elements, good to 0.001 %, the finest mesh here is
+0.02 % off overall and 0.08 % at that point, under the estimate at all 21
 points.
 
 ## A steel sheet shielding a sensor
@@ -158,8 +158,8 @@ report(shield, ["axis", "6 mm out", "12 mm out"], "mT", 1e3)
 
 On the axis the residual field falls from 12.4 mT on the coarsest mesh to 6.1
 mT. Finite elements put the three sensors at 5.53, 5.85 and 8.80 mT, to within
-0.002 %. Against these, the finest mesh here is 9.9 %, 3.1 % and 0.30 % off, and
-`study_cells` said 13.6 %, 4.7 % and 0.23 %. The last falls 0.07 % short: the
+0.002 %. Against these, the finest mesh here is 9.9 %, 3.1 % and 0.30 % off, and
+`study_cells` said 13.6 %, 4.7 % and 0.23 %. The last falls 0.07 % short: the
 error is an estimate, not a bound.
 
 <details>

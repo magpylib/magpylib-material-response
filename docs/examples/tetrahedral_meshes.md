@@ -100,7 +100,7 @@ print(f"relative error     : {abs(Jz_mean - J_exact) / J_exact:.2%}")
 +++ {"user_expressions": []}
 
 The mean polarization of the meshed sphere matches the exact result to about
-0.01 %.
+0.01 %.
 
 ## Practical notes
 

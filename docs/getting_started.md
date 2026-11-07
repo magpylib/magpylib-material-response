@@ -92,7 +92,7 @@ B_solved = magpy.getB(solved, line[0])[2]
 print(f"Bz 0.5 mm above the magnet: {B_alone * 1e3:.0f} mT alone, {B_solved * 1e3:.0f} mT on the plate")
 ```
 
-The plate raises the field above the magnet by about 30 %: the magnet's south
+The plate raises the field above the magnet by about 30 %: the magnet's south
 face rests on the iron, which gives its flux a short way back below.
 
 ```{code-cell} ipython3
@@ -155,9 +155,9 @@ fig.update_layout(height=480, margin={"l": 60, "r": 20, "t": 20, "b": 40}, legen
 fig
 ```
 
-The three solvers agree. Face charge and finite elements are 0.08 % apart, the
-error left in finite elements at order 4: at order 5 the two agree to 0.01 %.
-Cells, with 4 cells across the plate's thickness, are within 0.6 %.
+The three solvers agree. Face charge and finite elements are 0.08 % apart, the
+error left in finite elements at order 4: at order 5 the two agree to 0.01 %.
+Cells, with 4 cells across the plate's thickness, are within 0.6 %.
 
 - **`solve_face_charge`** is the default choice. A part that is linear and
   uniform inside, like soft iron below saturation, carries its whole response as
@@ -166,7 +166,7 @@ Cells, with 4 cells across the plate's thickness, are within 0.6 %.
   cell. It covers what face charge does not: saturation on a B–H curve, a
   susceptibility that differs along the axes or varies inside a part, and B
   inside a part. Its error falls slowly with the cell count: here 4 cells across
-  the plate leave 0.6 %.
+  the plate leave 0.6 %.
 - **`solve_fem`** solves the same model by finite elements, with NGSolve. It is
   slower and needs the `fem` extra, and it is independent of the other two: use
   it to check them.

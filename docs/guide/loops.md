@@ -37,7 +37,7 @@ agree with a fresh solve to 1e-13 of the largest, 2e-11 at a weak observer.
 The matrix depends on the solved parts' panels, their susceptibilities and their
 poses relative to each other. Everything else enters only the load. A cuboid
 magnet close to a part regrades the part's panels toward its footprint: close
-means within 20 % of the largest half-side of the smaller of the two, 0.5 mm for
+means within 20 % of the largest half-side of the smaller of the two, 0.5 mm for
 a 5 mm magnet. Measured on a 20 × 20 × 2 mm plate with χ 1000 at level 2:
 
 | What changes between solves                                                      | Matrix kept |

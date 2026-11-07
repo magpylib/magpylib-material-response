@@ -102,10 +102,10 @@ fig
 +++ {"user_expressions": []}
 
 They disagree in two places, and both times MoM's bar is the short one: FEM at
-order 5 puts the sensor just under the soft cube's corner, at 1.5 mm, 1.31 %
-from MoM's finest mesh, where `study_cells` estimated 1.15 %, and FEM's order 4
-within 0.002 %. Far to the left the field is weak and both differences are below
-0.1 %. A disagreement is the cue to refine the mesh there, or to take FEM's
+order 5 puts the sensor just under the soft cube's corner, at 1.5 mm, 1.31 %
+from MoM's finest mesh, where `study_cells` estimated 1.15 %, and FEM's order 4
+within 0.002 %. Far to the left the field is weak and both differences are below
+0.1 %. A disagreement is the cue to refine the mesh there, or to take FEM's
 value.
 
 ## What `solve_fem` does
@@ -144,10 +144,10 @@ and others that are hard for the method of moments, nearly all with a stored
 finite-element reference at their sensors. A test holds the method of moments to
 its stored accuracy on every pull request, and every night all methods climb
 their settings against references made again, so that a change in either method
-shows. Magpylib alone, the model without its material response, is the floor: 18
-% off on the three cuboids, 721 % under the soft plate, and 100 % wherever only
-soft parts answer. The method of moments beats it on every case, by a factor of
-11 to 130 at its finest mesh. From a clone of the repository:
+shows. Magpylib alone, the model without its material response, is the floor:
+18 % off on the three cuboids, 721 % under the soft plate, and 100 % wherever
+only soft parts answer. The method of moments beats it on every case, by a
+factor of 11 to 130 at its finest mesh. From a clone of the repository:
 
 ```bash
 python -m validation.run --cases plate --methods magpylib MoM FEM  # error against time

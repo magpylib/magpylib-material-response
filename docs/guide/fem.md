@@ -65,7 +65,7 @@ per entry and in all: with three orders whose changes shrink, otherwise the
 error is NaN, with a warning. `quantity` is a set of positions or sensors, or a
 function of the solution such as `lambda s: s.moment`. On a cube of infinite
 susceptibility it finds the known polarizability to 2e-5 at order 5; it reaches
-0.1 % on every validation case in 24 s at most.
+0.1 % on every validation case in 24 s at most.
 [How accurate is a result?](accuracy.md) shows how to set it beside the other
 solvers.
 
@@ -73,7 +73,7 @@ solvers.
 
 Memory is the limit, not time. The
 [magnet in a steel tube](../examples/shield_tube.md) takes 1.9 million unknowns
-and 8.4 GB at order 4, in 50 s. On the validation cases it reaches 1 % in 0.5 to
+and 8.4 GB at order 4, in 50 s. On the validation cases it reaches 1 % in 0.5 to
 11 s, 3 to 104 times slower than face charge ([Choosing a solver](choosing.md)).
 
 [Inside finite elements](../inside/fem.md) shows the formulation: the

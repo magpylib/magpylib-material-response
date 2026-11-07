@@ -97,14 +97,14 @@ soft plate its moment overshoots and then falls back as the mesh is refined.
 
 At equal cell count neither rule is more accurate in general. On cubic cells
 they agree to fourth order in cell size over distance. On a soft cube of 1,728
-cells, point matching is closer on the field above it (0.43 % against 0.52 %)
-and volume averaging on its moment (1.1 % against 1.2 %). Both converge to the
+cells, point matching is closer on the field above it (0.43 % against 0.52 %)
+and volume averaging on its moment (1.1 % against 1.2 %). Both converge to the
 same answer.
 
 The rules are never mixed within a solve. A mix would use volume averaging only
 between parallel cuboids, so turning one of two touching bodies by any angle,
 however small, would switch their interaction to point matching: the result
-would jump (0.28 % for a magnet and an iron block turned by a millionth of a
+would jump (0.28 % for a magnet and an iron block turned by a millionth of a
 degree), and the lower bound would be lost. `interaction="newell"` therefore
 raises when the cells are not all cuboids with one orientation. Cylinder
 segments close together are the one exception, below: their cell type alone
@@ -128,18 +128,18 @@ height, symmetrized so that $V_i\mathsf{T}_{ij}=V_j\mathsf{T}_{ji}^\mathsf{T}$
 as for the exact average. At the centroid, curved cells give $\mathsf{T}$
 positive eigenvalues, which no demagnetizing field has; above $1/\chi$ they
 leave the system indefinite, and a tube with a 1 mm wall at $\chi = 1000$, in
-cells 16 around and 16 along, comes out −10 %, −68 % and +2 % from its moment
+cells 16 around and 16 along, comes out −10 %, −68 % and +2 % from its moment
 with 1, 2 and 3 cells across the wall
 ([#92](https://github.com/magpylib/magpylib-material-response/issues/92)).
-Averaged, every eigenvalue is negative and the moment holds at −12 %, −11 % and
-−11 %; what is left falls as cells are added around the ring. Pairs farther
+Averaged, every eigenvalue is negative and the moment holds at −12 %, −11 % and
+−11 %; what is left falls as cells are added around the ring. Pairs farther
 apart than twice the sum of their half-diagonals keep the centroid, which
 changes that tube's moment by 0.13 points at most; at a reach of 1 a positive
 eigenvalue comes back, and at 0.75 the system is indefinite again. A pair with
 both susceptibilities below 1 keeps the centroid too: the positive eigenvalues
 reach 0.27 at most, on short thin tubes, so $\chi$ times them stays far from 1,
 and a meshed cylinder of 110 cells at $\chi = 0.5$ solves in 0.8 s instead of
-4.4 s. On a thin tube the field moves by up to 16 % at some points where $\chi$
+4.4 s. On a thin tube the field moves by up to 16 % at some points where $\chi$
 crosses 1, the two schemes' difference on a coarse mesh.
 
 ### Volume averaging (Newell)
@@ -285,11 +285,11 @@ Measured on soft iron at $\chi = 1000$, out of 39 models:
 
 | Model                         | Cells | FFT   | Direct         | Iterative      | `"auto"`  |
 | ----------------------------- | ----- | ----- | -------------- | -------------- | --------- |
-| one cube, identical cells     | 4,096 | 100 % | 3.1 s, 1.4 GB  | 0.41 s, 0.2 GB | iterative |
-| three cubes, three cell sizes | 3,240 | 40 %  | 9.0 s, 1.4 GB  | 8.3 s, 1.0 GB  | iterative |
-| a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
-| 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
-| voxelized sphere              | 1,304 | 100 % | 0.30 s, 0.3 GB | 0.20 s, 0.1 GB | iterative |
+| one cube, identical cells     | 4,096 | 100 % | 3.1 s, 1.4 GB  | 0.41 s, 0.2 GB | iterative |
+| three cubes, three cell sizes | 3,240 | 40 %  | 9.0 s, 1.4 GB  | 8.3 s, 1.0 GB  | iterative |
+| a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
+| 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
+| voxelized sphere              | 1,304 | 100 % | 0.30 s, 0.3 GB | 0.20 s, 0.1 GB | iterative |
 | tetrahedra                    | 1,937 | 0     | 3.3 s, 0.9 GB  | 3.3 s, 1.0 GB  | direct    |
 | cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
 
@@ -356,7 +356,7 @@ $$
 for grid indices $\mathbf{i}$, $\mathbf{j}$, a convolution on a box of $N_A +
 N_B - 1$ per axis. The same index differences give the dense solver that block
 from one table, without sorting. Every other block is computed once per distinct
-displacement when fewer than 25 % of the displacements are distinct, and reverse
+displacement when fewer than 25 % of the displacements are distinct, and reverse
 blocks follow by reciprocity where it is exact,
 
 $$
@@ -372,11 +372,11 @@ the polarization in and the field back, so the solve runs in the global frame.
 
 In the iterative solver, a block with more than `DENSE_BLOCK_MAX_ENTRIES`
 entries is stored sparse when that pays: at least 64 observers, drawn at random
-across the body, must show that at least 90 % of the entries can go
-(`SPARSIFY_MIN_DROP`). A sparse product runs on one thread: at 90 % dropped it
+across the body, must show that at least 90 % of the entries can go
+(`SPARSIFY_MIN_DROP`). A sparse product runs on one thread: at 90 % dropped it
 takes about 1.7 times as long as the dense one, for a sixth of the memory. When
 the explicit blocks would pass `DENSE_BLOCK_MAX_BYTES` (2 GB) dense in all,
-memory comes first and 60 % suffices (`SPARSIFY_MIN_DROP_LARGE`): a sparse
+memory comes first and 60 % suffices (`SPARSIFY_MIN_DROP_LARGE`): a sparse
 matrix takes 12 bytes per kept entry against 8 per dense entry, and about 20
 while it is built. At high susceptibility the budget below rarely allows either,
 and blocks stay dense at any size. When the explicit blocks pass

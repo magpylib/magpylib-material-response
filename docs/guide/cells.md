@@ -38,7 +38,7 @@ print(f"Bz without response: {magpy.getB(magnet, observer)[2] * 1e3:.2f} mT")
 print(f"Bz with response   : {magpy.getB(solved, observer)[2] * 1e3:.2f} mT")
 ```
 
-The field drops by about 10 %: the magnet's own field opposes its polarization.
+The field drops by about 10 %: the magnet's own field opposes its polarization.
 
 ## Mesh the parts
 

@@ -25,8 +25,8 @@ above the plate is 1 to 3 times it.
 
 `refine=k` uses the same jumps: each of k rounds splits the panels where they
 are largest and solves again. For the plate, `refine=2` from level 3 (2,688
-unknowns, under 2 s) puts B 0.25 mm above the plate within 0.04 %, where uniform
-panels need 10,350 unknowns and 20 s for 0.13 %.
+unknowns, under 2 s) puts B 0.25 mm above the plate within 0.04 %, where uniform
+panels need 10,350 unknowns and 20 s for 0.13 %.
 
 To check a face-charge result fully, solve it at two levels: where the field you
 read changes less than you can accept, it has converged.

@@ -261,11 +261,11 @@ pair_figure()
 
 +++ {"user_expressions": []}
 
-For cubes the two ways agree within about 1 % at every distance on a grid. For
+For cubes the two ways agree within about 1 % at every distance on a grid. For
 flat cells side by side the field changes so much across the neighbour that its
 centre value is only half the average, and the gap closes only a few widths
 away. Both rules converge to the same answer as the cells shrink: on the cube
-below they differ by 0.1 to 0.3 %, against a mesh error of 1 to 4 %. Keep the
+below they differ by 0.1 to 0.3 %, against a mesh error of 1 to 4 %. Keep the
 default; choose `"newell"` for meshes of flat cuboids, or for a mesh study,
 where its moment rises steadily toward the converged value.
 
@@ -275,12 +275,12 @@ The answer converges as the cells shrink, slowly: halving the cell size, which
 takes eight times the cells, cuts the error to about a third. Soft iron is the
 hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
-Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
+Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
 elements give it, `study_fem(cube, lambda s: s.moment[2], orders=(3, 4, 5))`, in
 seconds ([Checking a result with finite elements](../examples/fem_check.md)).
 The polarizability of a cube of infinite susceptibility, 3.6443 times its volume
-{cite}`helsing2013`, gives 0.028895 A m² through $m=VH/(1/3.6443+1/\chi)$, 0.05
-% high: that formula is exact for ellipsoids only.
+{cite}`helsing2013`, gives 0.028895 A m² through $m=VH/(1/3.6443+1/\chi)$,
+0.05 % high: that formula is exact for ellipsoids only.
 
 ```{code-cell} ipython3
 def soft_cube():
@@ -341,10 +341,10 @@ fig
 
 +++ {"user_expressions": []}
 
-Tetrahedra reach the same error with fewer cells: 1.3 % with 199 of them, where
+Tetrahedra reach the same error with fewer cells: 1.3 % with 199 of them, where
 cuboids need about 1,700. A cuboid grid, though, solves far faster per cell,
 with FFT products the next section explains: per second of solving, the
-tetrahedra lead down to about 1.3 % on this cube, and the cuboids go on to 0.8 %
+tetrahedra lead down to about 1.3 % on this cube, and the cuboids go on to 0.8 %
 in half a second. On other parts the balance shifts: on the core of the
 [U-core example](../examples/ucore_electromagnet.md), a few hundred tetrahedra
 come closer than thousands of cuboids. The two interaction rules sit almost on

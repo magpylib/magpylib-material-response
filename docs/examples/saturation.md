@@ -163,8 +163,8 @@ not repeated on this page, which would take minutes:
 | `solve_cells`, 720 sources   | 1.822 | 7.054 | 13.64 |
 
 At 400 A saturation cuts the field to 0.41 times the linear one, and the two
-methods differ by 2.6 %, the cells still rising. At lower currents the cells'
-gap, 8 % at 25 A, is their own discretization of a part with a high χ, which
+methods differ by 2.6 %, the cells still rising. At lower currents the cells'
+gap, 8 % at 25 A, is their own discretization of a part with a high χ, which
 saturation shrinks. No measurement backs these: the curve is a stand-in, and
 both methods share it.
 

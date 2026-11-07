@@ -27,7 +27,7 @@ susceptibility is 0 is not solved and stays as it was.
 
 `show()` colours the charge in the magnet colours, a positive charge being a
 north pole; `style.mesh.grid.show` draws the panels. The colour is full at the
-charge that 95 % of the surface stays below, not at the singular peak in a
+charge that 95 % of the surface stays below, not at the singular peak in a
 corner. Parts solved together share that scale, `style.charge.level`, so their
 colours compare.
 
@@ -42,8 +42,8 @@ colours compare.
   each part.
 - **Drives:** every other source of the model, a `UniformField` among them.
 - **How well:** on the six documented examples it lands within each reference's
-  own uncertainty, 0.64 % at worst, where `solve_cells` at the documented
-  settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
+  own uncertainty, 0.64 % at worst, where `solve_cells` at the documented
+  settings is off by up to 23 %. On soft iron it is 20 to 40 times more accurate
   than `solve_cells` in the same time.
 
 It raises for an anisotropic susceptibility, one that varies inside a part, and
@@ -68,7 +68,7 @@ a `BHCurve`. Those bring back charge inside the part: use `solve_cells`.
 
 - **Thin sheets.** The panels are sized to the thickness across the whole sheet,
   so they are many, and the result converges early: take `level=2`. A 0.5 mm
-  plate under a magnet is within 0.03 % of level 3 there, in 0.5 s instead of
+  plate under a magnet is within 0.03 % of level 3 there, in 0.5 s instead of
   1.7 s.
 - **Many parts.** They form one dense coupled system: 100 small cubes take 7,200
   unknowns at level 1 and four times as many at level 2.
@@ -81,18 +81,18 @@ a `BHCurve`. Those bring back charge inside the part: use `solve_cells`.
   when it is a cuboid aligned with the part: the panels follow its footprint and
   the field near it is integrated finely. A disc magnet, or a cuboid turned
   against the part, has a footprint the panels cannot follow. The solve warns,
-  and a disc on a soft cube stays 3 to 4 % off near it from level 4 on.
+  and a disc on a soft cube stays 3 to 4 % off near it from level 4 on.
 - **Many cuboid magnets on a part** each grade its face when they come within 20
   % of the largest half-side of the smaller of the two, so they cost unknowns:
   25 cube magnets on a yoke take 6,048 unknowns at level 2 and 13,608 at
-  level 3. Start such arrays at `level=2`, within 7 % of level 3 or 4 close to
+  level 3. Start such arrays at `level=2`, within 7 % of level 3 or 4 close to
   the magnets.
-- **Two parts close together.** A part within 20 % of the largest half-side of
+- **Two parts close together.** A part within 20 % of the largest half-side of
   the smaller of the two is graded toward the other, and parallel faces closer
-  than 0.01 % of it couple exactly, as touching ones do (0.1 % for a turned
-  cuboid). Down to a gap of 0.5 % of the half-side, the field near the gap stays
-  within 1 % of finite elements from level 3. Below that, with χ 1000 on both
-  sides, expect 1 to 4 % near the gap: the panels cannot follow a gap far below
+  than 0.01 % of it couple exactly, as touching ones do (0.1 % for a turned
+  cuboid). Down to a gap of 0.5 % of the half-side, the field near the gap stays
+  within 1 % of finite elements from level 3. Below that, with χ 1000 on both
+  sides, expect 1 to 4 % near the gap: the panels cannot follow a gap far below
   their size, and neither can finite elements, so that error cannot be measured
   yet.
 
@@ -119,9 +119,9 @@ above the plate is 1 to 3 times it.
 `refine` uses the same jumps: each round splits the panels where they are
 largest, a cuboid's panel in two along both axes and a triangle into four, and
 solves again. For the plate, `refine=2` from level 3 (2,688 unknowns, under 2 s)
-puts B 0.25 mm above the plate within 0.04 %, where uniform panels need 10,350
-unknowns and 20 s for 0.13 %. Outside the steel tube, one round from level 3
-brings 5.6 % down to 1.0 %.
+puts B 0.25 mm above the plate within 0.04 %, where uniform panels need 10,350
+unknowns and 20 s for 0.13 %. Outside the steel tube, one round from level 3
+brings 5.6 % down to 1.0 %.
 
 ## Triangle meshes and CAD exports
 
@@ -147,27 +147,27 @@ solved = solve_face_charge(magpy.Collection(part, coil), level=2)
 ![The validation's CAD part in a 10 mT field along a direction no symmetry helps with, and the U-core as one closed mesh with its coil, each solved at level 2 and drawn by show() with its graded triangles.](../_static/images/face_charge_triangles.png)
 
 - **How well:** the validation's CAD part, a plate with filleted corners and a
-  round hole, reaches 0.69 % of its finite-element reference at level 1 in 0.20
-  s, 0.15 % at level 2 in 0.50 s, and the reference's own 0.07 % from level 3,
-  in 1.0 s. The U-core as one closed mesh is within its reference's 0.25 % from
+  round hole, reaches 0.69 % of its finite-element reference at level 1 in 0.20
+  s, 0.15 % at level 2 in 0.50 s, and the reference's own 0.07 % from level 3,
+  in 1.0 s. The U-core as one closed mesh is within its reference's 0.25 % from
   level 2.
 - **Cuboids stay cuboids:** a box given as triangles needs twice the unknowns of
   its rectangle panels for the same accuracy, and the U-core as three cuboids
   reaches its reference's accuracy 5 times faster than as one mesh. Give a part
   as cuboids where it is made of them: on the nine validation cases both solve,
-  rectangle panels reach 1 % as fast to 15 times faster, and a thin sheet needs
+  rectangle panels reach 1 % as fast to 15 times faster, and a thin sheet needs
   too many triangles to solve at all.
 
-![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 15 ms to 2.8 s on ten cases, triangles 31 ms to 14 s on nine, the thin sheet refused as too many unknowns.](../_static/images/face_charge_rect_vs_tri.png)
+![Time to bring every sensor group within 1 % of the FEM reference, per validation case, with the solved cuboids as rectangle panels and as triangle meshes: rectangles 15 ms to 2.8 s on ten cases, triangles 31 ms to 14 s on nine, the thin sheet refused as too many unknowns.](../_static/images/face_charge_rect_vs_tri.png)
 
 - **Touching parts:** faces of two parts in one plane couple exactly, whatever
   their panels, and a part is graded toward the outline of whatever touches it,
-  a turned footprint included, or comes within 1 % of its size. Parts of one
+  a turned footprint included, or comes within 1 % of its size. Parts of one
   material that touch are solved as one: the faces they share carry no charge,
-  so a short bar between two wide ones is 0.83 % off the same solid as one mesh
-  at level 2, where both sides' charges, left to cancel, were 16 % off. A gap
+  so a short bar between two wide ones is 0.83 % off the same solid as one mesh
+  at level 2, where both sides' charges, left to cancel, were 16 % off. A gap
   far below the panels moves the field by its own effect: four pieces 1 µm from
-  a plate's side 0.13 %, as one piece, where they were 170 % off. A cube given
+  a plate's side 0.13 %, as one piece, where they were 170 % off. A cube given
   as triangles with a soft cuboid against one of its faces matches two cuboids
   to 4e-5 at level 4. Turned against each other, two cuboids converge
   erratically, as rectangle panels can only follow their own axes; with one of
@@ -182,28 +182,28 @@ solved = solve_face_charge(magpy.Collection(part, coil), level=2)
 A curved face is cut into flat facets, `12 (level + 1)` per turn (48 at level
 3), widened so that the part keeps its true volume, and then meshed as a
 triangle mesh is. The widening matters more than the facets' number: on a soft
-cylinder at level 3, 24 widened facets are 0.02 % off 50 mm away, 96 facets
-without it 0.16 %. A sphere is a geodesic polyhedron that gets finer with the
+cylinder at level 3, 24 widened facets are 0.02 % off 50 mm away, 96 facets
+without it 0.16 %. A sphere is a geodesic polyhedron that gets finer with the
 level, as it has no edge to grade toward. Against the validation's FEM
 references and the exact field of a sphere, on one M4 Pro:
 
 | Part                                   | Error, time                                                | `solve_cells` at best |
 | -------------------------------------- | ---------------------------------------------------------- | --------------------- |
-| Soft cylinder, 1 mm off its surface    | 0.41 % in 0.12 s at level 2, 0.12 % in 0.3 s at level 3    | 2.4 %                 |
-| Soft sphere, 1 mm off its surface      | 1.4 % in 0.09 s at level 1, 0.35 % in 0.5 s at level 3 ¹   |                       |
-| Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.85 % in 4.8 s with `refine=1` | 395 %                 |
-| Steel tube around a magnet, outside it | 5.6 % in 8.9 s at level 3, 1.0 % in 21 s with `refine=1`   | 41 %                  |
-| Soft rod 1 mm across, 20 mm long       | 0.07 % in 2.7 s at level 2, the default here               |                       |
+| Soft cylinder, 1 mm off its surface    | 0.41 % in 0.12 s at level 2, 0.12 % in 0.3 s at level 3    | 2.4 %                 |
+| Soft sphere, 1 mm off its surface      | 1.4 % in 0.09 s at level 1, 0.35 % in 0.5 s at level 3 ¹   |                       |
+| Thin ring beside a magnet, inside it   | 1.3 % in 1.8 s at level 3, 0.85 % in 4.8 s with `refine=1` | 395 %                 |
+| Steel tube around a magnet, outside it | 5.6 % in 8.9 s at level 3, 1.0 % in 21 s with `refine=1`   | 41 %                  |
+| Soft rod 1 mm across, 20 mm long       | 0.07 % in 2.7 s at level 2, the default here               |                       |
 
-¹ In the worst of 2,000 directions, against the exact field; 0.19 and 0.05 % on
+¹ In the worst of 2,000 directions, against the exact field; 0.19 and 0.05 % on
 its axes.
 
 - **Thin walls that shield** converge slowly with the level: outside the tube
   the field is what is left of the magnet's after the tube takes most of it, and
   the tube's cells are sized to its width, not its wall. `refine=1` splits the
   triangles where the charge jumps, at the rims and near the magnet, and brings
-  it within 1 %.
-- **Slender parts** are converged well below level 3: the rod is within 0.4 % at
+  it within 1 %.
+- **Slender parts** are converged well below level 3: the rod is within 0.4 % at
   level 1. Without a `level`, the highest level that fits `max_unknowns` is
   taken.
 
@@ -212,11 +212,11 @@ its axes.
 The repository's validation suite (`validation/`) solves 18 of its cases with
 face charge, at levels 1 to 5, against stored finite-element references; the
 three curved ones are in the table above, the others below. The time each method
-needs to bring the worst group of sensors within 1 % and 0.1 % of the reference,
+needs to bring the worst group of sensors within 1 % and 0.1 % of the reference,
 solve and `getB` together, one run each on an Apple M4 Pro; finite elements are
 `solve_fem` at orders 2 to 5:
 
-| Case                          | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
+| Case                          | Face charge to 1 % | FEM to 1 % | Face charge to 0.1 % | FEM to 0.1 % |
 | ----------------------------- | -----------------: | ---------: | -------------------: | -----------: |
 | Three cuboids, turned         |             0.05 s |      2.6 s |               0.05 s |        2.6 s |
 | Magnet beside a soft cube     |             0.02 s |      2.3 s |               0.10 s |        2.3 s |
@@ -234,15 +234,15 @@ solve and `getB` together, one run each on an Apple M4 Pro; finite elements are
 | Small cube just off a plate   |             0.11 s |      1.1 s |                  – ⁴ |        6.5 s |
 | 100 small cubes               |                – ³ |        – ² |                    – |            – |
 
-¹ The reference, from an independent FEM, is good to 0.25 %. ² The references
-are good to 0.2 % for the cuboids of many sizes and 1.5 % for the 100 cubes. ³
-1.8 % at level 2, in 27 s and 11 GB, with `max_unknowns` raised to its 28,800
-unknowns. ⁴ 0.15 % at level 5, in 1.1 s.
+¹ The reference, from an independent FEM, is good to 0.25 %. ² The references
+are good to 0.2 % for the cuboids of many sizes and 1.5 % for the 100 cubes. ³
+1.8 % at level 2, in 27 s and 11 GB, with `max_unknowns` raised to its 28,800
+unknowns. ⁴ 0.15 % at level 5, in 1.1 s.
 
-Face charge reaches 1 % faster than finite elements on all fourteen cases both
+Face charge reaches 1 % faster than finite elements on all fourteen cases both
 reach it on, 13 to 104 times faster on nine. Finite elements come closest where
 fields close to a surface need fine panels (the plate with its sides off, 7
-times at 0.1 %), on the thin sheet (10 times), where many bodies form one large
+times at 0.1 %), on the thin sheet (10 times), where many bodies form one large
 dense system (the cuboids of many sizes, 3 times) and where two parts nearly
 touch (the cubes just off a plate, 5 to 15 times).
 

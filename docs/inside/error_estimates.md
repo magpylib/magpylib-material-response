@@ -26,7 +26,7 @@ What `study_cells` does differently from Celik et al.:
   of all its entries together, instead of an average of each entry's order.
   Single sensors don't converge monotonically; the whole field does.
 - **No estimate unless the changes are steady**: the order must lie between 0.3
-  and 3, and entries moving against the trend may carry at most 10 % of the last
+  and 3, and entries moving against the trend may carry at most 10 % of the last
   change. Otherwise `order` is None and the errors NaN, which says: refine once
   more.
 - **A warning when the meshes are too close**: below 2.2 times the cells, 1.3

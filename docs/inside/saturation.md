@@ -57,5 +57,5 @@ solve holds.
 
 A sphere in a uniform field stays uniformly polarized while it saturates, so its
 answer is exact: $\mu_0 H$ inside is $B_0 - J/3$, with $J$ on the curve at that
-field. `solve_cells` is within 1 % of it along the whole curve
+field. `solve_cells` is within 1 % of it along the whole curve
 ([Saturation](../examples/saturation.md)).

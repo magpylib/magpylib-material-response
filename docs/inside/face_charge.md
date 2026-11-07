@@ -65,7 +65,7 @@ discontinuous from one panel to the next.
   `12 (level + 1)` flat facets per turn, widened so that the part keeps its true
   volume, and is then meshed as a triangle mesh. The widening matters more than
   the facets' number: on a soft cylinder at level 3, 24 widened facets are 0.02
-  % off 50 mm away, 96 facets without it 0.16 %. A sphere is a geodesic
+  % off 50 mm away, 96 facets without it 0.16 %. A sphere is a geodesic
   polyhedron, finer with each level.
 
 ![The plate under a magnet at level 3 with its panels drawn, and at level 5: the panels shrink toward every edge and toward the magnet's footprint.](../_static/images/face_charge_plate.png)
@@ -111,10 +111,10 @@ Galerkin method should: 4.5e-4 off at level 4.
   overlap. The overlap of the two panels is clipped as a polygon and integrated
   exactly, so the two meshes need not match.
 - **Parts of one material that touch** are solved as one: the faces they share
-  carry no charge. A short bar between two wide ones is 0.83 % off the same
+  carry no charge. A short bar between two wide ones is 0.83 % off the same
   solid as one mesh at level 2, where leaving both sides' charges to cancel was
-  16 % off.
-- **A part close to another** (`NEAR`), within 20 % of the largest half-side of
+  16 % off.
+- **A part close to another** (`NEAR`), within 20 % of the largest half-side of
   the smaller of the two, is graded toward the other's outline, as for touching
   parts. A magnet without susceptibility counts too, when it is a cuboid: the
   panels follow its footprint. Near any magnet, the load takes a finer rule.
