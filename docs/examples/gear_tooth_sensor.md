@@ -148,5 +148,5 @@ part moving against the rack. Each step then solves afresh.
 - **Signal:** a swing of 62 mT on top of 478 mT at a 1 mm air gap; Magpylib
   alone sees none.
 - **Air gap:** at 2 mm the swing is 8.5 mT, seven times less.
-- **Sweep:** 0.8 s for the first solve, then about 50 ms each, the factorization
-  kept.
+- **Sweep:** about a second for the first solve, then tens of milliseconds each,
+  the factorization kept.

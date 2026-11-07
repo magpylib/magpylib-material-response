@@ -18,8 +18,7 @@ kernelspec:
 
 +++
 
-The other examples drive the material response with hard magnets or a uniform
-applied field. This one uses **current sources**: a soft-magnetic U-core with a
+This example is driven by **current sources**: a soft-magnetic U-core with a
 multi-turn coil wound around its middle bar. `mesh_all` passes current sources
 through unmeshed, and `solve_cells` adds their field at each cell's centroid to
 the applied field.
@@ -436,8 +435,8 @@ judge convergence over a large range of cell counts.
 
 Notes:
 
-- The material is linear, with µr = 1000 at any field: saturation of real core
-  materials is not modeled.
+- The material here is linear, with µr = 1000 at any field.
+  [Saturation](saturation.md) solves this U-core on a B–H curve.
 
 This model on the <a href="../inside/map.html#ucore">solver map</a>: the path it
 takes through the solver, box by box.

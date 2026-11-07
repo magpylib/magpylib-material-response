@@ -138,6 +138,5 @@ solve_cells(meshed, inplace=True)
 
 ## See Also
 
-- {doc}`../examples/index` - Working examples that demonstrate logging output
 - [Loguru Documentation](https://loguru.readthedocs.io/) - Complete reference
   for the underlying logging library

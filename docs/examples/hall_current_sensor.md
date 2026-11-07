@@ -97,7 +97,7 @@ for gap in (1.0, 1.5, 2.0, 3.0, 4.0):
 print("\n".join(rows))
 ```
 
-A narrower slot gives more signal, close to as 1 / g, and the estimate stays 5
+A narrower slot gives more signal, close to as 1 / g, and the estimate stays 4.5
 to 7 % high throughout, for two reasons. The ring's own path, 66 mm long at a
 permeability of 2001, acts as 0.03 mm more slot: 3 % of a 1 mm slot, under 1 %
 of a 4 mm one. The rest is flux that leaves the ring before the slot, or spreads
@@ -194,7 +194,7 @@ part on a curve.
 ## The answers
 
 - **Sensitivity:** 0.598 mT/A in a 2 mm slot, 5 % under the textbook μ0 / g.
-- **Slot width:** close to 1 / g, 5 to 7 % under the estimate from 1 to 4 mm.
+- **Slot width:** close to 1 / g, 4.5 to 7 % under the estimate from 1 to 4 mm.
 - **Busbar off-centre:** at most 0.4 % at 4 mm, the most toward the slot.
 - **Saturation:** from about 140 A, opposite the slot, where the ferrite carries
   four to five times the slot's flux density. Past it, solve on a `BHCurve` with

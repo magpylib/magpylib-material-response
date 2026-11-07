@@ -132,11 +132,11 @@ and face charge's default is 4 % low. At contact they bracket the pull: face
 charge and cells rise toward it, finite elements falls toward it, and they meet
 at about 32.4 N. Face charge's default is 14 % low there, cells with 8 across
 the plate 3.5 % low. A block magnet aligned with the plate needs none of this:
-the panels follow its footprint, and the block of
-[Getting started](../getting_started.md) pulls 33.3 N at the default level,
-which `refine=2` changes by under 0.1 %. For a disc or any other shape, give
-face charge `refine=2`, and check that one more round, or a higher `level`,
-moves it by less than you need.
+the panels follow its footprint: the 10 × 10 × 5 mm block of
+[Getting started](../getting_started.md), on its plate, pulls 33.3 N at the
+default level, which `refine=2` changes by under 0.1 %. For a disc or any other
+shape, give face charge `refine=2`, and check that one more round, or a higher
+`level`, moves it by less than you need.
 
 ## How thin can the plate be?
 

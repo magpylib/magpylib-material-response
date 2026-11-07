@@ -70,3 +70,11 @@ html[data-theme="dark"]
 .magpy-gallery-card .sd-card-body p {
   margin-bottom: 0.4rem;
 }
+
+/* On a phone the package's long name pushed the header's buttons past the
+screen's edge, and every page scrolled sideways: there the logo stands alone. */
+@media (max-width: 480px) {
+  .navbar-brand .title {
+    display: none;
+  }
+}

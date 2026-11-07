@@ -42,10 +42,11 @@ M4 Pro:
 | CAD part, a triangle mesh  |      0.20 s |            11 s |
 | Thin shielding sheet       |      0.28 s |           2.7 s |
 
-Face charge reaches 1 % faster than finite elements on all fourteen cases where
-both reach it, 13 to 104 times faster on nine of them. On soft iron it is 20 to
-40 times more accurate than `solve_cells` in the same time. The full table, and
-where finite elements come closest, is in
+Over the fourteen validation cases where both reach 1 %, of which the table
+above shows eight, face charge gets there faster than finite elements, 13 to 104
+times faster on nine of them. On soft iron it is 20 to 40 times more accurate
+than `solve_cells` in the same time. The full table, and where finite elements
+come closest, is in
 [the face-charge guide](face_charge.md#against-finite-elements).
 
 ## Where face charge is not the fastest
