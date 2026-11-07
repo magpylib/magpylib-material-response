@@ -22,16 +22,36 @@
   const hud = Object.fromEntries(
     [...root.querySelectorAll("[data-hud]")].map((el) => [el.dataset.hud, el]),
   );
-  const css = getComputedStyle(root);
-  const colour = (name) => css.getPropertyValue(name).trim();
-  const C = {
-    north: colour("--mrl-north"),
-    south: colour("--mrl-south"),
-    line: colour("--mrl-line"),
-    fc: colour("--mrl-fc"),
-    cells: colour("--mrl-cells"),
-    fem: colour("--mrl-fem"),
+  // the drawing's colours, from landing.css, read again when the theme changes
+  const NAMES = {
+    north: "--mrl-north",
+    south: "--mrl-south",
+    line: "--mrl-line",
+    flow: "--mrl-flow",
+    glow: "--mrl-glow",
+    steelA: "--mrl-steel-a",
+    steelB: "--mrl-steel-b",
+    edge: "--mrl-edge",
+    tick: "--mrl-tick",
+    cell: "--mrl-cell",
+    cellEdge: "--mrl-cell-edge",
+    arrow: "--mrl-arrow",
+    fem: "--mrl-fem",
+    outline: "--mrl-outline",
+    label: "--mrl-label",
+    dot: "--mrl-dot",
+    tagBg: "--mrl-tag-bg",
+    tagInk: "--mrl-tag-ink",
+    force: "--mrl-force",
   };
+  const C = {};
+  const readColours = () => {
+    const css = getComputedStyle(root);
+    for (const [key, name] of Object.entries(NAMES))
+      C[key] = css.getPropertyValue(name).trim();
+    C.glow = Number(C.glow) || 1;
+  };
+  readColours();
 
   const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -214,7 +234,7 @@
       }
       const strength = (bin + 0.5) / BINS;
       ctx.strokeStyle = C.line;
-      ctx.globalAlpha = alpha * (0.05 + 0.16 * strength);
+      ctx.globalAlpha = alpha * C.glow * (0.05 + 0.16 * strength);
       ctx.lineWidth = 6;
       ctx.stroke(path);
       ctx.globalAlpha = alpha * (0.18 + 0.75 * strength ** 1.4);
@@ -222,7 +242,7 @@
       ctx.stroke(path);
     }
     // and the flux running along them, in the direction of B
-    ctx.strokeStyle = "#ffffff";
+    ctx.strokeStyle = C.flow;
     ctx.lineWidth = 2.6;
     ctx.globalAlpha = alpha * 0.9 * smooth(0.8, 1, grow);
     ctx.setLineDash([0.1, 38]);
@@ -242,13 +262,13 @@
     if (show <= 0) return;
     ctx.globalAlpha = show;
     const g = ctx.createLinearGradient(0, v.Z(3), 0, v.Z(-3));
-    g.addColorStop(0, `rgba(150, 162, 180, ${0.1 + 0.22 * response})`);
-    g.addColorStop(1, `rgba(90, 100, 118, ${0.06 + 0.16 * response})`);
+    g.addColorStop(0, `rgba(${C.steelA}, ${0.1 + 0.22 * response})`);
+    g.addColorStop(1, `rgba(${C.steelB}, ${0.06 + 0.16 * response})`);
     ctx.fillStyle = g;
     ctx.beginPath();
     rect(v, -20, -3, 40, 6);
     ctx.fill();
-    ctx.strokeStyle = "rgba(200, 210, 225, 0.55)";
+    ctx.strokeStyle = C.edge;
     ctx.lineWidth = 1;
     ctx.setLineDash(response > 0.02 ? [] : [5, 5]);
     ctx.stroke();
@@ -303,7 +323,7 @@
     if (ticks > 0) {
       // where one panel ends and the next begins
       ctx.globalAlpha = alpha * ticks;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.strokeStyle = C.tick;
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let i = 0; i < segs.length; i++) {
@@ -335,8 +355,8 @@
       if (x > edge) continue;
       const j = Math.hypot(jx, jz) / top;
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = `rgba(90, 169, 255, ${0.08 + 0.5 * j ** 0.7})`;
-      ctx.strokeStyle = "rgba(170, 205, 255, 0.55)";
+      ctx.fillStyle = `rgba(${C.cell}, ${0.08 + 0.5 * j ** 0.7})`;
+      ctx.strokeStyle = C.cellEdge;
       ctx.lineWidth = 1;
       ctx.beginPath();
       rect(v, x - dx / 2, z - dz / 2, dx, dz);
@@ -350,7 +370,7 @@
       const az = v.Z(z - uz * L);
       const bx = v.X(x + ux * L);
       const bz = v.Z(z + uz * L);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.strokeStyle = C.arrow;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(ax, az);
@@ -400,7 +420,7 @@
       rect(v, x, z0, 10, 2.5);
       ctx.fill();
     }
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.strokeStyle = C.outline;
     ctx.lineWidth = 1;
     ctx.beginPath();
     rect(v, x, z, 10, 5);
@@ -411,7 +431,7 @@
   function label(v, text, x, z, alpha, align = "left") {
     if (alpha <= 0) return;
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = "rgba(230, 236, 245, 0.9)";
+    ctx.fillStyle = C.label;
     ctx.font =
       "500 13px -apple-system, BlinkMacSystemFont, 'Inter', sans-serif";
     ctx.textAlign = align;
@@ -425,11 +445,12 @@
     const x = v.X(0);
     const z = v.Z(8.5 + gap);
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = C.dot;
     ctx.beginPath();
     ctx.arc(x, z, 4, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.strokeStyle = C.dot;
+    ctx.globalAlpha = alpha * 0.5;
     ctx.beginPath();
     ctx.arc(x, z, 9, 0, 2 * Math.PI);
     ctx.stroke();
@@ -439,11 +460,12 @@
     ctx.textBaseline = "middle";
     const text = `${fmt(bz)} mT`;
     const tw = ctx.measureText(text).width;
-    ctx.fillStyle = "rgba(7, 9, 13, 0.75)";
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = C.tagBg;
     ctx.beginPath();
     ctx.roundRect(x + 14, z - 13, tw + 16, 26, 13);
     ctx.fill();
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = C.tagInk;
     ctx.fillText(text, x + 22, z + 1);
     ctx.globalAlpha = 1;
   }
@@ -456,8 +478,8 @@
     const top = v.Z(5.5 + gap + 1.5);
     const L = (4 + 11 * Math.sqrt(force / data.lift[0].force)) * v.s;
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = "#ffc247";
-    ctx.fillStyle = "#ffc247";
+    ctx.strokeStyle = C.force;
+    ctx.fillStyle = C.force;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(x, top);
@@ -604,7 +626,7 @@
         x2: W - m.r,
         y1: Y(b),
         y2: Y(b),
-        stroke: "rgba(255,255,255,0.08)",
+        style: "stroke: var(--mrl-grid)",
       });
       el("text", {
         x: m.l - 10,
@@ -628,10 +650,11 @@
     }).textContent = "height above the plate's centre (mm)";
     const defs = el("defs", {});
     const curves = [
-      ["magnet alone", "#7f8b9d", "2", "2 5", "the magnet alone"],
-      ["finite elements", C.fem, "6", "", "finite elements"],
-      ["face charge", C.fc, "2.5", "9 6", "face charge"],
-      ["cells", C.cells, "2.5", "1.5 5", "cells"],
+      // the colours as CSS variables, so that they follow the theme
+      ["magnet alone", "--mrl-alone", "2", "2 5", "the magnet alone"],
+      ["finite elements", "--mrl-fem", "6", "", "finite elements"],
+      ["face charge", "--mrl-fc", "2.5", "9 6", "face charge"],
+      ["cells", "--mrl-cells", "2.5", "1.5 5", "cells"],
     ];
     const clips = curves.map(([key, stroke, width, dash, name], i) => {
       const clip = el("clipPath", { id: `mrl-clip-${i}` }, defs);
@@ -645,7 +668,7 @@
       el("path", {
         d,
         fill: "none",
-        stroke,
+        style: `stroke: var(${stroke})`,
         "stroke-width": width,
         "stroke-dasharray": dash,
         "stroke-linecap": "round",
@@ -659,7 +682,7 @@
         x: W - m.r + 12,
         y: Y(end) + 5 + (key === "magnet alone" ? 0 : 18 * (i - 2)),
         class: "mrl-label",
-        fill: key === "finite elements" ? C.fem : stroke,
+        style: `fill: var(${stroke})`,
         opacity: 0,
       });
       t.textContent = name;
@@ -766,6 +789,14 @@
     if (visible) request();
   }).observe(root.querySelector(".mrl-story"));
   window.addEventListener("scroll", request, { passive: true });
+  // the theme's switch flips data-theme on <html>
+  new MutationObserver(() => {
+    readColours();
+    request();
+  }).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
   window.addEventListener("resize", resize);
 
   root.querySelectorAll("[data-copy]").forEach((button) => {

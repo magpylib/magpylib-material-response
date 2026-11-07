@@ -1,15 +1,39 @@
 /*
-The scrolling story on the landing page. It is dark in both themes: the field
-lines glow on it. Everything below it is the theme's own page.
+The scrolling story on the landing page, in the theme's light or dark. Every
+colour is a variable below, the drawing's too: landing.js reads them.
 */
 
 .mrl {
   --mrl-bg: #07090d;
   --mrl-ink: #f2f4f7;
   --mrl-dim: #9aa3b2;
+  --mrl-panel: rgba(255, 255, 255, 0.05);
+  --mrl-rule: rgba(255, 255, 255, 0.14);
   --mrl-north: #ff5b4d;
   --mrl-south: #33d17a;
   --mrl-line: #8fd3ff;
+  --mrl-flow: #ffffff;
+  --mrl-glow: 1;
+  --mrl-steel-a: 150, 162, 180;
+  --mrl-steel-b: 90, 100, 118;
+  --mrl-edge: rgba(200, 210, 225, 0.55);
+  --mrl-tick: rgba(255, 255, 255, 0.9);
+  --mrl-cell: 90, 169, 255;
+  --mrl-cell-edge: rgba(170, 205, 255, 0.55);
+  --mrl-arrow: rgba(255, 255, 255, 0.9);
+  --mrl-outline: rgba(255, 255, 255, 0.35);
+  --mrl-label: rgba(230, 236, 245, 0.9);
+  --mrl-dot: #ffffff;
+  --mrl-tag-bg: rgba(7, 9, 13, 0.75);
+  --mrl-tag-ink: #ffffff;
+  --mrl-force: #ffc247;
+  --mrl-grid: rgba(255, 255, 255, 0.08);
+  --mrl-alone: #7f8b9d;
+  --mrl-title-from: #ffffff;
+  --mrl-title-to: #b7c6d9;
+  --mrl-code-key: #ff7ab2;
+  --mrl-code-num: #d9b8ff;
+  --mrl-code-note: #7f8b9d;
   --mrl-fc: #ff9a3d;
   --mrl-cells: #5aa9ff;
   --mrl-fem: #e9edf3;
@@ -22,6 +46,43 @@ lines glow on it. Everything below it is the theme's own page.
     -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI",
     Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* the light theme: the same story on a light page */
+html[data-theme="light"] .mrl {
+  --mrl-bg: var(--pst-color-background, #ffffff);
+  --mrl-ink: #1d1d1f;
+  --mrl-dim: #5f6470;
+  --mrl-panel: rgba(0, 0, 0, 0.04);
+  --mrl-rule: rgba(0, 0, 0, 0.14);
+  --mrl-north: #e0352b;
+  --mrl-south: #14a050;
+  --mrl-line: #1a6fd1;
+  --mrl-flow: #0b3d7a;
+  --mrl-glow: 0.45;
+  --mrl-steel-a: 120, 130, 148;
+  --mrl-steel-b: 90, 98, 112;
+  --mrl-edge: rgba(60, 68, 82, 0.6);
+  --mrl-tick: rgba(20, 24, 32, 0.85);
+  --mrl-cell: 26, 111, 209;
+  --mrl-cell-edge: rgba(26, 80, 150, 0.5);
+  --mrl-arrow: rgba(10, 20, 40, 0.85);
+  --mrl-outline: rgba(0, 0, 0, 0.3);
+  --mrl-label: rgba(30, 34, 42, 0.9);
+  --mrl-dot: #1d1d1f;
+  --mrl-tag-bg: rgba(255, 255, 255, 0.9);
+  --mrl-tag-ink: #1d1d1f;
+  --mrl-force: #c27400;
+  --mrl-grid: rgba(0, 0, 0, 0.08);
+  --mrl-alone: #8a8f99;
+  --mrl-title-from: #1d1d1f;
+  --mrl-title-to: #4a5263;
+  --mrl-code-key: #c2185b;
+  --mrl-code-num: #6f42c1;
+  --mrl-code-note: #7a808c;
+  --mrl-fc: #e0701a;
+  --mrl-cells: #1a6fd1;
+  --mrl-fem: #3a3f4a;
 }
 
 /* the pinned stage needs every box around it to let it overflow */
@@ -110,7 +171,7 @@ section#magpylib-material-response > h1:first-child {
 }
 
 .mrl code {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--mrl-panel);
   border: 0;
   border-radius: 0.3em;
   padding: 0.05em 0.35em;
@@ -173,7 +234,11 @@ section#magpylib-material-response > h1:first-child {
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.04em;
-  background: linear-gradient(180deg, #ffffff 30%, #b7c6d9);
+  background: linear-gradient(
+    180deg,
+    var(--mrl-title-from) 30%,
+    var(--mrl-title-to)
+  );
   /* room for the last letter, which a clipped background would cut */
   padding: 0 0.08em;
   -webkit-background-clip: text;
@@ -201,7 +266,7 @@ section#magpylib-material-response > h1:first-child {
   padding: 0.7rem 1.4rem;
   border-radius: 999px;
   background: var(--mrl-ink);
-  color: #0b0d12 !important;
+  color: var(--mrl-bg) !important;
   font-weight: 600;
   text-decoration: none !important;
   transition: transform 0.2s ease;
@@ -216,9 +281,9 @@ section#magpylib-material-response > h1:first-child {
   gap: 0.7rem;
   align-items: center;
   padding: 0.55rem 0.6rem 0.55rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--mrl-rule);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--mrl-panel);
   color: var(--mrl-ink);
   font: inherit;
   cursor: pointer;
@@ -233,7 +298,7 @@ section#magpylib-material-response > h1:first-child {
   font-size: 0.75rem;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--mrl-panel);
   color: var(--mrl-dim);
 }
 
@@ -295,7 +360,7 @@ section#magpylib-material-response > h1:first-child {
   gap: 1.5rem;
   padding: 0.45rem 0.8rem;
   border-radius: 0.6rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--mrl-panel);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   font-size: 0.9rem;
@@ -393,7 +458,7 @@ section#magpylib-material-response > h1:first-child {
   gap: 0.3rem;
   padding: 1.1rem 1.2rem;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--mrl-panel);
   opacity: 0;
   transform: translateY(24px);
   transition:
@@ -457,9 +522,9 @@ section#magpylib-material-response > h1:first-child {
   margin: 2.5rem auto 2rem;
   padding: 1.4rem 1.6rem;
   overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--mrl-rule);
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--mrl-panel);
   text-align: left;
   font-size: 0.86rem;
   line-height: 1.7;
@@ -482,17 +547,17 @@ section#magpylib-material-response > h1:first-child {
 
 .mrl-line i {
   font-style: normal;
-  color: #ff7ab2;
+  color: var(--mrl-code-key);
 }
 
 .mrl-line em {
   font-style: normal;
-  color: #d9b8ff;
+  color: var(--mrl-code-num);
 }
 
 .mrl-line s {
   text-decoration: none;
-  color: #7f8b9d;
+  color: var(--mrl-code-note);
 }
 
 .mrl-code .mrl-cta {
