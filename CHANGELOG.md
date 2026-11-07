@@ -8,6 +8,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `study_face_charge` puts an error bar on a face-charge result, as `study_fem`
+  does on finite elements: it solves at levels 2, 3 and 4 and takes 1.25 times
+  the last change as the error of the highest. `compare` takes it. On the
+  validation cases it covered the error wherever the reference could tell; on a
+  sphere it can fall short, and warns
+
+### Changed
+
+- `solve_cells` on meshed cylinders is several times faster: alike pairs of
+  cylinder-segment cells, turned about a shared axis or shifted along it, share
+  one cell average. A 96-cell pin solves in 0.7 s instead of 3.5 s, to the same
+  polarization within 1e-13
+
 ## [0.10.2] - 2026-11-05
 
 ### Changed

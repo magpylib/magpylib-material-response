@@ -146,7 +146,7 @@ FFT_CROSS_MIN_ENTRIES = 1_000_000
 #: this share of the interaction matrix's entries: the self-blocks of uniform
 #: grids and the blocks between large grids of one spacing. Measured on 39
 #: models at chi = 1000, GMRES was then as fast or faster and lighter (three
-#: cubes of three cell sizes, 40 %: 8.3 s and 1.0 GB against 9.2 s and 1.9 GB;
+#: cubes of three cell sizes, 40 %: 8.3 s and 1.0 GB against 9.0 s and 1.4 GB;
 #: a grid with 3,900 tetrahedra, 26 %: 99 s against 112 s). Below it, many small
 #: bodies or cells off any grid made it slower (100 cubes of 27 cells, 1 %:
 #: 6.2 s against 5.1 s; 1,728 cuboids of 216 sizes, 0 %: 61 s against 34 s).
@@ -736,14 +736,19 @@ SEGMENT_AVERAGE_FROM_CHI = 1.0
 #: Gauss points per direction (radius, angle, height) of a cell average: 3
 #: instead of 2 moves that tube's moment by 0.5 points, 4 % of its error.
 SEGMENT_AVERAGE_POINTS = 2
+#: Decimals to which a pair of cylinder-segment cells is described, in the
+#: largest cell's size, its angles in turns, before alike pairs share one
+#: average: far below the rounding of the averages themselves.
+SEGMENT_PAIR_DIGITS = 10
 
 
-def _segment_quadrature(segments):
-    """Gauss points ``(n, q, 3)`` in the global frame and their weights
-    ``(n, q)``, summing to 1 over each cylinder-segment cell."""
+def _segment_quadrature(dims):
+    """Gauss points ``(n, q, 3)`` of cylinder-segment cells of dimensions
+    ``dims`` ``(n, 5)``, in their own frames, and their weights ``(n, q)``,
+    summing to 1 over each cell."""
     x, w = np.polynomial.legendre.leggauss(SEGMENT_AVERAGE_POINTS)
     x, w = (x + 1) / 2, w / 2
-    r1, r2, h, phi1, phi2 = np.array([s.dimension for s in segments]).T
+    r1, r2, h, phi1, phi2 = np.asarray(dims, dtype=float).T
     r = r1[:, None] + (r2 - r1)[:, None] * x  # (n, g)
     phi = np.deg2rad(phi1[:, None] + (phi2 - phi1)[:, None] * x)
     z = h[:, None] * (x - 0.5)
@@ -754,14 +759,11 @@ def _segment_quadrature(segments):
             z[:, None, None, :],
         ),
         axis=-1,
-    ).reshape(len(segments), -1, 3)
+    ).reshape(len(r), -1, 3)
     weights = (r * w)[:, :, None, None] * w[:, None] * w  # dV = r dr dphi dz
-    weights = weights.reshape(len(segments), -1)
+    weights = weights.reshape(len(r), -1)
     weights /= weights.sum(axis=1, keepdims=True)
-    mats = R.from_quat([s.orientation.as_quat() for s in segments]).as_matrix()
-    positions = np.array([s.position for s in segments], dtype=float)
-    points = np.einsum("nij,nqj->nqi", mats, local) + positions[:, None]
-    return points, weights
+    return local, weights
 
 
 def _segment_averages(magnets_list, indices, strong):
@@ -797,31 +799,62 @@ def _segment_averages(magnets_list, indices, strong):
     if len(i) == 0:
         return None
 
-    with timelog(f"Cell averages of {len(i):,} cylinder-segment pairs"):
-        points, weights = _segment_quadrature(segments)
-        q = points.shape[1]
-        dims = np.array([s.dimension for s in segments], dtype=float)
-        positions = np.array([s.position for s in segments], dtype=float)
-        quats = np.array([s.orientation.as_quat() for s in segments])
-        mats = R.from_quat(quats).as_matrix()
-        blocks = np.empty((len(i), 3, 3))
+    dims = np.array([s.dimension for s in segments], dtype=float)
+    positions = np.array([s.position for s in segments], dtype=float)
+    # each cell's frame turned about its axis by its first angle, in which it
+    # spans the angles 0 to phi2 - phi1: pairs that differ only by a turn about
+    # a shared axis or a shift along it, as the cells of a meshed cylinder do
+    # layer after layer, look alike there and are averaged once
+    turn = np.deg2rad(phi1)
+    c, s_ = np.cos(turn), np.sin(turn)
+    z0, z1 = np.zeros_like(c), np.ones_like(c)
+    spin = np.stack([c, -s_, z0, s_, c, z0, z0, z0, z1], axis=-1).reshape(-1, 3, 3)
+    frames = R.from_quat([s.orientation.as_quat() for s in segments]).as_matrix() @ spin
+    canon = dims.copy()
+    canon[:, 3], canon[:, 4] = 0.0, phi2 - phi1
+    turned = np.einsum("pki,pkj->pij", frames[i], frames[j])  # j's frame in i's
+    shift = np.einsum("pki,pk->pi", frames[i], positions[j] - positions[i])
+    size = rho.max()
+    key = np.hstack(
+        [
+            canon[i][:, [0, 1, 2]] / size,
+            canon[i][:, [4]] / 360,
+            canon[j][:, [0, 1, 2]] / size,
+            canon[j][:, [4]] / 360,
+            turned.reshape(-1, 9),
+            shift / size,
+        ]
+    )
+    key = np.round(key, SEGMENT_PAIR_DIGITS) + 0.0  # + 0.0: -0.0 as 0.0
+    _, first, alike = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    alike = alike.reshape(-1)
+
+    with timelog(
+        f"Cell averages of {len(i):,} cylinder-segment pairs, {len(first):,} unlike"
+    ):
+        gauss, weights = _segment_quadrature(canon)
+        q = gauss.shape[1]
+        own = np.empty((len(first), 3, 3))  # in the observer's turned frame
         step = max(1, KERNEL_PAIRS_PER_CALL // q)
-        for start in range(0, len(i), step):
-            ii, jj = i[start : start + step], j[start : start + step]
-            src = np.repeat(jj, q)
+        for start in range(0, len(first), step):
+            pairs = first[start : start + step]
+            ii, jj = i[pairs], j[pairs]
+            src = np.repeat(pairs, q)
             for k in range(3):
-                # the unit polarization along global k, in each source's frame
+                # the unit polarization along the observer's k, in each source's
+                # frame
                 H = magpy.func.cylinder_segment_field(
                     "H",
-                    points[ii].reshape(-1, 3),
-                    dims[src],
-                    mats[src, k, :],
-                    positions[src],
-                    R.from_quat(quats[src]),
+                    gauss[ii].reshape(-1, 3),
+                    canon[np.repeat(jj, q)],
+                    turned[src, k, :],
+                    shift[src],
+                    R.from_matrix(turned[src]),
                 ).reshape(len(ii), q, 3)
-                blocks[start : start + step, :, k] = magpy.mu_0 * np.einsum(
+                own[start : start + step, :, k] = magpy.mu_0 * np.einsum(
                     "pqm,pq->pm", H, weights[ii]
                 )
+        blocks = np.einsum("pab,pbc,pdc->pad", frames[i], own[alike], frames[i])
 
     volumes = np.array([s.volume for s in segments])
     order = np.lexsort((j, i))
@@ -1697,8 +1730,8 @@ def solve_cells(
 
     solver: {"auto", "direct", "iterative"}
         Linear solver to use. All apply the same ``interaction`` rule and give the
-        same polarization to about ``solver_tol``, so this sets only time and
-        memory.
+        same polarization within the tolerance set out below, so this sets only
+        time and memory.
         ``"auto"`` (default) takes ``"iterative"`` when FFT products cover at
         least a tenth of the interaction matrix: the cells of each uniform grid
         (meshed cuboids of one size and orientation) among themselves, and large
@@ -1717,8 +1750,9 @@ def solve_cells(
         uniform-grid clusters of cells
         use an FFT-accelerated :math:`O(n \\log n)` matvec. GMRES stops when the
         residual is below ``solver_tol`` relative to the right-hand side. The
-        polarization then agrees with the direct solver to about ``solver_tol``
-        for hard magnets; for soft ones the gap grows with the cell count, to
+        polarization then agrees with the direct solver to within a few times
+        ``solver_tol`` for hard magnets (0.03 to 3.4 times on four models at
+        ``chi`` 0.05 to 0.2); for soft ones the gap grows with the cell count, to
         160 times ``solver_tol`` on 4,096 cells and 580 times on 32,768
         (measured at ``chi = 1000``), so tighten ``solver_tol`` for high
         susceptibilities.

@@ -89,6 +89,7 @@ NOT_IN_SKILL = {
     "MeshStudy": "what study_cells returns",
     "FemSolution": "what solve_fem returns",
     "FemStudy": "what study_fem returns",
+    "FaceChargeStudy": "what study_face_charge returns",
 }
 
 

@@ -186,12 +186,12 @@ study = study_cells(saturating, points, (3, 5, 9))
 study.errors  # (2,)
 ```
 
-`study_cells` refines the mesh and `study_fem` the order, and `compare(a, b)`
-sets two studies side by side. Face charge has no study function: solve at two
-levels and compare. Errors are relative to the field read, which includes a
-`UniformField`, so they look small where that dominates: pass a function of the
-solved model to study the quantity you need. All of these compare models with
-models, so a measurement is still the final check.
+`study_cells` refines the mesh, `study_face_charge` the panel level (2, 3, 4 by
+default) and `study_fem` the order, and `compare(a, b)` sets two studies side by
+side. Errors are relative to the field read, which includes a `UniformField`, so
+they look small where that dominates: pass a function of the solved model to
+study the quantity you need. All of these compare models with models, so a
+measurement is still the final check.
 
 ## Gotchas
 

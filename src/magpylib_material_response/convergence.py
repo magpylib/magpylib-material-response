@@ -196,6 +196,39 @@ def _relative(change, reference):
     )
 
 
+def _last_change_estimate(values):
+    """(ratio, last change, error, errors) from the two last changes: the last
+    change, relative to the last value, as the error when it is smaller than the
+    one before; NaN errors otherwise, and with two values a ratio of None."""
+    last, step = values[-1], values[-1] - values[-2]
+    change = float(_relative(np.linalg.norm(step), np.linalg.norm(last)))
+    errors = SAFETY_FACTOR * _relative(_sizes(step), _sizes(last))
+    nan = np.full(np.shape(errors), np.nan)
+    if len(values) < 3:
+        return None, change, np.nan, nan
+    before = np.linalg.norm(values[-2] - values[-3])
+    if before == 0:  # no change at all: exact, or exactly converged
+        ratio = 0.0 if np.linalg.norm(step) == 0 else np.inf
+    else:
+        ratio = float(np.linalg.norm(step) / before)
+    if ratio >= 1:
+        return ratio, change, np.nan, nan
+    return ratio, change, SAFETY_FACTOR * change, errors
+
+
+def _evaluator(quantity):
+    """What a study reads from each solve: ``quantity`` itself when it is a
+    function of the solved model, else B at its observers, one row each."""
+    if callable(quantity):
+        return quantity
+
+    def evaluate(solved):
+        field = np.asarray(magpy.getB(solved, quantity), dtype=float)
+        return field.reshape(1, 3) if field.ndim == 1 else field
+
+    return evaluate
+
+
 def _gci(cells, values):
     """Fit ``f = f_inf - C * N**-p`` through the last three (cells, value) pairs.
 
@@ -335,14 +368,7 @@ def study_cells(
         _warn_no_estimate("meshes", 2, "a finer mesh", stacklevel=2)
     if mesher is None:
         mesher = mesh_uniform
-    if callable(quantity):
-        evaluate = quantity
-    else:
-
-        def evaluate(solved):
-            field = np.asarray(magpy.getB(solved, quantity), dtype=float)
-            return field.reshape(1, 3) if field.ndim == 1 else field
-
+    evaluate = _evaluator(quantity)
     cells, values, seconds = [], [], []
     for level in levels:
         meshed = mesher(collection, level)

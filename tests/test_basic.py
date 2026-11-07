@@ -357,6 +357,55 @@ def test_segment_cells_are_averaged_from_a_susceptibility_of_one(
     assert np.array_equal(J, solve()) is not averaged
 
 
+def test_alike_segment_pairs_share_one_average():
+    """A meshed cylinder's pairs repeat, turned about its axis and shifted
+    along it, and are averaged once: the blocks are those of averaging every
+    pair in the global frame, for a turned cylinder and loose segments."""
+    turned = magpy.magnet.Cylinder(polarization=(0, 0, 0), dimension=(3e-3, 2e-3))
+    turned.rotate_from_angax(37, (1, 2, 0.5)).move((1e-3, -1e-3, 0))
+    loose = magpy.magnet.CylinderSegment(
+        polarization=(0, 0, 0),
+        dimension=(0, 1e-3, 1e-3, -50, 130),
+        position=(0, 0, 2e-3),
+    )
+    loose.rotate_from_angax(70, "x")
+    segments = [*mesh_Cylinder(turned, 40).sources_all, loose]
+    rows, cols, blocks = cells._segment_averages(
+        segments, np.arange(len(segments)), np.ones(len(segments), bool)
+    )
+    dims = np.array([s.dimension for s in segments])
+    gauss, weights = cells._segment_quadrature(dims)
+    points = [
+        s.orientation.apply(g) + s.position
+        for s, g in zip(segments, gauss, strict=True)
+    ]
+    direct = np.empty_like(blocks)
+    for p, (i, j) in enumerate(zip(rows, cols, strict=True)):
+        for k in range(3):
+            polarization = segments[j].orientation.inv().apply(np.eye(3)[k])
+            H = magpy.func.cylinder_segment_field(
+                "H",
+                points[i],
+                np.tile(dims[j], (len(points[i]), 1)),
+                np.tile(polarization, (len(points[i]), 1)),
+                np.tile(segments[j].position, (len(points[i]), 1)),
+                segments[j].orientation,
+            )
+            direct[p, :, k] = magpy.mu_0 * weights[i] @ H
+    volumes = np.array([s.volume for s in segments])
+    reverse = {(i, j): p for p, (i, j) in enumerate(zip(rows, cols, strict=True))}
+    expected = np.array(
+        [
+            (volumes[i] * direct[p] + volumes[j] * direct[reverse[j, i]].T)
+            / (2 * volumes[i])
+            for p, (i, j) in enumerate(zip(rows, cols, strict=True))
+        ]
+    )
+    np.testing.assert_allclose(
+        blocks, expected, rtol=0, atol=1e-12 * np.abs(expected).max()
+    )
+
+
 def _tube(chi, x=0.0):
     tube = magpy.Collection(
         *(

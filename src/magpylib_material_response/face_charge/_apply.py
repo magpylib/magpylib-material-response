@@ -47,8 +47,8 @@ MARK = 0.5  # a refinement round splits panels above this share of the largest j
 # straight facets per turn of a curved face, per level plus one: 48 at level 3,
 # 15 to 5 degrees apart at levels 1 to 5, below the 20 of a sharp edge. They
 # are widened to keep the true volume, which matters more than more facets: on
-# a soft cylinder at level 3, 24 facets widened are 0.02 % off 50 mm away, 96
-# not widened 0.16 %. A sphere, with no edge to grade toward, refines by them
+# a soft cylinder at level 3, B 50 mm away is 0.04 % off with its 48 facets
+# widened, 0.02 % with 24 widened, and 0.16 % with 96 not widened. A sphere, with no edge to grade toward, refines by them
 # alone: 1 mm away, 1.4 and 0.35 % off in the worst direction with 320 and 1280
 # facets at levels 1 and 3, 0.19 and 0.05 % on its axes
 FACETS = 12
