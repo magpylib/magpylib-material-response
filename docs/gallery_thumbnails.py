@@ -217,6 +217,24 @@ def hall_current_sensor():
     return [solved.children[0], busbar, magpy.Sensor(position=(10.5 * MM, 0, 0))]
 
 
+def angle_sensor():
+    sys.path.insert(0, str(HERE / "examples"))
+    from angle_sensor_study import angle_sensor as model  # noqa: PLC0415
+    from angle_sensor_study import hall_plates  # noqa: PLC0415
+
+    solved = solve_face_charge(model(30, 1.5, 5e-3, holder=True), level=2)
+    shown = [c for c in solved.sources_all if not isinstance(c, UniformField)]
+    return [*shown, *(magpy.Sensor(position=p) for p in hall_plates(1.5))]
+
+
+def tolerance_monte_carlo():
+    sys.path.insert(0, str(HERE / "examples"))
+    from tolerance_study import assembly  # noqa: PLC0415
+
+    model, _, sensor = assembly()
+    return [*solve_face_charge(model, level=2).children, sensor]
+
+
 def saturation():
     cube = soft(magpy.magnet.Cuboid(dimension=(10 * MM,) * 3, polarization=(0, 0, 0)))
     solved = solve_face_charge(magpy.Collection(cube, UniformField(B=(0, 0, 0.01))))
@@ -234,6 +252,8 @@ EXAMPLES = [
     fem_check,
     shield_tube,
     hall_current_sensor,
+    angle_sensor,
+    tolerance_monte_carlo,
     saturation,
 ]
 

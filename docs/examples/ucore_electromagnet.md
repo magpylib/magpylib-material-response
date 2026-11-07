@@ -438,3 +438,6 @@ Notes:
 
 - The material is linear, with µr = 1000 at any field: saturation of real core
   materials is not modeled.
+
+This model on the <a href="../inside/map.html#ucore">solver map</a>: the path it
+takes through the solver, box by box.

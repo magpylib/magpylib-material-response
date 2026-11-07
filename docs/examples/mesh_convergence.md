@@ -205,3 +205,6 @@ for study, reference in zip((halbach, shield), fem[1:], strict=True):
 - **One physical quantity per study:** the entries of a function's result share
   one norm, so a force and a field in one array would be weighed against each
   other.
+
+This model on the <a href="../inside/map.html#halbach">solver map</a>: the path
+it takes through the solver, box by box.

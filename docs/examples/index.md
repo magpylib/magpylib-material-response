@@ -52,6 +52,69 @@ A Hall sensor swept past steel teeth, one solve per step, the factorization kept
 ````
 
 ````{grid-item-card}
+:link: angle_sensor
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/angle_sensor-light.jpg
+:alt: An angle sensor on a steel shaft
+:class: only-light
+```
+
+```{image} ../_static/gallery/angle_sensor-dark.jpg
+:alt: An angle sensor on a steel shaft
+:class: only-dark
+```
+
+**An angle sensor on a steel shaft**
+
+How much angle error the shaft makes of a stray field, and how a holder ring takes it away.
+
+````
+
+````{grid-item-card}
+:link: hall_current_sensor
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/hall_current_sensor-light.jpg
+:alt: A Hall current sensor
+:class: only-light
+```
+
+```{image} ../_static/gallery/hall_current_sensor-dark.jpg
+:alt: A Hall current sensor
+:class: only-dark
+```
+
+**A Hall current sensor**
+
+A slotted ferrite ring from CAD around a busbar: sensitivity, slot width, position error, where it saturates.
+
+````
+
+````{grid-item-card}
+:link: tolerance_monte_carlo
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/tolerance_monte_carlo-light.jpg
+:alt: Assembly tolerances, by Monte Carlo
+:class: only-light
+```
+
+```{image} ../_static/gallery/tolerance_monte_carlo-dark.jpg
+:alt: Assembly tolerances, by Monte Carlo
+:class: only-dark
+```
+
+**Assembly tolerances, by Monte Carlo**
+
+10,000 samples of a magnet, a steel plate and a sensor, two minutes with the factorization kept.
+
+````
+
+````{grid-item-card}
 :link: shield_tube
 :link-type: doc
 :class-card: magpy-gallery-card
@@ -157,27 +220,6 @@ A B–H curve in place of a constant susceptibility: a sphere against its exact 
 ````
 
 ````{grid-item-card}
-:link: hall_current_sensor
-:link-type: doc
-:class-card: magpy-gallery-card
-
-```{image} ../_static/gallery/hall_current_sensor-light.jpg
-:alt: A Hall current sensor
-:class: only-light
-```
-
-```{image} ../_static/gallery/hall_current_sensor-dark.jpg
-:alt: A Hall current sensor
-:class: only-dark
-```
-
-**A Hall current sensor**
-
-A slotted ferrite ring from CAD around a busbar: sensitivity, slot width, position error, where it saturates.
-
-````
-
-````{grid-item-card}
 :link: cuboids_demagnetization
 :link-type: doc
 :class-card: magpy-gallery-card
@@ -248,12 +290,14 @@ The direct and the iterative solver: their agreement, time and memory, and which
 
 holding_magnet
 gear_tooth_sensor
+angle_sensor
+hall_current_sensor
+tolerance_monte_carlo
 shield_tube
 ucore_electromagnet
 saturation
 mesh_convergence
 fem_check
-hall_current_sensor
 cuboids_demagnetization
 soft_magnets
 solver_performance

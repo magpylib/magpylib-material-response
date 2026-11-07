@@ -157,3 +157,6 @@ python -m validation.references --check plate                      # make a refe
 
 The nightly run can be started by hand on some cases only, on any branch, as in
 `gh workflow run nightly.yml --ref my-branch -f having=CylinderSegment`.
+
+This model on the <a href="../inside/map.html#femcheck">solver map</a>: the path
+it takes through the solver, box by box.

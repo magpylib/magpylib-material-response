@@ -1071,6 +1071,11 @@ function showNode(id) {
   if (curScn) html += `<p class="src">Path still shown: ${curScn.t}.</p>`;
   panel.innerHTML = html;
 }
+/* the models a worked example in the docs builds, and its page */
+const EXAMPLE = {
+  shaft: 'angle_sensor', mc: 'tolerance_monte_carlo', ucore: 'ucore_electromagnet',
+  halbach: 'mesh_convergence', femcheck: 'fem_check',
+};
 function showScn(sc) {
   const pills = sc.r.map(([t, c]) => `<span class="pill ${c || ''}">${t}</span>`).join(' ');
   const trail = sc.n.filter(id => N[id]).map(id => `<span>${N[id].t}</span>`).join('');
@@ -1088,6 +1093,7 @@ function showScn(sc) {
     <h3>${sc.t}</h3><div style="display:flex;flex-wrap:wrap;gap:4px">${pills}</div><p>${sc.body}</p>
     ${nums}${valid}${measured}
     <div class="blk"><h4>Path</h4><div class="trail">${trail}</div></div>
+    ${EXAMPLE[sc.id] ? `<p><a href="../../examples/${EXAMPLE[sc.id]}.html" target="_top">The worked example →</a></p>` : ''}
     <p class="src">Source: ${sc.src}</p>`;
 }
 function highlight(sc) {
@@ -1233,8 +1239,10 @@ for (const [title, keys] of REF_GROUPS) {
   refsBox.append(g);
 }
 
-/* initial state */
-selectScn(S.find(s => s.id === 'plate'));
+/* initial state: the model a link names, as map.html#shaft, or the plate */
+const linked = S.find(s => s.id === location.hash.slice(1));
+selectScn(linked || S.find(s => s.id === 'plate'));
+if (linked) document.getElementById('scn-strip').scrollIntoView();
 const mapScroll = document.querySelector('.map-scroll');
 requestAnimationFrame(() => {
   const w = map.getBoundingClientRect().width;

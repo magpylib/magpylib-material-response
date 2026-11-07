@@ -15,6 +15,8 @@ click a box for what happens inside it and the papers it rests on.
   // model is picked or the window is resized
   (() => {
     const frame = document.getElementById("solver-map");
+    // a link to a model, map.html#shaft, picks it in the map
+    if (location.hash) frame.src = frame.getAttribute("src") + location.hash;
     const fit = () => {
       const doc = frame.contentDocument;
       if (doc && doc.body) frame.style.height = doc.documentElement.scrollHeight + "px";
