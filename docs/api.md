@@ -1,69 +1,52 @@
-# API Reference
+# API
 
-## Cells — `cells`
+Every public function and class, from its docstring, in the order a model is
+built and solved: the solvers, what goes into a model, meshing for cells, error
+estimates, what the solvers return, saving and logging. The building blocks of
+the cells solver come last.
 
-```{eval-rst}
-.. autofunction:: magpylib_material_response.cells.solve_cells
+## Solvers
 
-.. autoclass:: magpylib_material_response.BHCurve
-
-.. autoclass:: magpylib_material_response.UniformField
-
-.. autofunction:: magpylib_material_response.cells.demag_tensor
-
-.. autofunction:: magpylib_material_response.cells.get_susceptibilities
-
-.. autofunction:: magpylib_material_response.cells.get_H_ext
-```
-
-## Face charge — `face_charge`
+`solve_fem` needs the `fem` extra: see [Getting started](getting_started.md).
 
 ```{eval-rst}
 .. autofunction:: magpylib_material_response.face_charge.solve_face_charge
 
-.. autoclass:: magpylib_material_response.face_charge.ChargeSheet
-   :members: from_triangles, part, mean_polarization, jump_indicator, panel_indicator
+.. autofunction:: magpylib_material_response.cells.solve_cells
 
-.. autofunction:: magpylib_material_response.face_charge.field_matrix
-
-.. autoclass:: magpylib_material_response.face_charge.FieldMatrix
-   :members: charges, __call__
-```
-
-## Mesh convergence — `convergence`
-
-```{eval-rst}
-.. autofunction:: magpylib_material_response.convergence.study_cells
-
-.. autoclass:: magpylib_material_response.convergence.MeshStudy
-   :members: from_values
-
-.. autofunction:: magpylib_material_response.convergence.compare
-
-.. autoclass:: magpylib_material_response.convergence.Comparison
-```
-
-## Finite elements — `fem`
-
-Needs the `fem` extra: `pip install "magpylib-material-response[fem]"`.
-
-```{eval-rst}
 .. autofunction:: magpylib_material_response.fem.solve_fem
-
-.. autofunction:: magpylib_material_response.fem.study_fem
-
-.. autoclass:: magpylib_material_response.fem.FemSolution
-   :members: getB, getH
-
-.. autoclass:: magpylib_material_response.fem.FemStudy
 ```
 
-## Meshing — `meshing`
+## Model inputs
+
+A `BHCurve` goes where a susceptibility goes; a `UniformField` is an applied
+field, a child of the model like any source.
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.meshing.mesh_all
+.. autoclass:: magpylib_material_response.BHCurve
 
+.. autoclass:: magpylib_material_response.UniformField
+```
+
+### Parts and coils
+
+A closed triangle mesh from a Magpylib `model3d`, and a coil: a polyline with
+rounded corners, and a winding pack moved along it.
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.meshing_utils.trimesh_from_model3d
+
+.. autofunction:: magpylib_material_response.polyline.create_polyline_fillet
+
+.. autofunction:: magpylib_material_response.polyline.move_grid_along_polyline
+```
+
+## Meshing for cells
+
+```{eval-rst}
 .. autofunction:: magpylib_material_response.meshing.mesh_uniform
+
+.. autofunction:: magpylib_material_response.meshing.mesh_all
 
 .. autofunction:: magpylib_material_response.meshing.mesh_Cuboid
 
@@ -76,33 +59,79 @@ Needs the `fem` extra: `pip install "magpylib-material-response[fem]"`.
 .. autofunction:: magpylib_material_response.meshing.mesh_thin_CylinderSegment_with_cuboids
 
 .. autofunction:: magpylib_material_response.meshing.voxelize
-
-.. autofunction:: magpylib_material_response.meshing_utils.trimesh_from_model3d
 ```
 
-## Coil construction — `polyline`
+## Error estimates and comparison
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.polyline.create_polyline_fillet
+.. autofunction:: magpylib_material_response.convergence.study_cells
 
-.. autofunction:: magpylib_material_response.polyline.move_grid_along_polyline
+.. autoclass:: magpylib_material_response.convergence.MeshStudy
+   :members: from_values
+
+.. autofunction:: magpylib_material_response.fem.study_fem
+
+.. autoclass:: magpylib_material_response.fem.FemStudy
+
+.. autofunction:: magpylib_material_response.convergence.compare
+
+.. autoclass:: magpylib_material_response.convergence.Comparison
 ```
 
-## Structure analysis and FFT kernels — `demag_fft`
+## Face charge results
+
+What `solve_face_charge` puts in place of each solved part, and a fast reader
+for many solves at the same points.
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.demag_fft.analyze_collection
+.. autoclass:: magpylib_material_response.face_charge.ChargeSheet
+   :members: from_triangles, part, mean_polarization, jump_indicator, panel_indicator
 
-.. autofunction:: magpylib_material_response.demag_fft.analyze_structure
+.. autofunction:: magpylib_material_response.face_charge.field_matrix
 
-.. autofunction:: magpylib_material_response.demag_fft.detect_uniform_grid
-
-.. autofunction:: magpylib_material_response.demag_fft.build_fft_kernel
-
-.. autofunction:: magpylib_material_response.demag_fft.demag_fft_matvec
+.. autoclass:: magpylib_material_response.face_charge.FieldMatrix
+   :members: charges, __call__
 ```
 
-## Interaction tensors — `newell`
+## Finite-element results
+
+```{eval-rst}
+.. autoclass:: magpylib_material_response.fem.FemSolution
+   :members: getB, getH
+```
+
+## Saving and logging
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.utils.to_json
+
+.. autofunction:: magpylib_material_response.utils.from_json
+
+.. autofunction:: magpylib_material_response.configure_logging
+
+.. autofunction:: magpylib_material_response.disable_logging
+```
+
+## Internals
+
+The pieces `solve_cells` is built from: the interaction tensors, the structure
+analysis and FFT products, and the readers of a model's susceptibilities and
+applied fields. A model never needs them; they are here for tests and for
+building on the solver. `get_dataset` loads the finite-element reference fields
+stored with the package for two small models: three turned cuboids, and a magnet
+beside a soft cube.
+
+```{eval-rst}
+.. autofunction:: magpylib_material_response.cells.demag_tensor
+
+.. autofunction:: magpylib_material_response.cells.get_susceptibilities
+
+.. autofunction:: magpylib_material_response.cells.get_H_ext
+
+.. autofunction:: magpylib_material_response.get_dataset
+```
+
+### Interaction tensors: `newell`
 
 The two interaction rules of `solve_cells`: the field at a point (`point_block`,
 the default) and the field averaged over a cell (the Newell tensors).
@@ -119,16 +148,16 @@ the default) and the field averaged over a cell (the Newell tensors).
 .. autofunction:: magpylib_material_response.newell.self_demag_factors
 ```
 
-## Utilities
+### Structure analysis and FFT products: `demag_fft`
 
 ```{eval-rst}
-.. autofunction:: magpylib_material_response.utils.to_json
+.. autofunction:: magpylib_material_response.demag_fft.analyze_collection
 
-.. autofunction:: magpylib_material_response.utils.from_json
+.. autofunction:: magpylib_material_response.demag_fft.analyze_structure
 
-.. autofunction:: magpylib_material_response.get_dataset
+.. autofunction:: magpylib_material_response.demag_fft.detect_uniform_grid
 
-.. autofunction:: magpylib_material_response.configure_logging
+.. autofunction:: magpylib_material_response.demag_fft.build_fft_kernel
 
-.. autofunction:: magpylib_material_response.disable_logging
+.. autofunction:: magpylib_material_response.demag_fft.demag_fft_matvec
 ```

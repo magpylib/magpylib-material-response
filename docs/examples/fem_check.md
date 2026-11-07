@@ -12,42 +12,36 @@ kernelspec:
   name: python3
 ---
 
-+++ {"user_expressions": []}
+# Checking a result with finite elements
 
-# Checking a Result with Finite Elements
+`study_cells` puts an error bar on a cells result
+([Error bars for cells](mesh_convergence.md)), but it takes that bar from the
+cells' own results. Where more cells close the error only slowly, the bar can be
+too short, and nothing in the cells says so. Finite elements solve the same
+Magpylib objects by an independent method, with an error bar of their own
+([Finite elements](../guide/fem.md) describes the solver; it needs the `fem`
+extra, see [Getting started](../getting_started.md)). Three questions follow:
 
-`study_cells` says how far the finest mesh is from what the method of moments
-converges to ([Mesh convergence](mesh_convergence.md)). It cannot say whether
-its own estimate is too small, or whether the method converges at all where a
-thin shell shields a field. The `fem` extra answers both: it solves the same
-magpylib objects by finite elements, on their own shapes rather than on cells,
-with its own error estimate, and `compare` sets the two side by side, sensor by
-sensor.
+- How do you run the check?
+- Where do the two disagree, whose bar is too short, and what then?
+- When is a check worth it?
 
-```bash
-pip install "magpylib-material-response[fem]"
-```
+## The model: a soft edge close to the sensors
 
-It installs NGSolve (LGPL-2.1), which has no wheels for Linux on ARM or for
-musl.
-
-## A magnet beside a soft cube
-
-The model of [Soft magnets](soft_magnets.md): a magnet (χ = 0.5) beside a cube
-of soft iron (χ = 3999) turned by 45°, with 41 sensors on a line 1 mm below
-them.
+A test model, made hard on purpose. A magnet, 1 × 1 × 2 mm and 1 T, answers its
+own field strongly (χ = 0.5). Beside it, a 1 mm cube of soft iron (χ = 3999,
+μr = 4000) is turned by 45°, so that one of its edges points down at a line of
+41 sensors. That edge is 0.29 mm above the sensors, and another edge of the cube
+is 0.29 mm from the magnet. The field changes fastest at such edges and in such
+gaps, and that is where a discretized solver struggles.
 
 ```{code-cell} ipython3
 import magpylib as magpy
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-from magpylib_material_response import compare, study_cells
-from magpylib_material_response import study_fem
+from magpylib_material_response import compare, study_cells, study_fem
 
 MM = 1e-3  # lengths in metres, written in millimetres
-ORANGE, BLUE = "#eb6834", "#2a78d6"
 
 magnet = magpy.magnet.Cuboid(
     polarization=(0, 0, 1), dimension=(1 * MM, 1 * MM, 2 * MM), position=(0, 0, 0.5 * MM)
@@ -58,34 +52,50 @@ soft.rotate_from_angax(45, "y").move((1.5 * MM, 0, 0))
 soft.susceptibility = 3999
 model = magpy.Collection(magnet, soft)
 line = np.linspace((-4, 0, -1), (6, 0, -1), 41) * MM
-
-mom = study_cells(model, line, (2, 4, 8))
-fem = study_fem(model, line)
-comparison = compare(mom, fem)
-
-print(f"MoM: {mom.cells[-1]:,} cells in {mom.seconds[-1]:.1f} s, error {mom.error:.2%}")
-print(f"FEM: order {fem.orders[-1]}, {fem.ndofs[-1]:,} unknowns in {fem.seconds[-1]:.1f} s, error {fem.error:.2%}")
-print(f"{comparison.relative_difference:.2%} apart; {comparison.agree.sum()} of {comparison.agree.size} sensors agree")
 ```
 
-+++ {"user_expressions": []}
+## How do you run the check?
 
-Each method takes seconds here, and FEM's error is a third of MoM's. Two values
-agree when they are no farther apart than their two error bars together; where
-they disagree, at least one bar is too short.
+Run both studies on the same model and sensors, and pass them to `compare`.
+`study_cells` takes the cells across the thinnest part, here 2, 4 and 8 across
+the 1 mm cube. `study_fem` raises the polynomial order on one mesh, 2, 3 and 4
+by default.
+
+```{code-cell} ipython3
+cell_study = study_cells(model, line, (2, 4, 8))
+fem_study = study_fem(model, line)
+comparison = compare(cell_study, fem_study)
+
+print(f"cells: {cell_study.cells[-1]:,} cells in {cell_study.seconds[-1]:.1f} s, "
+      f"error {cell_study.error:.2%}")
+print(f"finite elements: order {fem_study.orders[-1]}, {fem_study.ndofs[-1]:,} unknowns "
+      f"in {fem_study.seconds[-1]:.1f} s, error {fem_study.error:.2%}")
+print(f"{comparison.relative_difference:.2%} apart; "
+      f"{comparison.agree.sum()} of {comparison.agree.size} sensors agree")
+```
+
+Each takes seconds, and over the whole line the two are 0.25 % apart, within the
+cells' estimated 0.39 %. Two values agree when they are no farther apart than
+their two error bars together; 32 of the 41 sensors do.
+
+## Where do they disagree?
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+ORANGE, BLUE = "#eb6834", "#2a78d6"
 x = line[:, 0] / MM
+size = np.linalg.norm(comparison.b, axis=-1)
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=(0.6, 0.4))
 for name, value, bar, colour in (
-    ("MoM, study_cells", comparison.a, comparison.a_errors, BLUE),
-    ("FEM, study_fem", comparison.b, comparison.b_errors, ORANGE),
+    ("cells, study_cells", comparison.a, comparison.a_errors, BLUE),
+    ("finite elements, study_fem", comparison.b, comparison.b_errors, ORANGE),
 ):
     fig.add_trace(go.Scatter(x=x, y=value[:, 2] * 1e3, name=name, mode="lines+markers", line={"color": colour, "width": 2},
                              error_y={"type": "data", "array": bar * 1e3, "visible": True}), 1, 1)
-size = np.linalg.norm(comparison.b, axis=-1)
 fig.add_trace(go.Scatter(x=x, y=100 * comparison.difference / size, name="apart", mode="lines", line={"color": "#555555", "width": 2}), 2, 1)
 fig.add_trace(go.Scatter(x=x, y=100 * (comparison.a_errors + comparison.b_errors) / size, name="both error bars",
                          mode="lines", line={"color": "#999999", "width": 2, "dash": "dash"}), 2, 1)
@@ -99,61 +109,63 @@ fig.update_layout(height=520, margin={"l": 60, "r": 20, "t": 20, "b": 40}, legen
 fig
 ```
 
-+++ {"user_expressions": []}
+```{code-cell} ipython3
+:tags: [hide-input]
 
-They disagree in two places, and both times MoM's bar is the short one: FEM at
-order 5 puts the sensor just under the soft cube's corner, at 1.5 mm, 1.31 %
-from MoM's finest mesh, where `study_cells` estimated 1.15 %, and FEM's order 4
-within 0.002 %. Far to the left the field is weak and both differences are below
-0.1 %. A disagreement is the cue to refine the mesh there, or to take FEM's
-value.
-
-## What `solve_fem` does
-
-`solve_fem(model, order, observers=...)` solves one model at one polynomial
-order and returns a magpylib source with `moment`: `magpy.getB`, `getH`, `getJ`
-and `getM` read it, as on a model solved by `solve_cells`. Inside a part with a
-high susceptibility these are pointwise and show the elements, because H there
-is small next to its error. `study_fem` solves it at rising orders on one mesh
-and takes 1.25 times the last change as the error of the highest, per sensor and
-in all.
-
-- **Shapes:** cuboids, cylinders, cylinder segments, spheres, tetrahedra and
-  triangular meshes, magnets with remanence and a linear susceptibility, also
-  per axis, or a `BHCurve`.
-- **Open space:** the air around the model is cut off at a sphere and mapped
-  onto a second one by a Kelvin transform, so the boundary is exact, not a
-  distant box.
-- **Edges and sensors:** elements shrink geometrically toward the magnets'
-  edges, where the field is singular, and are made small at the observers.
-- **Currents:** with current sources the magnets take the total potential and
-  the air the reduced one, so a coil around soft iron costs no accuracy; the
-  coil is not meshed. A current through a magnet, through the hole of a ring
-  magnet, or along an open path is refused.
-- **Memory is the limit**, not time: the
-  [magnet in a steel tube](shield_tube.md) takes 1.9 million unknowns and 8.4 GB
-  at order 4, in 50 s.
-
-Both methods take the same susceptibility, so FEM checks the numerics, not the
-material model.
-
-## The validation suite
-
-The repository's `validation/` folder holds 23 cases: the models of these pages
-and others that are hard for the method of moments, nearly all with a stored
-finite-element reference at their sensors. A test holds the method of moments to
-its stored accuracy on every pull request, and every night all methods climb
-their settings against references made again, so that a change in either method
-shows. Magpylib alone, the model without its material response, is the floor: 18
-% off on the three cuboids, 721 % under the soft plate, and 100 % wherever only
-soft parts answer. The method of moments beats it on every case, by a factor of
-11 to 130 at its finest mesh. From a clone of the repository:
-
-```bash
-python -m validation.run --cases plate --methods magpylib MoM FEM  # error against time
-python -m validation.run --having CylinderSegment --methods MoM    # cases with curved cells
-python -m validation.references --check plate                      # make a reference again
+labels = ("x (mm)", "|B| (mT)", "apart", "cells' bar", "finite elements' bar")
+print(" ".join(f"{label:>{width}}" for label, width in zip(labels, (7, 10, 9, 11, 21), strict=True)))
+for k in np.flatnonzero(~comparison.agree):
+    print(f"{x[k]:7.2f} {size[k] * 1e3:10.1f} {comparison.difference[k] / size[k]:9.3%} "
+          f"{comparison.a_errors[k] / size[k]:11.3%} {comparison.b_errors[k] / size[k]:21.3%}")
 ```
 
-The nightly run can be started by hand on some cases only, on any branch, as in
-`gh workflow run nightly.yml --ref my-branch -f having=CylinderSegment`.
+Nine sensors disagree, in two regions, and both times the cells' bar is the
+short one: the finite-element bars there are all below 0.03 %.
+
+- **Under the cube's lower edge**, at x = 1.25 and 1.5 mm, the finest cells mesh
+  is 0.25 % and 1.31 % from finite elements, where `study_cells` estimated
+  0.14 % and 1.15 %. Both sensors are within 0.4 mm of the edge: three of the
+  finest cells, which are 0.125 mm across.
+- **Far to the left**, from x = −4 to −2.5 mm, the field is weak, 2 to 7 mT, and
+  the two are at most 0.064 % apart.
+
+What to do with a disagreement depends on its size against the accuracy you
+need. Below 0.1 %, as on the left, it rarely changes a design. At the edge, take
+the finite-element value, or refine the cells and run the study again. In a run
+not repeated on this page, 16 cells across the cube (12,288 cells, 50 s on an
+Apple M4 Pro) brought the cells' value at x = 1.5 mm within 0.45 % of finite
+elements, inside the two bars together. Here finite elements are the cheaper way
+to the accurate value.
+
+## When is a check worth it?
+
+- **Sensors close to a soft part's edge or in a narrow gap**, within a few of
+  the finest cells: the field changes fast there, and the cells' bar can be
+  short, as here.
+- **Accuracy you need close to the cells' bar.** Where the bar is far below what
+  you need, as on most of this line, the cells' answer stands on its own.
+- **Not for the material model.** Both solvers take the same susceptibility, so
+  the check covers the numerics only, not whether a linear χ fits your steel.
+
+This model is the case `soft_magnets` of the repository's validation suite: 23
+cases, 21 of them with stored finite-element references. On every pull request a
+test runs cells and face charge at the settings `validation/pr_check.json`
+stores, on 21 of the cases, and fails when an error or the size of a problem
+grows. [How accurate is a result?](../guide/accuracy.md) describes the suite.
+
+## The answers
+
+- **How:**
+  `compare(study_cells(model, sensors, levels), study_fem(model, sensors))`, on
+  the same sensors; each study takes seconds here.
+- **Where:** 9 of the 41 sensors disagree, and the cells' bar is the short one.
+  Two sit under the soft edge, 1.31 % apart against an estimate of 1.15 %; seven
+  sit in the weak field far to the left, at most 0.064 % apart.
+- **What then:** below the accuracy you need, nothing. Otherwise take the
+  finite-element value, a few seconds away, or refine the cells: at 16 across,
+  the sensor under the edge agrees, after 50 s.
+- **When:** where sensors read within a few cells of a soft edge or in a narrow
+  gap, and the accuracy you need is close to the cells' bar.
+
+This model on the <a href="../inside/map.html#femcheck">solver map</a>: the path
+it takes through the solver, box by box.

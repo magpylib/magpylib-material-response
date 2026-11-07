@@ -14,17 +14,15 @@ kernelspec:
 
 +++ {"user_expressions": []}
 
-# How it works
+# Inside cells
 
-Magpylib computes the field of magnets whose polarization is fixed. Real parts
-answer back: an iron plate near a magnet becomes a magnet itself, and a
-permanent magnet loses a little polarization in the field of its neighbours.
-This package computes that answer. It cuts each part into small cells, finds the
-polarization of every cell, and hands back ordinary magpylib magnets that you
-use like any other.
-
-This page shows what happens on the way, with 3D views you can turn and charts
-you can drag. The [method page](method.md) has the equations.
+`solve_cells` cuts each part into small cells, finds the polarization of every
+cell, and hands back ordinary Magpylib magnets. This is the magnetostatic method
+of moments {cite}`chadebec2006`. How does a part become cells? How do the cells
+act on each other? How many cells does an answer need? And which solver runs?
+This page answers them in that order, with 3D views you can turn and charts you
+can drag; [the cell equations](cells_equations.md) has the maths, and
+[Cells](../guide/cells.md) in the user guide the settings.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -97,10 +95,10 @@ iron = magnet_and_plate(1000)
 +++ {"user_expressions": []}
 
 In the view, the plate's cells are coloured by the strength of their
-polarization, from dark blue for none to yellow for 1 T, and studio draws the
-field lines of B in the plane y = 0. Turn the view to look at the plate from
-below: the cells above the magnet's edges carry the most, where the flux turns
-into the plate.
+polarization, from dark blue for none to yellow for 1 T, and magpylib-studio
+draws the field lines of B in the plane y = 0. Turn the view to look at the
+plate from below: the cells above the magnet's edges carry the most, where the
+flux turns into the plate.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -164,21 +162,23 @@ is the applied one plus the field of every other cell, and those cells are
 magnetized in turn. For a linear material this is one equation per cell:
 
 $$
-\mathbf{J}_i = \mathbf{J}_{r,i} + \chi_i \Bigl(\mathbf{B}_\text{applied} +
+\mathbf{J}_i = \mathbf{J}_{r,i} + \chi_i \Bigl(\mathbf{B}_\text{ext} +
 \sum_{j} \mathsf{T}_{ij}\,\mathbf{J}_j\Bigr)
 $$
 
-where $\mathbf{J}_r$ is the remanence of a permanent magnet (zero for iron) and
-$\mathsf{T}_{ij}$ is the field of cell $j$ at cell $i$ per unit of its
-polarization. With three components per cell, N cells give 3N equations in 3N
-unknowns, solved all at once so that every cell agrees with every other.
+<!-- prettier-ignore -->
+where $\mathbf{J}_{r,i}$ is the remanence $\mathbf{J}_r$ of cell $i$ (zero for
+iron), $\mathbf{B}_\text{ext}$ the applied field of a `UniformField` and any
+currents at the cell, and $\mathsf{T}_{ij}$ the field of cell $j$ at cell $i$
+per unit of its polarization. With three components per cell, N cells give 3N
+equations in 3N unknowns, solved all at once so that every cell agrees with
+every other.
 
 The interactions $\mathsf{T}_{ij}$ are the heart of it: N cells have N² of them.
 There are two ways to take the field of one cell at another:
 
-- **at its centre** (`interaction="point"`, the default), for any cell type,
-  except cylinder segments close together at a susceptibility of 1 or more,
-  which are averaged;
+- **at its centre** (`interaction="point"`, the default), for any cell type;
+  close cylinder segments with χ ≥ 1 are averaged automatically;
 - **averaged over it** (`interaction="newell"`), for cuboids all turned the same
   way.
 
@@ -265,13 +265,14 @@ pair_figure()
 
 +++ {"user_expressions": []}
 
-For cubes the two ways agree within about 1 % at every distance on a grid. For
+For cubes the two ways agree within about 1 % at every distance on a grid. For
 flat cells side by side the field changes so much across the neighbour that its
 centre value is only half the average, and the gap closes only a few widths
 away. Both rules converge to the same answer as the cells shrink: on the cube
-below they differ by 0.1 to 0.3 %, against a mesh error of 1 to 4 %. Keep the
-default; choose `"newell"` for meshes of flat cuboids, or for a mesh study,
-where its moment rises steadily toward the converged value.
+below their moments differ by about a twentieth of the mesh error, 0.4 points at
+27 cells and 0.04 at 4,096. Keep the default; choose `"newell"` for meshes of
+flat cuboids, or for a mesh study, where `"newell"` gives a moment that rises
+steadily toward the converged value.
 
 ## How many cells?
 
@@ -279,22 +280,23 @@ The answer converges as the cells shrink, slowly: halving the cell size, which
 takes eight times the cells, cuts the error to about a third. Soft iron is the
 hard case, because its polarization gathers at edges and corners, where small
 cells are needed. Here is a 10 mm cube of soft iron (χ = 1000) in a 10 mT field.
-Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
+Its magnetic moment, 0.028880 A m², is known to 0.01 %: this package's finite
 elements give it, `study_fem(cube, lambda s: s.moment[2], orders=(3, 4, 5))`, in
-seconds ([Checking a result with finite elements](examples/fem_check.md)). The
-polarizability of a cube of infinite susceptibility, 3.6443 times its volume
-(Helsing and Perfekt 2013), gives 0.028895 A m² through
-$m=VH/(1/3.6443+1/\chi)$, 0.05 % high: that formula is exact for ellipsoids
-only.
+seconds ([the finite-element check](../examples/fem_check.md)). The cube is cut
+into cuboids under both rules, and into tetrahedra:
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 def soft_cube():
+    """A 10 mm cube of soft iron, χ = 1000."""
     cube = magpy.magnet.Cuboid(dimension=(10 * MM,) * 3, polarization=(0, 0, 0))
     cube.susceptibility = 1000
     return cube
 
 
 def soft_cube_surface():
+    """The same cube as a triangle mesh, for tetrahedra."""
     corners = np.array(list(itertools.product((-5 * MM, 5 * MM), repeat=3)))
     body = magpy.magnet.TriangularMesh.from_ConvexHull(polarization=(0, 0, 0), points=corners)
     body.susceptibility = 1000
@@ -312,6 +314,9 @@ def moment(solved):
 
 
 EXACT = 0.028880  # A m², this cube's moment by finite elements, orders 3 to 5
+```
+
+```{code-cell} ipython3
 runs = []
 for rule in ("point", "newell"):
     for n in (27, 64, 216, 512, 1728, 4096):
@@ -319,7 +324,7 @@ for rule in ("point", "newell"):
         t0 = time.perf_counter()
         solved = solve_cells(in_field(cells), interaction=rule)
         runs.append((f"cuboids, {rule}", len(cells.sources_all), moment(solved), time.perf_counter() - t0))
-for n in (30, 100, 300, 1000):
+for n in (30, 100, 300):
     cells = mesh_TriangularMesh(soft_cube_surface(), n)
     t0 = time.perf_counter()
     solved = solve_cells(in_field(cells))
@@ -346,38 +351,34 @@ fig
 
 +++ {"user_expressions": []}
 
-Tetrahedra reach the same error with fewer cells. A cuboid grid, though, solves
-far faster per cell, with FFT products the next section explains, so on this
-cube the cuboids win per second of solving below about 1 %. On other parts the
-balance shifts: on the core of the
-[U-core example](examples/ucore_electromagnet.md), a few hundred tetrahedra come
-closer than thousands of cuboids. The two interaction rules sit almost on top of
-each other. In practice: start coarse, multiply the cells by four to eight, and
-stop when the quantity you need, a force or a field at a sensor, changes by less
-than you can accept.
-
-**Do not read exactly on a boundary between cells.** Touching cells each count a
-point on their shared surface as inside, and return zero on their own edges, so
-the field there is wrong, with no warning: J counts 2, 4 or 8 times, and B can
-be far off. The centre of a part with an even number of cells across is such a
-point, as is any point on a symmetry plane through it: a 10 mm cube with χ = 10
-in 0.1 T, 6 cells across, reads B = 0.107 T at its centre and 0.29 T 1 µm off it
-along each axis. Use an odd number of cells, and read off every boundary: a step
-along one axis can stay on another.
+Tetrahedra reach a given error with fewer cells: 1.35 % with 199 of them, where
+cuboids need 1,728 cells and about five times the solve time for 1.20 %. Here,
+though, the tetrahedra stall: 609 of them still give 1.34 %, while a cuboid
+grid, which solves far faster per cell with the FFT products of the next
+section, goes on to 0.77 % with 4,096 cells. On other parts the balance shifts:
+on the core of the [U-core example](../examples/ucore_electromagnet.md), a few
+hundred tetrahedra come closer than thousands of cuboids. The two interaction
+rules sit almost on top of each other.
+[How accurate is a result?](../guide/accuracy.md) shows how to refine until the
+answer settles, and [Cells](../guide/cells.md) why a field must not be read on a
+boundary between cells.
 
 ## Solving: direct or iterative
 
 N cells give 3N unknowns and a matrix of 9N² numbers: 1 GB for 3,700 cells. The
-**direct** solver stores that matrix and solves it exactly, which is quick up to
-a few thousand cells. The **iterative** solver never stores it whole. It only
-needs the field of all cells on all cells, again and again, until the
-polarizations stop changing. On a grid of identical cuboids that field is a
-convolution, so FFTs compute it in N log N time and little memory.
+**direct** solver stores that matrix and solves it exactly. The **iterative**
+solver never stores it whole. It only needs the field of all cells on all cells,
+again and again, until the polarizations stop changing. On a grid of identical
+cuboids that field is a convolution, so FFTs compute it in N log N time and
+little memory.
 
-The default, `solver="auto"`, looks at how the cells are arranged and picks.
-Here three parts are meshed three ways, and coloured by how the solver sees
-them: a cuboid mesh is one grid (blue), and so is a voxelized sphere, a grid
-with holes; tetrahedra lie on no grid (grey).
+The default, `solver="auto"`, looks at how the cells are arranged and picks. It
+sorts them into clusters: a **grid** of identical cuboids, **loose** cuboids of
+one shape off any grid, and **generic** cells, such as tetrahedra. Here three
+parts are meshed three ways, and coloured by cluster: a cuboid mesh is one grid
+(blue), and so is a voxelized sphere, a grid with holes; tetrahedra are generic
+(grey). The two lines of logging around the solve only switch the package's log
+on and off.
 
 ```{code-cell} ipython3
 block = soft_cube()
@@ -393,9 +394,9 @@ cone = magpy.magnet.TriangularMesh.from_ConvexHull(
 )
 cone.susceptibility = 1000
 model = magpy.Collection(
-    mesh_Cuboid(block, 1000),
-    voxelize(ball, 1500),
-    mesh_TriangularMesh(cone, 250),
+    mesh_Cuboid(block, 512),
+    voxelize(ball, 800),
+    mesh_TriangularMesh(cone, 120),
     UniformField(B=(0, 0, 0.01)),
 )
 
@@ -420,25 +421,22 @@ magpy.show(*(magpy.Collection(*group, style_label=kinds[k][0]) for k, group in g
 
 +++ {"user_expressions": []}
 
-The first log line counts the clusters, the second says what `"auto"` made of
-them. It takes the iterative solver once FFT products cover a tenth of the
-interaction matrix, the cells of each grid among themselves and large grids of
-one spacing between each other. Below that, many small bodies or cells off any
-grid make the iterative solver slower, and it takes the direct one. Both give
-the same answer, to about `solver_tol`; the {ref}`method page <auto-solver>` has
-the measurements behind the rule.
+The first log line counts the clusters, the second says which solver `"auto"`
+took and why: here FFT products cover 38 % of the interactions, and it took the
+iterative solver. Both give the same answer, to about `solver_tol`.
+[Cells](../guide/cells.md) gives the rule, and
+[Cells: direct and iterative solvers, measured](cells_performance.md) the
+measurements behind it.
 
-## Where to go next
+## In short
 
-- The [quickstart](quickstart.md) sets susceptibilities and applied fields.
-- The [examples](examples/index.md) compare with FEM, drive a core with a coil
-  and mesh any shape with tetrahedra.
-- The [method page](method.md) has the equations, the two interaction rules and
-  the fast paths.
+Each cell carries one polarization, and every cell feels the field of every
+other, taken at its centre or averaged over it. The answer converges slowly as
+the cells shrink, so soft iron needs many cuboids or well-placed tetrahedra.
+`"auto"` picks the iterative solver where grids let FFT products carry the work,
+and the direct one elsewhere.
 
-## References
-
-1. Helsing, J., & Perfekt, K.-M. (2013). _On the polarizability and capacitance
-   of the cube._ Applied and Computational Harmonic Analysis, 34(3), 445–468.
-   [doi:10.1016/j.acha.2012.07.006](https://doi.org/10.1016/j.acha.2012.07.006).
-   The limit polarizability of a cube, 3.6443 times its volume, is in Table 1.
+- [The cell equations](cells_equations.md): the linear system, the two
+  interaction rules and the solvers, in equations.
+- The [examples](../examples/index.md) compare with finite elements, drive a
+  core with a coil and mesh any shape with tetrahedra.

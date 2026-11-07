@@ -1,0 +1,1470 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Inside material-response</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a technical sheet. The models as tiles and a chart, the map of the three solvers and its inspector
+   side by side, then three working instruments for solve_cells (the interaction matrix, the solver chooser, one
+   GMRES iteration), then the references. Blueprint blue marks the selected path, red a refusal. */
+:root {
+  --paper: #f2f4f6;
+  --panel: #ffffff;
+  --ink: #141e28;
+  --ink2: #485664;
+  --ink3: #7b8895;
+  --rule: #d0d8df;
+  --grid: #e5eaee;
+  --accent: #1c58c9;
+  --accent-soft: rgba(28, 88, 201, .10);
+  --new: #8640d0;
+  --new-soft: rgba(134, 64, 208, .08);
+  --stop: #c0402c;
+  --shade: #000000;
+  --t-soft: #a8bcd1;
+  --t-iron: #a0aab5;
+  --t-magnet: #d9806f;
+  /* magpylib's magnet colours, south, middle and north along the magnetization (its tricolor mode) */
+  --mag-s: #00B050;
+  --mag-m: #DDDDDD;
+  --mag-n: #E71111;
+  --t-tet: #86c4b8;
+  --t-coil: #c88a3c;
+  --t-new: #bb9ce9;
+  --b-fft: #1c58c9;
+  --b-fftx: #84a5e6;
+  --b-table: #2a9d8f;
+  --b-dedup: #d49a37;
+  --b-geth: #8994a0;
+  --sp0: #2f8a55;
+  --sp1: #6c9a2c;
+  --sp2: #c4870f;
+  --sp3: #c0402c;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d1218; --panel: #141b23; --ink: #e2e8ee; --ink2: #a3afbb; --ink3: #76838f; --rule: #2a3540; --grid: #1c252e;
+    --accent: #7ba5ff; --accent-soft: rgba(123, 165, 255, .14); --new: #ba95ff; --new-soft: rgba(186, 149, 255, .12); --stop: #ff8b76;
+    --t-soft: #4c6681; --t-iron: #5d6874; --t-magnet: #a5554a; --t-tet: #3e897e; --t-coil: #a6732f; --t-new: #7559ad;
+    --b-fft: #5f8ff5; --b-fftx: #3a5995; --b-table: #2e8e82; --b-dedup: #b98631; --b-geth: #5f6b77;
+    --sp0: #4cbc7e; --sp1: #98c552; --sp2: #e6a83a; --sp3: #ff8b76;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d1218; --panel: #141b23; --ink: #e2e8ee; --ink2: #a3afbb; --ink3: #76838f; --rule: #2a3540; --grid: #1c252e;
+  --accent: #7ba5ff; --accent-soft: rgba(123, 165, 255, .14); --new: #ba95ff; --new-soft: rgba(186, 149, 255, .12); --stop: #ff8b76;
+  --t-soft: #4c6681; --t-iron: #5d6874; --t-magnet: #a5554a; --t-tet: #3e897e; --t-coil: #a6732f; --t-new: #7559ad;
+  --b-fft: #5f8ff5; --b-fftx: #3a5995; --b-table: #2e8e82; --b-dedup: #b98631; --b-geth: #5f6b77;
+  --sp0: #4cbc7e; --sp1: #98c552; --sp2: #e6a83a; --sp3: #ff8b76;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 1840px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+.wrap > *, .inst > * { min-width: 0; }
+table.reg { min-width: 680px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -.005em; }
+h1 { font-size: clamp(30px, 4.4vw, 46px); font-weight: 600; line-height: 1.05; }
+h2 { font-size: 24px; font-weight: 600; }
+h3 { font-size: 18px; font-weight: 600; }
+p { margin: 0; }
+code, .mono { font-family: var(--font-mono); font-size: .9em; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); }
+.lead { max-width: 72ch; color: var(--ink2); font-size: 16px; }
+.sub { max-width: 72ch; color: var(--ink2); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+header { display: grid; gap: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; font-size: 13px; color: var(--ink2); }
+.key { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 26px; height: 16px; border-radius: 4px; border: 1.5px solid var(--ink3); background: var(--panel); }
+.sw.new { border: 1.5px dashed var(--new); background: var(--new-soft); }
+.sw.dec { width: 16px; height: 16px; transform: rotate(45deg) scale(.8); border-radius: 2px; }
+.sw.path { border: none; height: 3px; background: var(--accent); border-radius: 2px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--new); width: 16px; height: 16px; }
+
+/* scenarios */
+.scn-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+.scn-strip { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.scn-group { display: grid; gap: 6px; min-width: 0; }
+.scn-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.scn-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); padding-bottom: 4px; border-bottom: 1px solid var(--rule); }
+.scn-label.new { color: var(--new); border-color: var(--new); }
+.scn {
+  display: grid; grid-template-rows: 46px auto auto; align-content: start; gap: 3px; text-align: left; min-width: 0;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 7px; padding: 5px 7px 7px; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.scn:hover { border-color: var(--ink3); }
+.scn[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.scn.new { border-style: dashed; border-color: var(--new); background: linear-gradient(var(--new-soft), var(--new-soft)), var(--panel); }
+.scn.new[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--new-soft); border-style: solid; }
+.scn svg { width: 100%; height: 46px; display: block; }
+.scn .t { font-weight: 600; font-size: 11.5px; line-height: 1.2; }
+.scn .sp.acc { padding-left: 1px; color: var(--ink3); }
+.meter { display: inline-flex; gap: 2px; align-items: center; flex: none; }
+.meter i { width: 8px; height: 5px; border-radius: 1.5px; background: var(--grid); }
+.sp { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ladder-card { padding: 10px 12px 8px; }
+.ladder-scroll { overflow-x: auto; }
+#ladder { width: 100%; min-width: 760px; height: auto; display: block; }
+#ladder.hide-new .isnew { display: none; }
+.ld-pick { cursor: pointer; }
+.acc-line { fill: none; stroke-width: 1.4; }
+.acc-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; }
+.ld-pick .acc-main { opacity: .32; }
+.ld-pick:hover .acc-main { opacity: .75; }
+.ld-pick.sel .acc-main { opacity: 1; }
+.ld-pick.sel .acc-main .acc-line { stroke-width: 3; }
+.acc-extra { display: none; }
+.ld-pick.sel .acc-extra { display: inline; }
+#ladder .ld-pick .ld-lab { opacity: 0; }
+#ladder .ld-pick:hover .ld-lab, #ladder .ld-pick.sel .ld-lab { opacity: 1; }
+.ld-lab { font-size: 11.5px; fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+.ld-pick:hover .ld-lab { fill: var(--accent); }
+.ld-pick.sel .ld-lab { fill: var(--accent); font-weight: 700; }
+.ld-ring { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0; }
+.ld-pick.sel .ld-ring { opacity: 1; }
+.ld-range { opacity: 0; transition: opacity .2s; }
+.ld-pick.sel .ld-range, .ld-pick:hover .ld-range { opacity: 1; }
+.ld-axis { font-family: var(--font-mono); font-size: 11px; fill: var(--ink2); }
+.ld-band { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; }
+.ld-lane { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; fill: var(--ink3); }
+.scn .r { font-family: var(--font-mono); font-size: 11px; color: var(--ink2); display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.scn .r .pill { white-space: normal; max-width: 100%; }
+.pill { display: inline-block; padding: 1px 7px; border-radius: 99px; font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--rule); color: var(--ink2); white-space: nowrap; }
+.pill.it { color: var(--accent); border-color: var(--accent); }
+.pill.dir { color: var(--ink); border-color: var(--ink2); }
+.pill.new { color: var(--new); border-color: var(--new); }
+.pill.stop { color: var(--stop); border-color: var(--stop); }
+
+/* map + panel */
+/* the bench: picker and panel in a fixed side column, the map beside it; three columns when there is room */
+.bench { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.bench .panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px); overflow-y: auto; }
+@media (min-width: 1101px) { .map-scroll svg { max-height: calc(100vh - 90px); } }
+@media (max-width: 1100px) { .bench { grid-template-columns: minmax(0, 1fr); } .bench .panel { position: static; max-height: none; } }
+.scn-strip { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: flex-start; }
+.scn-group { align-content: start; }
+.scn-cards { align-items: start; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 5px; }
+.scn { grid-template-rows: 38px auto auto; padding: 4px 5px 5px; }
+.scn svg { height: 38px; }
+.scn .t { font-size: 11px; }
+.map-bar .chip-clear + .chip-clear { margin-left: 6px; }
+.scn-cards { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+.map-box { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 10px; min-width: 0; }
+.map-scroll { overflow-x: auto; }
+.map-scroll svg { width: 100%; height: auto; display: block; }
+@media (max-width: 900px) { .map-scroll svg { min-width: 900px; } }
+.map-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 2px 4px 8px; font-size: 13px; color: var(--ink2); }
+.chip-clear { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--accent); color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 2px 10px; cursor: pointer; font-size: 12.5px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.panel .tag { justify-self: start; }
+.panel h3 { font-size: 21px; }
+.panel .codeat { font-family: var(--font-mono); font-size: 12px; color: var(--ink3); word-break: break-word; }
+.panel p { color: var(--ink); }
+.panel .blk { display: grid; gap: 6px; }
+.panel .blk h4 { margin: 0; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink3); font-weight: 500; }
+.panel ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+.panel li { color: var(--ink); }
+.panel .trail { display: flex; flex-wrap: wrap; gap: 4px; font-size: 12.5px; color: var(--ink2); }
+.panel .trail span::after { content: "→"; margin-left: 4px; color: var(--ink3); }
+.panel .trail span:last-child::after { content: ""; }
+.panel .src { font-size: 13px; color: var(--ink2); }
+.panel .new-note { border-left: 3px solid var(--new); padding-left: 10px; color: var(--ink2); font-size: 13.5px; }
+
+/* svg map styles */
+.grp { fill: none; stroke: var(--rule); stroke-width: 1.2; }
+.grp.new { stroke: var(--new); stroke-dasharray: 5 4; fill: var(--new-soft); }
+.grp-label { font-family: var(--font-mono); font-size: 11.5px; fill: var(--ink3); }
+.grp-label.new { fill: var(--new); }
+.edge { fill: none; stroke: var(--ink3); stroke-width: 1.4; transition: opacity .2s, stroke .2s; }
+.edge.dash { stroke-dasharray: 5 4; }
+.edge.new { stroke: var(--new); stroke-dasharray: 5 4; }
+.edge.on { stroke: var(--accent); stroke-width: 2.6; stroke-dasharray: none; }
+.elabel { font-size: 11px; fill: var(--ink2); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; transition: opacity .2s; }
+.elabel.new { fill: var(--new); }
+.elabel.on { fill: var(--accent); font-weight: 600; }
+.node { cursor: pointer; transition: opacity .2s; }
+.node .shape { fill: var(--panel); stroke: var(--ink3); stroke-width: 1.4; transition: stroke .15s, fill .15s; }
+.node.data .shape { fill: var(--grid); }
+.node.dec .shape { fill: var(--panel); }
+.node.loop .shape { fill: var(--panel); stroke-dasharray: 2 0; }
+.node.new .shape { stroke: var(--new); stroke-dasharray: 5 4; fill: var(--new-soft); }
+.node:hover .shape { stroke: var(--ink); }
+.node.on .shape { stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: none; }
+.node.sel .shape { stroke: var(--accent); stroke-width: 3; fill: var(--accent-soft); stroke-dasharray: none; }
+.node.stop .shape { stroke: var(--stop); stroke-width: 3; stroke-dasharray: none; }
+.node .t { font-family: var(--font-display); font-weight: 600; font-size: 14px; fill: var(--ink); }
+.node .s { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink2); }
+.node .tg { font-family: var(--font-mono); font-size: 10px; fill: var(--new); }
+.node .ic { font-size: 13px; fill: var(--ink3); }
+.map.dimmed .node:not(.on):not(.sel) { opacity: .32; }
+.map.dimmed .edge:not(.on) { opacity: .22; }
+.map.dimmed .elabel:not(.on) { opacity: .25; }
+.map.hide-new .isnew { display: none; }
+
+/* instruments */
+.inst { display: grid; gap: 16px; }
+.inst-head { display: grid; gap: 6px; }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; min-width: 0; }
+.ctrls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13.5px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--ink2); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+.ctrl-l { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); margin-right: 6px; }
+
+.bm-row { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 14px; }
+@media (max-width: 820px) { .bm-row { grid-template-columns: minmax(0, 1fr); } }
+.bm-svg { width: 100%; height: auto; display: block; }
+.bm-cell { cursor: pointer; stroke: var(--panel); stroke-width: 2; transition: opacity .15s; }
+.bm-cell:hover, .bm-cell.sel { stroke: var(--ink); stroke-width: 2.5; }
+.bm-lab { font-family: var(--font-mono); font-size: 11px; fill: var(--ink2); }
+.bm-legend { display: grid; gap: 7px; font-size: 13px; }
+.bm-legend div { display: flex; gap: 8px; align-items: center; }
+.bm-legend i { width: 14px; height: 14px; border-radius: 3px; flex: 0 0 14px; }
+.bm-info { display: grid; gap: 8px; }
+.bm-info .what { font-weight: 600; }
+.bm-info .meta { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink2); }
+.bm-auto { font-size: 13.5px; color: var(--ink2); border-top: 1px solid var(--rule); padding-top: 10px; }
+
+.calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+@media (max-width: 820px) { .calc { grid-template-columns: minmax(0, 1fr); } }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { border: 1px solid var(--rule); background: var(--panel); border-radius: 99px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; color: var(--ink2); }
+.presets button:hover { border-color: var(--ink3); color: var(--ink); }
+.grid-rows { display: grid; gap: 8px; margin-top: 12px; }
+.grid-row { display: grid; grid-template-columns: 1fr 120px 34px; gap: 8px; align-items: center; }
+.grid-row input, .grid-row select, .other input { font: inherit; font-family: var(--font-mono); font-size: 14px; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); color: var(--ink); width: 100%; min-width: 0; }
+.grid-row button { border: 1px solid var(--rule); background: transparent; border-radius: 6px; height: 32px; cursor: pointer; color: var(--ink2); }
+.addrow { justify-self: start; border: 1px dashed var(--ink3); background: transparent; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--ink2); }
+.other { display: grid; grid-template-columns: 1fr 120px 34px; gap: 8px; align-items: center; margin-top: 8px; }
+.res { display: grid; gap: 12px; align-content: start; }
+.share { font-family: var(--font-display); font-size: 52px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.share small { font-size: 18px; color: var(--ink2); font-weight: 500; }
+.bar { position: relative; height: 14px; background: var(--grid); border-radius: 7px; overflow: visible; }
+.bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 7px; transition: width .25s; }
+.bar .mark { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); left: 10%; }
+.bar .mk { position: absolute; top: 18px; left: 10%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 11px; color: var(--ink2); white-space: nowrap; }
+.verdict { font-size: 18px; font-weight: 600; margin-top: 12px; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13.5px; }
+.facts dt { color: var(--ink2); }
+.facts dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.gm-svg { width: 100%; height: auto; display: block; }
+.gm-box { fill: var(--panel); stroke: var(--ink3); stroke-width: 1.4; transition: fill .2s, stroke .2s; }
+.gm-step.act .gm-box { stroke: var(--accent); stroke-width: 2.6; fill: var(--accent-soft); }
+.gm-t { font-family: var(--font-display); font-weight: 600; font-size: 13.5px; fill: var(--ink); }
+.gm-s { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink2); }
+.gm-arrow { stroke: var(--ink3); stroke-width: 1.4; fill: none; }
+.gm-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.gm-nav button { border: 1px solid var(--rule); background: var(--panel); border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 13px; }
+.gm-dots { display: flex; gap: 6px; }
+.gm-dots button { width: 26px; height: 26px; padding: 0; border-radius: 50%; font-family: var(--font-mono); font-size: 12px; }
+.gm-dots button[aria-current="step"] { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+.gm-text { margin-top: 12px; display: grid; gap: 6px; max-width: 80ch; }
+.gm-text h3 { font-size: 17px; }
+
+table.reg { width: 100%; border-collapse: collapse; font-size: 14px; }
+.reg-scroll { overflow-x: auto; }
+table.reg th { text-align: left; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--rule); }
+table.reg td { padding: 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.reg tr.new td:first-child { border-left: 3px dashed var(--new); }
+footer { font-size: 13px; color: var(--ink2); max-width: 90ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+
+:root { --t-chip: #3d4752; --dec: var(--new); }
+:root[data-theme="dark"] { --t-chip: #6b7682; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --t-chip: #6b7682; } }
+.sw.stop { border: 2px solid var(--stop); }
+.sp.stopped { color: var(--stop); }
+a.cite { text-decoration: none; border-bottom: 1px dotted var(--accent); white-space: nowrap; }
+.refs { columns: 2 420px; column-gap: 32px; }
+.refs .rg { break-inside: avoid; margin-bottom: 14px; }
+.refs h3 { font-size: 15px; margin-bottom: 6px; }
+.refs ol { margin: 0; padding-left: 20px; display: grid; gap: 5px; font-size: 13.5px; color: var(--ink2); }
+.refs li { scroll-margin-top: 24px; border-radius: 4px; }
+.refs li:target { background: var(--accent-soft); color: var(--ink); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">magpylib-material-response 0.10.2 · main at c8f97ff · 6 November 2026</div>
+    <h1>Inside material-response</h1>
+    <p class="lead">How a magpylib model with soft parts becomes a solved one, in each of the three solvers. <code>solve_cells</code> cuts the parts into cells, <code>solve_face_charge</code> puts a charge on their surfaces, and <code>solve_fem</code> hands them to NGSolve. Pick a model to light up its path, and click any box for what happens inside it and the papers it rests on.</p>
+    <div class="legend" aria-label="Legend">
+      <span class="key"><span class="sw"></span>step</span>
+      <span class="key"><span class="sw dec"></span>decision</span>
+      <span class="key"><span class="sw path"></span>path of the selected model</span>
+      <span class="key"><span class="sw stop"></span>refused</span>
+      <a href="#refs">References</a>
+    </div>
+  </header>
+
+  <section class="inst" aria-labelledby="models-h">
+    <div class="scn-head">
+      <h2 id="models-h">Models and the paths they take</h2>
+      <span class="sub">Pick a model: its path lights up in the map. The chart under the map sets the validated ones against finite elements.</span>
+    </div>
+    <nav class="scn-strip" id="scn-strip" aria-label="Models"></nav>
+    <div class="bench">
+      <div class="map-box">
+        <div class="map-bar">
+          <span id="map-status">Showing the path of one model</span>
+          <span><button class="chip-clear" id="to-models" type="button">↑ Models</button> <button class="chip-clear" id="clear-path" type="button">Clear path ✕</button></span>
+        </div>
+        <div class="map-scroll">
+          <svg id="map" class="map" viewBox="0 0 1360 870" role="img" aria-label="Flow chart of the three solvers: solve_cells (meshing, right-hand side, cell structure, solver choice, direct and iterative branches, saturation and mesh-study loops), solve_face_charge (panels, a kept factorization, operator, assembly, LU, surface charge, ChargeSheet, field_matrix) and solve_fem (NGSolve mesh, potentials, Kelvin transform, solve, study_fem)."></svg>
+        </div>
+      </div>
+      <aside class="panel" id="panel" aria-live="polite"></aside>
+    </div>
+    <div class="card ladder-card">
+      <div class="ladder-scroll"><svg id="ladder" viewBox="0 0 1200 316" role="img" aria-label="Error of B against FEM against the time of mesh, solve and B, both on log scales: each validated model's ladder, and for the picked model the other methods' ladders"></svg></div>
+      <p class="sub" id="ladder-note" style="font-size:12.5px; margin-top:4px"></p>
+    </div>
+  </section>
+
+  <section class="inst" id="matrix" aria-labelledby="bm-h">
+    <div class="inst-head">
+      <h2 id="bm-h">The interaction matrix, block by block</h2>
+      <p class="sub">T has one 3×3 block per pair of cells. The code never treats it as one matrix: it splits the cells into clusters and builds each cluster pair the cheapest exact way. Here a soft plate (a grid of 4,096 cuboids), a magnet (a grid of 1,728) and a pole piece of 1,500 tetrahedra. Click a block.</p>
+    </div>
+    <div class="card">
+      <div class="ctrls">
+        <span><span class="ctrl-l">Solver</span><span class="seg" id="bm-solver"><button type="button" data-v="iterative" aria-pressed="true">iterative</button><button type="button" data-v="direct" aria-pressed="false">direct</button></span></span>
+        <span><span class="ctrl-l">Rule</span><span class="seg" id="bm-rule"><button type="button" data-v="point" aria-pressed="true">point</button><button type="button" data-v="newell" aria-pressed="false">newell</button></span></span>
+        <label class="toggle"><input type="checkbox" id="bm-same" checked> Plate and magnet share one cell size</label>
+        <label class="toggle"><input type="checkbox" id="bm-tets" checked> Include the tetrahedral pole piece</label>
+      </div>
+      <div class="bm-row">
+        <svg class="bm-svg" id="bm" viewBox="0 0 440 440" role="img" aria-label="Interaction matrix split into cluster blocks, coloured by how each block is computed"></svg>
+        <div class="bm-info">
+          <div class="bm-legend" id="bm-legend"></div>
+          <div class="card" style="padding:14px" id="bm-detail"></div>
+          <div class="bm-auto" id="bm-auto"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="inst" id="auto" aria-labelledby="auto-h">
+    <div class="inst-head">
+      <h2 id="auto-h">Which solver does auto pick?</h2>
+      <p class="sub">The same count as <code>_auto_solver</code>: the share of T's entries that FFT products cover. Each uniform grid covers its own block, m². Two grids of one spacing also cover their mutual blocks, 2·mₐ·m_b, once a block passes 10⁶ entries. From 10 % on, GMRES; below, the dense direct solve.</p>
+    </div>
+    <div class="card calc">
+      <div>
+        <div class="presets" id="presets"></div>
+        <div class="grid-rows" id="grid-rows"></div>
+        <div style="display:flex; gap:10px; margin-top:10px"><button class="addrow" id="addrow" type="button">+ Add a meshed cuboid body</button></div>
+        <div class="other"><label for="other-cells">Cells off any grid (tetrahedra, cylinder segments, mixed cuboids)</label><input id="other-cells" type="number" min="0" step="1" value="0"><span></span></div>
+      </div>
+      <div class="res" aria-live="polite">
+        <div class="ctrl-l">FFT share of the interaction matrix</div>
+        <div class="share" id="share">0<small> %</small></div>
+        <div class="bar" aria-hidden="true"><div class="fill" id="share-bar"></div><div class="mark"></div><div class="mk">10 %</div></div>
+        <div class="verdict" id="verdict"></div>
+        <dl class="facts" id="facts"></dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="inst" id="gmres" aria-labelledby="gm-h">
+    <div class="inst-head">
+      <h2 id="gm-h">One GMRES iteration</h2>
+      <p class="sub">What the iterative solver repeats until the residual is small enough. The heavy step is the product with T; everything else is per cell or on a small Krylov basis.</p>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto"><svg class="gm-svg" id="gm" viewBox="0 0 980 230" style="min-width:760px" role="img" aria-label="Steps of one preconditioned GMRES iteration in solve_cells"></svg></div>
+      <div class="gm-nav"><button type="button" id="gm-prev">← Previous</button><div class="gm-dots" id="gm-dots"></div><button type="button" id="gm-next">Next →</button></div>
+      <div class="gm-text" id="gm-text"></div>
+    </div>
+  </section>
+
+
+  <section class="inst" id="refs" aria-labelledby="refs-h">
+    <div class="inst-head">
+      <h2 id="refs-h">References</h2>
+      <p class="sub">The methods material-response builds on, and the sources of the use cases. Each box in the map names the ones it rests on. DOIs checked against Crossref on 6 November 2026.</p>
+    </div>
+    <div class="card refs" id="refs-list"></div>
+  </section>
+
+  <footer>Built from material-response main at c8f97ff (0.10.2): <code>cells.py</code>, <code>demag_fft.py</code>, <code>newell.py</code>, <code>meshing.py</code>, <code>convergence.py</code>, <code>face_charge/</code> and <code>fem/</code>. Numbers are quoted from the code's comments and docs, from the validation suite (<code>validation/</code>, #99; local runs on one M4 Pro, 26 to 28 October), from the use-case scripts on <a href="https://github.com/magpylib/magpylib-material-response/tree/17991902ba2908ea3d9509af84a575ab5f3c2083/explorations/use-cases" target="_blank" rel="noopener">explore/use-cases</a> (MR 0.7.0, where the kept LU was the cache prototype of #132 that became <code>reuse=</code> in #135), and from solves timed on main on 6 November. Nothing in the page is simulated. This page merges <em>Inside apply_demag</em> and <em>apply_response Dispatch</em>.</footer>
+</div>
+
+<script>
+/* embedded in the docs' own page, which carries the title: drop the page's
+   header, keeping its legend */
+if (window.self !== window.top) {
+  for (const sel of ['header .eyebrow', 'header h1', 'header .lead']) {
+    const node = document.querySelector(sel);
+    if (node) node.remove();
+  }
+}
+
+(() => {
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+
+/* ───────────────────────── references ───────────────────────── */
+// [short label, full reference, DOI or null]; every DOI checked against Crossref on 6 November 2026
+const REFS = {
+  ortner2020: ['Ortner & Coliado Bandeira 2020', 'M. Ortner, L. G. Coliado Bandeira (2020). Magpylib: a free Python package for magnetic field computation. SoftwareX 11, 100466.', '10.1016/j.softx.2020.100466'],
+  engelherbert2005: ['Engel-Herbert & Hesjedal 2005', 'R. Engel-Herbert, T. Hesjedal (2005). Calculation of the magnetic stray field of a uniaxial magnetic domain. J. Appl. Phys. 97, 074504.', '10.1063/1.1883308'],
+  slanovc2022: ['Slanovc et al. 2022', 'F. Slanovc, M. Ortner, M. Moridi, C. Abert, D. Suess (2022). Full analytical solution for the magnetic field of uniformly magnetized cylinder tiles. J. Magn. Magn. Mater. 559, 169482.', '10.1016/j.jmmm.2022.169482'],
+  chadebec2006: ['Chadebec et al. 2006', 'O. Chadebec, J.-L. Coulomb, F. Janet (2006). A review of magnetostatic moment method. IEEE Trans. Magn. 42(4), 515–520.', '10.1109/TMAG.2006.870929'],
+  moskowitz1966: ['Moskowitz & Della Torre 1966', 'R. Moskowitz, E. Della Torre (1966). Theoretical aspects of demagnetization tensors. IEEE Trans. Magn. 2(4), 739–744.', '10.1109/TMAG.1966.1065973'],
+  newell1993: ['Newell et al. 1993', 'A. J. Newell, W. Williams, D. J. Dunlop (1993). A generalization of the demagnetizing tensor for nonuniform magnetization. J. Geophys. Res. 98(B6), 9551–9555.', '10.1029/93JB00694'],
+  hayashi1996: ['Hayashi et al. 1996', 'N. Hayashi, K. Saito, Y. Nakatani (1996). Calculation of demagnetizing field distribution based on fast Fourier transform of convolution. Jpn. J. Appl. Phys. 35, 6065.', '10.1143/JJAP.35.6065'],
+  saad1986: ['Saad & Schultz 1986', 'Y. Saad, M. H. Schultz (1986). GMRES: a generalized minimal residual algorithm for solving nonsymmetric linear systems. SIAM J. Sci. Stat. Comput. 7(3), 856–869.', '10.1137/0907058'],
+  lapack1999: ['LAPACK 1999', 'E. Anderson et al. (1999). LAPACK Users\' Guide, 3rd ed. SIAM.', '10.1137/1.9780898719604'],
+  scipy2020: ['Virtanen et al. 2020', 'P. Virtanen et al. (2020). SciPy 1.0: fundamental algorithms for scientific computing in Python. Nat. Methods 17, 261–272.', '10.1038/s41592-019-0686-2'],
+  si2015: ['Si 2015', 'H. Si (2015). TetGen, a Delaunay-based quality tetrahedral mesh generator. ACM Trans. Math. Softw. 41(2), 11.', '10.1145/2629697'],
+  anderson1965: ['Anderson 1965', 'D. G. Anderson (1965). Iterative procedures for nonlinear integral equations. J. ACM 12(4), 547–560.', '10.1145/321296.321305'],
+  walker2011: ['Walker & Ni 2011', 'H. F. Walker, P. Ni (2011). Anderson acceleration for fixed-point iterations. SIAM J. Numer. Anal. 49(4), 1715–1735.', '10.1137/10078356X'],
+  richardson1911: ['Richardson 1911', 'L. F. Richardson (1911). The approximate arithmetical solution by finite differences of physical problems involving differential equations. Phil. Trans. R. Soc. A 210, 307–357.', '10.1098/rsta.1911.0009'],
+  roache1994: ['Roache 1994', 'P. J. Roache (1994). Perspective: a method for uniform reporting of grid refinement studies. J. Fluids Eng. 116(3), 405–413.', '10.1115/1.2910291'],
+  celik2008: ['Celik et al. 2008', 'I. B. Celik, U. Ghia, P. J. Roache, C. J. Freitas (2008). Procedure for estimation and reporting of uncertainty due to discretization in CFD applications. J. Fluids Eng. 130(7), 078001.', '10.1115/1.2960953'],
+  wilton1984: ['Wilton et al. 1984', 'D. R. Wilton, S. M. Rao, A. W. Glisson, D. H. Schaubert, O. M. Al-Bundak, C. M. Butler (1984). Potential integrals for uniform and linear source distributions on polygonal and polyhedral domains. IEEE Trans. Antennas Propag. 32(3), 276–281.', '10.1109/TAP.1984.1143304'],
+  graglia1993: ['Graglia 1993', 'R. D. Graglia (1993). On the numerical integration of the linear shape functions times the 3-D Green\'s function or its gradient on a plane triangle. IEEE Trans. Antennas Propag. 41(10), 1448–1455.', '10.1109/8.247786'],
+  oosterom1983: ['van Oosterom & Strackee 1983', 'A. van Oosterom, J. Strackee (1983). The solid angle of a plane triangle. IEEE Trans. Biomed. Eng. 30(2), 125–126.', '10.1109/TBME.1983.325207'],
+  dunavant1985: ['Dunavant 1985', 'D. A. Dunavant (1985). High degree efficient symmetrical Gaussian quadrature rules for the triangle. Int. J. Numer. Methods Eng. 21(6), 1129–1148.', '10.1002/nme.1620210612'],
+  langou2006: ['Langou et al. 2006', 'J. Langou, J. Langou, P. Luszczek, J. Kurzak, A. Buttari, J. Dongarra (2006). Exploiting the performance of 32 bit floating point arithmetic in obtaining 64 bit accuracy. Proc. ACM/IEEE SC\'06.', '10.1109/SC.2006.30'],
+  carson2018: ['Carson & Higham 2018', 'E. Carson, N. J. Higham (2018). Accelerating the solution of linear systems by iterative refinement in three precisions. SIAM J. Sci. Comput. 40(2), A817–A847.', '10.1137/17M1140819'],
+  greengard1987: ['Greengard & Rokhlin 1987', 'L. Greengard, V. Rokhlin (1987). A fast algorithm for particle simulations. J. Comput. Phys. 73(2), 325–348.', '10.1016/0021-9991(87)90140-9'],
+  hackbusch1999: ['Hackbusch 1999', 'W. Hackbusch (1999). A sparse matrix arithmetic based on H-matrices. Part I: introduction to H-matrices. Computing 62(2), 89–108.', '10.1007/s006070050015'],
+  helsing2013: ['Helsing & Perfekt 2013', 'J. Helsing, K.-M. Perfekt (2013). On the polarizability and capacitance of the cube. Appl. Comput. Harmon. Anal. 34(3), 445–468.', '10.1016/j.acha.2012.07.006'],
+  schoberl1997: ['Schöberl 1997', 'J. Schöberl (1997). NETGEN: an advancing front 2D/3D-mesh generator based on abstract rules. Comput. Visual. Sci. 1, 41–52.', '10.1007/s007910050004'],
+  schoberl2014: ['Schöberl 2014', 'J. Schöberl (2014). C++11 implementation of finite elements in NGSolve. ASC Report 30/2014, TU Wien.', null],
+  babuska1996: ['Babuška & Guo 1996', 'I. Babuška, B. Q. Guo (1996). Approximation properties of the h-p version of the finite element method. Comput. Methods Appl. Mech. Eng. 133(3–4), 319–346.', '10.1016/0045-7825(95)00946-9'],
+  simkin1979: ['Simkin & Trowbridge 1979', 'J. Simkin, C. W. Trowbridge (1979). On the use of the total scalar potential in the numerical solution of field problems in electromagnetics. Int. J. Numer. Methods Eng. 14(3), 423–440.', '10.1002/nme.1620140308'],
+  freeman1988: ['Freeman & Lowther 1988', 'E. M. Freeman, D. A. Lowther (1988). A novel mapping technique for open boundary finite element solutions to Poisson\'s equation. IEEE Trans. Magn. 24(6), 2934–2936.', '10.1109/20.92293'],
+  chen1997: ['Chen & Konrad 1997', 'Q. Chen, A. Konrad (1997). A review of finite element open boundary techniques for static and quasi-static electromagnetic field problems. IEEE Trans. Magn. 33(1), 663–676.', '10.1109/20.560095'],
+  halbach1980: ['Halbach 1980', 'K. Halbach (1980). Design of permanent multipole magnets with oriented rare earth cobalt material. Nucl. Instrum. Methods 169(1), 1–10.', '10.1016/0029-554X(80)90094-4'],
+  ortner2023: ['Ortner et al. 2023', 'M. Ortner, A. Boisselet, L. G. Enger, F. Slanovc, P. Leitner, D. Markó (2023). Analytical models and magnetic position systems. 26th IMEKO TC4 Symposium.', '10.21014/tc4-2023.22'],
+  malago2020: ['Malagò et al. 2020', 'P. Malagò et al. (2020). Magnetic position system design method applied to three-axis joystick motion tracking. Sensors 20(23), 6873.', '10.3390/s20236873'],
+  ergun2019: ['Ergun et al. 2019', 'A. Ergun, U. Ausserlechner, J. Holliber, W. Granig, H. Zangl (2019). A statistical investigation into assembly tolerances of gradient field magnetic angle sensors with Hall plates. Mathematics 7(10), 968.', '10.3390/math7100968'],
+  binder2025: ['Binder et al. 2025', 'G. Binder, J. Cunha, H. Koeck, M. Lehner, Infineon (2025). Magnetic angle sensor system with stray field compensation. US patent 12,237,730 B2.', null],
+  fan2020: ['Fan et al. 2020', 'Fan, Li, Nabaei, Feng, Heidari (2020). Modeling of three-axis Hall effect sensors based on integrated magnetic concentrator. IEEE Sens. J. 20(17).', '10.1109/JSEN.2020.2989325'],
+  li2025: ['Li et al. 2025', 'Li, Xiong, Wang, Dong, Zhang (2025). Design and simulation of magnetic shielding structure based on closed-loop TMR current sensor. Micromachines 16(3), 272.', '10.3390/mi16030272'],
+  kong2022: ['Kong et al. 2022', 'Kong et al. (2022). Gradient coil design method specifically for permanent-magnet-type low field portable MRI brain scanner. IEEE Trans. Instrum. Meas. 72.', '10.1109/TIM.2022.3225042'],
+};
+const REF_GROUPS = [
+  ['Fields and cells', ['ortner2020', 'engelherbert2005', 'slanovc2022', 'chadebec2006', 'moskowitz1966', 'newell1993', 'hayashi1996', 'si2015']],
+  ['Linear algebra', ['saad1986', 'lapack1999', 'scipy2020', 'langou2006', 'carson2018', 'anderson1965', 'walker2011', 'greengard1987', 'hackbusch1999']],
+  ['Surface charge', ['wilton1984', 'graglia1993', 'oosterom1983', 'dunavant1985', 'helsing2013']],
+  ['Finite elements', ['schoberl1997', 'schoberl2014', 'babuska1996', 'simkin1979', 'freeman1988', 'chen1997']],
+  ['Error estimates', ['richardson1911', 'roache1994', 'celik2008']],
+  ['Use cases', ['halbach1980', 'ortner2023', 'malago2020', 'ergun2019', 'binder2025', 'fan2020', 'li2025', 'kong2022']],
+];
+const cite = (...keys) => keys.map(k => `<a class="cite" href="#ref-${k}">${REFS[k][0]}</a>`).join('; ');
+
+/* ───────────────────────── map data ───────────────────────── */
+const N = {
+  model:   { x: 360, y: 24,  w: 200, h: 56, t: 'Model', s: 'χ · coils · UniformField', k: 'data' },
+  mesh:    { x: 360, y: 116, w: 200, h: 56, t: 'Mesh into cells', s: 'mesh_uniform · per shape' },
+  rhs:     { x: 360, y: 208, w: 200, h: 56, t: 'Right-hand side', s: 'J_r + S·B_ext' },
+  analyze: { x: 360, y: 300, w: 200, h: 56, t: 'Cell structure', s: 'grid · loose · generic' },
+  rule:    { x: 180, y: 300, w: 150, h: 56, t: 'Interaction rule', s: 'point · newell' },
+  choose:  { cx: 460, cy: 430, hw: 112, hh: 42, t: "solver = 'auto'", s: 'FFT share ≥ 10 %?', k: 'dec' },
+  dense:   { x: 220, y: 512, w: 200, h: 56, t: 'Dense T', s: '(3n)², Fortran order' },
+  lu:      { x: 220, y: 604, w: 200, h: 56, t: 'LU of I − S·T', s: 'in place, exact' },
+  ops:     { x: 500, y: 512, w: 200, h: 56, t: 'Block operator', s: 'FFT · dense · sparse' },
+  gmres:   { x: 500, y: 604, w: 200, h: 56, t: 'GMRES', s: 'block-Jacobi · restart 100' },
+  out:     { x: 360, y: 704, w: 200, h: 56, t: 'Polarization', s: 'J per cell', k: 'data' },
+  field:   { x: 360, y: 796, w: 200, h: 56, t: 'Fields anywhere', s: 'magpy.getB · show · studio', k: 'data' },
+  study:   { x: 730, y: 384, w: 150, h: 64, t: 'study_cells', s: 'cells across → GCI', k: 'loop', ic: '↻' },
+  sat:     { x: 20,  y: 384, w: 150, h: 64, t: 'Saturation', s: 'χ from BHCurve', k: 'loop', ic: '↻' },
+  fc1:     { x: 915, y: 116, w: 180, h: 52, t: 'Surface panels', s: 'graded · level' },
+  kept:    { cx: 1005, cy: 222, hw: 94, hh: 34, t: 'Kept LU fits?', s: 'reuse=', k: 'dec' },
+  fc2:     { x: 915, y: 282, w: 180, h: 52, t: 'Galerkin operator', s: 'closed-form panels' },
+  fc3:     { x: 915, y: 360, w: 180, h: 52, t: 'Assembly', s: 'dense · far pairs by Gauss' },
+  fc4:     { x: 915, y: 438, w: 180, h: 52, t: 'LU', s: 'single, refined to double' },
+  fc5:     { x: 915, y: 530, w: 180, h: 52, t: 'Surface charge', s: 'linear on each panel', k: 'data' },
+  fc6:     { x: 915, y: 622, w: 180, h: 52, t: 'ChargeSheet', s: 'a magpylib source', k: 'data' },
+  fmx:     { x: 915, y: 714, w: 180, h: 52, t: 'field_matrix', s: 'fixed points · one product' },
+  fem1:    { x: 1160, y: 116, w: 180, h: 52, t: 'NGSolve mesh', s: 'graded to magnet edges' },
+  fem2:    { x: 1160, y: 208, w: 180, h: 52, t: 'Scalar potentials', s: 'reduced · total in parts' },
+  fem3:    { x: 1160, y: 300, w: 180, h: 52, t: 'Kelvin transform', s: 'exact open boundary' },
+  fem4:    { x: 1160, y: 392, w: 180, h: 52, t: 'Solve, order p', s: 'B–H by iteration' },
+  fem5:    { x: 1160, y: 484, w: 180, h: 52, t: 'FemSolution', s: 'getB · not picklable', k: 'data' },
+  femstudy:{ x: 1160, y: 600, w: 180, h: 64, t: 'study_fem', s: 'orders → error', k: 'loop', ic: '↻' },
+};
+const E = [
+  { id: 'e1',  p: [[460, 80], [460, 116]], l: ['solve_cells: mesh first', 470, 102] },
+  { id: 'e2',  p: [[460, 172], [460, 208]], l: ['cells', 470, 194] },
+  { id: 'e3',  p: [[460, 264], [460, 300]], l: ['(I − S·T)·J = rhs', 470, 286] },
+  { id: 'e4',  p: [[330, 328], [360, 328]], l: ['', 0, 0] },
+  { id: 'e5',  p: [[460, 356], [460, 388]], l: ['clusters', 470, 376] },
+  { id: 'e6',  p: [[348, 430], [320, 430], [320, 512]], l: ['below 10 %', 312, 486, 'end'] },
+  { id: 'e7',  p: [[572, 430], [600, 430], [600, 512]], l: ['10 % or more', 608, 486] },
+  { id: 'e8',  p: [[320, 568], [320, 604]], l: ['T', 330, 590] },
+  { id: 'e9',  p: [[600, 568], [600, 604]], l: ['matvec', 610, 590] },
+  { id: 'e10', p: [[500, 640], [460, 640], [460, 540], [420, 540]], l: ['fallback', 454, 600, 'middle', -90], c: 'dash' },
+  { id: 'e11', p: [[320, 660], [320, 684], [400, 684], [400, 704]], l: ['J', 330, 678] },
+  { id: 'e12', p: [[600, 660], [600, 684], [520, 684], [520, 704]], l: ['J', 590, 678, 'end'] },
+  { id: 'e13', p: [[460, 760], [460, 796]], l: ['solved collection', 470, 782] },
+  { id: 'e14', p: [[560, 732], [865, 732], [865, 448]], l: ['value on each mesh', 712, 726, 'middle'] },
+  { id: 'e15', p: [[865, 384], [865, 144], [560, 144]], l: ['next, finer mesh', 712, 138, 'middle'] },
+  { id: 'e16', p: [[360, 732], [95, 732], [95, 448]], l: ['B in each cell', 228, 726, 'middle'] },
+  { id: 'e17', p: [[95, 384], [95, 236], [360, 236]], l: ['update χ', 228, 230, 'middle'] },
+  { id: 'f0',  p: [[560, 44], [1005, 44], [1005, 116]], l: ['solve_face_charge: no volume mesh', 785, 38, 'middle'] },
+  { id: 'f1',  p: [[1005, 168], [1005, 188]], l: ['', 0, 0] },
+  { id: 'f2',  p: [[1005, 256], [1005, 282]], l: ['no', 1013, 273] },
+  { id: 'f3',  p: [[1005, 334], [1005, 360]], l: ['', 0, 0] },
+  { id: 'f4',  p: [[1005, 412], [1005, 438]], l: ['', 0, 0] },
+  { id: 'f5',  p: [[1005, 490], [1005, 530]], l: ['σ', 1013, 514] },
+  { id: 'f6',  p: [[1099, 222], [1122, 222], [1122, 556], [1095, 556]], l: ['yes: back-substitute', 1116, 390, 'middle', 90] },
+  { id: 'f7',  p: [[1005, 582], [1005, 622]], l: ['', 0, 0] },
+  { id: 'f8',  p: [[915, 648], [890, 648], [890, 808], [560, 808]], l: ['sources for getB', 725, 802, 'middle'] },
+  { id: 'f9',  p: [[1005, 674], [1005, 714]], l: ['same sheets', 1013, 698] },
+  { id: 'f10', p: [[1005, 766], [1005, 826], [560, 826]], l: ['B at fixed points', 725, 820, 'middle'] },
+  { id: 'g0',  p: [[560, 62], [1250, 62], [1250, 116]], l: ['solve_fem: the [fem] extra', 1242, 96, 'end'] },
+  { id: 'g1',  p: [[1250, 168], [1250, 208]], l: ['', 0, 0] },
+  { id: 'g2',  p: [[1250, 260], [1250, 300]], l: ['', 0, 0] },
+  { id: 'g3',  p: [[1250, 352], [1250, 392]], l: ['', 0, 0] },
+  { id: 'g4',  p: [[1250, 444], [1250, 484]], l: ['', 0, 0] },
+  { id: 'g5',  p: [[1160, 510], [1142, 510], [1142, 844], [560, 844]], l: ['its own getB', 725, 838, 'middle'] },
+  { id: 'g6',  p: [[1250, 536], [1250, 600]], l: ['value at each order', 1242, 572, 'end'] },
+  { id: 'g7',  p: [[1340, 632], [1352, 632], [1352, 418], [1340, 418]], l: ['', 0, 0] },
+];
+const NEW_NODES = new Set();
+const NEW_EDGES = new Set();
+
+/* ───────────────────────── node details ───────────────────────── */
+const GH = 'https://github.com/magpylib/magpylib-material-response';
+const D = {
+  model: { at: 'cells.py · face_charge/_apply.py · fem/_solve.py', lead: 'A magpylib Collection. A part with a <code>susceptibility</code> responds; a magnet without one stays fixed; currents and <code>UniformField</code> only drive.', b: [
+    ['Inputs', ['<code>susceptibility</code>: a number, a 3-vector along the part\'s own axes, or a <code>BHCurve</code>, on the part or any parent; the nearest wins.', '<code>UniformField(B=…)</code> or <code>(H=…)</code>: any number, they add up, and turn with their parent.', 'Remanence through <code>polarization</code>. Coils are never meshed: their field joins the right-hand side.']],
+    ['Which solver', ['<code>solve_face_charge</code>: linear, isotropic, uniform parts; the default, no mesh.', '<code>solve_cells</code>: a <code>BHCurve</code>, per-axis χ, χ varying inside a part, or B inside a part.', '<code>solve_fem</code>: to check the other two, with the <code>[fem]</code> extra.']],
+    ['Refused, in every solver', ['Any object with a path: one solve is one configuration. Loop over the steps; face charge keeps its factorization across them with <code>reuse=</code>.']]], p: ['ortner2020', 'chadebec2006'] },
+  mesh: { at: 'meshing.py · mesh_uniform, mesh_all, mesh_Cuboid, mesh_Cylinder, voxelize, mesh_TriangularMesh', lead: 'Each responding part becomes cells, each a magpylib magnet of one uniform polarization. The cell type decides how fast everything after it runs.', b: [
+    ['mesh_uniform(cells_across)', ['One cell size for the whole model: the thinnest responding part over <code>cells_across</code>. A cuboid side gets round(side / size) cells, so sides that are multiples of the size give grids of one spacing, FFT products within and between parts.', 'Refuses above <code>max_cells</code> = 1,000,000.']],
+    ['Per shape', ['<code>mesh_Cuboid</code>: a grid of cuboids, the fast path. <code>mesh_Cylinder</code>: a core and rings of cylinder segments, on the generic path.', '<code>mesh_TriangularMesh</code>: TetGen tetrahedra; every input triangle is kept, so a detailed export sets a floor.', '<code>voxelize</code>: cubes on one lattice for any shape, sized to hold its exact volume (a staircase surface).']]], p: ['si2015'] },
+  rhs: { at: 'cells.py · solve_cells, _cell_susceptibilities', lead: 'The system is (I − S·T)·J = J_r + S·B_ext: one 3-vector J per cell, T the interaction of every cell with every other.', b: [
+    ['Built here', ['J_r: each cell\'s remanence, in the global frame.', 'S: one 3×3 block per cell, R·diag(χ)·Rᵀ, so an anisotropic χ acts along the cell\'s own axes and turns with it.', 'B_ext: <code>magpy.getB</code> of every UniformField, magnet and current at the cell centres.']]], p: ['chadebec2006', 'moskowitz1966'] },
+  analyze: { at: 'demag_fft.py · analyze_collection, detect_uniform_grid', lead: 'The cells are split into clusters that cover every cell once. A cluster decides how fast its blocks are built, never what they hold.', b: [
+    ['Cluster kinds', ['<b>grid</b>: identical cuboids, one orientation, on a uniform grid. T between them depends only on the displacement, so their block is a convolution, applied by FFT.', '<b>loose</b>: identical cuboids off any grid; blocks computed once per distinct displacement.', '<b>generic</b>: everything else, one <code>magpy.getH</code> per cell pair.']],
+    ['Details', ['Clusters under 8 cells fold into generic. Touching parts stay separate grids: a yoke with two legs is three.']]], p: ['newell1993', 'hayashi1996'] },
+  rule: { at: 'cells.py · _check_interaction; newell.py', lead: 'One rule for every pair, never mixed: mixing would jump when a part turns by any angle.', b: [
+    ['point (default)', ['The source cell\'s exact field at the observer cell\'s centre (point matching): any cell type and orientation, through magpylib\'s closed forms.', 'Beyond 50 times the source\'s longest side, a far-field expansion takes over, error under 3e-8 at the switch.']],
+    ['newell', ['The field averaged over the observer cell, the Galerkin form: the induced moment rises toward the converged value as the mesh is refined, so a mesh study knows which side it is on.', 'Needs every cell a cuboid of one orientation. Far pairs switch to a dipole with its cell-size correction, accurate to (h/r)⁴.']]], p: ['newell1993', 'engelherbert2005', 'slanovc2022', 'chadebec2006'] },
+  choose: { at: 'cells.py · _auto_solver, AUTO_MIN_FFT_SHARE = 0.1', lead: 'Under solver="auto", the share of T\'s entries that FFT products cover decides: from 10 % on GMRES, below it the direct solve.', b: [
+    ['Counted as FFT', ['Each grid\'s own block, m² entries; both blocks between two grids of one spacing, 2·mₐ·m_b, once they pass 10⁶ entries.']],
+    ['Why 10 %', ['Measured on 39 models at χ = 1000: three cubes at three cell sizes, 40 %, GMRES 8.3 s against 9.0 s; a grid with 3,900 tetrahedra, 26 %, 99 s against 112 s; 100 cubes of 27 cells, 1 %, 6.2 s against 5.1 s. <a href="#auto">Try the count below.</a>']]] },
+  dense: { at: 'cells.py · _assemble_T_dense, _pair_block', lead: 'The whole 3n × 3n T, written block by block straight into one Fortran-ordered array: 72·n² bytes, 2 GB at 5,270 cells.', b: [
+    ['Tricks', ['Two grids of one spacing: the kernel tabulated once per index difference, each chunk a gather.', 'Cuboids of one shape and orientation: the tensor once per distinct displacement.', 'The reverse block is the forward one transposed and scaled where that holds exactly.']]], p: ['lapack1999'] },
+  lu: { at: 'cells.py · _solve_direct', lead: 'Q = I − S·T is formed in T\'s own buffer and factored in place by LAPACK: exact to rounding, one matrix of memory, time as n³.', b: [], p: ['lapack1999'] },
+  ops: { at: 'cells.py · _build_operator; demag_fft.py · build_fft_kernel', lead: 'A list of block operators that apply T without forming it.', b: [
+    ['Block kinds', ['Grid self-blocks: FFT convolutions on the grid padded to twice its size, 6 tensor components stored. Exact.', 'Grids of one spacing past 10⁶ entries between them: FFT cross-convolutions.', 'Everything else: dense blocks, or sparse ones where dropping the smallest entries moves the operator by less than a tenth of the tolerance; at high χ almost nothing drops.']]], p: ['hayashi1996'] },
+  gmres: { at: 'cells.py · _solve_iterative, GMRES_RESTART = 100', lead: 'SciPy\'s GMRES on I − S·T, each cell\'s own 3×3 block of Q inverted as the preconditioner (block Jacobi; for tetrahedra its isotropic part).', b: [
+    ['Settings', ['Restart every 100: against 20, 15–55 % fewer iterations on soft iron, and a 1 mm μ-metal sheet at χ = 10⁴ converges.', 'Auto runs to solver_tol / 100: at χ = 1000 the answer agrees with the direct one to about solver_tol on a few thousand cells, ten times it on 32,768. Run to solver_tol itself, as solver="iterative" does, it sits 160 to 580 tolerances away.']],
+    ['When it does not converge', ['solver="iterative" raises. Auto falls back to the direct solve when 72·n² ≤ 2 GB, and otherwise raises, naming the memory. <a href="#gmres">Step through one iteration.</a>']]], p: ['saad1986', 'scipy2020'] },
+  out: { at: 'cells.py · solve_cells', lead: 'Each cell\'s J is written back as its polarization. The solved collection holds ordinary magpylib magnets: getB, show, studio and to_json do not know a solve happened.', b: [] },
+  field: { at: 'magpylib · getB', lead: 'magpylib sums the field of every source in the solved collection at any observer: cells, sheets or a FemSolution\'s own getB.', b: [
+    ['Inside a part', ['Cells give B. A ChargeSheet gives μ0 H there, and warns: B inside needs the part\'s magnetization, which surface charge does not carry.']]], p: ['ortner2020'] },
+  study: { at: 'convergence.py · study_cells, MeshStudy, compare', lead: 'Solves one mesh per entry of <code>levels</code>, cells across the thinnest part by default, coarse to fine, and estimates the finest one\'s error by the grid convergence index.', b: [
+    ['How', ['One order for the whole quantity from its last two changes, accepted between 0.3 and 3; error = 1.25 × the distance to the Richardson-extrapolated value.', 'Declines, with NaN errors, when entries turning against the trend carry more than 10 % of the last change.', '<code>compare(study_cells, study_fem)</code> sets both error bars side by side per observer.']]], p: ['richardson1911', 'roache1994', 'celik2008'] },
+  sat: { at: '_saturation.py · BHCurve; cells.py · solve_cells', lead: 'With <code>susceptibility=BHCurve(H=…, B=…)</code>, each cell\'s χ follows the curve at its own field, and the linear solve repeats until no χ changes.', b: [
+    ['As released (0.9.0, #150, #159, #162)', ['T is built once; Anderson acceleration; about 3 to 40 solves, more on a sharp knee.', 'A sphere of 517 tetrahedra within 0.02 % of exact along the curve. <code>solve_fem</code> follows the same curve (#151); <code>solve_face_charge</code> refuses it.']]], p: ['anderson1965', 'walker2011'] },
+  fc1: { at: 'face_charge · _mesh.py, _panels.py, _tribody.py', lead: 'A part that is linear, isotropic and uniform inside has no charge in its volume: its whole response is a charge on its surface.', b: [
+    ['Panels', ['Cuboids: layers toward each edge at ℓ·(k/m)^2.5, where the charge is singular. Curved parts: 12 (level + 1) facets per turn; spheres geodesic.', 'Triangle meshes and CAD exports: coplanar triangles merged, rings inward from each sharp edge.', 'Parts that touch share the outline of their contact; a magnet close to a part grades its panels toward it.']],
+    ['refine=', ['Splits the panels where the solved charge jumps most and solves again: B 0.25 mm above a plate within 0.04 % in 2,688 unknowns, where uniform panels need 10,350 for 0.13 %.']]] },
+  kept: { at: 'face_charge · _kept.py, _apply.py', lead: 'The matrix depends only on the solved parts. <code>reuse=True</code> keeps the LU on the result; a later call with <code>reuse=previous</code> whose parts make the same matrix takes only a new load and a back-substitution.', b: [
+    ['The fingerprint', ['Read off the meshed panels, not the input: a magnet that comes close enough to regrade a part changes it by itself. Poses are relative to the first part, so parts that move as one keep it.', 'Outside it: magnets without χ, currents, UniformField, remanence. A poor match solves afresh, never a wrong field.']],
+    ['Measured, 10,368 unknowns (36 soft cubes)', ['First solve 3.6 s and 1.7 GB, a reused one 0.18 s. At 28,800 unknowns 30 s and 7.3 GB, reused 0.8 s. M4 Pro, default threads, 6 November.']]] },
+  fc2: { at: 'face_charge · _rectangle.py, _triangle.py', lead: '(1/χ + 1/2)·σ − K′σ = H₀·n + M₀·n / χ, K′ the adjoint double layer: the jump of the normal field across the surface. μ0 H₀ is the field of every fixed source (magnets, coils, UniformField), μ0 M₀ = J_r the part\'s remanence.', b: [
+    ['Discretized', ['Charge linear on each panel (1, u, v), Galerkin: the flux of one panel through another.', 'Fields of rectangles and triangles in closed form, from edge integrals and the solid angle of a triangle; checked to 1e-9.', 'One zero-net-charge row per part, or per closed shell of a mesh.']]], p: ['wilton1984', 'graglia1993', 'oosterom1983', 'chadebec2006'] },
+  fc3: { at: 'face_charge · _bodies.py, _panels.py · FAR_RULES, FAR_PAIRS', lead: 'All parts form one dense system, 8 n² bytes: 3.2 GB at the 20,000-unknown default <code>max_unknowns</code>.', b: [
+    ['Far pairs', ['Panel pairs far apart in large systems take Gauss points instead of the closed form, 3 or 2 per side; up to 1.55× faster on 8 threads (#133, #134).', 'getB far from a sheet: six points per triangle, exact to degree 4.']],
+    ['Beyond 20,000 unknowns', ['A fast multipole method or a hierarchical matrix would grow about linearly in memory. Not built: below the cap the dense solve is faster, and a kept LU beats any iteration in a loop.']]], p: ['dunavant1985', 'greengard1987', 'hackbusch1999'] },
+  fc4: { at: 'face_charge · _bodies.py · MIXED = 2_000', lead: 'From 2,000 unknowns, an LU in single precision refined against the double matrix to double\'s accuracy, as LAPACK\'s dsgesv: 2 to 4 times faster, fields within 2e-9.', b: [
+    ['Memory', ['The single copy takes the 20,000-unknown system from 3.2 to 4.8 GB.', 'With <code>reuse=True</code> the double LU is kept instead, on the result, until the result goes.']]], p: ['langou2006', 'carson2018', 'lapack1999'] },
+  fc5: { at: 'face_charge · jump_indicator; validation/', lead: 'On the six validation cases A to F (three turned cuboids, a magnet beside a soft cube, a flux concentrator, a Halbach array, a thin sheet and the U-core) within each reference\'s own uncertainty; on soft iron more accurate than cells in the same time.', b: [
+    ['Accuracy hint', ['<code>jump_indicator</code>: the largest jump of the charge between panels, as a share of the peak. The true charge is continuous on a flat face, so the jump is discretization error, free after a solve.']],
+    ['Checked on', ['A cube of infinite χ against its known polarizability, 3.6443 times its volume.']]], p: ['helsing2013'] },
+  fc6: { at: 'face_charge · _sheet.py', lead: 'Each solved part becomes a ChargeSheet: a magpylib CustomSource holding triangles and the charge at their corners, in the part\'s place in the collection.', b: [
+    ['What it does', ['getB, getH, show() and to_json as any source. Outside the part it gives B; inside, μ0 H and a warning.', '<code>sheet.mean_polarization</code>: the part\'s average J, free. <code>sheet.part</code>: the magnet it was solved from, to rebuild a model.', 'The result\'s <code>face_charge_info</code> holds unknowns, level, rounds, reused and seconds.']]] },
+  fmx: { at: 'face_charge · _matrix.py · field_matrix, FieldMatrix (#175, 0.10.0)', lead: 'For many solves read at the same points: the sheets\' field becomes one matrix times their charges.', b: [
+    ['Numbers', ['A plate read at 2,601 points: 0.4 ms against 25 ms for getB. It holds 3 × points × unknowns numbers, 62 MB there; float32 halves it.', 'It refuses sheets with another mesh or pose, never giving a wrong field. Add the other sources with getB.']]] },
+  fem1: { at: 'fem/_geometry.py · fem/_solve.py', lead: 'NGSolve meshes the model\'s parts and the air around them with Netgen, refined geometrically toward the magnets\' edges.', b: [
+    ['Controls', ['<code>maxh</code> and edge layers; <code>observers=</code> refines where you read.', 'Refused: a coil through a hole in a magnet.']]], p: ['schoberl1997', 'babuska1996'] },
+  fem2: { at: 'fem/_solve.py', lead: 'The air takes the reduced scalar potential, μ0 H = B_ext + B_c − ∇u, B_c the coils\' field from magpylib, never meshed. With currents the parts take the total potential, μ0 H = −∇ψ: in soft iron the reduced one would have to cancel the coil\'s field almost exactly, the total one carries only what is left.', b: [], p: ['simkin1979'] },
+  fem3: { at: 'fem/_solve.py · _kelvin_gradient', lead: 'The air ball is mapped onto a second ball by the Kelvin transform and joined along the sphere: the open boundary is exact, not truncated.', b: [], p: ['freeman1988', 'chen1997'] },
+  fem4: { at: 'fem/_solve.py · solve_fem(order=3)', lead: 'High-order elements: <code>solve_fem</code> defaults to order 3, <code>study_fem</code> to orders 2, 3 and 4. On a BHCurve order 2 can stop with "did not settle", so start a study of a saturating part at order 3, <code>orders=(3, 4, 5)</code>. A BHCurve iterates the same way as in cells (#151).', b: [], p: ['schoberl2014'] },
+  fem5: { at: 'fem/_solve.py · FemSolution', lead: 'getB at any point: (3,) for one row, (n, 3) for n. It cannot be pickled or saved: a pickled one crashes on its first read.', b: [] },
+  femstudy: { at: 'fem/_study.py · study_fem; convergence.py · compare', lead: 'Raises the order on one mesh and reads the error from the last steps. On a cube of infinite χ it gives the known polarizability to 2e-5 at order 5. Against the validation references, at orders 2 to 5, it reaches 0.1 % on 12 of the 15 cuboid and CAD cases of the face-charge comparison, in 21 s at most; on the other three the references are themselves good only to 0.2 to 1.5 %.', b: [], p: ['babuska1996', 'helsing2013'] },
+};
+
+/* measured solve times, each with what was timed: the validation runs, the docs, the code's comments */
+const SPEED = {
+  cube:    { t: 1.14, lo: 0.09, hi: 7.5, what: '4,096 cells of the flux concentrator; 512 to 32,768 cells took 0.09 to 7.5 s', acc: '0.81 % off finite elements at 4,096 cells, 0.29 % at 32,768', src: 'docs: Error bars for cells, the flux concentrator' },
+  plate:   { t: 7, what: 'about 17,000 cells at 0.5 mm', acc: 'still 70 % off right under the plate, where it shields', src: 'face-charge study, magnet on a plate' },
+  ucore:   { t: 0.21, what: '704 cuboid cells, 4 across', acc: '15 % off finite elements above the poles; face charge 0.08 % in 0.4 s', src: 'docs: A U-core electromagnet' },
+  halbach: { t: 4.9, lo: 0.08, hi: 4.9, what: '30,720 cells; 480 to 30,720 cells took 0.08 to 4.9 s', acc: '0.022 % off finite elements over the profile, 0.08 % at the worst point', src: 'docs: Error bars for cells' },
+  rotated: { t: 0.45, lo: 0.0015, hi: 0.45, what: '256 cells per magnet', acc: '0.64 %, the ANSYS data\'s own limit', src: 'face-charge validation, case A' },
+  cyl:     { t: 775, what: 'a study on three meshes up to 3,168 cells, mostly the finest', acc: 'finest level 0.3–1 % off', src: 'face-charge step 3a' },
+  tets:    { t: 248, lo: 7, hi: 248, what: '8,256 tetrahedra, about the memory limit; 1,582 to 8,256 took 7 to 248 s', acc: '0.2–0.7 % off', src: 'face-charge step 3b' },
+  sheet:   { t: 11.9, lo: 0.17, hi: 11.9, what: '36,864 cells; 576 to 36,864 cells took 0.17 to 12 s', acc: '10 % off behind the sheet', src: 'face-charge validation, case E' },
+  study:   { t: 9.2, what: 'three meshes, 512, 4,096 and 32,768 cells, of the flux concentrator', acc: 'its own estimate: 0.13–0.44 %', src: 'docs: Mesh convergence' },
+  offgrid: { t: 130, what: 'magnet on a 5 mm plate at 0.4 mm, peak 9.9 GB', acc: '', src: '#86' },
+  small:   { t: 5.1, what: '2,700 cells, direct; GMRES took 6.2 s', acc: '', src: 'AUTO_MIN_FFT_SHARE notes' },
+  sizes:   { t: 34, what: '1,728 cuboids, direct; GMRES took 61 s', acc: '', src: 'AUTO_MIN_FFT_SHARE notes' },
+  fc:      { t: 0.38, lo: 0.38, hi: 4.7, what: '1,368 unknowns on the flux concentrator; a cuboid alone solves for any χ in 2 ms, after 1.5 s once', acc: '0.073 % off, where cells took 1.2 s for 0.81 %', src: 'face-charge validation, case C' },
+  fccad:   { t: 5.5, lo: 2.1, hi: 56, what: '3,712 triangles, hierarchical assembly; 1,714 to 18,216 triangles took 2.1 to 56 s', acc: 'within 4e-4 of the next mesh level', src: 'face-charge steps 3b and 4' },
+};
+const UNTIMED = {
+  moving: 'Refused before any solve.',
+  stall: 'Not timed: max_iter GMRES iterations, then the dense solve if it fits.',
+  aniso: 'Not timed: it costs what its mesh costs; S is a 3×3 block per cell either way.',
+  sat: 'Not timed: about 3 to 40 solves of solve_cells, more on a sharp knee.',
+};
+const BANDS = ['under a second', 'seconds', 'tens of seconds', 'minutes'];
+const band = t => (t < 1 ? 0 : t < 10 ? 1 : t < 100 ? 2 : 3);
+const fmtT = t => (t < 1 ? `${+(t * 1000).toPrecision(2)} ms` : t < 10 ? `${t.toFixed(1)} s` : t < 100 ? `${Math.round(t)} s` : `${Math.round(t / 60)} min`);
+// per validation case and method: [time in s, error of B in the worst sensor group
+// against FEM, below the reference's own error, setting], coarse to fine; one run
+// each on an M4 Pro
+const ACC = {"anisotropic":{"MoM":[[0.0018,0.0354,0,"1 cells"],[0.0037,0.0198,0,"8 cells"],[0.0189,0.00718,0,"64 cells"],[0.1361,0.00231,0,"512 cells"]],"FEM":[[0.674,0.00632,0,"order 2"],[2.2015,0.000875,0,"order 3"],[3.4215,0.000101,0,"order 4"],[6.2557,2.31e-05,0,"order 5"]]},"cad_part":{"MoM":[[5.5999,0.00794,0,"1,529 cells"]],"FaceCharge":[[0.2033,0.00701,0,"level 1"],[0.5022,0.00156,0,"level 2"],[1.0289,0.00068,1,"level 3"],[2.039,0.00068,1,"level 4"],[3.619,0.00068,1,"level 5"]],"FEM":[[2.4052,0.0101,0,"order 2"],[11.2584,0.00113,0,"order 3"],[21.4309,0.00068,1,"order 4"]]},"concentrator":{"MoM":[[0.0033,0.347,0,"8 cells"],[0.0135,0.143,0,"64 cells"],[0.1171,0.0357,0,"512 cells"],[1.3509,0.0106,0,"4,096 cells"]],"FaceCharge":[[0.0083,0.0163,0,"level 1"],[0.0393,0.00213,0,"level 2"],[0.0543,0.000724,0,"level 3"],[0.1023,0.000324,0,"level 4"],[0.2548,0.000164,0,"level 5"]],"FEM":[[0.8324,0.00755,0,"order 2"],[3.3298,0.00065,0,"order 3"],[5.8485,7.33e-05,0,"order 4"],[9.9186,9.15e-06,1,"order 5"]]},"cuboids":{"MoM":[[0.0053,0.0247,0,"4 cells"],[0.0179,0.0162,0,"32 cells"],[0.1097,0.00519,0,"256 cells"],[2.1642,0.00142,0,"2,048 cells"]],"FaceCharge":[[0.0528,0.000849,0,"level 1"],[0.1495,0.00014,0,"level 2"],[0.4972,8.82e-05,1,"level 3"],[1.4039,8.82e-05,1,"level 4"],[3.3207,8.82e-05,1,"level 5"]],"FEM":[[0.7911,0.0129,0,"order 2"],[2.6173,0.000934,0,"order 3"],[4.5544,0.000115,0,"order 4"],[9.3072,8.82e-05,0,"order 5"]]},"cylinder":{"MoM":[[0.0028,0.333,0,"1 cells"],[0.021,0.263,0,"6 cells"],[0.1778,0.108,0,"48 cells"],[11.0523,0.0242,0,"400 cells"]],"FEM":[[0.2741,0.00702,0,"order 2"],[0.8051,0.000735,0,"order 3"],[1.4186,9.98e-05,0,"order 4"],[2.8568,8.45e-05,1,"order 5"]]},"gmres_stops":{"MoM":[[0.0016,0.553,0,"1 cells"],[0.0027,0.352,0,"8 cells"],[0.0398,0.12,0,"64 cells"],[0.1569,0.0384,0,"512 cells"]],"FaceCharge":[[0.0044,0.0734,0,"level 1"],[0.0111,0.0106,0,"level 2"],[0.0401,0.00203,0,"level 3"],[0.0447,0.000898,0,"level 4"],[0.0722,0.000314,0,"level 5"]],"FEM":[[0.5197,0.0047,0,"order 2"],[1.9549,0.000269,0,"order 3"],[3.3657,4.77e-05,0,"order 4"],[6.453,7.82e-05,1,"order 5"]]},"halbach":{"MoM":[[0.0153,0.00476,0,"60 cells"],[0.115,0.00185,0,"480 cells"],[0.8998,0.000639,0,"3,840 cells"]],"FaceCharge":[[0.0633,0.000559,0,"level 1"],[0.2262,8.73e-05,0,"level 2"],[0.6893,2.06e-05,0,"level 3"],[1.7231,8.76e-06,0,"level 4"],[4.0023,8.03e-06,1,"level 5"]],"FEM":[[1.4959,0.00656,0,"order 2"],[6.3265,0.000357,0,"order 3"],[9.6772,3.98e-05,0,"order 4"],[18.2682,8.03e-06,1,"order 5"]]},"many_sizes":{"MoM":[[0.0473,0.203,0,"134 cells"],[2.6624,0.0886,0,"1,253 cells"],[103.618,0.0325,0,"10,031 cells"]],"FaceCharge":[[0.6921,0.0175,0,"level 1"],[2.8583,0.00446,0,"level 2"]],"FEM":[[4.5128,0.0699,0,"order 2"],[5.6693,0.0102,0,"order 3"],[8.3112,0.00214,1,"order 4"]]},"plate":{"MoM":[[0.0164,20.5,0,"29 cells"],[0.0901,7.18,0,"218 cells"],[0.8397,1.84,0,"2,144 cells"],[6.3571,0.487,0,"17,152 cells"]],"FaceCharge":[[0.0194,0.0264,0,"level 1"],[0.0948,0.00548,0,"level 2"],[0.1822,0.00188,0,"level 3"],[0.3959,0.000826,0,"level 4"],[0.9199,0.000198,0,"level 5"]],"FEM":[[0.7278,0.0202,0,"order 2"],[3.1064,0.00111,0,"order 3"],[4.9971,0.000222,0,"order 4"],[9.7875,5.89e-05,1,"order 5"]]},"sheet":{"MoM":[[0.1961,0.61,0,"577 cells"],[1.6544,0.18,0,"4,609 cells"]],"FaceCharge":[[0.2787,0.00165,0,"level 1"],[0.9079,0.000528,0,"level 2"],[3.0554,0.000186,0,"level 3"]],"FEM":[[2.7368,0.00474,0,"order 2"],[10.1014,0.000869,0,"order 3"],[14.2385,0.000132,0,"order 4"],[25.8769,2.31e-05,1,"order 5"]]},"sides_off":{"MoM":[[0.0157,19.3,0,"26 cells"],[0.0812,9.72,0,"180 cells"],[0.8893,1.65,0,"1,720 cells"],[27.1743,0.538,0,"12,632 cells"]],"FaceCharge":[[0.0192,0.0256,0,"level 1"],[0.093,0.00536,0,"level 2"],[0.1812,0.00147,0,"level 3"],[0.3982,0.000688,0,"level 4"],[0.9612,0.000173,0,"level 5"]],"FEM":[[0.7648,0.0108,0,"order 2"],[2.8417,0.000298,0,"order 3"],[4.6058,3.98e-05,0,"order 4"],[9.1341,3.96e-05,1,"order 5"]]},"small_bodies":{"MoM":[[0.0461,0.168,0,"100 cells"],[0.5395,0.133,0,"800 cells"],[13.0422,0.0679,0,"6,400 cells"]],"FaceCharge":[[2.4197,0.0316,0,"level 1"],[27.2005,0.0181,0,"level 2"]],"FEM":[[3.0594,0.157,0,"order 2"],[3.4981,0.0442,0,"order 3"],[3.7853,0.0153,1,"order 4"],[4.6105,0.0153,1,"order 5"]]},"ucore":{"MoM":[[0.015,0.612,0,"11 cells"],[0.0509,0.367,0,"88 cells"],[0.3245,0.152,0,"704 cells"],[3.9617,0.0493,0,"5,632 cells"]],"FaceCharge":[[0.1295,0.00251,1,"level 1"],[0.5581,0.00251,1,"level 2"],[1.031,0.00251,1,"level 3"],[1.7336,0.00251,1,"level 4"],[3.1495,0.00251,1,"level 5"]],"FEM":[[4.2885,0.0239,0,"order 2"],[8.476,0.0061,0,"order 3"],[13.9103,0.00251,1,"order 4"],[23.3483,0.00251,1,"order 5"]]}};
+const CASE_OF = {"cube": "gmres_stops", "stall": "gmres_stops", "plate": "plate", "ucore": "ucore", "halbach": "halbach", "rotated": "cuboids", "cyl": "cylinder", "tets": "cad_part", "sheet": "sheet", "study": "concentrator", "offgrid": "sides_off", "small": "small_bodies", "sizes": "many_sizes", "aniso": "anisotropic", "fc": "concentrator", "fccad": "cad_part"};
+const pcE = e => (e >= 1 ? `${Math.round(e * 100).toLocaleString('en')} %` : `${+(e * 100).toPrecision(2)} %`);
+const reachT = (pts, e) => { const p = pts.find(q => q[1] <= e); return p ? p[0] : null; };
+const bestP = pts => pts.reduce((a, b) => (b[1] < a[1] ? b : a));
+// the validation ladder a model's tile and chart line show: face charge for its own model, MoM otherwise
+const byFC = sc => sc.id === 'fc' || sc.id === 'fccad';
+const mainPts = sc => { const d = ACC[CASE_OF[sc.id]]; return d && d[byFC(sc) ? 'FaceCharge' : 'MoM']; };
+const accText = pts => {
+  const t1 = reachT(pts, 0.01), t01 = reachT(pts, 0.001), b = bestP(pts);
+  const got = [t1 != null ? `1 % in ${fmtT(t1)}` : '', t01 != null ? `0.1 % in ${fmtT(t01)}` : ''].filter(Boolean);
+  return got.length ? got.join(', ') : `best ${pcE(b[1])}, at ${fmtT(b[0])}`;
+};
+const meterHTML = t => { const b = band(t); return `<span class="meter" aria-hidden="true">${[0, 1, 2, 3].map(k => `<i${k < 4 - b ? ` style="background:var(--sp${b})"` : ''}></i>`).join('')}</span>`; };
+
+/* ───────────────────────── models ───────────────────────── */
+const IT = ['model', 'mesh', 'rhs', 'analyze', 'choose', 'ops', 'gmres', 'out', 'field'], ITE = ['e1', 'e2', 'e3', 'e5', 'e7', 'e9', 'e12', 'e13'];
+const DI = ['model', 'mesh', 'rhs', 'analyze', 'choose', 'dense', 'lu', 'out', 'field'], DIE = ['e1', 'e2', 'e3', 'e5', 'e6', 'e8', 'e11', 'e13'];
+const FC = ['model', 'fc1', 'kept', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6', 'field'], FCE = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f7', 'f8'];
+const FCR = ['model', 'fc1', 'kept', 'fc5', 'fc6', 'field'], FCRE = ['f0', 'f1', 'f6', 'f7', 'f8'];
+const FCM = ['model', 'fc1', 'kept', 'fc5', 'fc6', 'fmx', 'field'], FCME = ['f0', 'f1', 'f6', 'f7', 'f9', 'f10'];
+const FEMS = ['model', 'fem1', 'fem2', 'fem3', 'fem4', 'fem5', 'femstudy', 'field'], FEMSE = ['g0', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7'];
+const arc = (cx, cy, z, r, a0, a1, n = 20) => Array.from({ length: n + 1 }, (_, i) => { const t = (a0 + (a1 - a0) * i / n) * Math.PI / 180; return [cx + r * Math.cos(t), cy + r * Math.sin(t), z]; });
+const SHAFT = [{ cyl: [0, 0, 0], r: 4, h: 13, tone: 'iron' }, { cyl: [0, 0, 13.4], r: 2.2, h: 1.8, tone: 'magnet' }];
+const PLATE_MAGNET = [{ box: [0, 0, 0], s: [14, 14, 2], c: [7, 7, 1], tone: 'soft' }, { box: [4.5, 4.5, 4], s: [5, 5, 5], tone: 'magnet' }];
+const UCORE = [{ box: [0, 0, 0], s: [18, 5, 5], tone: 'iron' }, { box: [0, 0, 5], s: [5, 5, 12], tone: 'iron' }, { box: [13, 0, 5], s: [5, 5, 12], tone: 'iron' }];
+const S = [
+
+  { g: 'cells', id: 'cube', t: 'Soft cube in a uniform field', r: [['1 grid'], ['FFT 100 %'], ['iterative', 'it']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [10, 10, 10], c: [6, 6, 6], tone: 'soft' }, { arrow: [14, -2, 1], to: [14, -2, 11] }],
+    body: 'mesh_uniform cuts it into one grid of identical cubes. Every interaction is an FFT convolution, so auto takes GMRES: time and memory grow about as n log n. At 1,728 cells (χ = 3) it is already 4.7 times faster than the direct solve, 0.12 s against 0.56 s; at 10,000 cells the dense matrix alone would take 7 GB.', src: 'docs: inside/cells_performance.json' },
+  { g: 'cells', id: 'plate', t: 'Magnet on a soft plate, one cell size', r: [['2 grids, 1 spacing'], ['FFT within and between'], ['iterative', 'it']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [22, 22, 4], c: [11, 11, 2], tone: 'soft' }, { box: [8, 8, 4], s: [6, 6, 4], c: [3, 3, 2], tone: 'magnet' }],
+    body: 'Both bodies\' sides are multiples of the cell size, so the two grids share one spacing: the blocks between them are FFT cross-convolutions too, once they pass 10⁶ entries. The magnet\'s remanence enters the right-hand side; its small χ makes it respond weakly.', src: 'meshing.py · mesh_uniform; cells.py · FFT_CROSS_MIN_ENTRIES' },
+  { g: 'cells', id: 'ucore', t: 'U-core driven by a coil', r: [['3 grids'], ['coil → rhs'], ['iterative', 'it']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [18, 5, 5], c: [9, 2, 2], tone: 'iron' }, { box: [0, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { box: [13, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { coil: [9, 2.5, 2.5], r: 3.9, axis: 'x', turns: 6, pitch: 1.0 }],
+    body: 'The coil is not meshed: magpy.getB of its windings at every cell centre joins the right-hand side. Touching cuboids stay three grids, not one; at one cell size they couple by FFT. In the docs\' example, 2, 4 and 8 cells across (88, 704 and 5,632 cells) put the field 30 mm above the poles 37, 15 and 4.9 % off finite elements; tetrahedra (53, 229 and 1,491) 2.8, 1.6 and 0.8 %. That error is not the coil\'s: the iron alone in a uniform field errs by the same amounts (5.1 % at 8 cells across), because uniform cuboid cells converge slowly where the flux turns the inside corners. Face charge gets 0.08 % in 0.4 s at its default level.', src: 'docs: U-core electromagnet; face-charge validation, case F' },
+  { g: 'cells', id: 'halbach', t: 'Halbach array on back iron', r: [['6 grids, 1 spacing'], ['FFT throughout'], ['iterative', 'it']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [25, 5, 4], c: [10, 2, 2], tone: 'iron' }, ...[0, 1, 2, 3, 4].map(i => ({ box: [i * 5, 0, 4], s: [5, 5, 5], c: [2, 2, 2], tone: 'magnet', pol: [[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1], [1, 0, 0]][i] })),
+      ...[[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1], [1, 0, 0]].map((d, i) => ({ arrow: [i * 5 + 2.5 - d[0] * 1.3, 2.5, 11.5 - d[2] * 1.3], to: [i * 5 + 2.5 + d[0] * 1.3, 2.5, 11.5 + d[2] * 1.3], small: true }))],
+    body: 'The magnets point in turning directions, a Halbach array (' + cite('halbach1980') + '), but are cut along the same axes, so all cells are parallel cuboids: grids of one spacing, FFT products everywhere. The docs\' mesh study (2, 4 and 8 cells across) is good to 0.03 %.', src: 'docs: Mesh convergence; face-charge validation, case D' },
+  { g: 'cells', id: 'rotated', t: 'Bodies rotated individually', r: [['1 grid per body'], ['cross blocks pair by pair'], ['either', 'dir']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [6, 6, 6], c: [3, 3, 3], tone: 'magnet' }, { box: [11, 0, 0], s: [6, 6, 6], c: [3, 3, 3], tone: 'soft', rz: 30 }, { box: [4, 11, 0], s: [6, 6, 6], c: [3, 3, 3], tone: 'magnet', rz: -25 }],
+    body: 'Each body is a grid in its own rotated frame, so its self-block is still an FFT product. Blocks between bodies turned against each other share no displacements and are computed pair by pair, at the same cost for both solvers. interaction="newell" refuses: it needs one orientation for every cell.', src: 'demag_fft.py · analyze_collection; cells.py · _check_interaction' },
+  { g: 'cells', id: 'cyl', t: 'Meshed cylinder', r: [['cylinder segments'], ['getH per pair'], ['direct', 'dir']], n: DI, e: DIE,
+    sk: [{ cyl: [0, 0, 0], r: 6, h: 10, seg: [3, 12], tone: 'soft' }],
+    body: 'mesh_Cylinder cuts a core and rings of cylinder-segment cells. They are not cuboids, so every pair is one magpy.getH, through elliptic integrals: a study on three meshes up to 3,168 cells took 13 minutes per field direction. The cell type, not the solver, sets the time. On thin rings at high χ the centre-point rule is unstable (#92): curved cells give the matrix positive eigenvalues, and a 1 mm tube at χ = 1000 swings from −10 % to −68 % to +2 % with 1, 2 and 3 cells across the wall. Averaging the field over each cell keeps every eigenvalue negative; PR #100, merged, does it for segment pairs close together, at 2 to 3 times the solve time, and the moment holds at −11 %.', src: 'face-charge step 3a; #92, #100' },
+  { g: 'cells', id: 'tets', t: 'CAD part as tetrahedra', r: [['TetGen'], ['generic'], ['direct', 'dir']], n: DI, e: DIE,
+    sk: [{ box: [0, 0, 0], s: [16, 6, 3], c: [6, 2, 1], tone: 'tet', tri: true }, { box: [0, 0, 3], s: [3, 6, 10], c: [1, 2, 4], tone: 'tet', tri: true }],
+    body: 'mesh_TriangularMesh hands the closed surface to TetGen. The target sets the largest cell volume, but every input triangle is kept, so a detailed export sets a floor, with a warning above 4× the target. Tetrahedra take the generic path, and the dense solve\'s 2 GB covers about 5,270 cells. Beside a large grid (a measured model of a grid and 3,900 tetrahedra, FFT 26 %) auto takes GMRES: 99 s against 112 s.', src: 'meshing.py · mesh_TriangularMesh; AUTO_MIN_FFT_SHARE notes in cells.py' },
+  { g: 'cells', id: 'sheet', t: 'Thin shielding sheet', r: [['thinnest part sets the cell'], ['high χ'], ['iterative', 'it']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [24, 24, 1], c: [16, 16, 1], tone: 'soft' }, { box: [9, 9, 3], s: [6, 6, 3], tone: 'magnet' }],
+    body: 'mesh_uniform takes its cell size from the thinnest responding part, so a 1 mm sheet sets small cells everywhere, and max_cells (10⁶) refuses meshes that would blow up. At the docs\' setting (36,864 cells) the field behind the sheet is still 10 % off. At high χ GMRES needs its restart of 100.', src: 'docs: Mesh convergence; face-charge validation, case E' },
+  { g: 'check', id: 'study', t: 'Mesh study with Newell', r: [['study_cells'], ['lower bound'], ['GCI']], n: [...IT, 'rule', 'study'], e: [...ITE, 'e4', 'e14', 'e15'],
+    sk: [{ box: [0, 0, 0], s: [6, 6, 6], c: [2, 2, 2], tone: 'soft' }, { box: [9, 0, 0], s: [6, 6, 6], c: [4, 4, 4], tone: 'soft' }, { box: [18, 0, 0], s: [6, 6, 6], c: [8, 8, 8], tone: 'soft' }],
+    body: 'study_cells solves one mesh per cell size and estimates the finest one\'s error by the grid convergence index (' + cite('roache1994', 'celik2008') + '). With interaction="newell" (parallel cuboids only) the induced moment rises toward the converged value, so the study knows which side the answer is on. It declines when the last changes turn or the order leaves 0.3–3.', src: 'docs: Error bars for cells; convergence.py' },
+  { g: 'cells', id: 'offgrid', t: 'Sides off the cell size', r: [['2 spacings'], ['dense cross blocks'], ['iterative', 'it']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [22, 22, 4], c: [13, 13, 3], tone: 'soft' }, { box: [8, 8, 4], s: [6, 6, 4], c: [4, 4, 3], tone: 'magnet' }],
+    body: 'round(side / size) cuts a 5 mm plate at 0.4 mm into 12 cells of 0.4167 mm while the magnet keeps 0.4: no shared lattice, so the block between them is dense, 608 million entries each way. Since #86 it stays dense unless dropping entries pays, which it rarely does at χ = 1000: about 10 GB and 2 minutes. A cell size that divides every side keeps it an FFT product.', src: '<a href="' + GH + '/pull/86" target="_blank" rel="noopener">#86</a>' },
+  { g: 'cells', id: 'small', t: '100 small bodies', r: [['100 grids of 27'], ['FFT 1 %'], ['direct', 'dir']], n: DI, e: DIE,
+    sk: [...[0, 1, 2, 3].flatMap(i => [0, 1, 2, 3].map(j => ({ box: [i * 5, j * 5, 0], s: [3, 3, 3], c: [3, 3, 3], tone: 'soft' })))],
+    body: 'Each cube is a grid of its own, but their self-blocks cover 100 × 27² of 2,700² entries: 1 %. The blocks between bodies, one per pair, carry the cost, and auto takes the direct solve: 5.1 s against 6.2 s for GMRES.', src: 'AUTO_MIN_FFT_SHARE notes in cells.py' },
+  { g: 'cells', id: 'sizes', t: 'Cuboids of many sizes', r: [['8 per size'], ['FFT 0 %'], ['direct', 'dir']], n: DI, e: DIE,
+    sk: [[0, 0, 3, 3, 3], [5, 0, 2, 4, 2], [9, 1, 4, 2, 3], [0, 6, 2, 2, 5], [4, 6, 3, 3, 1.5], [9, 6, 2, 3, 2], [1, 11, 4, 2, 2], [7, 11, 2, 2, 4]].map(b => ({ box: [b[0], b[1], 0], s: [b[2], b[3], b[4]], tone: 'iron' })),
+    body: '1,728 cuboids in 216 sizes, 8 of each. Cuboids of one shape and orientation form a cluster whose blocks are computed once per distinct displacement, but no cluster is big enough to matter: FFT products cover 0 % of T. Auto takes the direct solve: 34 s against 61 s.', src: 'AUTO_MIN_FFT_SHARE notes in cells.py' },
+  { g: 'loop', id: 'moving', t: 'A magnet on a path', r: [['refused', 'stop']], n: ['model'], e: [], stop: 'model',
+    sk: [{ box: [0, 0, 0], s: [5, 5, 5], tone: 'magnet' }, { path: [[6, 2.5, 2.5], [10, 3, 3.5], [14, 6, 3.5], [16, 11, 2.5]] }],
+    body: 'Every solver refuses an object with a path, in position, orientation or any property: one solve is one configuration. Loop over the positions and solve each; face charge keeps its LU across them with <code>reuse=</code> when only drives move.', src: 'cells.py, face_charge/_apply.py, fem/_solve.py' },
+  { g: 'cells', id: 'stall', t: 'GMRES does not converge', r: [['fallback'], ['≤ 2 GB → direct'], ['direct', 'dir']], n: ['model', 'mesh', 'rhs', 'analyze', 'choose', 'ops', 'gmres', 'dense', 'lu', 'out', 'field'], e: ['e1', 'e2', 'e3', 'e5', 'e7', 'e9', 'e10', 'e8', 'e11', 'e13'],
+    sk: [{ box: [0, 0, 0], s: [26, 26, 0.6], c: [20, 20, 1], tone: 'soft' }, { label: 'χ = 10⁴', at: [13, 13, 4] }],
+    body: 'GMRES stops after max_iter, counted in cycles of 100. Under solver="iterative" that raises. Under auto the dense solve takes over when 72·n² ≤ 2 GB, about 5,270 cells, and otherwise it raises, naming the memory it would need.', src: 'cells.py · solve_cells, _solve_iterative' },
+  { g: 'cells', id: 'aniso', t: 'Anisotropic χ', r: [['3×3 S per cell'], ['iterative', 'it']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [10, 10, 6], c: [4, 4, 3], tone: 'soft', rz: 20 }, { arrow: [5, 5, 6.5], to: [12.5, 7.7, 6.5], small: true }, { arrow: [5, 5, 6.5], to: [3.3, 9.7, 6.5], small: true }],
+    body: 'A 3-vector susceptibility acts along the cell\'s own axes and turns with it: S = R·diag(χ)·Rᵀ, one 3×3 block per cell. The preconditioner inverts each cell\'s I − χ·T_ii exactly, for any anisotropy.', src: 'cells.py · _cell_susceptibilities (#50)' },
+  { g: 'fc', id: 'fc', t: 'Soft part by face charge', r: [['surface only'], ['no mesh']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [10, 10, 10], tone: 'soft', graded: true }],
+    body: 'A linear, isotropic, uniform body needs no volume mesh: the charge on its surface, graded toward edges, carries its whole response. On the six validation cases A to F (three turned cuboids, a magnet beside a soft cube, a flux concentrator, a Halbach array, a thin sheet and the U-core) it lands within each reference\'s own uncertainty; on soft iron it is 20–40× more accurate than cells in the same time.', src: 'face-charge validation, <code>validation/</code> (#99)' },
+  { g: 'fc', id: 'fccad', t: 'CAD export by face charge', r: [['triangles, #104'], ['dense']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [20, 12, 4], c: [8, 5, 2], tone: 'iron', tri: true }, { hole: [13, 6, 4], r: 3, tone: 'iron' }],
+    body: 'The validation\'s CAD part, a plate with fillets and a hole exported as triangles, solved on its surface: 1 % in 0.20 s and 0.1 % in 1.0 s, where finite elements take 11 and 21 s and cells on tetrahedra stay 0.79 % off at 1,529 cells. A hierarchical assembly, 8 times faster at 18,216 triangles, stays in the study (#103).', src: '<a href="' + GH + '/pull/104" target="_blank" rel="noopener">#104</a>; validation case G' },
+  { g: 'cells', id: 'sat', t: 'Saturating yoke', r: [['B–H loop'], ['BHCurve, 0.9.0']], n: [...IT, 'sat'], e: [...ITE, 'e16', 'e17'],
+    sk: [{ box: [0, 0, 0], s: [18, 5, 5], c: [9, 2, 2], tone: 'iron' }, { box: [0, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { box: [13, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { coil: [9, 2.5, 2.5], r: 3.9, axis: 'x', turns: 6, pitch: 1.0 }],
+    body: 'With a BHCurve as its susceptibility, each cell\'s χ follows its field: solve_cells repeats the linear solve, the matrix built once, until no χ changes. About 3 to 40 solves with Anderson acceleration; a sphere of 517 tetrahedra within 0.02 % of exact, from 0.05 to 2 T applied. Released in 0.9.0. Anderson acceleration: ' + cite('anderson1965', 'walker2011') + '.', src: '<a href="' + GH + '/pull/150" target="_blank" rel="noopener">PR #150</a>, <a href="' + GH + '/pull/159" target="_blank" rel="noopener">#159</a>' },
+
+  { g: 'cells', id: 'inside', t: 'The field inside a soft part', r: [['observer inside'], ['cells', 'dir']], n: IT, e: ITE,
+    sk: [{ box: [0, 0, 0], s: [12, 12, 6], c: [6, 6, 3], tone: 'soft' }, { arrow: [18, 6, 3], to: [12.3, 6, 3] }, { label: 'B inside?', at: [22, 7, 4.6] }],
+    body: 'Saturation checks need B inside the iron. Face charge gives μ0 H there, and B = μ0 (1 + χ) H multiplies its error by 1 + χ: cells give B inside.',
+    nums: ['At χ 1000, 0.3 mm below the surface: 952, 91 and 359 mT at face-charge levels 3, 4 and 5, where cells give 442 to 446 mT.'], src: 'B-inside probe, explore/use-cases' },
+  { g: 'cells', id: 'lam', t: 'Laminated steel: anisotropic χ', r: [['anisotropic χ'], ['cells', 'dir']], n: IT, e: ITE,
+    sk: [...[0, 1, 2, 3, 4].map(i => ({ box: [0, 0, i * 1.15], s: [12, 12, 0.9], tone: 'iron' })), { arrow: [2, 6, 7], to: [11.5, 6, 7], small: true }],
+    body: 'Laminated steel conducts along its sheets and barely across them: μ 37,200 along and 14.5 across in a gradient-coil yoke (' + cite('kong2022') + '). Face charge needs a uniform, isotropic part, so this is a case for cells, where a 3-vector χ acts along each cell\'s axes (#50).',
+    src: 'explore/use-cases' },
+  { g: 'fc', id: 'imc', t: 'Concentrator on a Hall chip', r: [['one solve'], ['read close']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [12, 12, 1], tone: 'chip' }, { cyl: [6, 6, 1], r: 3.4, h: 0.6, tone: 'soft' }, { arrow: [6, 6, 9], to: [6, 6, 2.2] }],
+    body: 'A soft disc on a Hall chip gathers the field into the chip\'s plates: a gain of 2.335 at μr 20,000 (' + cite('fan2020') + '). The field is read a few µm from the surface, so the panels under the observers matter most.',
+    nums: ['Not built: panels refined near the observers, as <code>solve_fem(observers=)</code> does.'], src: 'explore/use-cases' },
+  { g: 'fc', id: 'shield', t: 'A thin shielding sheet', r: [['one solve'], ['thin part']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [16, 16, 0.6], c: [8, 8, 1], tone: 'soft' }, { box: [5.5, 5.5, 2.4], s: [5, 5, 3], tone: 'magnet' }],
+    body: 'A sheet between a magnet and a sensor, as permalloy shells around a current sensor (' + cite('li2025') + '). Face charge needs no volume cells, so the sheet costs only its faces, about 10 × area / thickness² unknowns at level 2.',
+    nums: ['A 40 × 40 × 1 mm plate at level 2: 18,054 unknowns, 8.0 s and 5.3 GB, near the 20,000 cap (#120); 2 mm: 5,304 unknowns in 0.5 s.', 'Thinner: flat cuboid cells with at least 3 layers through the thickness.'], src: 'timed on main, 6 November; validation case E' },
+  { g: 'fc', id: 'hard', t: 'A hard magnet\'s own demagnetization', r: [['one solve'], ['χ about 0.05']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [8, 8, 8], tone: 'magnet' }, { label: 'χ 0.05', at: [4, 4, 11.5] }],
+    body: 'A sintered NdFeB magnet has a recoil μr up to 1.05 (' + cite('ortner2023') + '): a small susceptibility, so the magnet becomes a solved part and its field drops a little.',
+    nums: ['Moving such a magnet changes the matrix: see the recoil Monte Carlo.'], src: 'face-charge validation, case A' },
+  { g: 'check', id: 'nmr', t: 'Two NMR pole-piece designs (#85)', r: [['a difference'], ['two levels']], n: FC, e: FCE,
+    sk: [{ cyl: [0, 0, 0], r: 8, h: 2.4, tone: 'magnet' }, { cyl: [0, 0, 2.4], r: 8, h: 2.4, tone: 'iron' }, { cyl: [0, 0, 9.4], r: 8, h: 2.4, tone: 'iron' }, { cyl: [0, 0, 11.8], r: 8, h: 2.4, tone: 'magnet' }],
+    body: 'Ø120 mm ferrite discs (0.38 T) with iron pole pieces of 20 mm (A) or 24 mm (B) across a 40 mm gap. The question is a difference: is B more uniform than A? Face charge has no study function: solve each at two levels and compare.',
+    nums: ['B − A: +9.5, −2.5 and −5.6 ppm at levels 1, 2 and 3. The verdict flips and still moves, while Bz at the centre settled to 0.03 % by level 2.', 'Level 3 of A needs 20,640 unknowns, past the 20,000 default, and 6.7 GB.'], src: 'explore/use-cases, s4_nmr_pole_pieces.py' },
+  { g: 'check', id: 'femcheck', t: 'A finite-element check', r: [['solve_fem'], ['study_fem']], n: FEMS, e: FEMSE,
+    sk: [{ box: [0, 0, 0], s: [14, 8, 3], c: [7, 4, 1], tone: 'tet', tri: true }, { box: [0, 0, 3], s: [3, 8, 9], c: [1, 4, 3], tone: 'tet', tri: true }],
+    body: 'Finite elements check the other two. They run only when called, through the <code>[fem]</code> extra and NGSolve; <code>study_fem</code> raises the order and <code>compare</code> sets its error bars beside a cell study\'s.',
+    nums: ['Against the validation references, finite elements at orders 2 to 5 reach 0.1 % on 12 of the 15 cuboid and CAD cases of the face-charge comparison, in 21 s at most; on the other three the references are themselves good only to 0.2 to 1.5 %.'], src: '<code>validation/</code>, #99' },
+  { g: 'loop', id: 'shaft', t: 'Angle sensor on a steel shaft', r: [['rotation'], ['48 configurations'], ['one LU', 'it']], n: FCR, e: FCRE,
+    sk: [...SHAFT, { box: [-1.6, -1.6, 16.6], s: [3.2, 3.2, 0.6], tone: 'chip' }, { path: arc(0, 0, 9, 6.5, -40, 125), tone: '--accent' }],
+    body: 'A diametric magnet on the end of a steel shaft (Ø20 × 40 mm, χ 3999), read by four Hall plates on a 1 mm circle, after an Infineon patent (' + cite('binder2025') + '). Shaft and magnet turn together, and poses count relative to the first part, so one LU serves every angle. The air gap is a sensor move and needs no solve.',
+    nums: ['1.26° angle error at a 1.5 mm gap in a 5 mT stray field; the patent gives 1.3°.', '48 configurations (12 angles × 2 gaps × 2 stray fields): 7.4 s solved afresh, 2.5 s with a kept LU.'], src: 'explore/use-cases, s1_shaft_sensor.py' },
+  { g: 'loop', id: 'mc', t: 'Tolerance Monte Carlo, 10,000 samples', r: [['poses vary'], ['10,000 samples'], ['one LU', 'it']], n: FCR, e: FCRE,
+    sk: [...PLATE_MAGNET, { ghost: [5.6, 3.9, 4.4], s: [5, 5, 5] }, { ghost: [3.6, 5.3, 3.7], s: [5, 5, 5] }, { box: [10.5, 6, 2.4], s: [2, 2, 0.5], tone: 'chip' }],
+    body: 'A 5 mm magnet over a soft plate (χ 1000), the sensor in the gap. The magnet\'s and the sensor\'s positions and tilts vary, σ 0.1 mm and 1°: 8 degrees of freedom, as in ' + cite('ergun2019') + '. The plate stays put, so only the load changes.',
+    nums: ['A fresh solve per sample: 76 ms, 13 min in all. With a kept LU: 3.4 min; what remains is the load, the magnet\'s field at 18,896 points.', 'Equal to a fresh solve to 0.7 nT, on fields of 47 to 173 mT; 1,518 unknowns.'], src: 'explore/use-cases, p1_tolerance_kept.py' },
+  { g: 'loop', id: 'coils', t: 'Coils on a U-core, 20 sets of currents', r: [['currents vary'], ['linear'], ['one LU', 'it']], n: FCR, e: FCRE,
+    sk: [...UCORE, { coil: [2.5, 2.5, 11], r: 3.9, axis: 'z', turns: 5, pitch: 1.5 }, { coil: [15.5, 2.5, 11], r: 3.9, axis: 'z', turns: 5, pitch: 1.5 }],
+    body: 'A U-core (χ 999) with five loops on each leg. Only the currents change, so the LU stays. The response is also linear in the currents: one solve per coil gives any set as a weighted sum.',
+    nums: ['20 sets solved one by one: 2.9 s, 1,320 unknowns.', 'Weighted sums of two per-coil solves: 0.3 s, equal to the direct solves to 2e-14 of the peak. Written by hand.'], src: 'explore/use-cases, s3_coils_sum.py' },
+  { g: 'loop', id: 'drag', t: 'Dragging a magnet in studio', r: [['a frame at a time'], ['one LU', 'it'], ['field_matrix']], n: FCM, e: FCME,
+    sk: [...PLATE_MAGNET, { path: [[7, 7, 9.5], [10, 9, 10], [13.5, 12.5, 9.5]], tone: '--accent' }],
+    body: 'Drag frames arrive one at a time, so a path never sees them together. Studio re-solves face-charge parts on every frame with <code>reuse=</code> (studio #96): a moving magnet costs a load and a back-substitution. <code>field_matrix</code> was built for its field-line grid (#175).',
+    nums: ['A solve per frame at levels 2 to 5: 46, 76, 141 and 377 ms afresh; 12, 19, 30 and 50 ms with a kept LU.', 'The plate\'s field at 2,601 grid points: 25 ms by getB, 0.4 ms by field_matrix.'], src: 'studio #96; MR #175' },
+  { g: 'loop', id: 'length', t: 'Sensitivity to a plate\'s length', r: [['the part changes'], ['a fresh LU each', 'stop']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [14, 8, 2], c: [7, 4, 1], tone: 'soft' }, { box: [4.5, 1.5, 4], s: [5, 5, 4], tone: 'magnet' }, { arrow: [14.4, 4, 1], to: [18, 4, 1], small: true }, { arrow: [-0.4, 4, 1], to: [-4, 4, 1], small: true }],
+    body: 'The plate\'s length swept from 9.5 to 10.5 mm under a magnet, B about 105 mT at a sensor in the gap. A length that changes changes the matrix, so every step solves afresh, and every new panel layout adds its own jump to a difference.',
+    nums: ['Face charge jumps by 35 µT where its layout changes, and its slope misses the trend. Re-meshed cells jump by 20 and 56 µT: 10 % and 31 % of one 0.05 mm step\'s real effect.', 'Cells on one layout stretched with the part, a prototype, give the same slope coarse and fine: 3.98 and 3.86 mT/mm at 10 mm.'], src: 'tolerance probes, explore/use-cases' },
+  { g: 'loop', id: 'holder', t: 'The shaft turning inside a soft holder', r: [['parts move apart'], ['a fresh LU each', 'stop']], n: FC, e: FCE,
+    sk: [...SHAFT, { cyl: [0, 0, 15.6], r: 5, h: 1.4, tone: 'soft' }, { hole: [0, 0, 17], r: 3, bottom: 15.6, tone: 'soft' }, { path: arc(0, 0, 8, 6.5, -40, 125) }],
+    body: 'A soft holder ring around the sensor, the shaft turning beneath it: two solved parts move against each other, so every angle has its own matrix, and <code>reuse=</code> finds no match.',
+    nums: ['With a stocky holder the 48-configuration grid takes 158 s.', 'The holder cuts the angle error to 0.06° here; the patent gives 0.24°. A real 2 mm holder ring takes 16,044 unknowns alone at level 2.'], src: 'explore/use-cases, s1_shaft_sensor.py' },
+  { g: 'loop', id: 'recoil', t: 'Recoil magnet, Monte Carlo', r: [['magnet χ 0.05'], ['a fresh LU each', 'stop']], n: FC, e: FCE,
+    sk: [...PLATE_MAGNET, { ghost: [5.6, 3.9, 4.4], s: [5, 5, 5] }, { label: 'χ 0.05', at: [7, 7, 12.5] }],
+    body: 'The same Monte Carlo with a magnet of recoil χ 0.05. The magnet is then a solved part, so moving it changes the matrix.',
+    nums: ['10,000 samples: 23 min; 2,166 unknowns, of which the magnet\'s 648.', 'Not built: keep the plate\'s block and recouple through the magnet\'s 648 unknowns.'], src: 'explore/use-cases, s2_tolerance_mc.py' },
+  { g: 'loop', id: 'slide', t: 'A magnet sliding along a plate, almost touching', r: [['footprint moves'], ['a fresh LU each', 'stop']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [14, 14, 2], c: [7, 7, 1], tone: 'soft' }, { box: [1, 4.5, 2.1], s: [5, 5, 5], tone: 'magnet' }, { arrow: [6.5, 7, 4.5], to: [11, 7, 4.5], small: true }],
+    body: 'The plate stays put, but a magnet closer than about 20 % of the plate\'s half-side grades the plate\'s panels toward its footprint, and the footprint moves: every step has its own matrix. The fingerprint reads the panels, so <code>reuse=</code> solves afresh instead of answering wrong.',
+    nums: ['An LU kept from the first step would put B off by up to 5.4 %, 1.4 mT, with the magnet 0.01 mm off the plate.'], src: 'explore/use-cases, c7_frozen_layout.py' },
+  { g: 'loop', id: 'opt', t: 'An optimizer\'s population', r: [['shapes vary'], ['a solve each']], n: FC, e: FCE,
+    sk: [{ box: [0, 0, 0], s: [4, 4, 7], tone: 'magnet' }, { box: [7, 0, 0], s: [5, 5, 4], tone: 'magnet' }, { box: [15, 0, 0], s: [3, 6, 5.5], tone: 'magnet' }],
+    body: 'Sensor design fits and optimizes with differential evolution: 18 variables in under four minutes (' + cite('malago2020') + '), 30 to 100 in real systems (' + cite('ortner2023') + '). Each candidate\'s shape differs, so each is its own solve.',
+    nums: ['Gradient-free: no use case outside finite-element research asks for derivatives.'], src: 'explore/use-cases' },
+];
+const SHORT = { cube: 'Soft cube', plate: 'Magnet on a plate', ucore: 'U-core and coil', halbach: 'Halbach array', rotated: 'Rotated bodies', cyl: 'Meshed cylinder', tets: 'CAD as tetrahedra', sheet: 'Thin sheet', study: 'Mesh study', offgrid: 'Sides off the cell size', small: '100 small bodies', sizes: 'Many sizes', moving: 'Magnet on a path', stall: 'GMRES stalls', aniso: 'Anisotropic χ', fc: 'Soft part', fccad: 'CAD export', sat: 'Saturation',
+  inside: 'B inside a part', lam: 'Laminated core', imc: 'Hall-chip concentrator', shield: 'Shield sheet', hard: 'A magnet\'s own demag', nmr: 'NMR pole pieces', femcheck: 'FEM check', shaft: 'Shaft angle sensor', mc: 'Tolerance Monte Carlo', coils: 'U-core coils', drag: 'Studio drag', length: 'Plate length', holder: 'Shaft in a holder', recoil: 'Recoil Monte Carlo', slide: 'Magnet sliding', opt: 'Design optimizer' };
+const GROUPS = [['cells', 'Cells: solve_cells'], ['fc', 'Surfaces: solve_face_charge'], ['check', 'Checks: error bars and finite elements'], ['loop', 'Many solves: loops and paths']];
+
+/* ───────────────────────── iso sketches ───────────────────────── */
+const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
+const iso = ([x, y, z]) => [(x - y) * C30, (x + y) * S30 - z];
+const TONE = { soft: '--t-soft', iron: '--t-iron', magnet: '--t-magnet', tet: '--t-tet', new: '--t-new', chip: '--t-chip' };
+function boxGeom(b) {
+  const [px, py, pz] = b.box, [w, d, hh] = b.s, a = (b.rz || 0) * Math.PI / 180;
+  const cx = px + w / 2, cy = py + d / 2;
+  const rot = ([x, y, z]) => { const dx = x - cx, dy = y - cy; return [cx + dx * Math.cos(a) - dy * Math.sin(a), cy + dx * Math.sin(a) + dy * Math.cos(a), z]; };
+  const P = (i, j, k) => rot([px + i * w, py + j * d, pz + k * hh]);
+  const rn = ([x, y, z]) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a), z];
+  const c = b.c || [1, 1, 1];
+  return [
+    { q: [P(0, 0, 1), P(1, 0, 1), P(1, 1, 1), P(0, 1, 1)], n: [0, 0, 1], div: [c[0], c[1]] },
+    { q: [P(1, 0, 0), P(1, 1, 0), P(1, 1, 1), P(1, 0, 1)], n: rn([1, 0, 0]), div: [c[1], c[2]] },
+    { q: [P(0, 1, 0), P(1, 1, 0), P(1, 1, 1), P(0, 1, 1)], n: rn([0, 1, 0]), div: [c[0], c[2]] },
+    { q: [P(0, 0, 0), P(0, 1, 0), P(0, 1, 1), P(0, 0, 1)], n: rn([-1, 0, 0]), div: [c[1], c[2]] },
+    { q: [P(0, 0, 0), P(1, 0, 0), P(1, 0, 1), P(0, 0, 1)], n: rn([0, -1, 0]), div: [c[0], c[2]] },
+  ];
+}
+const lerp = (p, q, t) => p.map((v, i) => v + (q[i] - v) * t);
+/* A magnet's face cut where its magnetization crosses a fifth and four fifths of the magnet: south,
+   middle and north bands, as magpylib draws magnets. */
+const BANDS3 = [[0, 0.2, '--mag-s'], [0.2, 0.8, '--mag-m'], [0.8, 1, '--mag-n']];
+function clipBand(poly, u, a, b) {
+  const cut = (pts, keep, at) => {
+    const out = [];
+    pts.forEach((P, i) => {
+      const Q = pts[(i + 1) % pts.length], kp = keep(u(P)), kq = keep(u(Q));
+      if (kp) out.push(P);
+      if (kp !== kq) out.push(lerp(P, Q, (at - u(P)) / (u(Q) - u(P))));
+    });
+    return out;
+  };
+  return cut(cut(poly, v => v >= a - 1e-9, a), v => v <= b + 1e-9, b);
+}
+function drawFace(g, f) {
+  const tone = `var(${TONE[f.it.tone] || '--t-soft'})`;
+  const P2 = f.q.map(iso);
+  if (f.band) {
+    const { pol, lo, hi } = f.band, u = P => (P[0] * pol[0] + P[1] * pol[1] + P[2] * pol[2] - lo) / (hi - lo);
+    for (const [a, b, colour] of BANDS3) {
+      const part = clipBand(f.q, u, a, b);
+      if (part.length > 2) el('polygon', { points: part.map(iso).map(p => p.join(',')).join(' '), style: `fill:var(${colour});stroke:var(${colour});stroke-width:.15`, 'stroke-linejoin': 'round' }, g);
+    }
+  } else {
+    el('polygon', { points: P2.map(p => p.join(',')).join(' '), style: `fill:${tone}`, 'stroke-linejoin': 'round' }, g);
+  }
+  const shade = f.n[2] > 0.5 ? 0 : (f.n[0] >= f.n[1] ? 0.12 : 0.26);
+  if (shade) el('polygon', { points: P2.map(p => p.join(',')).join(' '), style: `fill:var(--shade);fill-opacity:${shade}` }, g);
+  const lines = [];
+  if (f.it.box && f.q.length === 4) {
+    const [a, b, c, d] = f.q, [nu, nv] = f.div;
+    if (f.it.graded) {
+      for (const t of [0.05, 0.14, 0.3, 0.7, 0.86, 0.95]) { lines.push([lerp(a, b, t), lerp(d, c, t)]); lines.push([lerp(a, d, t), lerp(b, c, t)]); }
+    } else {
+      for (let i = 1; i < nu; i++) lines.push([lerp(a, b, i / nu), lerp(d, c, i / nu)]);
+      for (let j = 1; j < nv; j++) lines.push([lerp(a, d, j / nv), lerp(b, c, j / nv)]);
+      if (f.it.tri) for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) lines.push([lerp(lerp(a, b, i / nu), lerp(d, c, i / nu), j / nv), lerp(lerp(a, b, (i + 1) / nu), lerp(d, c, (i + 1) / nu), (j + 1) / nv)]);
+    }
+  }
+  if (f.it.cylside && f.it.seg && f.it.k % Math.max(1, Math.round(32 / f.it.seg[1])) === 0) lines.push([f.q[0], f.q[3]]);
+  if (f.it.cyltop && f.it.seg) {
+    const [cx, cy] = f.it.cyl, z = f.it.cyl[2] + f.it.h, [nr, np] = f.it.seg;
+    for (let r = 1; r < nr; r++) { const rr = f.it.r * r / nr, ring = []; for (let k = 0; k <= 32; k++) { const t = k / 32 * 2 * Math.PI; ring.push([cx + rr * Math.cos(t), cy + rr * Math.sin(t), z]); } for (let k = 0; k < 32; k++) lines.push([ring[k], ring[k + 1]]); }
+    for (let k = 0; k < np; k++) { const t = k / np * 2 * Math.PI; lines.push([[cx + f.it.r / nr * Math.cos(t), cy + f.it.r / nr * Math.sin(t), z], [cx + f.it.r * Math.cos(t), cy + f.it.r * Math.sin(t), z]]); }
+  }
+  for (const [p, q] of lines) { const A = iso(p), B = iso(q); el('line', { x1: A[0], y1: A[1], x2: B[0], y2: B[1], style: 'stroke:var(--ink);stroke-opacity:.28;stroke-width:.35' }, g); }
+  el('polygon', { points: P2.map(p => p.join(',')).join(' '), style: 'fill:none;stroke:var(--ink);stroke-opacity:.55;stroke-width:.5', 'stroke-linejoin': 'round' }, g);
+}
+const aabb = ps => ({ lo: [0, 1, 2].map(k => Math.min(...ps.map(p => p[k]))), hi: [0, 1, 2].map(k => Math.max(...ps.map(p => p[k]))) });
+/* Painter's order for the sketch. The viewer looks from +x, +y, +z, so a box that ends where another
+   begins along any axis lies behind it; faces alone, sorted by their centres, misorder a large face
+   against a small one. A coil is split into the half behind its axis and the half in front, drawn
+   before and after the bar it winds around. */
+let holeCount = 0;
+function drawSketch(svg, spec) {
+  const items = [], over = [], pts = [];
+  for (const it of spec) {
+    if (it.box) {
+      const all = boxGeom(it), corners = all.flatMap(f => f.q);
+      let band = null;
+      if (it.tone === 'magnet') {
+        const pol = it.pol || [0, 0, 1], along = corners.map(P => P[0] * pol[0] + P[1] * pol[1] + P[2] * pol[2]);
+        band = { pol, lo: Math.min(...along), hi: Math.max(...along) };
+      }
+      const faces = all.filter(f => f.n[0] + f.n[1] + f.n[2] > 1e-6).map(f => ({ q: f.q, n: f.n, div: f.div, it, band }));
+      corners.forEach(p => pts.push(iso(p)));
+      items.push({ faces, b: aabb(corners), p2: corners.map(iso) });
+    } else if (it.cyl) {
+      const [cx, cy, z0] = it.cyl, M = 32, faces = [], all = [];
+      const ring = k => { const t = k / M * 2 * Math.PI; return [cx + it.r * Math.cos(t), cy + it.r * Math.sin(t)]; };
+      for (let k = 0; k < M; k++) {
+        const t = (k + 0.5) / M * 2 * Math.PI, n = [Math.cos(t), Math.sin(t), 0];
+        const [x0, y0] = ring(k), [x1, y1] = ring(k + 1);
+        const q = [[x0, y0, z0], [x1, y1, z0], [x1, y1, z0 + it.h], [x0, y0, z0 + it.h]];
+        all.push(...q);
+        if (n[0] + n[1] <= 0) continue;
+        faces.push({ q, n, div: [1, 1], it: { ...it, cylside: true, k }, depth: x0 + y0 });
+      }
+      const top = []; for (let k = 0; k < M; k++) { const [x, y] = ring(k); top.push([x, y, z0 + it.h]); }
+      faces.sort((a, b) => a.depth - b.depth);
+      faces.push({ q: top, n: [0, 0, 1], div: [1, 1], it: { ...it, cyltop: true } });
+      all.forEach(p => pts.push(iso(p)));
+      items.push({ faces, b: aabb(all), p2: all.map(iso) });
+    } else if (it.coil) {
+      const [cx, cy, cz] = it.coil, halves = { back: [], front: [] }, p3 = { back: [], front: [] };
+      for (let n = 0; n < it.turns; n++) {
+        const off = (n - (it.turns - 1) / 2) * it.pitch, ring = [];
+        for (let k = 0; k <= 48; k++) {
+          const t = k / 48 * 2 * Math.PI, c = it.r * Math.cos(t), s = it.r * Math.sin(t);
+          ring.push(it.axis === 'z' ? [cx + c, cy + s, cz + off] : [cx + off, cy + c, cz + s]);
+        }
+        let run = null, side = null;
+        for (let k = 0; k < 48; k++) {
+          const a = ring[k], b = ring[k + 1];
+          const m = it.axis === 'z' ? a[0] + b[0] - 2 * cx + a[1] + b[1] - 2 * cy : a[1] + b[1] - 2 * cy + a[2] + b[2] - 2 * cz;
+          const sd = m > 0 ? 'front' : 'back';
+          if (sd !== side) { run = [a]; halves[sd].push(run); side = sd; }
+          run.push(b); p3[sd].push(a, b);
+        }
+        ring.forEach(p => pts.push(iso(p)));
+      }
+      for (const sd of ['back', 'front']) if (p3[sd].length) items.push({ lines: halves[sd].map(r => r.map(iso)), b: aabb(p3[sd]), p2: p3[sd].map(iso), coil: sd, centre: it.coil });
+    } else if (it.arrow) {
+      const a = iso(it.arrow), b = iso(it.to); pts.push(a, b); over.push({ arrow: [a, b], small: it.small });
+    } else if (it.path) {
+      const line = it.path.map(iso); line.forEach(p => pts.push(p)); over.push({ path: line, tone: it.tone || '--stop' });
+    } else if (it.ghost) {
+      const [x, y, z] = it.ghost, [w, d, hh] = it.s, P = (i, j, k) => iso([x + i * w, y + j * d, z + k * hh]);
+      const segs = [[P(0, 0, 1), P(1, 0, 1)], [P(1, 0, 1), P(1, 1, 1)], [P(1, 1, 1), P(0, 1, 1)], [P(0, 1, 1), P(0, 0, 1)],
+        [P(1, 0, 0), P(1, 0, 1)], [P(1, 1, 0), P(1, 1, 1)], [P(0, 1, 0), P(0, 1, 1)], [P(1, 0, 0), P(1, 1, 0)], [P(1, 1, 0), P(0, 1, 0)]];
+      segs.flat().forEach(p => pts.push(p)); over.push({ ghost: segs });
+    } else if (it.hole) {
+      // a hole through the part: its opening, the bottom opening, and lines down the far wall
+      const [cx, cy, z] = it.hole, z0 = it.bottom ?? 0, top = [], bottom = [], walls = [];
+      for (let k = 0; k < 48; k++) {
+        const t = k / 48 * 2 * Math.PI, x = cx + it.r * Math.cos(t), y = cy + it.r * Math.sin(t);
+        top.push(iso([x, y, z])); bottom.push(iso([x, y, z0]));
+        if (k % 4 === 2 && Math.cos(t) + Math.sin(t) < 0) walls.push([iso([x, y, z]), iso([x, y, z0])]);
+      }
+      top.forEach(p => pts.push(p)); over.push({ hole: { top, bottom, walls, tone: it.tone } });
+    } else if (it.label) {
+      const p = iso(it.at); pts.push(p); over.push({ label: it.label, p });
+    }
+  }
+  const n = items.length;
+  const s2 = items.map(o => { const xs = o.p2.map(p => p[0]), ys = o.p2.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
+  const overlap = (i, j) => s2[i][0] < s2[j][2] - 1e-6 && s2[j][0] < s2[i][2] - 1e-6 && s2[i][1] < s2[j][3] - 1e-6 && s2[j][1] < s2[i][3] - 1e-6;
+  const behind = (a, b) => [0, 1, 2].some(k => a.hi[k] <= b.lo[k] + 1e-9);
+  const holds = (b, p) => [0, 1, 2].every(k => b.lo[k] - 1e-9 <= p[k] && p[k] <= b.hi[k] + 1e-9);
+  const depth = o => o.b.lo[0] + o.b.lo[1] + o.b.lo[2] + o.b.hi[0] + o.b.hi[1] + o.b.hi[2];
+  const later = items.map(() => new Set());
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const A = items[i], B = items[j];
+    let pair;
+    if (A.coil && B.faces && holds(B.b, A.centre)) pair = A.coil === 'back' ? [i, j] : [j, i];
+    else if (B.coil && A.faces && holds(A.b, B.centre)) pair = B.coil === 'back' ? [j, i] : [i, j];
+    else if (!overlap(i, j)) continue;
+    else if (behind(A.b, B.b) && !behind(B.b, A.b)) pair = [i, j];
+    else if (behind(B.b, A.b) && !behind(A.b, B.b)) pair = [j, i];
+    else pair = depth(A) <= depth(B) ? [i, j] : [j, i];
+    later[pair[0]].add(pair[1]);
+  }
+  const before = items.map(() => 0);
+  later.forEach(set => set.forEach(j => before[j]++));
+  const order = [], done = new Set();
+  while (order.length < n) {
+    let free = [...items.keys()].filter(i => !done.has(i) && before[i] === 0);
+    if (!free.length) free = [...items.keys()].filter(i => !done.has(i));  // a cycle: farthest first
+    const i = free.reduce((a, b) => (depth(items[a]) <= depth(items[b]) ? a : b));
+    order.push(i); done.add(i); later[i].forEach(j => before[j]--);
+  }
+  const g = el('g', {}, svg);
+  for (const i of order) {
+    const o = items[i];
+    if (o.lines) o.lines.forEach(line => el('polyline', { points: line.map(p => p.join(',')).join(' '), style: 'fill:none;stroke:var(--t-coil);stroke-width:.9;stroke-linecap:round' }, g));
+    else o.faces.forEach(f => drawFace(g, f));
+  }
+  for (const o of over) {
+    if (o.arrow) {
+      const [a, b] = o.arrow, dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, hs = o.small ? 1.1 : 1.8;
+      el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], style: `stroke:var(--ink);stroke-width:${o.small ? .55 : .8}` }, g);
+      el('polygon', { points: `${b[0]},${b[1]} ${b[0] - ux * hs * 1.6 - uy * hs * .7},${b[1] - uy * hs * 1.6 + ux * hs * .7} ${b[0] - ux * hs * 1.6 + uy * hs * .7},${b[1] - uy * hs * 1.6 - ux * hs * .7}`, style: 'fill:var(--ink)' }, g);
+    }
+    if (o.path) {
+      el('polyline', { points: o.path.map(p => p.join(',')).join(' '), style: `fill:none;stroke:var(${o.tone});stroke-width:.8;stroke-dasharray:1.6 1.2` }, g);
+      const b = o.path.at(-1), a = o.path.at(-2), dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+      el('polygon', { points: `${b[0]},${b[1]} ${b[0] - ux * 2.4 - uy * 1.1},${b[1] - uy * 2.4 + ux * 1.1} ${b[0] - ux * 2.4 + uy * 1.1},${b[1] - uy * 2.4 - ux * 1.1}`, style: `fill:var(${o.tone})` }, g);
+    }
+    if (o.ghost) for (const [a, b] of o.ghost) el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], style: 'stroke:var(--dec);stroke-width:.5;stroke-dasharray:1 .8' }, g);
+    if (o.hole) {
+      const id = `hole-${++holeCount}`, poly = ring => ring.map(p => p.join(',')).join(' ');
+      el('polygon', { points: poly(o.hole.top) }, el('clipPath', { id }, g));
+      const inside = el('g', { 'clip-path': `url(#${id})` }, g);
+      el('polygon', { points: poly(o.hole.top), style: `fill:var(${TONE[o.hole.tone] || '--t-soft'})` }, inside);
+      el('polygon', { points: poly(o.hole.top), style: 'fill:var(--shade);fill-opacity:.34' }, inside);
+      for (const [a, b] of o.hole.walls) el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], style: 'stroke:var(--ink);stroke-opacity:.3;stroke-width:.35' }, inside);
+      el('polygon', { points: poly(o.hole.bottom), style: 'fill:var(--panel);stroke:var(--ink);stroke-opacity:.45;stroke-width:.4' }, inside);
+      el('polygon', { points: poly(o.hole.top), style: 'fill:none;stroke:var(--ink);stroke-opacity:.6;stroke-width:.5' }, g);
+    }
+    if (o.label) { const t = el('text', { x: o.p[0], y: o.p[1], 'text-anchor': 'middle', style: 'font-family:var(--font-mono);font-size:3.4px;fill:var(--ink)' }, g); t.textContent = o.label; }
+  }
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), pad = 2;
+  svg.setAttribute('viewBox', `${x0 - pad} ${y0 - pad} ${x1 - x0 + 2 * pad} ${y1 - y0 + 2 * pad}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+}
+
+
+/* ───────────────────────── map render ───────────────────────── */
+const map = document.getElementById('map');
+const defs = el('defs', {}, map);
+for (const [id, v] of [['ar', '--ink3'], ['ar-on', '--accent']]) {
+  const m = el('marker', { id, viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse' }, defs);
+  el('path', { d: 'M0,1 L9,5 L0,9 z', style: `fill:var(${v})` }, m);
+}
+for (const [x, y, w, hh, lab, lx, ly, anchor] of [
+  [172, 186, 548, 586, 'solve_cells', 184, 203, 'start'],
+  [900, 98, 236, 690, 'solve_face_charge', 1130, 782, 'end'],
+  [1146, 98, 210, 590, 'solve_fem', 1250, 682, 'middle'],
+]) {
+  el('rect', { x, y, width: w, height: hh, rx: 10, class: 'grp' }, map);
+  el('text', { x: lx, y: ly, class: 'grp-label', 'text-anchor': anchor }, map).textContent = lab;
+}
+
+const edgeEls = {};
+for (const e of E) {
+  const g = el('g', {}, map);
+  const line = el('polyline', { points: e.p.map(p => p.join(',')).join(' '), class: 'edge' + (e.c ? ' ' + e.c : ''), 'marker-end': 'url(#ar)' }, g);
+  let lab = null;
+  if (e.l[0]) {
+    const [txt, x, y, anchor, rot] = e.l;
+    lab = el('text', { x, y, class: 'elabel', 'text-anchor': anchor || 'start' }, g);
+    if (rot) lab.setAttribute('transform', `rotate(${rot} ${x} ${y})`);
+    lab.textContent = txt;
+  }
+  edgeEls[e.id] = { line, lab };
+}
+const nodeEls = {};
+for (const [id, n] of Object.entries(N)) {
+  const g = el('g', { class: `node ${n.k || ''}`, tabindex: '0', role: 'button', 'aria-label': `${n.t}: ${n.s}` }, map);
+  let cx, ty;
+  if (n.k === 'dec') {
+    el('polygon', { class: 'shape', points: `${n.cx},${n.cy - n.hh} ${n.cx + n.hw},${n.cy} ${n.cx},${n.cy + n.hh} ${n.cx - n.hw},${n.cy}` }, g);
+    cx = n.cx; ty = n.cy - 3;
+  } else {
+    el('rect', { class: 'shape', x: n.x, y: n.y, width: n.w, height: n.h, rx: n.k === 'data' ? 16 : 7 }, g);
+    cx = n.x + n.w / 2; ty = n.y + n.h / 2 - 3;
+  }
+  const t = el('text', { x: cx, y: ty, 'text-anchor': 'middle', class: 't' }, g); t.textContent = n.t;
+  const s = el('text', { x: cx, y: ty + 16, 'text-anchor': 'middle', class: 's' }, g); s.textContent = n.s;
+  if (n.ic) { const ic = el('text', { x: n.x + n.w - 14, y: n.y + 17, class: 'ic', 'text-anchor': 'middle' }, g); ic.textContent = n.ic; }
+  g.addEventListener('click', () => selectNode(id));
+  g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectNode(id); } });
+  nodeEls[id] = g;
+}
+
+/* ───────────────────────── panel ───────────────────────── */
+const panel = document.getElementById('panel');
+const GROUP_OF = Object.fromEntries(GROUPS);
+let curScn = null, curNode = null;
+/* the docs page that explains a box: [path from docs/, its title] */
+const PAGE = {
+  cells: ['inside/cells', 'Inside cells'], fc: ['inside/face_charge', 'Inside face charge'],
+  fem: ['inside/fem', 'Inside finite elements'], errors: ['inside/error_estimates', 'Inside the error estimates'],
+  sat: ['inside/saturation', 'Inside saturation'], model: ['guide/model', 'Building a model'],
+  loops: ['guide/loops', 'Many solves'],
+};
+const MORE = {
+  model: 'model', mesh: 'cells', rhs: 'cells', analyze: 'cells', rule: 'cells', choose: 'cells', dense: 'cells',
+  lu: 'cells', ops: 'cells', gmres: 'cells', out: 'cells', study: 'errors', sat: 'sat',
+  fc1: 'fc', kept: 'loops', fc2: 'fc', fc3: 'fc', fc4: 'fc', fc5: 'fc', fc6: 'fc', fmx: 'loops',
+  fem1: 'fem', fem2: 'fem', fem3: 'fem', fem4: 'fem', fem5: 'fem', femstudy: 'errors',
+};
+function showNode(id) {
+  const n = N[id], d = D[id];
+  let html = `<h3>${n.t}</h3><div class="codeat">${d.at}</div><p>${d.lead}</p>`;
+  for (const [hd, items] of d.b) html += `<div class="blk"><h4>${hd}</h4><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul></div>`;
+  if (d.p) html += `<div class="blk"><h4>Papers</h4><p class="src">${cite(...d.p)}</p></div>`;
+  if (MORE[id]) { const [page, title] = PAGE[MORE[id]]; html += `<p><a href="../../${page}.html" target="_top">${title} →</a></p>`; }
+  if (curScn) html += `<p class="src">Path still shown: ${curScn.t}.</p>`;
+  panel.innerHTML = html;
+}
+/* the models a worked example in the docs builds, and its page */
+const EXAMPLE = {
+  shaft: 'angle_sensor', holder: 'angle_sensor', mc: 'tolerance_monte_carlo',
+  ucore: 'ucore_electromagnet', sat: 'saturation', halbach: 'mesh_convergence',
+  sheet: 'mesh_convergence', femcheck: 'fem_check',
+};
+function showScn(sc) {
+  const pills = sc.r.map(([t, c]) => `<span class="pill ${c || ''}">${t}</span>`).join(' ');
+  const trail = sc.n.filter(id => N[id]).map(id => `<span>${N[id].t}</span>`).join('');
+  const sp = SPEED[sc.id];
+  const measured = sp
+    ? `<div class="blk"><h4>As its source measured it</h4><div class="sp" style="font-size:12.5px">${meterHTML(sp.t)}<b style="color:var(--ink)">${fmtT(sp.t)}</b><span>${BANDS[band(sp.t)]}</span></div>
+       <ul><li>${sp.what}</li>${sp.acc ? `<li>${sp.acc}</li>` : ''}<li>${sp.src}</li></ul></div>`
+    : (UNTIMED[sc.id] ? `<div class="blk"><h4>Measured</h4><p class="src">${UNTIMED[sc.id]}</p></div>` : '');
+  const nums = sc.nums ? `<div class="blk"><h4>Numbers</h4><ul>${sc.nums.map(x => `<li>${x}</li>`).join('')}</ul></div>` : '';
+  const d = ACC[CASE_OF[sc.id]];
+  const valid = d
+    ? `<div class="blk"><h4>Validation, against FEM</h4><ul>${[['MoM', 'cells'], ['FaceCharge', 'face charge'], ['FEM', 'FEM']].filter(([m]) => d[m]).map(([m, name]) => `<li><b>${name}</b>: ${accText(d[m])}</li>`).join('')}</ul></div>`
+    : '';
+  panel.innerHTML = `<span class="pill tag">${GROUP_OF[sc.g]}</span>
+    <h3>${sc.t}</h3><div style="display:flex;flex-wrap:wrap;gap:4px">${pills}</div><p>${sc.body}</p>
+    ${nums}${valid}${measured}
+    <div class="blk"><h4>Path</h4><div class="trail">${trail}</div></div>
+    ${EXAMPLE[sc.id] ? `<p><a href="../../examples/${EXAMPLE[sc.id]}.html" target="_top">The worked example →</a></p>` : ''}
+    <p class="src">Source: ${sc.src}</p>`;
+}
+function highlight(sc) {
+  map.classList.toggle('dimmed', !!sc);
+  for (const [id, g] of Object.entries(nodeEls)) {
+    g.classList.toggle('on', !!sc && sc.n.includes(id));
+    g.classList.toggle('stop', !!sc && sc.stop === id);
+  }
+  for (const [id, o] of Object.entries(edgeEls)) {
+    const on = !!sc && sc.e.includes(id);
+    o.line.classList.toggle('on', on);
+    o.line.setAttribute('marker-end', `url(#${on ? 'ar-on' : 'ar'})`);
+    if (o.lab) o.lab.classList.toggle('on', on);
+  }
+  document.getElementById('map-status').textContent = sc ? `Path: ${sc.t}` : 'No path selected: pick a model';
+  document.getElementById('clear-path').hidden = !sc;
+}
+function selectNode(id) {
+  curNode = id;
+  for (const [k, g] of Object.entries(nodeEls)) g.classList.toggle('sel', k === id);
+  showNode(id);
+}
+function selectScn(sc) {
+  curScn = sc; curNode = null;
+  for (const g of Object.values(nodeEls)) g.classList.remove('sel');
+  document.querySelectorAll('.scn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id === (sc && sc.id))));
+  highlight(sc);
+  document.querySelectorAll('#ladder .ld-pick').forEach(g => g.classList.toggle('sel', !!sc && g.dataset.id === sc.id));
+  const picked = document.querySelector('#ladder .ld-pick.sel');
+  if (picked) picked.parentNode.appendChild(picked);
+  if (sc) showScn(sc);
+}
+document.getElementById('clear-path').addEventListener('click', () => { selectScn(null); selectNode(curNode || 'model'); });
+
+/* ───────────────────────── tiles ───────────────────────── */
+const strip = document.getElementById('scn-strip');
+for (const [g, label] of GROUPS) {
+  const wrap = h('div', 'scn-group');
+  const count = S.filter(s => s.g === g).length;
+  wrap.style.flex = `${count} 1 ${Math.min(count, 9) * 89}px`;
+  const cards = h('div', 'scn-cards');
+  wrap.append(h('div', 'scn-label', label), cards);
+  for (const sc of S.filter(s => s.g === g)) {
+    const b = h('button', 'scn');
+    b.type = 'button'; b.dataset.id = sc.id; b.setAttribute('aria-pressed', 'false');
+    b.title = sc.t;
+    const svg = el('svg', { role: 'img', 'aria-label': sc.t });
+    b.appendChild(svg);
+    b.appendChild(h('div', 't', SHORT[sc.id] || sc.t));
+    const sp = SPEED[sc.id], pts = mainPts(sc);
+    if (pts) {
+      // the time to 1 %, or the best error and its time: a time needs its accuracy
+      const t1 = reachT(pts, 0.01), best = bestP(pts), tt = t1 != null ? t1 : best[0];
+      b.appendChild(h('div', 'sp', `${meterHTML(tt)}${fmtT(tt)}`));
+      b.appendChild(h('div', 'sp acc', t1 != null ? 'to 1 %' : `best ${pcE(best[1])}`));
+    } else if (sp) {
+      b.appendChild(h('div', 'sp', `${meterHTML(sp.t)}${fmtT(sp.t)}`));
+    } else {
+      const last = sc.r[sc.r.length - 1];
+      b.appendChild(h('div', 'sp' + (last[1] === 'stop' || sc.stop ? ' stopped' : ''), sc.stop ? 'refused' : last[0]));
+    }
+    b.addEventListener('click', () => {
+      selectScn(sc);
+      // bring the lit path into view when the map sits below the fold
+      const box = document.querySelector('.bench').getBoundingClientRect();
+      if (box.top > innerHeight * 0.55) document.querySelector('.bench').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    cards.appendChild(b);
+    drawSketch(svg, sc.sk);
+  }
+  strip.appendChild(wrap);
+}
+document.getElementById('to-models').addEventListener('click', () => strip.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+
+/* ───────────────────────── accuracy against time ───────────────────────── */
+(function drawAcc() {
+  const sv = document.getElementById('ladder');
+  const x0 = 64, x1 = 1160, y0 = 26, y1 = 296, tmin = -3, tmax = Math.log10(600), emin = -5, emax = 2;
+  const X = t => x0 + (Math.log10(Math.min(Math.max(t, 1e-3), 600)) - tmin) / (tmax - tmin) * (x1 - x0);
+  const Y = e => y1 - (Math.log10(Math.min(Math.max(e, 1e-5), 100)) - emin) / (emax - emin) * (y1 - y0);
+  const pc = e => e >= 1 ? `${Math.round(e * 100).toLocaleString('en')} %` : `${+(e * 100).toPrecision(2)} %`;
+  for (const [t, lab] of [[1e-3, '1 ms'], [1e-2, '10 ms'], [0.1, '0.1 s'], [1, '1 s'], [10, '10 s'], [60, '1 min'], [600, '10 min']]) {
+    el('line', { x1: X(t), x2: X(t), y1: y0, y2: y1, style: 'stroke:var(--grid);stroke-width:1' }, sv);
+    el('text', { x: X(t), y: y1 + 16, 'text-anchor': 'middle', class: 'ld-axis' }, sv).textContent = lab;
+  }
+  for (let k = emin; k <= emax; k++) {
+    el('line', { x1: x0, x2: x1, y1: Y(10 ** k), y2: Y(10 ** k), style: 'stroke:var(--grid);stroke-width:1' }, sv);
+    if ((k - emin) % 2 === 0) el('text', { x: x0 - 6, y: Y(10 ** k) + 4, 'text-anchor': 'end', class: 'ld-axis' }, sv).textContent = pc(10 ** k);
+  }
+  for (const [e, lab] of [[0.01, '1 %'], [0.001, '0.1 %']]) {
+    el('line', { x1: x0, x2: x1, y1: Y(e), y2: Y(e), style: 'stroke:var(--ink3);stroke-width:1;stroke-dasharray:3 4' }, sv);
+    el('text', { x: x1 - 4, y: Y(e) - 4, 'text-anchor': 'end', class: 'ld-axis' }, sv).textContent = lab;
+  }
+  el('text', { x: x0, y: 14, class: 'ld-axis' }, sv).textContent = 'relative error of B against the FEM reference (lower is better)';
+  const key = [['cells', 'var(--accent)', ''], ['face charge', 'var(--new)', ''], ['FEM, the yardstick', 'var(--stop)', '']];
+  key.forEach(([lab, c, cls], i) => {
+    const g = el('g', { class: cls }, sv), x = 640 + i * 182;
+    el('line', { x1: x, x2: x + 22, y1: 10, y2: 10, style: `stroke:${c};stroke-width:3` }, g);
+    el('text', { x: x + 28, y: 14, class: 'ld-axis' }, g).textContent = lab;
+  });
+  const line = (pts, colour, cls, name, parent) => {
+    const g = el('g', { class: cls }, parent);
+    el('polyline', { points: pts.map(([t, e]) => `${X(t)},${Y(e)}`).join(' '), class: 'acc-line', style: `stroke:${colour}` }, g);
+    for (const [t, e, below, set] of pts) {
+      const d = el('circle', { cx: X(t), cy: Y(e), r: 3.6, class: 'acc-dot', style: below ? `fill:var(--panel);stroke:${colour};stroke-width:1.5` : `fill:${colour}` }, g);
+      el('title', {}, d).textContent = `${name}, ${set}: ${fmtT(t)}, ${below ? 'below the reference, ' : ''}${pc(e)}`;
+    }
+    return g;
+  };
+  const shown = S.filter(s => CASE_OF[s.id] && ACC[CASE_OF[s.id]]);
+  for (const sc of shown) {
+    const data = ACC[CASE_OF[sc.id]], name = SHORT[sc.id] || sc.t, main = byFC(sc) ? 'FaceCharge' : 'MoM';
+    if (!data[main]) continue;
+    const pick = el('g', { class: 'ld-pick', 'data-id': sc.id, tabindex: '0', role: 'button', 'aria-label': `${sc.t}: accuracy against time` }, sv);
+    el('polyline', { points: data[main].map(([t, e]) => `${X(t)},${Y(e)}`).join(' '), class: 'acc-hit' }, pick);
+    const extra = el('g', { class: 'acc-extra' }, pick);
+    if (data.FEM) line(data.FEM, 'var(--stop)', '', `${name}, FEM`, extra);
+    if (main === 'MoM' && data.FaceCharge) line(data.FaceCharge, 'var(--new)', '', `${name}, face charge`, extra);
+    if (main === 'FaceCharge' && data.MoM) line(data.MoM, 'var(--accent)', '', `${name}, cells`, extra);
+    line(data[main], main === 'MoM' ? 'var(--accent)' : 'var(--new)', 'acc-main', `${name}, ${main === 'MoM' ? 'cells' : 'face charge'}`, pick);
+    const [tl, el2] = data[main][data[main].length - 1];
+    el('text', { x: X(tl) + 8, y: Y(el2) + 4, class: 'ld-lab' }, pick).textContent = name;
+    const go = () => selectScn(sc);
+    pick.addEventListener('click', go);
+    pick.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+  }
+  document.getElementById('ladder-note').innerHTML = '<b>How to read it.</b> Each line is one model, solved on finer and finer meshes from left to right; lower is more accurate, further right is slower. A point’s height is the relative error of B, ‖B − B<sub>ref</sub>‖ / ‖B<sub>ref</sub>‖ over a set of sensors, such as a line 30 mm above the U-core’s poles. B<sub>ref</sub> is a finite-element solve refined until its own error is known. Where a model has several sets of sensors, such as above a plate and under it, the line shows the worst one, so a weak field behind a shield is not hidden by a strong one beside it. Time is mesh, solve and B together. A hollow dot is below the reference’s own error, closer than can be told. Pick a line to see the other methods on the same model. From the validation suite (<code>validation/</code>), local runs on one M4 Pro, 26 to 28 October; models outside it are not on the chart.';
+})();
+
+/* references */
+const refsBox = document.getElementById('refs-list');
+for (const [title, keys] of REF_GROUPS) {
+  const g = h('div', 'rg');
+  g.append(h('h3', '', title));
+  const ol = h('ol');
+  for (const k of keys) {
+    const [, text, doi] = REFS[k];
+    const li = h('li', '', text + (doi ? ` <a href="https://doi.org/${doi}" target="_blank" rel="noopener">doi:${doi}</a>` : ''));
+    li.id = `ref-${k}`;
+    ol.append(li);
+  }
+  g.append(ol);
+  refsBox.append(g);
+}
+
+/* initial state: the model a link names, as map.html#shaft, or the plate */
+const linked = S.find(s => s.id === location.hash.slice(1));
+selectScn(linked || S.find(s => s.id === 'plate'));
+if (linked) document.getElementById('scn-strip').scrollIntoView();
+const mapScroll = document.querySelector('.map-scroll');
+requestAnimationFrame(() => {
+  const w = map.getBoundingClientRect().width;
+  if (w > mapScroll.clientWidth + 1) mapScroll.scrollLeft = w * 330 / 1360 - 8;  // open on the cells column
+});
+
+/* ───────────────────────── block matrix ───────────────────────── */
+const bm = document.getElementById('bm');
+const bmState = { solver: 'iterative', rule: 'point', same: true, tets: true, sel: ['A', 'B'] };
+const CL = { A: { name: 'plate', n: 4096, kind: 'grid' }, B: { name: 'magnet', n: 1728, kind: 'grid' }, C: { name: 'pole piece', n: 1500, kind: 'generic' } };
+const CAT = {
+  fft:   ['--b-fft', 'FFT convolution', 'Self-block of a grid: an FFT convolution on the grid padded to twice its size, about m log m per product, exact. The kernel spectrum (6 tensor components) is built once.'],
+  fftx:  ['--b-fftx', 'FFT cross-convolution', 'Two grids of one spacing whose block passes 10⁶ entries: an FFT product too, in both directions, never stored.'],
+  table: ['--b-table', 'gathered from a table', 'Grids of one spacing: the kernel is tabulated once per index difference, at most ∏(Nₐ + N_b − 1) tensors for the whole block, and every chunk is a gather.'],
+  dedup: ['--b-dedup', 'closed form, per displacement', 'Cuboid sources of one shape and orientation: the closed-form tensor, computed once per distinct displacement when at most a quarter are distinct, else directly; observer chunks of at most 200,000 pairs.'],
+  geth:  ['--b-geth', 'one magpy.getH per pair', 'Sources that are not cuboids: the generic path, one field evaluation per pair through magpylib, in chunks of at most 200,000 pairs. No reciprocity.'],
+};
+const fmt = n => n.toLocaleString('en-US');
+function bmKind(i, j) {
+  const s = bmState, a = CL[i], b = CL[j];
+  if (s.rule === 'newell' && s.tets) return ['raise'];
+  if (i === j) return a.kind === 'grid' ? [s.solver === 'iterative' ? 'fft' : 'table'] : ['geth'];
+  const order = ['A', 'B', 'C'], fwd = order.indexOf(i) < order.indexOf(j);
+  if (a.kind === 'grid' && b.kind === 'grid') {
+    if (s.solver === 'iterative' && s.same && 9 * a.n * b.n > 1e6) return ['fftx'];
+    const base = s.same ? 'table' : 'dedup';
+    if (fwd) return [base];
+    const recip = s.rule === 'newell' || s.same;
+    return recip ? [base, 'recip'] : [base];
+  }
+  if (b.kind === 'generic') return ['geth'];
+  return ['dedup'];
+}
+function bmDraw() {
+  bm.innerHTML = '';
+  const defs2 = el('defs', {}, bm);
+  const pat = el('pattern', { id: 'hatch', width: '7', height: '7', patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs2);
+  el('rect', { width: '7', height: '7', style: 'fill:transparent' }, pat);
+  el('line', { x1: '0', y1: '0', x2: '0', y2: '7', style: 'stroke:var(--panel);stroke-width:3;stroke-opacity:.8' }, pat);
+  const ids = bmState.tets ? ['A', 'B', 'C'] : ['A', 'B'];
+  const tot = ids.reduce((s, k) => s + CL[k].n, 0), x0 = 54, y0 = 40, W = 374;
+  let off = 0; const pos = {};
+  for (const k of ids) { pos[k] = [off, CL[k].n / tot * W]; off += CL[k].n / tot * W; }
+  for (const k of ids) {
+    const [o, w] = pos[k];
+    const t1 = el('text', { x: x0 + o + w / 2, y: y0 - 10, 'text-anchor': 'middle', class: 'bm-lab' }, bm); t1.textContent = `${CL[k].name} ${k}`;
+    const t2 = el('text', { x: x0 - 8, y: y0 + o + w / 2 + 4, 'text-anchor': 'end', class: 'bm-lab' }, bm); t2.textContent = k;
+  }
+  const tx = el('text', { x: x0 + W / 2, y: 14, 'text-anchor': 'middle', class: 'bm-lab' }, bm); tx.textContent = 'sources →';
+  const ty = el('text', { x: 12, y: y0 + W / 2, 'text-anchor': 'middle', class: 'bm-lab', transform: `rotate(-90 12 ${y0 + W / 2})` }, bm); ty.textContent = 'observers →';
+  for (const i of ids) for (const j of ids) {
+    const kinds = bmKind(i, j), [oi, wi] = pos[i], [oj, wj] = pos[j];
+    const main = kinds[0];
+    const fill = main === 'raise' ? 'var(--stop)' : `var(${CAT[main][0]})`;
+    const r = el('rect', { x: x0 + oj, y: y0 + oi, width: wj, height: wi, class: 'bm-cell' + (bmState.sel[0] === i && bmState.sel[1] === j ? ' sel' : ''), style: `fill:${fill}${main === 'raise' ? ';fill-opacity:.35' : ''}`, tabindex: '0', role: 'button', 'aria-label': `observers ${i}, sources ${j}` }, bm);
+    if (kinds.includes('recip')) el('rect', { x: x0 + oj, y: y0 + oi, width: wj, height: wi, style: 'fill:url(#hatch);pointer-events:none' }, bm);
+    const pick = () => { bmState.sel = [i, j]; bmDraw(); };
+    r.addEventListener('click', pick);
+    r.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
+  }
+  if (bmState.rule === 'newell' && bmState.tets) {
+    const t = el('text', { x: x0 + W / 2, y: y0 + W / 2, 'text-anchor': 'middle', style: 'font-family:var(--font-display);font-weight:600;font-size:18px;fill:var(--stop)' }, bm); t.textContent = 'raises ValueError';
+  }
+  bmDetail(ids);
+}
+function bmDetail(ids) {
+  let [i, j] = bmState.sel;
+  if (!ids.includes(i) || !ids.includes(j)) { i = 'A'; j = 'B'; bmState.sel = [i, j]; }
+  const kinds = bmKind(i, j), a = CL[i], b = CL[j], entries = 9 * a.n * b.n;
+  const box = document.getElementById('bm-detail');
+  if (kinds[0] === 'raise') {
+    box.innerHTML = `<div class="what" style="color:var(--stop)">interaction="newell" refuses this model</div><p>It averages each field over the observer cell, which needs every cell to be a cuboid with one orientation. The tetrahedral pole piece makes solve_cells raise a ValueError before anything is built. Use the point rule, or drop the pole piece.</p>`;
+  } else {
+    const [, name, text] = CAT[kinds[0]];
+    let html = `<div class="what">Observers ${i} (${a.name}, ${fmt(a.n)} cells) · sources ${j} (${b.name}, ${fmt(b.n)} cells)</div><div><b>${name}</b>. ${text}</div>`;
+    if (kinds.includes('recip')) html += `<div><b>Not computed here:</b> it is the block ${j}–${i} transposed${bmState.rule === 'newell' ? ', times Vₐ/V_b' : ' (same shape and orientation, so the factor is 1)'}. ${bmState.solver === 'iterative' ? 'In GMRES a transposed view, no copy.' : 'Written into T from the forward chunks.'}</div>`;
+    html += `<div class="meta">${fmt(entries)} entries · ${(72 * a.n * b.n / 1e9).toFixed(2)} GB if stored dense</div>`;
+    if (bmState.solver === 'iterative' && !['fft', 'fftx'].includes(kinds[0]) && entries > 2e7) html += `<div class="meta">Above 2·10⁷ entries: stored sparse if at least 90 % of entries can drop within the row budget; at χ = 1000 they rarely can.</div>`;
+    box.innerHTML = html;
+  }
+  const lg = document.getElementById('bm-legend');
+  lg.innerHTML = Object.entries(CAT).map(([k, [v, name]]) => `<div><i style="background:var(${v})"></i>${name}</div>`).join('') + `<div><i style="background:var(--b-table);background-image:repeating-linear-gradient(45deg, transparent 0 3px, var(--panel) 3px 5px)"></i>reverse block by reciprocity, not computed</div>`;
+  const grids = ['A', 'B'].map(k => CL[k].n), n = ids.reduce((s, k) => s + CL[k].n, 0);
+  let ent = grids.reduce((s, m) => s + m * m, 0);
+  if (bmState.same && 9 * grids[0] * grids[1] > 1e6) ent += 2 * grids[0] * grids[1];
+  const share = ent / (n * n);
+  document.getElementById('bm-auto').innerHTML = `With these cells, auto counts an FFT share of <b>${(share * 100).toFixed(0)} %</b> and takes <b>${share >= 0.1 ? 'GMRES' : 'the direct solve'}</b>. The dense T would take ${(72 * n * n / 1e9).toFixed(1)} GB.`;
+}
+function segWire(id, key) {
+  const box = document.getElementById(id);
+  box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    bmState[key] = b.dataset.v;
+    box.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    bmDraw();
+  }));
+}
+segWire('bm-solver', 'solver'); segWire('bm-rule', 'rule');
+document.getElementById('bm-same').addEventListener('change', e => { bmState.same = e.target.checked; bmDraw(); });
+document.getElementById('bm-tets').addEventListener('change', e => { bmState.tets = e.target.checked; bmDraw(); });
+bmDraw();
+
+/* ───────────────────────── auto calculator ───────────────────────── */
+const rowsBox = document.getElementById('grid-rows'), other = document.getElementById('other-cells');
+let rows = [];
+const PRESETS = [
+  ['One soft cube, 4,096 cells', [[4096, 'A']], 0],
+  ['Magnet and plate, one spacing', [[4096, 'A'], [1728, 'A']], 0],
+  ['Magnet and plate, two spacings', [[4096, 'A'], [1728, 'B']], 0],
+  ['A 4,096-cell grid and 3,900 tetrahedra', [[4096, 'A']], 3900],
+  ['Magnet grid and a tetrahedral yoke', [[512, 'A']], 3900],
+  ['100 cubes of 27 cells', Array.from({ length: 100 }, () => [27, 'A']), 0],
+  ['1,728 cuboids of 216 sizes', [], 1728],
+];
+const pbox = document.getElementById('presets');
+PRESETS.forEach(([name, g, o]) => {
+  const b = h('button', '', name); b.type = 'button';
+  b.addEventListener('click', () => { rows = g.map(r => [...r]); other.value = o; renderRows(); calc(); });
+  pbox.appendChild(b);
+});
+function renderRows() {
+  rowsBox.innerHTML = '';
+  const head = h('div', 'grid-row', '<span class="ctrl-l">Cells in the body</span><span class="ctrl-l">Cell size</span><span></span>');
+  rowsBox.appendChild(head);
+  const shown = rows.length > 12 ? rows.slice(0, 12) : rows;
+  shown.forEach((r, k) => {
+    const row = h('div', 'grid-row');
+    const inp = h('input'); inp.type = 'number'; inp.min = '0'; inp.step = '1'; inp.value = r[0]; inp.id = `g-n-${k}`; inp.setAttribute('aria-label', `cells in body ${k + 1}`);
+    inp.addEventListener('input', () => { rows[k][0] = Math.max(0, Math.round(+inp.value || 0)); calc(); });
+    const sel = h('select'); sel.id = `g-s-${k}`; sel.setAttribute('aria-label', `cell size of body ${k + 1}`);
+    ['A', 'B', 'C'].forEach(v => { const o = h('option', '', `size ${v}`); o.value = v; if (r[1] === v) o.selected = true; sel.appendChild(o); });
+    sel.addEventListener('change', () => { rows[k][1] = sel.value; calc(); });
+    const del = h('button', '', '✕'); del.type = 'button'; del.setAttribute('aria-label', `remove body ${k + 1}`);
+    del.addEventListener('click', () => { rows.splice(k, 1); renderRows(); calc(); });
+    row.append(inp, sel, del); rowsBox.appendChild(row);
+  });
+  if (rows.length > 12) rowsBox.appendChild(h('div', 'sub', `… and ${rows.length - 12} more bodies like these (${rows.length} in all).`));
+}
+document.getElementById('addrow').addEventListener('click', () => { rows.push([1000, 'A']); renderRows(); calc(); });
+other.addEventListener('input', calc);
+function calc() {
+  const offgrid = Math.max(0, Math.round(+other.value || 0));
+  const grids = rows.filter(r => r[0] >= 8), tiny = rows.filter(r => r[0] < 8).reduce((s, r) => s + r[0], 0);
+  const n = grids.reduce((s, r) => s + r[0], 0) + tiny + offgrid;
+  let ent = grids.reduce((s, r) => s + r[0] * r[0], 0);
+  for (let a = 0; a < grids.length; a++) for (let b = a + 1; b < grids.length; b++)
+    if (grids[a][1] === grids[b][1] && 9 * grids[a][0] * grids[b][0] > 1e6) ent += 2 * grids[a][0] * grids[b][0];
+  const share = n ? ent / (n * n) : 0, it = share >= 0.1;
+  const pct = share * 100;
+  document.getElementById('share').innerHTML = `${pct < 1 && pct > 0 ? pct.toFixed(1) : Math.round(pct)}<small> %</small>`;
+  document.getElementById('share-bar').style.width = `${Math.min(100, pct)}%`;
+  const v = document.getElementById('verdict');
+  v.textContent = n ? (it ? 'auto takes GMRES (iterative)' : 'auto takes the direct solve') : 'Add a body or cells';
+  v.style.color = it ? 'var(--accent)' : 'var(--ink)';
+  const mem = 72 * n * n / 1e9;
+  document.getElementById('facts').innerHTML = `
+    <dt>cells</dt><dd>${fmt(n)}</dd>
+    <dt>dense T</dt><dd>${mem < 0.1 ? (mem * 1000).toFixed(0) + ' MB' : mem.toFixed(1) + ' GB'}</dd>
+    <dt>if GMRES fails</dt><dd>${it ? (mem <= 2 ? 'falls back to direct' : 'raises: dense T over 2 GB') : 'not used'}</dd>
+    <dt>tolerance</dt><dd>${it ? 'GMRES to solver_tol / 100' : 'exact LU'}</dd>
+    ${tiny ? `<dt>note</dt><dd>bodies under 8 cells join the generic cluster</dd>` : ''}`;
+}
+rows = PRESETS[1][1].map(r => [...r]); renderRows(); calc();
+
+/* ───────────────────────── GMRES stepper ───────────────────────── */
+const gm = document.getElementById('gm');
+const GS = [
+  { t: 'Set up', s: 'tol, x₀, M⁻¹', x: 10 },
+  { t: 'T·v', s: 'FFT · dense · sparse', x: 172 },
+  { t: 'v − S·(T·v)', s: '3×3 per cell', x: 334 },
+  { t: 'Precondition', s: '(I − χᵢTᵢᵢ)⁻¹ per cell', x: 496 },
+  { t: 'Arnoldi', s: '≤ 100 basis vectors', x: 658 },
+  { t: 'Test', s: 'residual ≤ tol·|rhs|?', x: 820 },
+];
+const GTEXT = [
+  ['Before the first iteration', 'Under auto the tolerance is solver_tol / 100, 10⁻⁸ by default. The start is x₀ = rhs, the polarization without interactions. For every cell the 3×3 block I − χᵢ·Tᵢᵢ is inverted once: cuboids use their exact self-demagnetizing factors under the solve\'s rule; other cells the isotropic −I/3.'],
+  ['The product with T: almost all the time', 'Each operator adds its share into T·v. A grid\'s self-block: pad the grid to twice its size, transform the three components, multiply by the kernel spectrum, transform back and crop. Grids of one spacing: the same with their pair kernel. Every other block: a dense or sparse matrix product; reverse blocks are transposed views times their factor.'],
+  ['Apply the system', 'w = v − S·(T·v): one 3×3 product per cell, anisotropic χ included. This is the action of I − S·T, never formed.'],
+  ['Precondition', 'z = M⁻¹·w, one 3×3 product per cell. Scaling every cell by its own block keeps the spectrum together; leaving some cells unscaled put them about χ away from the rest, where restarted GMRES stalls.'],
+  ['Grow the Krylov basis', 'z is orthogonalized against the basis built so far, and a small least-squares problem gives the best combination and its residual at no extra product. The basis holds at most 100 vectors, about 2 kB per cell.'],
+  ['Stop, continue or restart', 'Residual under tol·|rhs|: done. Otherwise the next iteration. After 100 iterations GMRES restarts from the current x with a fresh basis. After max_iter (1000, in whole cycles of 100) solver="iterative" raises; auto falls back to the dense solve when it fits in 2 GB.'],
+];
+let gstep = 0;
+function gmDraw() {
+  gm.innerHTML = '';
+  const d2 = el('defs', {}, gm);
+  const m = el('marker', { id: 'gar', viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto' }, d2);
+  el('path', { d: 'M0,1 L9,5 L0,9 z', style: 'fill:var(--ink3)' }, m);
+  GS.forEach((st, k) => {
+    const g = el('g', { class: 'gm-step' + (k === gstep ? ' act' : ''), style: 'cursor:pointer' }, gm);
+    el('rect', { class: 'gm-box', x: st.x, y: 70, width: 150, height: 64, rx: 7 }, g);
+    const t = el('text', { x: st.x + 75, y: 98, 'text-anchor': 'middle', class: 'gm-t' }, g); t.textContent = st.t;
+    const s = el('text', { x: st.x + 75, y: 116, 'text-anchor': 'middle', class: 'gm-s' }, g); s.textContent = st.s;
+    const n = el('text', { x: st.x + 8, y: 62, class: 'gm-s' }, g); n.textContent = k === 0 ? 'once' : `step ${k}`;
+    g.addEventListener('click', () => { gstep = k; gmDraw(); });
+    if (k < GS.length - 1) el('line', { x1: st.x + 150, y1: 102, x2: GS[k + 1].x - 2, y2: 102, class: 'gm-arrow', 'marker-end': 'url(#gar)' }, gm);
+  });
+  el('path', { d: 'M895,134 L895,180 L247,180 L247,138', class: 'gm-arrow', 'marker-end': 'url(#gar)' }, gm);
+  const lt = el('text', { x: 571, y: 198, 'text-anchor': 'middle', class: 'gm-s' }, gm); lt.textContent = 'not yet: next iteration on the new basis vector · restart after 100';
+  const done = el('text', { x: 895, y: 40, 'text-anchor': 'middle', class: 'gm-s' }, gm); done.textContent = 'converged → J';
+  el('line', { x1: 895, y1: 70, x2: 895, y2: 46, class: 'gm-arrow', 'marker-end': 'url(#gar)' }, gm);
+  const dots = document.getElementById('gm-dots'); dots.innerHTML = '';
+  GS.forEach((_, k) => { const b = h('button', '', String(k)); b.type = 'button'; b.setAttribute('aria-label', `step ${k}`); if (k === gstep) b.setAttribute('aria-current', 'step'); b.addEventListener('click', () => { gstep = k; gmDraw(); }); dots.appendChild(b); });
+  const [hd, tx] = GTEXT[gstep];
+  document.getElementById('gm-text').innerHTML = `<h3>${hd}</h3><p>${tx}</p>`;
+}
+document.getElementById('gm-prev').addEventListener('click', () => { gstep = (gstep + GS.length - 1) % GS.length; gmDraw(); });
+document.getElementById('gm-next').addEventListener('click', () => { gstep = (gstep + 1) % GS.length; gmDraw(); });
+gmDraw();
+})();
+</script>

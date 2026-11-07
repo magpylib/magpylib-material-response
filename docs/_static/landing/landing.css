@@ -1,0 +1,740 @@
+/*
+The scrolling story on the landing page, in the theme's light or dark. Every
+colour is a variable below, the drawing's too: landing.js reads them.
+*/
+
+.mrl {
+  --mrl-bg: #07090d;
+  --mrl-ink: #f2f4f7;
+  --mrl-dim: #9aa3b2;
+  --mrl-panel: rgba(255, 255, 255, 0.05);
+  --mrl-rule: rgba(255, 255, 255, 0.14);
+  --mrl-north: #ff5b4d;
+  --mrl-south: #33d17a;
+  --mrl-line: #8fd3ff;
+  --mrl-flow: #ffffff;
+  --mrl-glow: 1;
+  --mrl-steel-a: 150, 162, 180;
+  --mrl-steel-b: 90, 100, 118;
+  --mrl-edge: rgba(200, 210, 225, 0.55);
+  --mrl-tick: rgba(255, 255, 255, 0.9);
+  --mrl-cell: 90, 169, 255;
+  --mrl-cell-edge: rgba(170, 205, 255, 0.55);
+  --mrl-arrow: rgba(255, 255, 255, 0.9);
+  --mrl-outline: rgba(255, 255, 255, 0.35);
+  --mrl-label: rgba(230, 236, 245, 0.9);
+  --mrl-dot: #ffffff;
+  --mrl-tag-bg: rgba(7, 9, 13, 0.75);
+  --mrl-tag-ink: #ffffff;
+  --mrl-force: #ffc247;
+  --mrl-grid: rgba(255, 255, 255, 0.08);
+  --mrl-alone: #7f8b9d;
+  --mrl-title-from: #ffffff;
+  --mrl-title-to: #b7c6d9;
+  --mrl-code-key: #ff7ab2;
+  --mrl-code-num: #d9b8ff;
+  --mrl-code-note: #7f8b9d;
+  --mrl-fc: #ff9a3d;
+  --mrl-cells: #5aa9ff;
+  --mrl-fem: #e9edf3;
+  --mrl-header: var(--pst-header-height, 4rem);
+  position: relative;
+  /* landing.js widens it to the window, out of the article's column */
+  background: var(--mrl-bg);
+  color: var(--mrl-ink);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI",
+    Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* the light theme: the same story on a light page */
+html[data-theme="light"] .mrl {
+  --mrl-bg: var(--pst-color-background, #ffffff);
+  --mrl-ink: #1d1d1f;
+  --mrl-dim: #5f6470;
+  --mrl-panel: rgba(0, 0, 0, 0.04);
+  --mrl-rule: rgba(0, 0, 0, 0.14);
+  --mrl-north: #e0352b;
+  --mrl-south: #14a050;
+  --mrl-line: #1a6fd1;
+  --mrl-flow: #0b3d7a;
+  --mrl-glow: 0.45;
+  --mrl-steel-a: 120, 130, 148;
+  --mrl-steel-b: 90, 98, 112;
+  --mrl-edge: rgba(60, 68, 82, 0.6);
+  --mrl-tick: rgba(20, 24, 32, 0.85);
+  --mrl-cell: 26, 111, 209;
+  --mrl-cell-edge: rgba(26, 80, 150, 0.5);
+  --mrl-arrow: rgba(10, 20, 40, 0.85);
+  --mrl-outline: rgba(0, 0, 0, 0.3);
+  --mrl-label: rgba(30, 34, 42, 0.9);
+  --mrl-dot: #1d1d1f;
+  --mrl-tag-bg: rgba(255, 255, 255, 0.9);
+  --mrl-tag-ink: #1d1d1f;
+  --mrl-force: #c27400;
+  --mrl-grid: rgba(0, 0, 0, 0.08);
+  --mrl-alone: #8a8f99;
+  --mrl-title-from: #1d1d1f;
+  --mrl-title-to: #4a5263;
+  --mrl-code-key: #c2185b;
+  --mrl-code-num: #6f42c1;
+  --mrl-code-note: #626875;
+  --mrl-fc: #e0701a;
+  --mrl-cells: #1a6fd1;
+  --mrl-fem: #3a3f4a;
+}
+
+/* the story's colour runs into the page's below it */
+.mrl::after {
+  content: "";
+  display: block;
+  height: 16vh;
+  background: linear-gradient(
+    var(--mrl-bg),
+    var(--pst-color-background, var(--mrl-bg))
+  );
+}
+
+/* the pinned stage needs every box around it to let it overflow */
+.bd-article-container:has(#mrl) {
+  overflow: visible;
+}
+
+/* the page title stays for the outline and screen readers, the story shows its own */
+section#magpylib-material-response > h1:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.mrl h2,
+.mrl h3,
+.mrl p {
+  color: inherit;
+  margin: 0;
+}
+
+.mrl a {
+  color: inherit;
+}
+
+/* ── the pinned stage, and the beats that scroll over it ───────────────────── */
+
+.mrl-story {
+  position: relative;
+}
+
+.mrl-stage {
+  position: sticky;
+  top: var(--mrl-header);
+  height: calc(100vh - var(--mrl-header));
+  overflow: hidden;
+}
+
+.mrl-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mrl-beats {
+  position: relative;
+  /* the last beat stays pinned while it is read */
+  padding-bottom: 35vh;
+  margin-top: calc(-1 * (100vh - var(--mrl-header)));
+  pointer-events: none;
+}
+
+.mrl-beat {
+  min-height: calc(100vh - var(--mrl-header));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+  box-sizing: border-box;
+  padding: 0 0 0 max(6vw, 2rem);
+  width: min(40vw, 36rem);
+  will-change: opacity, transform;
+}
+
+.mrl-beat > * {
+  pointer-events: auto;
+}
+
+.mrl-beat h3,
+.mrl-agree h3,
+.mrl-code h3 {
+  text-wrap: balance;
+}
+
+.mrl-beat h3 {
+  font-size: clamp(1.9rem, 3.4vw, 3.2rem);
+  line-height: 1.08;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.mrl-beat p {
+  font-size: clamp(1.02rem, 1.25vw, 1.25rem);
+  line-height: 1.5;
+  color: var(--mrl-dim);
+}
+
+.mrl-beat b,
+.mrl-beat code {
+  color: var(--mrl-ink);
+  font-weight: 600;
+}
+
+.mrl code {
+  background: var(--mrl-panel);
+  border: 0;
+  border-radius: 0.3em;
+  padding: 0.05em 0.35em;
+  color: var(--mrl-ink);
+  font-size: 0.9em;
+}
+
+.mrl-kicker,
+.mrl-eyebrow {
+  font-size: 0.85rem !important;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mrl-line) !important;
+}
+
+.mrl-big {
+  font-size: clamp(4.5rem, 11vw, 10rem) !important;
+  line-height: 0.95 !important;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--mrl-ink) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the opening: centred over the drawing, which sits back behind it */
+.mrl-hero {
+  width: 100%;
+  padding: 11vh 2rem 0;
+  justify-content: flex-start;
+  align-items: center;
+  text-align: center;
+}
+
+.mrl-hero > * {
+  animation: mrl-rise 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.mrl-hero > :nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.mrl-hero > :nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.mrl-hero > :nth-child(4) {
+  animation-delay: 0.45s;
+}
+
+/* past the story, for a reader who knows it */
+.mrl-skip {
+  display: inline-block;
+  padding: 0.7rem 0.5rem;
+  color: var(--mrl-dim) !important;
+  font-size: 0.9rem;
+  text-decoration: none !important;
+}
+
+.mrl-skip:hover {
+  color: var(--mrl-ink) !important;
+}
+
+@keyframes mrl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+.mrl-title {
+  font-size: clamp(2.8rem, 7.2vw, 6.6rem);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  background: linear-gradient(
+    180deg,
+    var(--mrl-title-from) 30%,
+    var(--mrl-title-to)
+  );
+  /* room for the last letter, which a clipped background would cut */
+  padding: 0 0.08em;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+}
+
+.mrl-hero .mrl-lead {
+  max-width: 36rem;
+  font-size: clamp(1.1rem, 1.6vw, 1.45rem);
+  color: var(--mrl-dim);
+}
+
+.mrl-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.8rem !important;
+}
+
+.mrl-btn {
+  display: inline-block;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  background: var(--mrl-ink);
+  color: var(--mrl-bg) !important;
+  font-weight: 600;
+  text-decoration: none !important;
+  transition: transform 0.2s ease;
+}
+
+.mrl-btn:hover {
+  transform: scale(1.04);
+}
+
+.mrl-pill {
+  display: inline-flex;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.55rem 0.6rem 0.55rem 1rem;
+  border: 1px solid var(--mrl-rule);
+  border-radius: 999px;
+  background: var(--mrl-panel);
+  color: var(--mrl-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mrl-pill code {
+  background: none;
+  padding: 0;
+}
+
+.mrl-pill span {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--mrl-panel);
+  color: var(--mrl-dim);
+}
+
+.mrl-link {
+  display: inline-block;
+  padding: 0.75rem 0.4rem;
+  color: var(--mrl-line) !important;
+  text-decoration: none !important;
+  font-weight: 500;
+}
+
+.mrl-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 1.6rem;
+  transform: translateX(-50%);
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mrl-dim);
+}
+
+.mrl-hint::after {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 2.2rem;
+  margin: 0.6rem auto 0;
+  background: linear-gradient(var(--mrl-dim), transparent);
+  animation: mrl-drip 1.8s ease-in-out infinite;
+  transform-origin: top;
+}
+
+@keyframes mrl-drip {
+  0% {
+    transform: scaleY(0);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+}
+
+/* the read-outs, beside the drawing */
+.mrl-hud {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  gap: 0.35rem;
+  min-width: 15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mrl-hud > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--mrl-panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 0.9rem;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease,
+    max-height 0.35s ease,
+    padding 0.35s ease,
+    margin 0.35s ease;
+}
+
+.mrl-hud > div:not(.on) {
+  max-height: 0;
+  padding-block: 0;
+  margin-block: -0.175rem;
+}
+
+.mrl-hud > div.on {
+  max-height: 3rem;
+  opacity: 1;
+  transform: none;
+}
+
+.mrl-hud span {
+  color: var(--mrl-dim);
+}
+
+.mrl-hud b {
+  font-weight: 600;
+}
+
+/* ── after the stage: the agreement and the code ───────────────────────────── */
+
+.mrl-agree,
+.mrl-code {
+  box-sizing: border-box;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 18vh max(5vw, 1.5rem) 8vh;
+  text-align: center;
+}
+
+.mrl-agree h3,
+.mrl-code h3 {
+  font-size: clamp(2rem, 4.4vw, 3.8rem);
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0.6rem 0 0.8rem;
+}
+
+.mrl-sub,
+.mrl-note {
+  color: var(--mrl-dim) !important;
+  font-size: 1.05rem;
+}
+
+.mrl-note {
+  font-size: 0.85rem;
+  margin-top: 1.2rem !important;
+}
+
+.mrl-chart {
+  display: block;
+  width: 100%;
+  max-width: 56rem;
+  margin: 2.5rem auto 1rem;
+  overflow: visible;
+}
+
+.mrl-chart text {
+  fill: var(--mrl-dim);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.mrl-chart .mrl-label.mrl-small {
+  font-size: 12px;
+}
+
+.mrl-chart .mrl-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mrl-code.seen .mrl-line {
+  opacity: 1;
+  transform: none;
+}
+
+/* the solve times as a race: the bars grow at one pace, the real one */
+.mrl-race {
+  display: grid;
+  gap: 1.3rem;
+  max-width: 52rem;
+  margin: 3rem auto 0;
+  text-align: left;
+}
+
+.mrl-race-title {
+  color: var(--mrl-dim) !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mrl-race-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr 4.5rem;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  align-items: center;
+}
+
+.mrl-race-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.mrl-race-track {
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--mrl-panel);
+  overflow: hidden;
+}
+
+.mrl-race-bar {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.mrl-race-bar.mrl-fc {
+  background: var(--mrl-fc);
+}
+
+.mrl-race-bar.mrl-cells {
+  background: var(--mrl-cells);
+}
+
+.mrl-race-bar.mrl-fem {
+  background: var(--mrl-fem);
+}
+
+.mrl-race-time {
+  text-align: right;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mrl-dim);
+}
+
+.mrl-race-row.done .mrl-race-time {
+  color: var(--mrl-ink);
+  font-weight: 650;
+}
+
+.mrl-race-acc {
+  grid-column: 2 / 4;
+  font-size: 0.9rem;
+  color: var(--mrl-dim);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.mrl-race-row.done .mrl-race-acc {
+  opacity: 1;
+}
+
+.mrl-race-acc i {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--mrl-ink);
+}
+
+.mrl-race-head {
+  margin-top: 0.8rem !important;
+  font-size: clamp(1.3rem, 2.4vw, 2rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+
+.mrl-race.done .mrl-race-head {
+  opacity: 1;
+  transform: none;
+}
+
+.mrl-race-head b {
+  color: var(--mrl-fc);
+}
+
+.mrl-replay {
+  min-height: 44px;
+  margin-left: 0.6rem;
+  padding: 0.3rem 1rem;
+  border: 1px solid var(--mrl-rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--mrl-dim);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.mrl-code {
+  padding-bottom: 16vh;
+}
+
+.mrl-code pre {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 2.5rem auto 2rem;
+  padding: 1.4rem 1.6rem;
+  overflow-x: auto;
+  border: 1px solid var(--mrl-rule);
+  border-radius: 1rem;
+  background: var(--mrl-panel);
+  text-align: left;
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.mrl-code pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.mrl-line {
+  display: inline-block;
+  opacity: 0;
+  transform: translateX(-12px);
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease;
+}
+
+.mrl-line i {
+  font-style: normal;
+  color: var(--mrl-code-key);
+}
+
+.mrl-line em {
+  font-style: normal;
+  color: var(--mrl-code-num);
+}
+
+.mrl-line s {
+  text-decoration: none;
+  color: var(--mrl-code-note);
+}
+
+.mrl-code .mrl-cta {
+  margin-top: 0 !important;
+}
+
+/* ── small screens: the drawing on top, the words below it ─────────────────── */
+
+@media (max-width: 899px) {
+  .mrl-beat {
+    width: 100%;
+    padding: 0 1.4rem 9vh;
+    justify-content: flex-end;
+  }
+
+  .mrl-beat:not(.mrl-hero) > * {
+    max-width: 34rem;
+  }
+
+  .mrl-hero {
+    justify-content: center;
+    padding-bottom: 0;
+  }
+
+  .mrl-hud {
+    min-width: 0;
+  }
+
+  /* the words on a band of the page's colour, over the drawing's last lines */
+  .mrl-beat:not(.mrl-hero) {
+    background: linear-gradient(
+        to top,
+        var(--mrl-bg) 0,
+        var(--mrl-bg) 70%,
+        transparent 100%
+      )
+      bottom / 100% 42% no-repeat;
+  }
+
+  .mrl-hud > div {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .mrl-race-row {
+    grid-template-columns: 1fr 4.5rem;
+  }
+
+  .mrl-race-name,
+  .mrl-race-acc {
+    grid-column: 1 / 3;
+  }
+
+  .mrl-hero {
+    padding-top: 7vh;
+  }
+
+  .mrl-pill code {
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  .mrl-code pre {
+    font-size: max(12px, 0.8rem);
+    padding: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mrl-hint::after,
+  .mrl-hero > * {
+    animation: none;
+  }
+
+  .mrl-line {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

@@ -46,6 +46,9 @@ class UniformField(magpy.misc.CustomSource):
     collection, which every solver takes as driving its parts, and whose field
     ``getB`` of the solved model includes.
 
+    Setting a value on the field of a solved model changes the field and not the
+    response, as moving a magnet of it does: solve again.
+
     Parameters
     ----------
     B, H : array-like, shape (3,)
@@ -54,9 +57,6 @@ class UniformField(magpy.misc.CustomSource):
     position, orientation, style, **kwargs
         As for any magpylib source. It turns with its orientation; its position
         changes nothing.
-
-    Setting a value on the field of a solved model changes the field and not the
-    response, as moving a magnet of it does: solve again.
 
     Examples
     --------

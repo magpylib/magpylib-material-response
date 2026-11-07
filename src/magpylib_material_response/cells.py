@@ -170,8 +170,8 @@ def get_susceptibilities(sources, susceptibility=None):
     Priority is given at the source level, however if value is not found, it is searched
     up the parent tree, if available. A magnet with none, on itself or any
     parent, is fixed: 0, as in solve_face_charge, and
-    :func:`_report_fixed_magnets` says so. A part on a B-H curve counts 0 here:
-    its susceptibility comes from :func:`~._saturation.curve_of`."""
+    ``_report_fixed_magnets`` says so. A part on a B-H curve counts 0 here:
+    its susceptibility comes from ``_saturation.curve_of``."""
     n = len(sources)
 
     if susceptibility is None:

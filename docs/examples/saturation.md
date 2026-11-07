@@ -12,63 +12,70 @@ kernelspec:
   name: python3
 ---
 
-+++ {"user_expressions": []}
+# A U-core electromagnet at high current
 
-# Saturation
+At 25 A per winding, the [U-core electromagnet](ucore_electromagnet.md) is
+linear: the middle of its yoke carries 0.28 T, and the field 30 mm above the
+poles is 2.15 mT. A constant susceptibility lets iron carry any flux, so at 16
+times the current it would put the yoke at 16 times the polarization, 4.4 T.
+Real iron saturates near 1.6 to 2 T. A B–H curve in place of the constant
+captures that, if the solver follows it: does it? Then, at what current does
+this core saturate, and how much field above the poles does that cost? And what
+does a curve cost in solve time?
 
-+++
+## The curve
 
-With a constant susceptibility, iron can reach any polarization: at 1 T applied,
-a χ = 1000 sphere comes out at 3 T, where real iron saturates near 1.6 to 2 T. A
-`BHCurve` set as `susceptibility` on a part, or on a collection above it,
-replaces the constant: `solve_cells` then puts every cell at the susceptibility
-its own field gives on the curve, repeating the linear solve until none changes.
-The interaction matrix is built once; the fixed point takes about 3 to 40
-solves, more on a sharp knee, with Anderson acceleration.
+The iron here is a stand-in: J = χ0 μ0 H / (1 + χ0 μ0 H / Js), with the core's
+χ0 = 999 at low field and Js = 1.6 T. `BHCurve` takes it as B against H, as a
+datasheet gives it ([Saturation](../guide/saturation.md) in the guide shows how
+to enter one):
 
-## A curve
-
-A `BHCurve` takes H in A/m and B in T, from (0, 0), with H increasing. A
-measured steel's table goes in as it is, column by column. Here a simple curve
-stands in: J = χ₀ μ₀ H / (1 + χ₀ μ₀ H / Jₛ), with χ₀ = 1000 and Jₛ = 1.6 T, so B
-= J + μ₀ H. Past its last point, J keeps its last value.
-
-```{code-cell} ipython3
-import magpylib as magpy
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.optimize import brentq
-
-from magpylib_material_response import solve_cells
-from magpylib_material_response import BHCurve, UniformField
-from magpylib_material_response.meshing import mesh_Cuboid, mesh_TriangularMesh
-
-MU0 = 4e-7 * np.pi
-CHI0, JS = 1000.0, 1.6
-
-
-def polarization(H):
-    return CHI0 * MU0 * H / (1 + CHI0 * MU0 * H / JS)
-
-
-H = np.r_[0.0, np.geomspace(1e-2, 1e6, 400)]  # A/m
-curve = BHCurve(H=H, B=polarization(H) + MU0 * H)
-
-fig, ax = plt.subplots(figsize=(5, 3))
-ax.plot(MU0 * H, polarization(H), label="the curve, J(H)")
-ax.plot(MU0 * H, CHI0 * MU0 * H, "--", label="χ = 1000")
-ax.set(xlim=(0, 0.02), ylim=(0, 2), xlabel="μ₀ H inside the iron (T)", ylabel="J (T)")
-ax.legend()
+```{literalinclude} saturation_study.py
+:pyobject: iron_curve
 ```
 
-## A sphere against the exact answer
+```{code-cell} ipython3
+:tags: [hide-input]
 
-A sphere stays uniformly polarized while it saturates, so its answer is exact:
-μ₀ H inside is B₀ − J / 3, and J follows the curve at that field. The sphere is
-a triangle mesh cut into tetrahedra, placed in a `UniformField`.
+import json
+from pathlib import Path
+
+import magpylib as magpy
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from saturation_study import CHI0, iron_curve
+from scipy.optimize import brentq
+from ucore_model import coil, core_mesh, line_above_poles
+
+from magpylib_material_response import UniformField, solve_cells
+from magpylib_material_response.meshing import mesh_TriangularMesh
+
+COLOURS = {"linear": "#999999", "cells": "#1baf7a", "finite elements": "#555555"}
+curve = iron_curve()
+mu0H = np.linspace(0, 0.02, 200)  # T
+fig = go.Figure()
+fig.add_scatter(x=mu0H * 1e3, y=curve.polarization(mu0H / magpy.mu_0), name="the curve")
+fig.add_scatter(x=mu0H * 1e3, y=CHI0 * mu0H, name="χ = 999", line={"color": COLOURS["linear"], "dash": "dash"})
+fig.update_xaxes(title_text="μ0H inside the iron (mT)")
+fig.update_yaxes(title_text="polarization J (T)", range=[0, 2])
+fig.update_layout(height=320, margin={"l": 60, "r": 20, "t": 20, "b": 50}, legend={"orientation": "h", "y": -0.3})
+fig
+```
+
+## Does the solver follow the curve?
+
+A sphere in a uniform applied field stays uniformly polarized while it
+saturates, so its answer is exact: μ0H inside is $B_\text{ext}$ − J/3, and J
+lies on the curve at that field. A 10 mm sphere, a triangle mesh cut into
+tetrahedra, in four applied fields:
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 def icosphere(diameter, splits=2):
+    """A sphere as a closed triangle mesh: an icosahedron, its faces split in
+    four `splits` times, the new vertices pushed out onto the sphere."""
     t = (1 + 5**0.5) / 2
     V = np.array([[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t],
                   [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]], float)
@@ -92,99 +99,128 @@ def icosphere(diameter, splits=2):
     return magpy.magnet.TriangularMesh(
         polarization=(0, 0, 0), vertices=np.array(V) * diameter / 2, faces=np.array(F)
     )
-
-
-sphere = icosphere(0.01)
-sphere.susceptibility = curve
-mesh = mesh_TriangularMesh(sphere, 300)
-cells = mesh.sources_all
-volumes = np.array([c.volume for c in cells])
-
-B0 = np.array([0.05, 0.2, 0.5, 1.0, 1.5, 2.0])
-solved, exact = [], []
-for b in B0:
-    model = magpy.Collection(mesh.copy(), UniformField(B=(0, 0, b)))
-    answer = solve_cells(model, solver="direct").children[0]
-    J = np.array([c.polarization for c in answer.sources_all])
-    solved.append((J[:, 2] * volumes).sum() / volumes.sum())
-    exact.append(brentq(lambda J, b=b: polarization((b - J / 3) / MU0) - J, 0, 3 * b))
-
-fig, ax = plt.subplots(figsize=(5, 3))
-ax.plot(B0, exact, label="exact")
-ax.plot(B0, solved, "o", label=f"solve_cells, {len(cells)} tetrahedra")
-ax.plot(B0, 3 * B0 / (1 + 3 / CHI0), "--", label="χ = 1000")
-ax.set(xlabel="applied field B₀ (T)", ylabel="polarization of the sphere (T)", ylim=(0, 3))
-ax.legend()
-print("largest error:", f"{np.max(np.abs(np.array(solved) / np.array(exact) - 1)):.1%}")
 ```
-
-## Where a cube saturates
-
-A 10 mm iron cube in 0.5 T along z, 512 cells. Each cell's polarization over Jₛ
-says how far it is saturated: the bulk and the edges fully, the middle of the
-two pole faces not yet.
 
 ```{code-cell} ipython3
-cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
-cube.susceptibility = curve
-field = UniformField(B=(0, 0, 0.5))
-cells = magpy.Collection(mesh_Cuboid(cube, (8, 8, 8)), field)
-solved = solve_cells(cells, solver="direct").children[0]
-constant = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
-constant.susceptibility = CHI0
-cells_constant = magpy.Collection(mesh_Cuboid(constant, (8, 8, 8)), field.copy())
-linear = solve_cells(cells_constant, solver="direct").children[0]
+sphere = icosphere(0.01)
+sphere.susceptibility = curve
+mesh = mesh_TriangularMesh(sphere, 150)
+volumes = np.array([c.volume for c in mesh.sources_all])
 
-share = np.array([np.linalg.norm(c.polarization) / JS for c in solved.sources_all])
-centres = np.array([c.position for c in solved.sources_all])
-layers = np.unique(np.round(centres[:, 1], 9))
-middle = np.isclose(centres[:, 1], layers[len(layers) // 2])  # the layer nearest y = 0
-x, z, s = centres[middle, 0], centres[middle, 2], share[middle]
-fig, ax = plt.subplots(figsize=(4, 3.5))
-img = ax.scatter(x * 1e3, z * 1e3, c=s, s=180, marker="s", vmin=0, vmax=1, cmap="magma")
-ax.set(xlabel="x (mm)", ylabel="z (mm)", aspect="equal", title="J / Jₛ, the layer nearest y = 0")
-fig.colorbar(img)
-J_max = max(np.linalg.norm(c.polarization) for c in linear.sources_all)
-print(f"polarization: {share.min() * JS:.2f} to {share.max() * JS:.2f} T; with χ = 1000 up to {J_max:.2f} T")
+for B_ext in (0.05, 0.5, 1.0, 2.0):  # T
+    solved = solve_cells(magpy.Collection(mesh.copy(), UniformField(B=(0, 0, B_ext))))
+    J = np.array([c.polarization[2] for c in solved.children[0].sources_all]) @ volumes / volumes.sum()
+    # J on the curve at the field inside, mu0 H = B_ext - J / 3
+    exact = brentq(lambda j, b=B_ext: curve.polarization(max(b - j / 3, 0) / magpy.mu_0) - j, 0, 3 * B_ext)
+    print(f"{B_ext:4.2f} T applied: J = {J:.4f} T, exact {exact:.4f} T, {J / exact - 1:+.3%}")
 ```
 
-## A part in use: the U-core at high current
+On 517 tetrahedra the sphere's polarization is within 0.02 % of the exact one,
+from the linear range at 0.05 T to deep saturation at 2 T.
 
-The docs' U-core with every winding at 25, 100 and 400 A, on the same kind of
-curve (χ₀ = 999, Jₛ = 1.6 T). Peak Bz 30 mm above the poles, in mT, from runs
-not repeated on this page, which would take minutes:
+## When does the core saturate?
 
-| Method                       |  25 A | 100 A | 400 A |
-| ---------------------------- | ----: | ----: | ----: |
-| Linear, χ = 999, face charge | 2.151 | 8.605 | 34.42 |
-| `solve_fem`, order 3         | 2.148 | 8.178 | 14.28 |
-| `solve_fem`, order 2         | 2.189 | 8.331 | 14.51 |
-| `solve_cells`, 2,392 sources | 1.971 | 7.576 | 13.91 |
-| `solve_cells`, 720 sources   | 1.822 | 7.054 | 13.64 |
+The core goes on the curve as one closed triangle mesh, `core_mesh` in
+[`ucore_model.py`](ucore_model.py), cut into tetrahedra: the U-core example
+found them converging far faster than cuboid cells. A coarse mesh at 400 A per
+winding:
 
-At 400 A saturation cuts the field to 0.41 times the linear one, and the two
-methods differ by 2.6 %, the cells still rising. At lower currents the cells'
-gap, 8 % at 25 A, is their own discretization of a part with a high χ, which
-saturation shrinks. No measurement backs these: the curve is a stand-in, and
-both methods share it.
+```{code-cell} ipython3
+core = mesh_TriangularMesh(core_mesh(susceptibility=curve), target_elems=100)
+solved = solve_cells(magpy.Collection(core, coil(current=400)))
 
-## What it costs, and what it leaves out
+B = magpy.getB(solved, line_above_poles())
+J = np.linalg.norm([c.polarization for c in solved.children[0].sources_all], axis=1)
+print(f"{len(J)} tetrahedra: peak Bz {np.abs(B[:, 2]).max() * 1e3:.1f} mT, J up to {J.max():.2f} T")
+```
 
-- A part on a curve solves about 3 to 40 times, more on a sharp knee, the matrix
-  built once; the sphere above takes 6 to 25 solves.
-- `solve_face_charge` refuses a part on a curve: it needs a uniform
-  susceptibility in each part. `solve_fem` follows the curve, and is the check
-  on a part that a sphere's exact answer cannot give; it assembles again at each
-  of its 5 to 40 solves. Start at order 3: order 2 can fail to settle, and says
-  so, as on a cube in 0.3 T or a plate under a magnet in 0.3 T, which settled at
-  order 3 in about 20 s.
-- The curve is the material's initial curve: no hysteresis, so a field that
-  comes back down returns along the same curve.
-- A part's `polarization` stays a fixed remanence, and the curve's J adds to it,
-  so a part with both can pass the curve's saturation: 1 T of remanence and a
-  curve saturating at 1.5 T reach 2.5 T. For a saturating part, leave
-  `polarization` at zero.
-- A sharp knee, rising within about 100 A/m, can stop either iteration with an
-  error, at any order: give it more points or a gentler rise.
-- magpylib-studio does not draw a `UniformField` yet: its field lines leave it
-  out, and warn, and there is no arrow.
+The study script [`saturation_study.py`](saturation_study.py) runs that from 25
+to 400 A, on 229 and 1,491 tetrahedra, and checks it with `solve_fem` at orders
+2 and 3, which take up to a minute each. It stores the results in
+`saturation.json`:
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+stored = json.loads(Path("saturation.json").read_text())
+currents = stored["currents"]
+cells = stored["cells"]["1491"]["runs"]
+fem = stored["fem"]["3"]
+
+fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.12,
+                    subplot_titles=("peak Bz 30 mm above the poles", "polarization in the yoke's middle"))
+fig.add_scatter(x=currents, y=stored["linear"], name="linear, χ = 999", line={"color": COLOURS["linear"], "dash": "dash"}, row=1, col=1)
+fig.add_scatter(x=currents, y=[r["peak"] for r in cells], name="cells, 1,491 tetrahedra", mode="lines+markers",
+                line={"color": COLOURS["cells"], "width": 3}, row=1, col=1)
+fig.add_scatter(x=[r["current"] for r in fem], y=[r["peak"] for r in fem], name="finite elements, order 3",
+                mode="markers", marker={"color": COLOURS["finite elements"], "size": 10, "symbol": "diamond"}, row=1, col=1)
+fig.add_scatter(x=currents, y=[r["J"]["yoke middle"] for r in cells], mode="lines+markers", showlegend=False,
+                line={"color": COLOURS["cells"], "width": 3}, row=1, col=2)
+fig.add_hline(y=1.6, line={"color": COLOURS["linear"], "dash": "dot"}, annotation_text="Js = 1.6 T", row=1, col=2)
+fig.update_xaxes(title_text="current per winding (A)")
+fig.update_yaxes(title_text="mT", rangemode="tozero", row=1, col=1)
+fig.update_yaxes(title_text="T", range=[0, 1.8], row=1, col=2)
+fig.update_layout(height=400, margin={"l": 60, "r": 20, "t": 40, "b": 50}, legend={"orientation": "h", "y": -0.25})
+fig
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+linear = dict(zip(currents, stored["linear"], strict=True))
+print("current   yoke J   peak Bz: linear  finite elements   cells     ratio to linear")
+for run, current in zip(cells, currents, strict=True):
+    f = next((r["peak"] for r in fem if r["current"] == current), None)
+    fe = f"{f:8.2f} mT" if f else "        –  "
+    ratio = f"{f / linear[current]:.2f}" if f else "–"
+    print(f"{current:5} A   {run['J']['yoke middle']:5.2f} T   {linear[current]:7.2f} mT"
+          f"   {fe}   {run['peak']:6.2f} mT   {ratio}")
+```
+
+At 25 A the curve changes nothing: finite elements on the curve agree with the
+linear answer within 0.3 %. At 100 A the yoke's middle carries 1.05 T, past the
+knee, and the field is 5 % below the linear one. By 200 A the yoke is at 1.54 T,
+close to the curve's 1.6 T. At 400 A the field is 14.3 mT, 0.41 times the linear
+34.5 mT: the last fourfold rise of the current, from 100 to 400 A, gives only
+1.75 times the field.
+
+The cells differ from finite elements by 0.9 to 1.3 % at every current. The two
+finite-element orders differ by 1.6 to 1.9 %, so order 2 alone would not be a
+check at that level.
+
+## What does a curve cost?
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+for n, study in stored["cells"].items():
+    runs = study["runs"]
+    print(f"cells, {int(n):,} tetrahedra: linear {study['linear_seconds']:.2f} s; on the curve "
+          f"{runs[0]['solves']} to {runs[-1]['solves']} solves, {runs[0]['seconds']:.2f} to {runs[-1]['seconds']:.2f} s")
+for order, runs in stored["fem"].items():
+    print(f"finite elements, order {order}: {runs[0]['seconds']:.0f} to {runs[-1]['seconds']:.0f} s")
+```
+
+The further into saturation, the more solves: 6 at 25 A, 29 at 400 A.
+`solve_cells` builds its interaction matrix once, so 29 solves on 1,491
+tetrahedra take only about 2.4 times the linear solve. Finite elements assemble
+again at every solve: order 3 takes 15 s at 25 A and about a minute at 400 A.
+Face charge refuses a part on a curve ([Saturation](../guide/saturation.md) in
+the guide).
+
+## The answers
+
+- **Following the curve:** the sphere is within 0.02 % of its exact answer from
+  0.05 to 2 T; on the U-core, cells and finite elements differ by 0.9 to 1.3 %.
+- **When it saturates:** from about 100 A per winding (1,600 ampere-turns). The
+  yoke's middle reaches 1.05 T there and the field is 5 % below the linear
+  answer; by 200 A the yoke is near the curve's 1.6 T.
+- **What it costs in field:** at 400 A, 14.3 mT above the poles instead of the
+  linear 34.5 mT. Above 100 A, four times the current gives 1.75 times the
+  field.
+- **Solve time:** 6 to 29 solves, about 2.4 times a linear solve with cells; up
+  to a minute with finite elements at order 3.
+
+The curve is a stand-in, the same in every solver here: no measurement backs
+these numbers. For a real core, enter the steel's datasheet curve.
+[Inside saturation](../inside/saturation.md) shows how the solvers follow it.
