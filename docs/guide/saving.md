@@ -14,71 +14,118 @@ kernelspec:
 
 # Saving and loading a solved model
 
-A solve can take seconds to minutes. Save the solved model, and read fields from
-it later without solving again.
+A solve can take seconds. A field map, a report or a colleague may need the
+solved model later, without solving again. This page answers four questions. How
+do I save a solved model? Does it give the same field once loaded? What comes
+back with it? And what cannot be saved?
 
-`to_json` writes a Magpylib collection to a JSON string, and `from_json` reads
-it back. It takes the magnets (`Cuboid`, `Cylinder`, `CylinderSegment`,
-`Sphere`, `Tetrahedron`, `TriangularMesh`), the currents (`Polyline`, `Circle`,
-`TriangleStrip`, `TriangleSheet`), `Sensor`, `UniformField`, the `ChargeSheet`
-of `solve_face_charge`, and nested collections: solved cells and solved sheets
-alike. Geometry, paths, polarizations and susceptibilities come back exactly.
+## Save and load
 
-A `FemSolution` cannot be saved: save the values you read from it.
-
-## Solve and save a model
+`to_json` writes Magpylib objects to a JSON string, and `from_json` reads them
+back as a list. The model is the magnet on an iron plate from
+[Getting started](../getting_started.md), solved by face charge.
 
 ```{code-cell} ipython3
-from pathlib import Path
 import time
+from pathlib import Path
 
 import magpylib as magpy
 import numpy as np
-from magpylib_material_response import to_json
-from magpylib_material_response import solve_cells
-from magpylib_material_response.meshing import mesh_all
+from magpylib_material_response import from_json, solve_cells, solve_face_charge, to_json
+from magpylib_material_response.meshing import mesh_uniform
 
-magpy.defaults.display.backend = "plotly"
+MM = 1e-3  # lengths are in metres; this writes them in millimetres
 
-# soft magnet in the centre
-cube = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.002, 0.002, 0.004))
-cube.susceptibility = 3999
-cube.style.label = "Iron core"
+magnet = magpy.magnet.Cuboid(
+    dimension=(10 * MM, 10 * MM, 5 * MM),
+    position=(0, 0, 5.5 * MM),
+    polarization=(0, 0, 1.2),
+)
+plate = magpy.magnet.Cuboid(dimension=(40 * MM, 40 * MM, 6 * MM), polarization=(0, 0, 0))
+plate.susceptibility = 1000
+model = magpy.Collection(magnet, plate)
+solved = solve_face_charge(model)
 
-# current loop around it
-loop = magpy.current.Circle(current=10, diameter=0.003)
-loop.style.label = "Current loop"
-
-coll = magpy.Collection(cube, loop, style_label="setup")
-
-# mesh and apply demagnetization — clock this
-t0 = time.perf_counter()
-coll_demag = mesh_all(coll, target_elems=200)
-solve_cells(coll_demag, inplace=True)
-t_demag = time.perf_counter() - t0
-print(f"Demag computation : {t_demag * 1e3:.0f} ms")
+Path("plate.json").write_text(to_json(solved))
+loaded = from_json(Path("plate.json").read_text())[0]
 ```
 
-## Save to disk
+## The same field
 
 ```{code-cell} ipython3
-json_path = Path("demag_collection.json")
-json_path.write_text(to_json(coll_demag, indent=2))
-print(f"Saved {json_path.stat().st_size / 1024:.1f} kB → {json_path.name}")
+points = np.array([(0, 0, 8.5), (15, 0, 3.5), (0, 0, -4)]) * MM  # above, beside, below
+difference = np.max(np.abs(loaded.getB(points) - solved.getB(points)))
+print(f"largest difference: {difference:.1e} T")
 ```
 
-## Reload and display
+The loaded model gives the same field to the last bit: the file holds the solved
+charge, not a recipe to solve again.
+
+## What comes back
 
 ```{code-cell} ipython3
-from magpylib_material_response import from_json
-
-# reload — no simulation needed
-t0 = time.perf_counter()
-coll_loaded = from_json(json_path.read_text())[0]
-t_load = time.perf_counter() - t0
-
-print(f"Load from JSON : {t_load * 1e3:.0f} ms")
-print(f"Full demag     : {t_demag * 1e3:.0f} ms  ({t_demag / t_load:.0f}× slower)")
-
-magpy.show(*coll_loaded)
+sheet = loaded.children[1]
+print(loaded.solved_by, loaded.face_charge_info)
+print(type(sheet).__name__, "solved from a", type(sheet.part).__name__, "with χ =", sheet.part.susceptibility)
+print(f"mean polarization, z: {sheet.mean_polarization[2] * 1e3:.1f} mT, jump indicator {sheet.jump_indicator:.3f}")
 ```
+
+- **Objects:** the magnets (`Cuboid`, `Cylinder`, `CylinderSegment`, `Sphere`,
+  `Tetrahedron`, `TriangularMesh`), the currents (`Polyline`, `Circle`,
+  `TriangleStrip`, `TriangleSheet`), `Sensor`, `UniformField`, `ChargeSheet` and
+  nested collections, so the results of `solve_face_charge` and `solve_cells`
+  alike.
+- **Their state:** geometry, poses, polarizations and susceptibilities, a
+  `BHCurve` included, and styles.
+- **The solve's record:** `solved_by`, `face_charge_info`, and each sheet's
+  `part`, the magnet it was solved from. A loaded face-charge model can
+  therefore be solved again: see
+  [Solve a solved model again](loops.md#solve-a-solved-model-again).
+
+A factorization kept with `reuse=True` is not saved: the first solve after
+loading factors afresh.
+
+## How large the file is
+
+A sheet holds triangles and their charges, a solved cells model one magnet per
+cell. Here the plate solved both ways, with 6 cells across its thickness for
+`solve_cells`:
+
+```{code-cell} ipython3
+for name, solve in (
+    ("face charge", lambda: solve_face_charge(model)),
+    ("cells", lambda: solve_cells(mesh_uniform(model, 6))),
+):
+    start = time.perf_counter()
+    result = solve()
+    solve_time = time.perf_counter() - start
+    text = to_json(result)
+    start = time.perf_counter()
+    from_json(text)
+    load_time = time.perf_counter() - start
+    print(f"{name:>11}: {len(text) / 1e6:4.1f} MB, solved in {solve_time:4.2f} s, loaded in {load_time:4.2f} s")
+```
+
+```{code-cell} ipython3
+:tags: [remove-cell]
+
+Path("plate.json").unlink()
+```
+
+Loading is several times faster than solving for both, and the face-charge file
+is far smaller. A cells file grows with the cell count, so a fine mesh makes a
+large file.
+
+## What cannot be saved
+
+A `FemSolution`, the result of `solve_fem`, cannot be saved: save the values you
+read from it ([Finite elements](fem.md#what-it-returns)).
+
+## In short
+
+- `to_json` and `from_json` save and load a solved model, and the loaded one
+  gives the same field.
+- The file keeps what the solve recorded and each sheet's part, so the model can
+  be solved again; it does not keep a factorization.
+- A face-charge file is small; a cells file grows with the cells. A
+  `FemSolution` cannot be saved.

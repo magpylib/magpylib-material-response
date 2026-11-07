@@ -1,7 +1,9 @@
 """The models and mesh studies of `mesh_convergence.md`. The studies take about
 40 s here and two minutes on the 2 CPUs the docs are built on, so they run once
 and are stored in `mesh_convergence.json`; the page rebuilds each with
-`MeshStudy.from_values`, which gives the same estimate.
+`MeshStudy.from_values`, which gives the same estimate. The JSON also holds
+each model's finite-element reference, copied from the validation suite's
+`validation/references/`, in the quantity the page compares.
 
     uv run --group docs python docs/examples/mesh_convergence_studies.py
 
@@ -76,23 +78,44 @@ def steel_shield():
     return magpy.Collection(magnet, sheet), behind
 
 
-#: the studies: a model, what is compared, and the levels, cells across the
-#: thinnest part that responds
+#: the studies: a model, what is compared, the cells across the thinnest part
+#: that responds, one value per mesh, and the validation case of the reference
 STUDIES = {
-    "concentrator": (flux_concentrator, (4, 8, 16)),
-    "halbach": (halbach_array, (2, 4, 8)),
-    "shield": (steel_shield, (1, 2, 4)),
+    "concentrator": (flux_concentrator, (4, 8, 16), "concentrator"),
+    "halbach": (halbach_array, (2, 4, 8), "halbach"),
+    "shield": (steel_shield, (1, 2, 4), "sheet"),
 }
+REFERENCES = Path(__file__).parents[2] / "validation" / "references"
+
+
+def reference(name):
+    """The finite-element reference of study `name`, in the quantity it compares,
+    and its estimated relative error.
+
+    The concentrator's case stores the bar's own field on the axis at 8.5, 9,
+    9.5 and 10 mm, without the applied field: its gain at the page's three
+    sensors is 1 + Bx / B0 at the first, second and fourth.
+    """
+    case = STUDIES[name][2]
+    groups = json.loads((REFERENCES / f"{case}.json").read_text())["groups"]
+    group = next(iter(groups.values()))  # the sensors the page reads come first
+    field = np.asarray(group["B"])
+    if name == "concentrator":
+        field = 1 + field[[0, 1, 3], 0] / B0
+    return field, group["error"]
 
 
 def main():
     out = {}
-    for name, (make, levels) in STUDIES.items():
+    for name, (make, levels, _) in STUDIES.items():
         study = study_cells(*make(), levels)
+        field, error = reference(name)
         out[name] = {
             "cells": [int(n) for n in study.cells],
             "values": [np.asarray(v).tolist() for v in study.values],
             "seconds": [float(t) for t in study.seconds],
+            "reference": field.tolist(),
+            "reference_error": error,
         }
     Path(__file__).with_name("mesh_convergence.json").write_text(json.dumps(out) + "\n")
 

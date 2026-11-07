@@ -1,13 +1,16 @@
 # Inside the error estimates
 
-None of the solvers knows its error from one solve. Two of them estimate it from
-several: `study_cells` over meshes, `study_fem` over orders. Code references are
-to `src/magpylib_material_response/convergence.py` and `fem/_study.py`.
+A solve gives an answer, not its error. Face charge reads an indicator of its
+error off the solve, the jump of its charge between panels; cells and finite
+elements estimate theirs from several solves: `study_cells` over meshes,
+`study_fem` over orders. How does each estimate work, when does it hold, and
+when do two estimates agree? [How accurate is a result?](../guide/accuracy.md)
+shows how to call them.
 
 ## `study_cells`: the grid convergence index
 
-The method of moments converges as a power of the cell size $h$ once the mesh
-resolves the parts' features:
+Cells converge as a power of the cell size $h$ once the mesh resolves the parts'
+features:
 
 $$
 f(h) \approx f_0 + C h^p .
@@ -29,14 +32,16 @@ What `study_cells` does differently from Celik et al.:
   and 3, and entries moving against the trend may carry at most 10 % of the last
   change. Otherwise `order` is None and the errors NaN, which says: refine once
   more.
-- **A warning when the meshes are too close**: below 2.2 times the cells, 1.3
-  times smaller cells, the least Celik et al. recommend. Meshes 4 to 8 times
-  apart work best.
+- **A warning when the meshes are too close**: when the cell count grows by less
+  than 2.2 times from one mesh to the next (cells less than 1.3 times smaller),
+  the least Celik et al. recommend. Meshes 4 to 8 times apart work best.
 
 Each entry's error is its own last change, extrapolated with that one order,
 relative to its own finest value, times 1.25. The order is fitted in the count
 of cells, which is what the meshes control; only the cells that respond are
-counted, so a permanent magnet that is not meshed doesn't inflate it.
+counted, so a permanent magnet that is not meshed doesn't inflate it. The
+[mesh convergence example](../examples/mesh_convergence.md) runs it on three
+parts.
 
 ## `study_fem`: rising orders on one mesh
 
@@ -50,7 +55,9 @@ change is not smaller than the one before, the error is NaN, with a warning.
 It extrapolates nothing: the rate slows as the layers start to limit, so an
 extrapolation would claim too much. On a cube at orders 3, 4 and 5, the last
 ratio of changes, 0.09, would put the remaining error of the moment at 5e-6,
-where it is 2e-5. The estimate is an overestimate while the error still falls.
+where it is 2e-5. The last change itself, 1.25 times over, stays above the
+remaining error while the error still falls. The
+[finite-element check](../examples/fem_check.md) runs it.
 
 ## `compare`: two estimates against each other
 
@@ -62,8 +69,20 @@ the model.
 
 ## Face charge's `jump_indicator`
 
-Face charge needs no second solve for a first estimate. On a flat face the true
-charge is continuous, while the panels' linear charges jump from one panel to
-the next. The largest jump, weighted by panel size, is discretization error read
-off the solve. For a plate under a magnet the worst error of B 0.25 mm above the
-plate is 1 to 3 times it. `refine` splits the panels where it is largest.
+On a flat face the true charge is continuous, while the panels' linear charges
+jump from one panel to the next. The largest jump, weighted by panel size, comes
+with the solve. It is an indicator, not an error bar: for a plate under a magnet
+the worst error of B 0.25 mm above the plate is 1 to 3 times it.
+[How accurate is a result?](../guide/accuracy.md) shows how to use it with
+`level` and `refine`.
+
+## In short
+
+Face charge gives an indicator with every solve; cells and finite elements give
+an error bar from three solves or more. The grid convergence index extrapolates
+over meshes and needs steady changes; the order study extrapolates nothing and
+overestimates while the error falls. Two error bars that do not overlap mean one
+of them is too small.
+
+Code: `study_cells` in `src/magpylib_material_response/convergence.py`,
+`study_fem` in `fem/_study.py`.

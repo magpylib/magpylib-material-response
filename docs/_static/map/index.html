@@ -320,7 +320,7 @@ a.cite { text-decoration: none; border-bottom: 1px dotted var(--accent); white-s
   <section class="inst" aria-labelledby="models-h">
     <div class="scn-head">
       <h2 id="models-h">Models and the paths they take</h2>
-      <span class="sub">Pick a model: its path lights up in the map. The chart under the map sets the validated ones against FEM.</span>
+      <span class="sub">Pick a model: its path lights up in the map. The chart under the map sets the validated ones against finite elements.</span>
     </div>
     <nav class="scn-strip" id="scn-strip" aria-label="Models"></nav>
     <div class="bench">
@@ -407,7 +407,7 @@ a.cite { text-decoration: none; border-bottom: 1px dotted var(--accent); white-s
     <div class="card refs" id="refs-list"></div>
   </section>
 
-  <footer>Built from material-response main at c8f97ff (0.10.2): <code>cells.py</code>, <code>demag_fft.py</code>, <code>newell.py</code>, <code>meshing.py</code>, <code>convergence.py</code>, <code>face_charge/</code> and <code>fem/</code>. Numbers are quoted from the code's comments and docs, from the validation suite (<code>validation/</code>, #99; local runs on one M4 Pro, 26 to 28 October), from the use-case scripts on <a href="https://github.com/magpylib/magpylib-material-response/tree/explore/use-cases/explorations/use-cases" target="_blank" rel="noopener">explore/use-cases</a> (MR 0.7.0, where the kept LU was the cache prototype of #132 that became <code>reuse=</code> in #135), and from solves timed on main on 6 November. Nothing in the page is simulated. This page merges <em>Inside apply_demag</em> and <em>apply_response Dispatch</em>.</footer>
+  <footer>Built from material-response main at c8f97ff (0.10.2): <code>cells.py</code>, <code>demag_fft.py</code>, <code>newell.py</code>, <code>meshing.py</code>, <code>convergence.py</code>, <code>face_charge/</code> and <code>fem/</code>. Numbers are quoted from the code's comments and docs, from the validation suite (<code>validation/</code>, #99; local runs on one M4 Pro, 26 to 28 October), from the use-case scripts on <a href="https://github.com/magpylib/magpylib-material-response/tree/17991902ba2908ea3d9509af84a575ab5f3c2083/explorations/use-cases" target="_blank" rel="noopener">explore/use-cases</a> (MR 0.7.0, where the kept LU was the cache prototype of #132 that became <code>reuse=</code> in #135), and from solves timed on main on 6 November. Nothing in the page is simulated. This page merges <em>Inside apply_demag</em> and <em>apply_response Dispatch</em>.</footer>
 </div>
 
 <script>
@@ -487,7 +487,7 @@ const cite = (...keys) => keys.map(k => `<a class="cite" href="#ref-${k}">${REFS
 const N = {
   model:   { x: 360, y: 24,  w: 200, h: 56, t: 'Model', s: 'χ · coils · UniformField', k: 'data' },
   mesh:    { x: 360, y: 116, w: 200, h: 56, t: 'Mesh into cells', s: 'mesh_uniform · per shape' },
-  rhs:     { x: 360, y: 208, w: 200, h: 56, t: 'Right-hand side', s: 'J₀ + S·B_ext' },
+  rhs:     { x: 360, y: 208, w: 200, h: 56, t: 'Right-hand side', s: 'J_r + S·B_ext' },
   analyze: { x: 360, y: 300, w: 200, h: 56, t: 'Cell structure', s: 'grid · loose · generic' },
   rule:    { x: 180, y: 300, w: 150, h: 56, t: 'Interaction rule', s: 'point · newell' },
   choose:  { cx: 460, cy: 430, hw: 112, hh: 42, t: "solver = 'auto'", s: 'FFT share ≥ 10 %?', k: 'dec' },
@@ -497,7 +497,7 @@ const N = {
   gmres:   { x: 500, y: 604, w: 200, h: 56, t: 'GMRES', s: 'block-Jacobi · restart 100' },
   out:     { x: 360, y: 704, w: 200, h: 56, t: 'Polarization', s: 'J per cell', k: 'data' },
   field:   { x: 360, y: 796, w: 200, h: 56, t: 'Fields anywhere', s: 'magpy.getB · show · studio', k: 'data' },
-  study:   { x: 730, y: 384, w: 150, h: 64, t: 'study_cells', s: 'levels → GCI', k: 'loop', ic: '↻' },
+  study:   { x: 730, y: 384, w: 150, h: 64, t: 'study_cells', s: 'cells across → GCI', k: 'loop', ic: '↻' },
   sat:     { x: 20,  y: 384, w: 150, h: 64, t: 'Saturation', s: 'χ from BHCurve', k: 'loop', ic: '↻' },
   fc1:     { x: 915, y: 116, w: 180, h: 52, t: 'Surface panels', s: 'graded · level' },
   kept:    { cx: 1005, cy: 222, hw: 94, hh: 34, t: 'Kept LU fits?', s: 'reuse=', k: 'dec' },
@@ -528,8 +528,8 @@ const E = [
   { id: 'e11', p: [[320, 660], [320, 684], [400, 684], [400, 704]], l: ['J', 330, 678] },
   { id: 'e12', p: [[600, 660], [600, 684], [520, 684], [520, 704]], l: ['J', 590, 678, 'end'] },
   { id: 'e13', p: [[460, 760], [460, 796]], l: ['solved collection', 470, 782] },
-  { id: 'e14', p: [[560, 732], [865, 732], [865, 448]], l: ['value at each level', 712, 726, 'middle'] },
-  { id: 'e15', p: [[865, 384], [865, 144], [560, 144]], l: ['next, finer level', 712, 138, 'middle'] },
+  { id: 'e14', p: [[560, 732], [865, 732], [865, 448]], l: ['value on each mesh', 712, 726, 'middle'] },
+  { id: 'e15', p: [[865, 384], [865, 144], [560, 144]], l: ['next, finer mesh', 712, 138, 'middle'] },
   { id: 'e16', p: [[360, 732], [95, 732], [95, 448]], l: ['B in each cell', 228, 726, 'middle'] },
   { id: 'e17', p: [[95, 384], [95, 236], [360, 236]], l: ['update χ', 228, 230, 'middle'] },
   { id: 'f0',  p: [[560, 44], [1005, 44], [1005, 116]], l: ['solve_face_charge: no volume mesh', 785, 38, 'middle'] },
@@ -565,8 +565,8 @@ const D = {
   mesh: { at: 'meshing.py · mesh_uniform, mesh_all, mesh_Cuboid, mesh_Cylinder, voxelize, mesh_TriangularMesh', lead: 'Each responding part becomes cells, each a magpylib magnet of one uniform polarization. The cell type decides how fast everything after it runs.', b: [
     ['mesh_uniform(cells_across)', ['One cell size for the whole model: the thinnest responding part over <code>cells_across</code>. A cuboid side gets round(side / size) cells, so sides that are multiples of the size give grids of one spacing, FFT products within and between parts.', 'Refuses above <code>max_cells</code> = 1,000,000.']],
     ['Per shape', ['<code>mesh_Cuboid</code>: a grid of cuboids, the fast path. <code>mesh_Cylinder</code>: a core and rings of cylinder segments, on the generic path.', '<code>mesh_TriangularMesh</code>: TetGen tetrahedra; every input triangle is kept, so a detailed export sets a floor.', '<code>voxelize</code>: cubes on one lattice for any shape, sized to hold its exact volume (a staircase surface).']]], p: ['si2015'] },
-  rhs: { at: 'cells.py · solve_cells, _cell_susceptibilities', lead: 'The system is (I − S·T)·J = J₀ + S·B_ext: one 3-vector J per cell, T the interaction of every cell with every other.', b: [
-    ['Built here', ['J₀: each cell\'s remanence, in the global frame.', 'S: one 3×3 block per cell, R·diag(χ)·Rᵀ, so an anisotropic χ acts along the cell\'s own axes and turns with it.', 'B_ext: <code>magpy.getB</code> of every UniformField, magnet and current at the cell centres.']]], p: ['chadebec2006', 'moskowitz1966'] },
+  rhs: { at: 'cells.py · solve_cells, _cell_susceptibilities', lead: 'The system is (I − S·T)·J = J_r + S·B_ext: one 3-vector J per cell, T the interaction of every cell with every other.', b: [
+    ['Built here', ['J_r: each cell\'s remanence, in the global frame.', 'S: one 3×3 block per cell, R·diag(χ)·Rᵀ, so an anisotropic χ acts along the cell\'s own axes and turns with it.', 'B_ext: <code>magpy.getB</code> of every UniformField, magnet and current at the cell centres.']]], p: ['chadebec2006', 'moskowitz1966'] },
   analyze: { at: 'demag_fft.py · analyze_collection, detect_uniform_grid', lead: 'The cells are split into clusters that cover every cell once. A cluster decides how fast its blocks are built, never what they hold.', b: [
     ['Cluster kinds', ['<b>grid</b>: identical cuboids, one orientation, on a uniform grid. T between them depends only on the displacement, so their block is a convolution, applied by FFT.', '<b>loose</b>: identical cuboids off any grid; blocks computed once per distinct displacement.', '<b>generic</b>: everything else, one <code>magpy.getH</code> per cell pair.']],
     ['Details', ['Clusters under 8 cells fold into generic. Touching parts stay separate grids: a yoke with two legs is three.']]], p: ['newell1993', 'hayashi1996'] },
@@ -575,36 +575,36 @@ const D = {
     ['newell', ['The field averaged over the observer cell, the Galerkin form: the induced moment rises toward the converged value as the mesh is refined, so a mesh study knows which side it is on.', 'Needs every cell a cuboid of one orientation. Far pairs switch to a dipole with its cell-size correction, accurate to (h/r)⁴.']]], p: ['newell1993', 'engelherbert2005', 'slanovc2022', 'chadebec2006'] },
   choose: { at: 'cells.py · _auto_solver, AUTO_MIN_FFT_SHARE = 0.1', lead: 'Under solver="auto", the share of T\'s entries that FFT products cover decides: from 10 % on GMRES, below it the direct solve.', b: [
     ['Counted as FFT', ['Each grid\'s own block, m² entries; both blocks between two grids of one spacing, 2·mₐ·m_b, once they pass 10⁶ entries.']],
-    ['Why 10 %', ['Measured on 39 models at χ = 1000: three cubes at three cell sizes, 40 %, GMRES 8.3 s against 9.2 s; a grid with 3,900 tetrahedra, 26 %, 99 s against 112 s; 100 cubes of 27 cells, 1 %, 6.2 s against 5.1 s. <a href="#auto">Try the count below.</a>']]] },
+    ['Why 10 %', ['Measured on 39 models at χ = 1000: three cubes at three cell sizes, 40 %, GMRES 8.3 s against 9.0 s; a grid with 3,900 tetrahedra, 26 %, 99 s against 112 s; 100 cubes of 27 cells, 1 %, 6.2 s against 5.1 s. <a href="#auto">Try the count below.</a>']]] },
   dense: { at: 'cells.py · _assemble_T_dense, _pair_block', lead: 'The whole 3n × 3n T, written block by block straight into one Fortran-ordered array: 72·n² bytes, 2 GB at 5,270 cells.', b: [
     ['Tricks', ['Two grids of one spacing: the kernel tabulated once per index difference, each chunk a gather.', 'Cuboids of one shape and orientation: the tensor once per distinct displacement.', 'The reverse block is the forward one transposed and scaled where that holds exactly.']]], p: ['lapack1999'] },
   lu: { at: 'cells.py · _solve_direct', lead: 'Q = I − S·T is formed in T\'s own buffer and factored in place by LAPACK: exact to rounding, one matrix of memory, time as n³.', b: [], p: ['lapack1999'] },
   ops: { at: 'cells.py · _build_operator; demag_fft.py · build_fft_kernel', lead: 'A list of block operators that apply T without forming it.', b: [
     ['Block kinds', ['Grid self-blocks: FFT convolutions on the grid padded to twice its size, 6 tensor components stored. Exact.', 'Grids of one spacing past 10⁶ entries between them: FFT cross-convolutions.', 'Everything else: dense blocks, or sparse ones where dropping the smallest entries moves the operator by less than a tenth of the tolerance; at high χ almost nothing drops.']]], p: ['hayashi1996'] },
-  gmres: { at: 'cells.py · _solve_iterative, GMRES_RESTART = 100', lead: 'SciPy\'s GMRES on I − S·T, each cell\'s own 3×3 block of Q inverted as the preconditioner (block Jacobi).', b: [
+  gmres: { at: 'cells.py · _solve_iterative, GMRES_RESTART = 100', lead: 'SciPy\'s GMRES on I − S·T, each cell\'s own 3×3 block of Q inverted as the preconditioner (block Jacobi; for tetrahedra its isotropic part).', b: [
     ['Settings', ['Restart every 100: against 20, 15–55 % fewer iterations on soft iron, and a 1 mm μ-metal sheet at χ = 10⁴ converges.', 'Auto runs to solver_tol / 100: at χ = 1000 the answer agrees with the direct one to about solver_tol on a few thousand cells, ten times it on 32,768. Run to solver_tol itself, as solver="iterative" does, it sits 160 to 580 tolerances away.']],
     ['When it does not converge', ['solver="iterative" raises. Auto falls back to the direct solve when 72·n² ≤ 2 GB, and otherwise raises, naming the memory. <a href="#gmres">Step through one iteration.</a>']]], p: ['saad1986', 'scipy2020'] },
   out: { at: 'cells.py · solve_cells', lead: 'Each cell\'s J is written back as its polarization. The solved collection holds ordinary magpylib magnets: getB, show, studio and to_json do not know a solve happened.', b: [] },
   field: { at: 'magpylib · getB', lead: 'magpylib sums the field of every source in the solved collection at any observer: cells, sheets or a FemSolution\'s own getB.', b: [
     ['Inside a part', ['Cells give B. A ChargeSheet gives μ0 H there, and warns: B inside needs the part\'s magnetization, which surface charge does not carry.']]], p: ['ortner2020'] },
-  study: { at: 'convergence.py · study_cells, MeshStudy, compare', lead: 'Solves one mesh per level, coarse to fine, and estimates the finest one\'s error by the grid convergence index.', b: [
+  study: { at: 'convergence.py · study_cells, MeshStudy, compare', lead: 'Solves one mesh per entry of <code>levels</code>, cells across the thinnest part by default, coarse to fine, and estimates the finest one\'s error by the grid convergence index.', b: [
     ['How', ['One order for the whole quantity from its last two changes, accepted between 0.3 and 3; error = 1.25 × the distance to the Richardson-extrapolated value.', 'Declines, with NaN errors, when entries turning against the trend carry more than 10 % of the last change.', '<code>compare(study_cells, study_fem)</code> sets both error bars side by side per observer.']]], p: ['richardson1911', 'roache1994', 'celik2008'] },
   sat: { at: '_saturation.py · BHCurve; cells.py · solve_cells', lead: 'With <code>susceptibility=BHCurve(H=…, B=…)</code>, each cell\'s χ follows the curve at its own field, and the linear solve repeats until no χ changes.', b: [
-    ['As released (0.9.0, #150, #159, #162)', ['T is built once; Anderson acceleration; about 3 to 40 solves, more on a sharp knee.', 'A sphere within 1 % of exact along the curve. <code>solve_fem</code> follows the same curve (#151); <code>solve_face_charge</code> refuses it.']]], p: ['anderson1965', 'walker2011'] },
+    ['As released (0.9.0, #150, #159, #162)', ['T is built once; Anderson acceleration; about 3 to 40 solves, more on a sharp knee.', 'A sphere of 517 tetrahedra within 0.02 % of exact along the curve. <code>solve_fem</code> follows the same curve (#151); <code>solve_face_charge</code> refuses it.']]], p: ['anderson1965', 'walker2011'] },
   fc1: { at: 'face_charge · _mesh.py, _panels.py, _tribody.py', lead: 'A part that is linear, isotropic and uniform inside has no charge in its volume: its whole response is a charge on its surface.', b: [
     ['Panels', ['Cuboids: layers toward each edge at ℓ·(k/m)^2.5, where the charge is singular. Curved parts: 12 (level + 1) facets per turn; spheres geodesic.', 'Triangle meshes and CAD exports: coplanar triangles merged, rings inward from each sharp edge.', 'Parts that touch share the outline of their contact; a magnet close to a part grades its panels toward it.']],
     ['refine=', ['Splits the panels where the solved charge jumps most and solves again: B 0.25 mm above a plate within 0.04 % in 2,688 unknowns, where uniform panels need 10,350 for 0.13 %.']]] },
   kept: { at: 'face_charge · _kept.py, _apply.py', lead: 'The matrix depends only on the solved parts. <code>reuse=True</code> keeps the LU on the result; a later call with <code>reuse=previous</code> whose parts make the same matrix takes only a new load and a back-substitution.', b: [
     ['The fingerprint', ['Read off the meshed panels, not the input: a magnet that comes close enough to regrade a part changes it by itself. Poses are relative to the first part, so parts that move as one keep it.', 'Outside it: magnets without χ, currents, UniformField, remanence. A poor match solves afresh, never a wrong field.']],
     ['Measured, 10,368 unknowns (36 soft cubes)', ['First solve 3.6 s and 1.7 GB, a reused one 0.18 s. At 28,800 unknowns 30 s and 7.3 GB, reused 0.8 s. M4 Pro, default threads, 6 November.']]] },
-  fc2: { at: 'face_charge · _rectangle.py, _triangle.py', lead: '(1/χ + 1/2)·σ − K′σ = H_ext·n + M₀·n / χ, K′ the adjoint double layer: the jump of the normal field across the surface.', b: [
+  fc2: { at: 'face_charge · _rectangle.py, _triangle.py', lead: '(1/χ + 1/2)·σ − K′σ = H₀·n + M₀·n / χ, K′ the adjoint double layer: the jump of the normal field across the surface. μ0 H₀ is the field of every fixed source (magnets, coils, UniformField), μ0 M₀ = J_r the part\'s remanence.', b: [
     ['Discretized', ['Charge linear on each panel (1, u, v), Galerkin: the flux of one panel through another.', 'Fields of rectangles and triangles in closed form, from edge integrals and the solid angle of a triangle; checked to 1e-9.', 'One zero-net-charge row per part, or per closed shell of a mesh.']]], p: ['wilton1984', 'graglia1993', 'oosterom1983', 'chadebec2006'] },
   fc3: { at: 'face_charge · _bodies.py, _panels.py · FAR_RULES, FAR_PAIRS', lead: 'All parts form one dense system, 8 n² bytes: 3.2 GB at the 20,000-unknown default <code>max_unknowns</code>.', b: [
     ['Far pairs', ['Panel pairs far apart in large systems take Gauss points instead of the closed form, 3 or 2 per side; up to 1.55× faster on 8 threads (#133, #134).', 'getB far from a sheet: six points per triangle, exact to degree 4.']],
     ['Beyond 20,000 unknowns', ['A fast multipole method or a hierarchical matrix would grow about linearly in memory. Not built: below the cap the dense solve is faster, and a kept LU beats any iteration in a loop.']]], p: ['dunavant1985', 'greengard1987', 'hackbusch1999'] },
   fc4: { at: 'face_charge · _bodies.py · MIXED = 2_000', lead: 'From 2,000 unknowns, an LU in single precision refined against the double matrix to double\'s accuracy, as LAPACK\'s dsgesv: 2 to 4 times faster, fields within 2e-9.', b: [
     ['Memory', ['The single copy takes the 20,000-unknown system from 3.2 to 4.8 GB.', 'With <code>reuse=True</code> the double LU is kept instead, on the result, until the result goes.']]], p: ['langou2006', 'carson2018', 'lapack1999'] },
-  fc5: { at: 'face_charge · jump_indicator; validation/', lead: 'On the six documented examples within each reference\'s own uncertainty, 0.64 % at worst; on soft iron 20–40 times more accurate than cells in the same time.', b: [
+  fc5: { at: 'face_charge · jump_indicator; validation/', lead: 'On the six validation cases A to F (three turned cuboids, a magnet beside a soft cube, a flux concentrator, a Halbach array, a thin sheet and the U-core) within each reference\'s own uncertainty; on soft iron more accurate than cells in the same time.', b: [
     ['Accuracy hint', ['<code>jump_indicator</code>: the largest jump of the charge between panels, as a share of the peak. The true charge is continuous on a flat face, so the jump is discretization error, free after a solve.']],
     ['Checked on', ['A cube of infinite χ against its known polarizability, 3.6443 times its volume.']]], p: ['helsing2013'] },
   fc6: { at: 'face_charge · _sheet.py', lead: 'Each solved part becomes a ChargeSheet: a magpylib CustomSource holding triangles and the charge at their corners, in the part\'s place in the collection.', b: [
@@ -615,26 +615,26 @@ const D = {
     ['Controls', ['<code>maxh</code> and edge layers; <code>observers=</code> refines where you read.', 'Refused: a coil through a hole in a magnet.']]], p: ['schoberl1997', 'babuska1996'] },
   fem2: { at: 'fem/_solve.py', lead: 'The air takes the reduced scalar potential, μ0 H = B_ext + B_c − ∇u, B_c the coils\' field from magpylib, never meshed. With currents the parts take the total potential, μ0 H = −∇ψ: in soft iron the reduced one would have to cancel the coil\'s field almost exactly, the total one carries only what is left.', b: [], p: ['simkin1979'] },
   fem3: { at: 'fem/_solve.py · _kelvin_gradient', lead: 'The air ball is mapped onto a second ball by the Kelvin transform and joined along the sphere: the open boundary is exact, not truncated.', b: [], p: ['freeman1988', 'chen1997'] },
-  fem4: { at: 'fem/_solve.py · solve_fem(order=3)', lead: 'High-order elements, order 3 to start: order 2 can stop with "did not settle" on a curve. A BHCurve iterates the same way as in cells (#151).', b: [], p: ['schoberl2014'] },
+  fem4: { at: 'fem/_solve.py · solve_fem(order=3)', lead: 'High-order elements: <code>solve_fem</code> defaults to order 3, <code>study_fem</code> to orders 2, 3 and 4. On a BHCurve order 2 can stop with "did not settle", so start a study of a saturating part at order 3, <code>orders=(3, 4, 5)</code>. A BHCurve iterates the same way as in cells (#151).', b: [], p: ['schoberl2014'] },
   fem5: { at: 'fem/_solve.py · FemSolution', lead: 'getB at any point: (3,) for one row, (n, 3) for n. It cannot be pickled or saved: a pickled one crashes on its first read.', b: [] },
-  femstudy: { at: 'fem/_study.py · study_fem; convergence.py · compare', lead: 'Raises the order on one mesh and reads the error from the last steps. On a cube of infinite χ it gives the known polarizability to 2e-5 at order 5; it reaches 0.1 % on every validation case in 24 s at most.', b: [], p: ['babuska1996', 'helsing2013'] },
+  femstudy: { at: 'fem/_study.py · study_fem; convergence.py · compare', lead: 'Raises the order on one mesh and reads the error from the last steps. On a cube of infinite χ it gives the known polarizability to 2e-5 at order 5. Against the validation references, at orders 2 to 5, it reaches 0.1 % on 12 of the 15 cuboid and CAD cases of the face-charge comparison, in 21 s at most; on the other three the references are themselves good only to 0.2 to 1.5 %.', b: [], p: ['babuska1996', 'helsing2013'] },
 };
 
 /* measured solve times, each with what was timed: the validation runs, the docs, the code's comments */
 const SPEED = {
-  cube:    { t: 1.18, lo: 0.089, hi: 7.97, what: '4,096 cells; 512 to 32,768 cells took 0.09 to 8.0 s', acc: '0.81 % off the converged value at 4,096 cells, 0.29 % at 32,768', src: 'docs: Mesh convergence, the flux concentrator' },
+  cube:    { t: 1.14, lo: 0.09, hi: 7.5, what: '4,096 cells of the flux concentrator; 512 to 32,768 cells took 0.09 to 7.5 s', acc: '0.81 % off finite elements at 4,096 cells, 0.29 % at 32,768', src: 'docs: Error bars for cells, the flux concentrator' },
   plate:   { t: 7, what: 'about 17,000 cells at 0.5 mm', acc: 'still 70 % off right under the plate, where it shields', src: 'face-charge study, magnet on a plate' },
-  ucore:   { t: 0.156, what: 'the docs\' setting, about 250 cells', acc: '23 % off FEM above the poles', src: 'face-charge validation, case F' },
-  halbach: { t: 5.1, lo: 0.081, hi: 5.1, what: '30,720 cells; 480 to 30,720 cells took 0.08 to 5.1 s', acc: '0.027 % off', src: 'face-charge validation, case D' },
+  ucore:   { t: 0.21, what: '704 cuboid cells, 4 across', acc: '15 % off finite elements above the poles; face charge 0.08 % in 0.4 s', src: 'docs: A U-core electromagnet' },
+  halbach: { t: 4.9, lo: 0.08, hi: 4.9, what: '30,720 cells; 480 to 30,720 cells took 0.08 to 4.9 s', acc: '0.022 % off finite elements over the profile, 0.08 % at the worst point', src: 'docs: Error bars for cells' },
   rotated: { t: 0.45, lo: 0.0015, hi: 0.45, what: '256 cells per magnet', acc: '0.64 %, the ANSYS data\'s own limit', src: 'face-charge validation, case A' },
-  cyl:     { t: 775, what: 'a three-level study up to 3,168 cells, mostly the finest', acc: 'finest level 0.3–1 % off', src: 'face-charge step 3a' },
+  cyl:     { t: 775, what: 'a study on three meshes up to 3,168 cells, mostly the finest', acc: 'finest level 0.3–1 % off', src: 'face-charge step 3a' },
   tets:    { t: 248, lo: 7, hi: 248, what: '8,256 tetrahedra, about the memory limit; 1,582 to 8,256 took 7 to 248 s', acc: '0.2–0.7 % off', src: 'face-charge step 3b' },
   sheet:   { t: 11.9, lo: 0.17, hi: 11.9, what: '36,864 cells; 576 to 36,864 cells took 0.17 to 12 s', acc: '10 % off behind the sheet', src: 'face-charge validation, case E' },
-  study:   { t: 9.2, what: 'three levels, 512, 4,096 and 32,768 cells, of the flux concentrator', acc: 'its own estimate: 0.13–0.44 %', src: 'docs: Mesh convergence' },
+  study:   { t: 9.2, what: 'three meshes, 512, 4,096 and 32,768 cells, of the flux concentrator', acc: 'its own estimate: 0.13–0.44 %', src: 'docs: Mesh convergence' },
   offgrid: { t: 130, what: 'magnet on a 5 mm plate at 0.4 mm, peak 9.9 GB', acc: '', src: '#86' },
   small:   { t: 5.1, what: '2,700 cells, direct; GMRES took 6.2 s', acc: '', src: 'AUTO_MIN_FFT_SHARE notes' },
   sizes:   { t: 34, what: '1,728 cuboids, direct; GMRES took 61 s', acc: '', src: 'AUTO_MIN_FFT_SHARE notes' },
-  fc:      { t: 0.38, lo: 0.38, hi: 4.7, what: '1,368 unknowns on the flux concentrator; a cuboid alone solves for any χ in 2 ms, after 1.5 s once', acc: '0.073 % off, where the MoM took 1.2 s for 0.81 %', src: 'face-charge validation, case C' },
+  fc:      { t: 0.38, lo: 0.38, hi: 4.7, what: '1,368 unknowns on the flux concentrator; a cuboid alone solves for any χ in 2 ms, after 1.5 s once', acc: '0.073 % off, where cells took 1.2 s for 0.81 %', src: 'face-charge validation, case C' },
   fccad:   { t: 5.5, lo: 2.1, hi: 56, what: '3,712 triangles, hierarchical assembly; 1,714 to 18,216 triangles took 2.1 to 56 s', acc: 'within 4e-4 of the next mesh level', src: 'face-charge steps 3b and 4' },
 };
 const UNTIMED = {
@@ -679,32 +679,32 @@ const S = [
 
   { g: 'cells', id: 'cube', t: 'Soft cube in a uniform field', r: [['1 grid'], ['FFT 100 %'], ['iterative', 'it']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [10, 10, 10], c: [6, 6, 6], tone: 'soft' }, { arrow: [14, -2, 1], to: [14, -2, 11] }],
-    body: 'mesh_uniform cuts it into one grid of identical cubes. Every interaction is an FFT convolution, so auto takes GMRES: time and memory grow about as n log n. Up to 2,000–3,000 cells either solver is fine; at 10,000 cells the dense matrix alone would take 7 GB.', src: 'docs: Solvers and Performance' },
+    body: 'mesh_uniform cuts it into one grid of identical cubes. Every interaction is an FFT convolution, so auto takes GMRES: time and memory grow about as n log n. At 1,728 cells (χ = 3) it is already 4.7 times faster than the direct solve, 0.12 s against 0.56 s; at 10,000 cells the dense matrix alone would take 7 GB.', src: 'docs: inside/cells_performance.json' },
   { g: 'cells', id: 'plate', t: 'Magnet on a soft plate, one cell size', r: [['2 grids, 1 spacing'], ['FFT within and between'], ['iterative', 'it']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [22, 22, 4], c: [11, 11, 2], tone: 'soft' }, { box: [8, 8, 4], s: [6, 6, 4], c: [3, 3, 2], tone: 'magnet' }],
-    body: 'Both bodies\' sides are multiples of the cell size, so the two grids share one spacing: the blocks between them are FFT cross-convolutions too, once they pass 10⁶ entries. The magnet\'s remanence enters the right-hand side; its small χ makes it respond weakly.', src: 'docs: Solvers and Performance, Mesh convergence' },
+    body: 'Both bodies\' sides are multiples of the cell size, so the two grids share one spacing: the blocks between them are FFT cross-convolutions too, once they pass 10⁶ entries. The magnet\'s remanence enters the right-hand side; its small χ makes it respond weakly.', src: 'meshing.py · mesh_uniform; cells.py · FFT_CROSS_MIN_ENTRIES' },
   { g: 'cells', id: 'ucore', t: 'U-core driven by a coil', r: [['3 grids'], ['coil → rhs'], ['iterative', 'it']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [18, 5, 5], c: [9, 2, 2], tone: 'iron' }, { box: [0, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { box: [13, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { coil: [9, 2.5, 2.5], r: 3.9, axis: 'x', turns: 6, pitch: 1.0 }],
-    body: 'The coil is not meshed: magpy.getB of its windings at every cell centre joins the right-hand side. Touching cuboids stay three grids, not one; at one cell size they couple by FFT. At the docs\' setting (about 250 cells) the field 30 mm above the poles is 23 % off FEM, and 4.9 % at 5,632 cells. That error is not the coil\'s: the iron alone in a uniform field errs by the same amounts (5.1 % at 8 cells across), because uniform cuboid cells converge slowly where the flux turns the inside corners. Face charge (#89) gets 0.22 % in 0.94 s; the U as one body of 407 tetrahedra 0.48 % in 0.5 s.', src: 'docs: U-core electromagnet; face-charge validation, case F' },
+    body: 'The coil is not meshed: magpy.getB of its windings at every cell centre joins the right-hand side. Touching cuboids stay three grids, not one; at one cell size they couple by FFT. In the docs\' example, 2, 4 and 8 cells across (88, 704 and 5,632 cells) put the field 30 mm above the poles 37, 15 and 4.9 % off finite elements; tetrahedra (53, 229 and 1,491) 2.8, 1.6 and 0.8 %. That error is not the coil\'s: the iron alone in a uniform field errs by the same amounts (5.1 % at 8 cells across), because uniform cuboid cells converge slowly where the flux turns the inside corners. Face charge gets 0.08 % in 0.4 s at its default level.', src: 'docs: U-core electromagnet; face-charge validation, case F' },
   { g: 'cells', id: 'halbach', t: 'Halbach array on back iron', r: [['6 grids, 1 spacing'], ['FFT throughout'], ['iterative', 'it']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [25, 5, 4], c: [10, 2, 2], tone: 'iron' }, ...[0, 1, 2, 3, 4].map(i => ({ box: [i * 5, 0, 4], s: [5, 5, 5], c: [2, 2, 2], tone: 'magnet', pol: [[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1], [1, 0, 0]][i] })),
       ...[[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1], [1, 0, 0]].map((d, i) => ({ arrow: [i * 5 + 2.5 - d[0] * 1.3, 2.5, 11.5 - d[2] * 1.3], to: [i * 5 + 2.5 + d[0] * 1.3, 2.5, 11.5 + d[2] * 1.3], small: true }))],
     body: 'The magnets point in turning directions, a Halbach array (' + cite('halbach1980') + '), but are cut along the same axes, so all cells are parallel cuboids: grids of one spacing, FFT products everywhere. The docs\' mesh study (2, 4 and 8 cells across) is good to 0.03 %.', src: 'docs: Mesh convergence; face-charge validation, case D' },
   { g: 'cells', id: 'rotated', t: 'Bodies rotated individually', r: [['1 grid per body'], ['cross blocks pair by pair'], ['either', 'dir']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [6, 6, 6], c: [3, 3, 3], tone: 'magnet' }, { box: [11, 0, 0], s: [6, 6, 6], c: [3, 3, 3], tone: 'soft', rz: 30 }, { box: [4, 11, 0], s: [6, 6, 6], c: [3, 3, 3], tone: 'magnet', rz: -25 }],
-    body: 'Each body is a grid in its own rotated frame, so its self-block is still an FFT product. Blocks between bodies turned against each other share no displacements and are computed pair by pair, at the same cost for both solvers. interaction="newell" refuses: it needs one orientation for every cell.', src: 'docs: Cuboids demagnetization, Solvers and Performance' },
+    body: 'Each body is a grid in its own rotated frame, so its self-block is still an FFT product. Blocks between bodies turned against each other share no displacements and are computed pair by pair, at the same cost for both solvers. interaction="newell" refuses: it needs one orientation for every cell.', src: 'demag_fft.py · analyze_collection; cells.py · _check_interaction' },
   { g: 'cells', id: 'cyl', t: 'Meshed cylinder', r: [['cylinder segments'], ['getH per pair'], ['direct', 'dir']], n: DI, e: DIE,
     sk: [{ cyl: [0, 0, 0], r: 6, h: 10, seg: [3, 12], tone: 'soft' }],
-    body: 'mesh_Cylinder cuts a core and rings of cylinder-segment cells. They are not cuboids, so every pair is one magpy.getH, through elliptic integrals: a three-level study up to 3,168 cells took 13 minutes per field direction. The cell type, not the solver, sets the time. On thin rings at high χ the centre-point rule is unstable (#92): curved cells give the matrix positive eigenvalues, and a 1 mm tube at χ = 1000 swings from −10 % to −68 % to +2 % with 1, 2 and 3 cells across the wall. Averaging the field over each cell keeps every eigenvalue negative; PR #100, merged, does it for segment pairs close together, at 2 to 3 times the solve time, and the moment holds at −11 %.', src: 'docs: Solvers and Performance; face-charge step 3a' },
+    body: 'mesh_Cylinder cuts a core and rings of cylinder-segment cells. They are not cuboids, so every pair is one magpy.getH, through elliptic integrals: a study on three meshes up to 3,168 cells took 13 minutes per field direction. The cell type, not the solver, sets the time. On thin rings at high χ the centre-point rule is unstable (#92): curved cells give the matrix positive eigenvalues, and a 1 mm tube at χ = 1000 swings from −10 % to −68 % to +2 % with 1, 2 and 3 cells across the wall. Averaging the field over each cell keeps every eigenvalue negative; PR #100, merged, does it for segment pairs close together, at 2 to 3 times the solve time, and the moment holds at −11 %.', src: 'face-charge step 3a; #92, #100' },
   { g: 'cells', id: 'tets', t: 'CAD part as tetrahedra', r: [['TetGen'], ['generic'], ['direct', 'dir']], n: DI, e: DIE,
     sk: [{ box: [0, 0, 0], s: [16, 6, 3], c: [6, 2, 1], tone: 'tet', tri: true }, { box: [0, 0, 3], s: [3, 6, 10], c: [1, 2, 4], tone: 'tet', tri: true }],
-    body: 'mesh_TriangularMesh hands the closed surface to TetGen. The target sets the largest cell volume, but every input triangle is kept, so a detailed export sets a floor, with a warning above 4× the target. Tetrahedra take the generic path, and the dense solve\'s 2 GB covers about 5,270 cells. Beside a large grid (a measured model of a grid and 3,900 tetrahedra, FFT 26 %) auto takes GMRES: 99 s against 112 s.', src: 'docs: Tetrahedral meshes; AUTO_MIN_FFT_SHARE notes in cells.py' },
+    body: 'mesh_TriangularMesh hands the closed surface to TetGen. The target sets the largest cell volume, but every input triangle is kept, so a detailed export sets a floor, with a warning above 4× the target. Tetrahedra take the generic path, and the dense solve\'s 2 GB covers about 5,270 cells. Beside a large grid (a measured model of a grid and 3,900 tetrahedra, FFT 26 %) auto takes GMRES: 99 s against 112 s.', src: 'meshing.py · mesh_TriangularMesh; AUTO_MIN_FFT_SHARE notes in cells.py' },
   { g: 'cells', id: 'sheet', t: 'Thin shielding sheet', r: [['thinnest part sets the cell'], ['high χ'], ['iterative', 'it']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [24, 24, 1], c: [16, 16, 1], tone: 'soft' }, { box: [9, 9, 3], s: [6, 6, 3], tone: 'magnet' }],
     body: 'mesh_uniform takes its cell size from the thinnest responding part, so a 1 mm sheet sets small cells everywhere, and max_cells (10⁶) refuses meshes that would blow up. At the docs\' setting (36,864 cells) the field behind the sheet is still 10 % off. At high χ GMRES needs its restart of 100.', src: 'docs: Mesh convergence; face-charge validation, case E' },
   { g: 'check', id: 'study', t: 'Mesh study with Newell', r: [['study_cells'], ['lower bound'], ['GCI']], n: [...IT, 'rule', 'study'], e: [...ITE, 'e4', 'e14', 'e15'],
     sk: [{ box: [0, 0, 0], s: [6, 6, 6], c: [2, 2, 2], tone: 'soft' }, { box: [9, 0, 0], s: [6, 6, 6], c: [4, 4, 4], tone: 'soft' }, { box: [18, 0, 0], s: [6, 6, 6], c: [8, 8, 8], tone: 'soft' }],
-    body: 'study_cells solves one mesh per level and estimates the finest one\'s error by the grid convergence index (' + cite('roache1994', 'celik2008') + '). With interaction="newell" (parallel cuboids only) the induced moment rises toward the converged value, so the study knows which side the answer is on. It declines when the last changes turn or the order leaves 0.3–3.', src: 'docs: Mesh convergence; convergence.py' },
+    body: 'study_cells solves one mesh per cell size and estimates the finest one\'s error by the grid convergence index (' + cite('roache1994', 'celik2008') + '). With interaction="newell" (parallel cuboids only) the induced moment rises toward the converged value, so the study knows which side the answer is on. It declines when the last changes turn or the order leaves 0.3–3.', src: 'docs: Error bars for cells; convergence.py' },
   { g: 'cells', id: 'offgrid', t: 'Sides off the cell size', r: [['2 spacings'], ['dense cross blocks'], ['iterative', 'it']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [22, 22, 4], c: [13, 13, 3], tone: 'soft' }, { box: [8, 8, 4], s: [6, 6, 4], c: [4, 4, 3], tone: 'magnet' }],
     body: 'round(side / size) cuts a 5 mm plate at 0.4 mm into 12 cells of 0.4167 mm while the magnet keeps 0.4: no shared lattice, so the block between them is dense, 608 million entries each way. Since #86 it stays dense unless dropping entries pays, which it rarely does at χ = 1000: about 10 GB and 2 minutes. A cell size that divides every side keeps it an FFT product.', src: '<a href="' + GH + '/pull/86" target="_blank" rel="noopener">#86</a>' },
@@ -725,13 +725,13 @@ const S = [
     body: 'A 3-vector susceptibility acts along the cell\'s own axes and turns with it: S = R·diag(χ)·Rᵀ, one 3×3 block per cell. The preconditioner inverts each cell\'s I − χ·T_ii exactly, for any anisotropy.', src: 'cells.py · _cell_susceptibilities (#50)' },
   { g: 'fc', id: 'fc', t: 'Soft part by face charge', r: [['surface only'], ['no mesh']], n: FC, e: FCE,
     sk: [{ box: [0, 0, 0], s: [10, 10, 10], tone: 'soft', graded: true }],
-    body: 'A linear, isotropic, uniform body needs no volume mesh: the charge on its surface, graded toward edges, carries its whole response. On the six documented examples it lands within each reference\'s own uncertainty; on soft iron it is 20–40× more accurate than the MoM in the same time.', src: 'face-charge validation, <code>validation/</code> (#99)' },
+    body: 'A linear, isotropic, uniform body needs no volume mesh: the charge on its surface, graded toward edges, carries its whole response. On the six validation cases A to F (three turned cuboids, a magnet beside a soft cube, a flux concentrator, a Halbach array, a thin sheet and the U-core) it lands within each reference\'s own uncertainty; on soft iron it is 20–40× more accurate than cells in the same time.', src: 'face-charge validation, <code>validation/</code> (#99)' },
   { g: 'fc', id: 'fccad', t: 'CAD export by face charge', r: [['triangles, #104'], ['dense']], n: FC, e: FCE,
     sk: [{ box: [0, 0, 0], s: [20, 12, 4], c: [8, 5, 2], tone: 'iron', tri: true }, { hole: [13, 6, 4], r: 3, tone: 'iron' }],
-    body: 'The validation\'s CAD part, a plate with fillets and a hole exported as triangles, solved on its surface: 1 % in 0.20 s and 0.1 % in 1.0 s, where FEM takes 11 and 21 s and the tetrahedral MoM stays 0.79 % off at 1,529 cells. A hierarchical assembly, 8 times faster at 18,216 triangles, stays in the study (#103).', src: '<a href="' + GH + '/pull/104" target="_blank" rel="noopener">#104</a>; validation case G' },
+    body: 'The validation\'s CAD part, a plate with fillets and a hole exported as triangles, solved on its surface: 1 % in 0.20 s and 0.1 % in 1.0 s, where finite elements take 11 and 21 s and cells on tetrahedra stay 0.79 % off at 1,529 cells. A hierarchical assembly, 8 times faster at 18,216 triangles, stays in the study (#103).', src: '<a href="' + GH + '/pull/104" target="_blank" rel="noopener">#104</a>; validation case G' },
   { g: 'cells', id: 'sat', t: 'Saturating yoke', r: [['B–H loop'], ['BHCurve, 0.9.0']], n: [...IT, 'sat'], e: [...ITE, 'e16', 'e17'],
     sk: [{ box: [0, 0, 0], s: [18, 5, 5], c: [9, 2, 2], tone: 'iron' }, { box: [0, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { box: [13, 0, 5], s: [5, 5, 12], c: [2, 2, 6], tone: 'iron' }, { coil: [9, 2.5, 2.5], r: 3.9, axis: 'x', turns: 6, pitch: 1.0 }],
-    body: 'With a BHCurve as its susceptibility, each cell\'s χ follows its field: solve_cells repeats the linear solve, the matrix built once, until no χ changes. About 3 to 40 solves with Anderson acceleration; a sphere within 1 % of exact along the curve. Released in 0.9.0. Anderson acceleration: ' + cite('anderson1965', 'walker2011') + '.', src: '<a href="' + GH + '/pull/150" target="_blank" rel="noopener">PR #150</a>, <a href="' + GH + '/pull/159" target="_blank" rel="noopener">#159</a>' },
+    body: 'With a BHCurve as its susceptibility, each cell\'s χ follows its field: solve_cells repeats the linear solve, the matrix built once, until no χ changes. About 3 to 40 solves with Anderson acceleration; a sphere of 517 tetrahedra within 0.02 % of exact, from 0.05 to 2 T applied. Released in 0.9.0. Anderson acceleration: ' + cite('anderson1965', 'walker2011') + '.', src: '<a href="' + GH + '/pull/150" target="_blank" rel="noopener">PR #150</a>, <a href="' + GH + '/pull/159" target="_blank" rel="noopener">#159</a>' },
 
   { g: 'cells', id: 'inside', t: 'The field inside a soft part', r: [['observer inside'], ['cells', 'dir']], n: IT, e: ITE,
     sk: [{ box: [0, 0, 0], s: [12, 12, 6], c: [6, 6, 3], tone: 'soft' }, { arrow: [18, 6, 3], to: [12.3, 6, 3] }, { label: 'B inside?', at: [22, 7, 4.6] }],
@@ -752,7 +752,7 @@ const S = [
   { g: 'fc', id: 'hard', t: 'A hard magnet\'s own demagnetization', r: [['one solve'], ['χ about 0.05']], n: FC, e: FCE,
     sk: [{ box: [0, 0, 0], s: [8, 8, 8], tone: 'magnet' }, { label: 'χ 0.05', at: [4, 4, 11.5] }],
     body: 'A sintered NdFeB magnet has a recoil μr up to 1.05 (' + cite('ortner2023') + '): a small susceptibility, so the magnet becomes a solved part and its field drops a little.',
-    nums: ['Moving such a magnet changes the matrix: see the recoil Monte Carlo.'], src: 'the cuboid example' },
+    nums: ['Moving such a magnet changes the matrix: see the recoil Monte Carlo.'], src: 'face-charge validation, case A' },
   { g: 'check', id: 'nmr', t: 'Two NMR pole-piece designs (#85)', r: [['a difference'], ['two levels']], n: FC, e: FCE,
     sk: [{ cyl: [0, 0, 0], r: 8, h: 2.4, tone: 'magnet' }, { cyl: [0, 0, 2.4], r: 8, h: 2.4, tone: 'iron' }, { cyl: [0, 0, 9.4], r: 8, h: 2.4, tone: 'iron' }, { cyl: [0, 0, 11.8], r: 8, h: 2.4, tone: 'magnet' }],
     body: 'Ø120 mm ferrite discs (0.38 T) with iron pole pieces of 20 mm (A) or 24 mm (B) across a 40 mm gap. The question is a difference: is B more uniform than A? Face charge has no study function: solve each at two levels and compare.',
@@ -760,7 +760,7 @@ const S = [
   { g: 'check', id: 'femcheck', t: 'A finite-element check', r: [['solve_fem'], ['study_fem']], n: FEMS, e: FEMSE,
     sk: [{ box: [0, 0, 0], s: [14, 8, 3], c: [7, 4, 1], tone: 'tet', tri: true }, { box: [0, 0, 3], s: [3, 8, 9], c: [1, 4, 3], tone: 'tet', tri: true }],
     body: 'Finite elements check the other two. They run only when called, through the <code>[fem]</code> extra and NGSolve; <code>study_fem</code> raises the order and <code>compare</code> sets its error bars beside a cell study\'s.',
-    nums: ['FEM reaches 0.1 % on every validation case, in 24 s at most.'], src: '<code>validation/</code>, #99' },
+    nums: ['Against the validation references, finite elements at orders 2 to 5 reach 0.1 % on 12 of the 15 cuboid and CAD cases of the face-charge comparison, in 21 s at most; on the other three the references are themselves good only to 0.2 to 1.5 %.'], src: '<code>validation/</code>, #99' },
   { g: 'loop', id: 'shaft', t: 'Angle sensor on a steel shaft', r: [['rotation'], ['48 configurations'], ['one LU', 'it']], n: FCR, e: FCRE,
     sk: [...SHAFT, { box: [-1.6, -1.6, 16.6], s: [3.2, 3.2, 0.6], tone: 'chip' }, { path: arc(0, 0, 9, 6.5, -40, 125), tone: '--accent' }],
     body: 'A diametric magnet on the end of a steel shaft (Ø20 × 40 mm, χ 3999), read by four Hall plates on a 1 mm circle, after an Infineon patent (' + cite('binder2025') + '). Shaft and magnet turn together, and poses count relative to the first part, so one LU serves every angle. The air gap is a sensor move and needs no solve.',
@@ -783,7 +783,7 @@ const S = [
     nums: ['Face charge jumps by 35 µT where its layout changes, and its slope misses the trend. Re-meshed cells jump by 20 and 56 µT: 10 % and 31 % of one 0.05 mm step\'s real effect.', 'Cells on one layout stretched with the part, a prototype, give the same slope coarse and fine: 3.98 and 3.86 mT/mm at 10 mm.'], src: 'tolerance probes, explore/use-cases' },
   { g: 'loop', id: 'holder', t: 'The shaft turning inside a soft holder', r: [['parts move apart'], ['a fresh LU each', 'stop']], n: FC, e: FCE,
     sk: [...SHAFT, { cyl: [0, 0, 15.6], r: 5, h: 1.4, tone: 'soft' }, { hole: [0, 0, 17], r: 3, bottom: 15.6, tone: 'soft' }, { path: arc(0, 0, 8, 6.5, -40, 125) }],
-    body: 'A soft holder around the magnet, the shaft turning inside it: two solved parts move against each other, so every angle has its own matrix, and <code>reuse=</code> finds no match.',
+    body: 'A soft holder ring around the sensor, the shaft turning beneath it: two solved parts move against each other, so every angle has its own matrix, and <code>reuse=</code> finds no match.',
     nums: ['With a stocky holder the 48-configuration grid takes 158 s.', 'The holder cuts the angle error to 0.06° here; the patent gives 0.24°. A real 2 mm holder ring takes 16,044 unknowns alone at level 2.'], src: 'explore/use-cases, s1_shaft_sensor.py' },
   { g: 'loop', id: 'recoil', t: 'Recoil magnet, Monte Carlo', r: [['magnet χ 0.05'], ['a fresh LU each', 'stop']], n: FC, e: FCE,
     sk: [...PLATE_MAGNET, { ghost: [5.6, 3.9, 4.4], s: [5, 5, 5] }, { label: 'χ 0.05', at: [7, 7, 12.5] }],
@@ -800,7 +800,7 @@ const S = [
 ];
 const SHORT = { cube: 'Soft cube', plate: 'Magnet on a plate', ucore: 'U-core and coil', halbach: 'Halbach array', rotated: 'Rotated bodies', cyl: 'Meshed cylinder', tets: 'CAD as tetrahedra', sheet: 'Thin sheet', study: 'Mesh study', offgrid: 'Sides off the cell size', small: '100 small bodies', sizes: 'Many sizes', moving: 'Magnet on a path', stall: 'GMRES stalls', aniso: 'Anisotropic χ', fc: 'Soft part', fccad: 'CAD export', sat: 'Saturation',
   inside: 'B inside a part', lam: 'Laminated core', imc: 'Hall-chip concentrator', shield: 'Shield sheet', hard: 'A magnet\'s own demag', nmr: 'NMR pole pieces', femcheck: 'FEM check', shaft: 'Shaft angle sensor', mc: 'Tolerance Monte Carlo', coils: 'U-core coils', drag: 'Studio drag', length: 'Plate length', holder: 'Shaft in a holder', recoil: 'Recoil Monte Carlo', slide: 'Magnet sliding', opt: 'Design optimizer' };
-const GROUPS = [['cells', 'Cells: solve_cells'], ['fc', 'Surfaces: solve_face_charge'], ['check', 'Checks: error bars and FEM'], ['loop', 'Many solves: loops and paths']];
+const GROUPS = [['cells', 'Cells: solve_cells'], ['fc', 'Surfaces: solve_face_charge'], ['check', 'Checks: error bars and finite elements'], ['loop', 'Many solves: loops and paths']];
 
 /* ───────────────────────── iso sketches ───────────────────────── */
 const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
@@ -1063,18 +1063,33 @@ for (const [id, n] of Object.entries(N)) {
 const panel = document.getElementById('panel');
 const GROUP_OF = Object.fromEntries(GROUPS);
 let curScn = null, curNode = null;
+/* the docs page that explains a box: [path from docs/, its title] */
+const PAGE = {
+  cells: ['inside/cells', 'Inside cells'], fc: ['inside/face_charge', 'Inside face charge'],
+  fem: ['inside/fem', 'Inside finite elements'], errors: ['inside/error_estimates', 'Inside the error estimates'],
+  sat: ['inside/saturation', 'Inside saturation'], model: ['guide/model', 'Building a model'],
+  loops: ['guide/loops', 'Many solves'],
+};
+const MORE = {
+  model: 'model', mesh: 'cells', rhs: 'cells', analyze: 'cells', rule: 'cells', choose: 'cells', dense: 'cells',
+  lu: 'cells', ops: 'cells', gmres: 'cells', out: 'cells', study: 'errors', sat: 'sat',
+  fc1: 'fc', kept: 'loops', fc2: 'fc', fc3: 'fc', fc4: 'fc', fc5: 'fc', fc6: 'fc', fmx: 'loops',
+  fem1: 'fem', fem2: 'fem', fem3: 'fem', fem4: 'fem', fem5: 'fem', femstudy: 'errors',
+};
 function showNode(id) {
   const n = N[id], d = D[id];
   let html = `<h3>${n.t}</h3><div class="codeat">${d.at}</div><p>${d.lead}</p>`;
   for (const [hd, items] of d.b) html += `<div class="blk"><h4>${hd}</h4><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul></div>`;
   if (d.p) html += `<div class="blk"><h4>Papers</h4><p class="src">${cite(...d.p)}</p></div>`;
+  if (MORE[id]) { const [page, title] = PAGE[MORE[id]]; html += `<p><a href="../../${page}.html" target="_top">${title} →</a></p>`; }
   if (curScn) html += `<p class="src">Path still shown: ${curScn.t}.</p>`;
   panel.innerHTML = html;
 }
 /* the models a worked example in the docs builds, and its page */
 const EXAMPLE = {
-  shaft: 'angle_sensor', mc: 'tolerance_monte_carlo', ucore: 'ucore_electromagnet',
-  halbach: 'mesh_convergence', femcheck: 'fem_check',
+  shaft: 'angle_sensor', holder: 'angle_sensor', mc: 'tolerance_monte_carlo',
+  ucore: 'ucore_electromagnet', sat: 'saturation', halbach: 'mesh_convergence',
+  sheet: 'mesh_convergence', femcheck: 'fem_check',
 };
 function showScn(sc) {
   const pills = sc.r.map(([t, c]) => `<span class="pill ${c || ''}">${t}</span>`).join(' ');

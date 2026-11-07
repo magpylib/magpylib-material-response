@@ -21,26 +21,28 @@ own polarization. That last term makes the problem self-consistent: each part's
 polarization depends on all the others', its own included.
 
 Magpylib gives the field of a uniformly polarized cuboid, cylinder, sphere or
-tetrahedron in closed form {cite}`ortner2020,engelherbert2005,slanovc2022`.
-Cells use it for the field of every cell; face charge for the field of the fixed
-sources at its panels, its own panels having closed forms of their own; finite
+tetrahedron in closed form {cite}`ortner2020,engelherbert2005,slanovc2022`. Face
+charge uses it for the field of the fixed sources at its panels, its own panels
+having closed forms of their own; cells for the field of every cell; finite
 elements only for the field of currents, as they mesh the magnets.
 
 ## Three discretizations
 
-|                | [Cells](cells.md)                                         | [Face charge](face_charge.md)                         | [Finite elements](fem.md)                      |
-| -------------- | --------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
-| Unknown        | one polarization per cell, in the parts' volume           | a magnetic charge on the parts' surfaces              | a scalar potential in the parts and the air    |
-| Equation       | J in each cell from the field of all cells                | each panel's charge M·n from the field just inside it | div B = 0 everywhere, in weak form             |
-| Discretization | uniform cells, the field of one at another in closed form | panels, the charge linear on each, Galerkin           | tetrahedra, polynomials of order p             |
-| System         | dense, 3 unknowns per cell; FFT on grids                  | dense, 3 unknowns per panel                           | sparse, iterative                              |
-| Known as       | the magnetostatic moment method {cite}`chadebec2006`      | a boundary-integral (surface-charge) method           | the finite element method {cite}`schoberl2014` |
+|                | [Face charge](face_charge.md)                                                     | [Cells](cells.md)                                         | [Finite elements](fem.md)                      |
+| -------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------- |
+| Unknown        | a magnetic charge on the parts' surfaces                                          | one polarization per cell, in the parts' volume           | a scalar potential in the parts and the air    |
+| Equation       | each panel's charge M·n, with n the outward normal, from the field just inside it | J in each cell from the field of all cells                | div B = 0 everywhere, in weak form             |
+| Discretization | panels, the charge linear on each, Galerkin (tested over each panel)              | uniform cells, the field of one at another in closed form | tetrahedra, polynomials of order p             |
+| System         | dense, 3 unknowns per panel                                                       | dense, 3 unknowns per cell; FFT on grids                  | sparse, iterative                              |
+| Known as       | a boundary-integral method                                                        | the method of moments {cite}`chadebec2006`                | the finite element method {cite}`schoberl2014` |
 
 Face charge needs the least: a part that is linear, isotropic and uniform inside
 has no magnetic charge in its volume, so its surface carries its whole response.
 Cells drop that assumption and pay with a volume of unknowns that converges
 slowly. Finite elements mesh the air as well, and close the open space exactly,
 which makes them the independent reference.
+[Choosing a solver](../guide/choosing.md) compares the three from the user's
+side.
 
 ## The map
 
@@ -51,34 +53,41 @@ the papers it rests on.
 
 ```{raw} html
 <p><a href="map.html"><img src="../_static/images/solver_map.png"
-  alt="The map of the three solvers, with the path of a soft part through solve_face_charge lit: surface panels, the kept-LU check, the Galerkin operator, assembly, LU, surface charge, ChargeSheet, fields."
+  alt="The map of the three solvers, with the path of a soft part through solve_face_charge lit: surface panels, the check for a kept factorization, the Galerkin operator, assembly, LU, surface charge, ChargeSheet, fields."
   style="width: 100%; border: 1px solid var(--pst-color-border); border-radius: 6px;"></a></p>
 <p><a href="map.html"><b>Open the interactive map →</b></a></p>
 ```
 
 ## The pages
 
-- [The solver map](map.md): the interactive map, full width.
-- [Inside cells](cells.md) and [the cell equations](cells_equations.md): the
-  moment method, its interaction rules, solvers and fast paths.
 - [Inside face charge](face_charge.md): the surface-charge equation, panels,
-  contacts and the kept factorization.
+  contacts and the kept factorization; settings in
+  [Face charge](../guide/face_charge.md).
+- [Inside cells](cells.md): how a part becomes cells, how they interact and
+  which solver runs; settings in [Cells](../guide/cells.md).
+- [The cell equations](cells_equations.md): the linear system, the two
+  interaction rules and the two solvers, in equations.
+- [Cells: direct and iterative solvers, measured](cells_performance.md): time,
+  memory and agreement of the two, on one grid and on other layouts.
 - [Inside finite elements](fem.md): the potentials, the exact open boundary and
-  the mesh.
+  the mesh; settings in [Finite elements](../guide/fem.md).
 - [Inside saturation](saturation.md): the B–H iteration of cells and finite
   elements.
 - [Inside the error estimates](error_estimates.md): the grid convergence index,
-  the order study and the jump indicator.
+  the order study and the jump indicator; their use in
+  [How accurate is a result?](../guide/accuracy.md).
+- [The solver map](map.md): the interactive map, full width.
 
 ```{toctree}
 :maxdepth: 1
 :hidden:
 
-map
+face_charge
 cells
 cells_equations
-face_charge
+cells_performance
 fem
 saturation
 error_estimates
+map
 ```

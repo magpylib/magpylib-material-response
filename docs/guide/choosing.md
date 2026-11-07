@@ -1,7 +1,9 @@
 # Choosing a solver
 
 All three solvers take the same Magpylib model and return a model that Magpylib
-reads. Start from what your parts are made of and what you need to read.
+reads. Which one fits depends on two questions: what are your parts made of, and
+where do you need the field? The terms below, χ and `BHCurve` among them, are
+set out in [Building a model](model.md).
 
 | Your model                                                          | Solver                            |
 | ------------------------------------------------------------------- | --------------------------------- |
@@ -20,53 +22,56 @@ reads. Start from what your parts are made of and what you need to read.
 | Mesh                | made inside, from `level`                                                          | you mesh the parts (`mesh_uniform`, `mesh_*`)                                                                                     | made inside by Netgen, from `order` and `maxh` |
 | Shapes solved       | cuboids, cylinders, cylinder segments, spheres, tetrahedra, closed triangle meshes | cells of any shape: cuboids, cylinder segments, tetrahedra; `mesh_TriangularMesh` (TetGen) and `voxelize` mesh any closed surface | the same as face charge, unmeshed              |
 | Material            | linear, isotropic, uniform in each part                                            | linear or a `BHCurve`; per axis; per cell                                                                                         | linear or a `BHCurve`; per axis                |
-| Field inside a part | μ0 H only, with a warning                                                          | B, H, J, M                                                                                                                        | B, H, J, M                                     |
-| Error estimate      | `jump_indicator`, free with each solve                                             | `study_cells`, several meshes                                                                                                     | `study_fem`, several orders                    |
+| Field inside a part | not B: `getB` gives μ0 H, with a warning                                           | B, H, J, M                                                                                                                        | B, H, J, M                                     |
+| Error               | `jump_indicator` with each solve; a second `level` to check                        | `study_cells`, three meshes or more                                                                                               | `study_fem`, three orders or more              |
 | Extra install       | none                                                                               | none; `[tetgen]` for `mesh_TriangularMesh`                                                                                        | `[fem]`, NGSolve                               |
 
-## How they compare
+The pages [Face charge](face_charge.md), [Cells](cells.md) and
+[Finite elements](fem.md) give each solver's settings and limits;
+[How accurate is a result?](accuracy.md) gives the error estimates;
+[Inside the solvers](../inside/index.md) sets out the three methods.
 
-The repository's validation suite solves its cases with each method against
-stored finite-element references. The time to bring the worst group of sensors
-within 1 % of the reference, solve and `getB` together, one run each on an Apple
-M4 Pro:
+## How fast each one is
 
-| Case                       | Face charge | Finite elements |
-| -------------------------- | ----------: | --------------: |
-| Magnet beside a soft cube  |      0.02 s |           2.3 s |
-| Iron cube in 10 mT         |      0.04 s |          0.52 s |
-| Flux concentrator          |      0.04 s |          0.83 s |
-| Halbach array on back iron |      0.06 s |           1.5 s |
-| U-core driven by a coil    |      0.07 s |           4.5 s |
-| Magnet on a soft plate     |      0.09 s |           3.1 s |
-| CAD part, a triangle mesh  |      0.20 s |            11 s |
-| Thin shielding sheet       |      0.28 s |           2.7 s |
+The repository's validation suite solves its cases against stored finite-element
+references. Its sensors are grouped by region, such as above the magnet or under
+the plate, and each group's error is taken against its own field. The time to
+bring every group within 1 % of the reference, solve and `getB` together, one
+run each on an Apple M4 Pro:
 
-Over the fourteen validation cases where both reach 1 %, of which the table
-above shows eight, face charge gets there faster than finite elements, 13 to 104
-times faster on nine of them. On soft iron it is 20 to 40 times more accurate
-than `solve_cells` in the same time. The full table, and where finite elements
-come closest, is in
-[the face-charge guide](face_charge.md#against-finite-elements).
+| Case                        | Face charge | Finite elements |
+| --------------------------- | ----------: | --------------: |
+| Magnet beside a soft cube   |      0.02 s |           2.3 s |
+| Iron cube in 10 mT          |      0.04 s |          0.52 s |
+| Flux concentrator           |      0.04 s |          0.83 s |
+| Halbach array on back iron  |      0.06 s |           1.5 s |
+| U-core driven by a coil     |      0.07 s |           4.5 s |
+| Magnet 4 mm tall on a plate |      0.09 s |           3.1 s |
+| CAD part, a triangle mesh   |      0.20 s |            11 s |
+| Thin shielding sheet        |      0.28 s |           2.7 s |
 
-## Where face charge is not the fastest
+Face charge reaches 1 % first on all 14 cases where both methods reach it: 13 to
+over 100 times sooner on nine of them, 3 to 12 times on the other five. The
+table shows eight; [Face charge](face_charge.md) has all 14, and the times to
+0.1 %.
 
-- **A few weak magnets on their own**, χ around 0.05: `solve_cells` reaches the
-  same accuracy faster, because their polarization hardly varies.
-- **Many separate parts**: face charge solves one dense system for all of them,
-  so 100 small cubes take 7,200 unknowns at level 1 and four times as many at
-  level 2.
-- **Thin sheets**: the panels are sized to the thickness over the whole sheet.
-  Start at `level=2`.
-- **More than `max_unknowns`**, 20,000 by default, a 3.2 GB system: without a
-  `level`, face charge takes the highest level that fits, and warns; with one,
-  or if even level 1 is too large, it refuses before it assembles. Then mesh the
-  parts for `solve_cells`.
+## Where face charge costs more
+
+Face charge solves one dense system for all the parts. Many separate parts and
+thin sheets make that system large, and a few weak magnets on their own reach
+the same accuracy sooner with `solve_cells`. Above `max_unknowns`, 20,000 by
+default, face charge takes a lower level, or refuses.
+[Face charge](face_charge.md) gives the numbers and the settings for each case.
 
 ## What none of them does
 
-- **Paths.** Each solve is one configuration: a model whose objects move along a
-  path is refused. Loop over the steps; [Many solves](loops.md) shows how to
-  keep the factorization between them.
 - **Hysteresis and eddy currents.** The materials are static and single-valued:
   a remanence plus a susceptibility, or a B–H curve.
+- **Paths.** One solve is one configuration: see
+  [what each solver refuses](model.md#what-is-refused).
+
+## In short
+
+Start with `solve_face_charge`. Take `solve_cells` when a part saturates, when
+its susceptibility differs along its axes or inside it, or when you need B
+inside a part. Check either with `solve_fem` and `study_fem`.

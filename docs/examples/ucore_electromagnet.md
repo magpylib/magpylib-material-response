@@ -12,431 +12,198 @@ kernelspec:
   name: python3
 ---
 
-+++ {"user_expressions": []}
+# A U-core electromagnet
 
-# U-core electromagnet
+A coil of 16 windings at 25 A, 400 ampere-turns, sits on the yoke of an iron
+U-core. The core gathers the coil's flux and brings it out at its two poles. How
+strong is the field 30 mm above the poles, and how much of it is the core's? The
+flux density inside the iron needs cells: how fine a mesh do they need, and
+should they be cuboids or tetrahedra? And how hard is the iron driven at this
+current: does a linear susceptibility hold?
 
-+++
+## The model
 
-This example is driven by **current sources**: a soft-magnetic U-core with a
-multi-turn coil wound around its middle bar. `mesh_all` passes current sources
-through unmeshed, and `solve_cells` adds their field at each cell's centroid to
-the applied field.
+The core is iron with χ = 999 (μr = 1000), as three cuboids of 20 mm square
+section: a 100 mm yoke and two 60 mm legs. The coil comes from the `polyline`
+helpers: `create_polyline_fillet` rounds the corners of one square turn, and
+`move_grid_along_polyline` sweeps a grid of wire positions, 8 along the yoke in
+2 layers, along that turn, one closed polyline per winding. Both functions are
+in [`ucore_model.py`](ucore_model.py), which
+[the same core at high current](saturation.md) shares:
 
-The coil itself is built with the `polyline` helpers: `create_polyline_fillet`
-rounds the corners of a square loop, and `move_grid_along_polyline` sweeps the
-winding-pack cross-section (turns × layers) along it, producing one closed
-polyline per winding.
+```{literalinclude} ucore_model.py
+:pyobject: coil
+```
 
-At the end, the same core is re-meshed with tetrahedral cells and both
-discretizations are compared along a line above the poles.
-
-## Build the U-core
-
-Three soft-iron cuboids — a horizontal yoke and two legs — with µr = 1000. The
-susceptibility is set on the parent collection and inherited by all children
-(and later by their mesh cells). All quantities are SI (m, T, A).
+```{literalinclude} ucore_model.py
+:pyobject: core
+```
 
 ```{code-cell} ipython3
-:tags: [hide-input]
-
 import time
 
 import magpylib as magpy
 import numpy as np
-import pandas as pd
-import plotly.express as px
+from ucore_model import coil, core, core_mesh, line_above_poles
+
+from magpylib_material_response import solve_cells, solve_face_charge, study_cells
+from magpylib_material_response.meshing import mesh_TriangularMesh
+
+system = magpy.Collection(core(susceptibility=999), coil(current=25))
+magpy.show(system, backend="widget")
+```
+
+## How strong is the field above the poles?
+
+The core is linear and each of its parts uniform, so face charge solves it on
+its surfaces, with no volume mesh. The field is read on a line 30 mm above the
+pole faces, along the U at y = 0:
+
+```{code-cell} ipython3
+line = line_above_poles()
+solved = solve_face_charge(system)
+B = magpy.getB(solved, line)
+B_coil = magpy.getB(system.children[1], line)  # the coil alone
+
+print(f"{solved.face_charge_info['unknowns']:,} unknowns, {solved.face_charge_info['seconds']:.2f} s")
+print(f"peak Bz: {np.abs(B[:, 2]).max() * 1e3:.3f} mT, coil alone {np.abs(B_coil[:, 2]).max() * 1e3:.3f} mT")
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+import json
+from pathlib import Path
+
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-from magpylib_material_response import solve_cells
-from magpylib_material_response.meshing import mesh_all, mesh_TriangularMesh
-from magpylib_material_response.polyline import (
-    create_polyline_fillet,
-    move_grid_along_polyline,
-)
+COLOURS = {"face charge": "#eb6834", "cuboids": "#2a78d6", "tetrahedra": "#1baf7a"}
+reference = json.loads(Path("../../validation/references/ucore.json").read_text())
+Bz_ref = np.array(reference["groups"]["30 mm above the poles"]["B"])[:, 0]
 
-magpy.defaults.display.backend = "plotly"
 
-a = 0.02  # core cross-section side
-yoke = magpy.magnet.Cuboid(dimension=(0.10, a, a), style_label="yoke")
-leg_left = magpy.magnet.Cuboid(
-    dimension=(a, a, 0.06), position=(-0.04, 0, 0.04), style_label="left leg"
-)
-leg_right = magpy.magnet.Cuboid(
-    dimension=(a, a, 0.06), position=(0.04, 0, 0.04), style_label="right leg"
-)
+def error(B):
+    """Relative error of Bz on the line against the finite-element reference."""
+    return np.linalg.norm(B[:, 2] - Bz_ref) / np.linalg.norm(Bz_ref)
 
-core = magpy.Collection(yoke, leg_left, leg_right, style_label="U-core")
-core.susceptibility = 999  # µr = 1000
+
+x = line[:, 0] * 1e3
+fig = go.Figure()
+fig.add_scatter(x=x, y=B_coil[:, 2] * 1e3, name="coil alone", line={"color": "#999999"})
+fig.add_scatter(x=x, y=B[:, 2] * 1e3, name="face charge", line={"color": COLOURS["face charge"], "width": 3})
+fig.add_scatter(x=x, y=Bz_ref * 1e3, name="finite-element reference", line={"color": "#555555", "dash": "dot"})
+fig.update_xaxes(title_text="x (mm)")
+fig.update_yaxes(title_text="Bz 30 mm above the poles (mT)")
+fig.update_layout(height=380, margin={"l": 60, "r": 20, "t": 20, "b": 50}, legend={"orientation": "h", "y": -0.25})
+print(f"face charge against the reference: {error(B):.2%}")
+print(f"the core multiplies the peak by {np.abs(B[:, 2]).max() / np.abs(B_coil[:, 2]).max():.0f}")
+fig
 ```
 
-+++ {"user_expressions": []}
+The peak is 2.15 mT, 71 times the coil's own 0.030 mT: nearly all of the field
+is the core's. The reference is the validation suite's finite-element solve of
+this model, good to 0.25 % ([How accurate is a result?](../guide/accuracy.md));
+face charge lies within 0.1 % of it, in under a second.
 
-## Wind the coil with the polyline helpers
+## How fine a mesh do cells need?
 
-One turn is a square loop around the yoke cross-section with filleted corners.
-The loop starts and ends on an edge midpoint so that the seam of the closed
-polyline lies on a straight segment, away from the fillets.
+Inside a part, face charge gives μ0H without the part's own polarization. The
+flux density in the iron needs the core cut into cells and solved with
+`solve_cells` ([Cells](../guide/cells.md)). `study_cells` meshes the three
+cuboids at 2, 4 and 8 cells across their 20 mm section, eight times the cells
+each time, solves each mesh and estimates the error of the finest:
 
 ```{code-cell} ipython3
-h = 0.014  # loop half-width: 4 mm clearance around the 20 mm core
-square = np.array(
-    [
-        [0, h, 0],  # seam on the edge midpoint
-        [0, h, h],
-        [0, -h, h],
-        [0, -h, -h],
-        [0, h, -h],
-        [0, h, 0],
-    ]
-)
-turn = create_polyline_fillet(square, max_radius=0.006, N=6)
+cuboids = study_cells(system, magpy.Sensor(pixel=line), levels=(2, 4, 8))
+for n, seconds in zip(cuboids.cells, cuboids.seconds, strict=True):
+    print(f"{n:5,} cuboid cells: {seconds:.2f} s")
+print(f"estimated error of the finest: {cuboids.error:.1%}")
 ```
 
-+++ {"user_expressions": []}
-
-The winding pack is a grid of wire positions in the cross-sectional plane of the
-coil: 8 turns along the yoke axis (x) times 2 radial layers, anchored at the
-seam point of the turn. Sweeping this grid along the rounded turn returns one
-closed polyline per winding; the outer layer gets slightly larger fillet radii.
+The same U as one closed triangle mesh, `core_mesh` in
+[`ucore_model.py`](ucore_model.py), goes to `mesh_TriangularMesh`, which cuts it
+into tetrahedra with TetGen {cite}`si2015` (the `tetgen` extra, see
+[Getting started](../getting_started.md)):
 
 ```{code-cell} ipython3
-pitch = 0.0022  # wire pitch
-x_turns = (np.arange(8) - 3.5) * pitch  # 8 turns centered on the yoke middle
-y_layers = h + np.arange(2) * pitch  # 2 radial layers
-pack = np.array([(xt, yl, 0) for xt in x_turns for yl in y_layers])
-
-windings = move_grid_along_polyline(turn, pack)  # shape (16, n_vertices, 3)
-
-coil = magpy.Collection(
-    *(magpy.current.Polyline(current=25, vertices=v) for v in windings),
-    style_label="coil",
-)
-print(f"{len(coil)} windings × 25 A = {len(coil) * 25:.0f} ampere-turns")
-```
-
-+++ {"user_expressions": []}
-
-## Assemble the system and the field plane
-
-The field is evaluated on a plane 30 mm above the pole faces, normal to the legs
-(the z-direction). A decimated copy of the sensor grid is added to the scene to
-visualize where the field will be evaluated.
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-system = magpy.Collection(core, coil, style_label="U-core electromagnet")
-
-x = np.linspace(-0.08, 0.08, 161)  # 1 mm grid step
-y = np.linspace(-0.04, 0.04, 81)
-X, Y = np.meshgrid(x, y, indexing="ij")
-pixel = np.stack([X, Y, np.full_like(X, 0.10)], axis=-1)  # 30 mm above poles
-
-plane = magpy.Sensor(pixel=pixel, style_label="field plane")
-plane_shown = magpy.Sensor(
-    pixel=pixel[::20, ::10],
-    style_label="field plane",
-    style_pixel_size=0.5,
-    style_opacity=0.5,
-)
-
-magpy.show(system, plane_shown)
-```
-
-+++ {"user_expressions": []}
-
-## Mesh and apply the material response
-
-`mesh_all` meshes the three cuboids into cells and passes the current polylines
-through untouched. `solve_cells` then solves for the self-consistent
-polarization of every cell, with the coil's field at each cell's centroid as the
-applied field.
-
-```{code-cell} ipython3
-system_meshed = mesh_all(system, target_elems=250)
-n_cells = sum(isinstance(s, magpy.magnet.Cuboid) for s in system_meshed.sources_all)
-print(f"{n_cells} magnet cells")
-magpy.show(system_meshed, plane_shown)
-```
-
-```{code-cell} ipython3
-def timed_demag(collection, **kwargs):
-    """solve_cells with wall-clock timing, quoted with the results below."""
+tetrahedra = []  # (cells, seconds, solved model)
+for target in (25, 100, 700):
+    model = magpy.Collection(mesh_TriangularMesh(core_mesh(999), target), coil(25))
     t0 = time.perf_counter()
-    out = solve_cells(collection, **kwargs)
-    return out, time.perf_counter() - t0
-
-
-system_demag, t_cub = timed_demag(system_meshed, solver="direct")
-print(f"{n_cells} cuboid cells solved in {t_cub:.1f} s")
+    solved_tets = solve_cells(model)
+    tetrahedra.append((len(model.children[0].sources_all), time.perf_counter() - t0, solved_tets))
 ```
-
-+++ {"user_expressions": []}
-
-The three cuboids are three grids of identical cells, so the iterative solver
-(`solver="iterative"`, which the default `solver="auto"` takes for this model)
-applies FFT products within each body and, for pairs of bodies large enough to
-pay for it, between them. Here the bodies are small and the dense solver is
-already quick; the structure the solver found and the agreement are what to look
-at, the gain grows with the cell count.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-from magpylib_material_response.demag_fft import analyze_collection
-
-cells = [s for s in system_meshed.sources_all if isinstance(s, magpy.magnet.Cuboid)]
-_, clusters = analyze_collection(cells)
-print("structure:", ", ".join(f"{c['kind']} of {len(c['indices'])} cells" for c in clusters))
-
-system_iter, t_iter = timed_demag(system_meshed, solver="iterative")
-pol = lambda coll: np.array(  # noqa: E731
-    [s.polarization for s in coll.sources_all if isinstance(s, magpy.magnet.Cuboid)]
-)
-print(
-    f"iterative: {t_iter:.1f} s, polarizations within "
-    f"{np.abs(pol(system_iter) - pol(system_demag)).max():.1e} T of the direct solve"
-)
-```
-
-+++ {"user_expressions": []}
-
-## Field on the plane above the poles
-
-The returned collection contains the magnetized cells _and_ the coil, so it
-gives the total field. The normal component $B_z$ maps the two pole footprints —
-positive above one leg, negative above the other:
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-B_full = plane.getB(system_demag)  # shape (161, 81, 3)
-
-fig = px.imshow(
-    B_full[..., 2].T * 1e3,  # transpose to (y, x) image orientation
-    x=x * 1e3,
-    y=y * 1e3,
-    origin="lower",
-    color_continuous_scale="RdBu_r",
-    color_continuous_midpoint=0,
-    labels={"x": "x (mm)", "y": "y (mm)", "color": "Bz (mT)"},
-    title="Bz 30 mm above the pole faces",
-)
-fig
-```
-
-+++ {"user_expressions": []}
-
-How much of this is the core? Compare with the bare coil along the line y = 0.
-Without the core the same 400 ampere-turns produce a field roughly fifty times
-weaker on this plane: the high-permeability core guides the flux to the poles:
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-B_coil = plane.getB(coil)  # bare coil, no core
-
-iy = np.argmin(np.abs(y))  # index of the y=0 line
-cut = pd.DataFrame(
-    {
-        "coil only": B_coil[:, iy, 2] * 1e3,
-        f"coil + core response ({t_cub:.1f} s solve)": B_full[:, iy, 2] * 1e3,
-    },
-    index=pd.Index(x * 1e3, name="x (mm)"),
-)
-fig = px.line(
-    cut,
-    labels={"value": "Bz (mT)", "variable": ""},
-    title="Bz along y=0, 30 mm above the pole faces",
-)
-
-amp = np.abs(B_full[..., 2]).max() / np.abs(B_coil[..., 2]).max()
-print(f"peak Bz amplification by the core: ×{amp:.0f}")
-fig
-```
-
-+++ {"user_expressions": []}
-
-## Cuboid cells vs tetrahedral cells
-
-The three-cuboid core is convenient, but nothing forces cuboid cells. The same
-solid can be built as a **single closed `TriangularMesh`** — the U profile in
-the x–z plane, extruded along y — and handed to `mesh_TriangularMesh`, which
-drives [TetGen](https://wias-berlin.de/software/tetgen/) (optional dependency,
-`pip install "magpylib-material-response[tetgen]"`, see the
-[current sensor](hall_current_sensor.md)):
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-u_profile = np.array(
-    [  # U outline in the x–z plane, counterclockwise
-        (-0.05, -0.01),
-        (0.05, -0.01),
-        (0.05, 0.07),
-        (0.03, 0.07),
-        (0.03, 0.01),
-        (-0.03, 0.01),
-        (-0.03, 0.07),
-        (-0.05, 0.07),
-    ]
-)
-cap = [(0, 1, 4), (1, 3, 4), (1, 2, 3), (0, 4, 5), (0, 5, 7), (5, 6, 7)]
-
-# extrude the profile along y into a closed prism: two caps + side walls
-n = len(u_profile)
-vertices = np.array([(ux, uy, uz) for uy in (-0.01, 0.01) for ux, uz in u_profile])
-faces = list(cap) + [tuple(i + n for i in tri) for tri in cap]
-for i in range(n):
-    j = (i + 1) % n
-    faces += [(i, j, j + n), (i, j + n, i + n)]
-
-u_iron = magpy.magnet.TriangularMesh(
-    vertices=vertices, faces=np.array(faces), reorient_faces=True
-)
-print(f"closed U prism: {len(u_iron.faces)} faces, volume {u_iron.volume * 1e6:.0f} cm³")
-```
-
-+++ {"user_expressions": []}
-
-TetGen's cells near the surface come out about half the volume of those in the
-bulk. Solve both discretizations at the same refinement levels, up to a
-`target_elems` of 1000. The tetrahedral target is halved: `target_elems` sets
-TetGen's _maximum_ cell volume, and its quality refinement typically lands near
-twice the requested count. Every solve is timed, and the wall times are printed
-with the results. The comparison field is evaluated along the y = 0 line only —
-that is all the plot below needs, and it keeps the field evaluation cheap:
-
-```{code-cell} ipython3
-line = magpy.Sensor(pixel=pixel[:, iy])  # the y=0 row of the field plane
-
-targets = [100, 250, 500, 750, 1000]
-runs = {"cuboids": [], "tetrahedra": []}  # (legend label, cells, B on the line)
-
-for target in targets:  # cuboid meshes
-    meshed = mesh_all(system, target_elems=target)
-    nc = sum(isinstance(s, magpy.magnet.Cuboid) for s in meshed.sources_all)
-    demag_cub, t = timed_demag(meshed)
-    runs["cuboids"].append((f"cuboids: {nc} cells, {t:.1f} s", nc, line.getB(demag_cub)))
-
-for target in targets:  # tetrahedral meshes
-    core_t = mesh_TriangularMesh(u_iron, target_elems=target // 2)
-    core_t.susceptibility = 999
-    demag_tet, t = timed_demag(magpy.Collection(core_t, coil.copy()))
-    nt = len(core_t.sources_all)
-    runs["tetrahedra"].append((f"tetrahedra: {nt} cells, {t:.1f} s", nt, line.getB(demag_tet)))
-```
-
-+++ {"user_expressions": []}
-
-After the loops, `demag_cub` and `demag_tet` hold the finest solve of each
-family. Side by side, the cell colors show the direction of the induced
-magnetization: along +x through the yoke, up one leg and down the other.
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-magpy.show(
-    {"objects": [demag_cub], "col": 1},
-    {"objects": [demag_tet], "col": 2},
-)
-```
-
-+++ {"user_expressions": []}
-
-In the comparison the hue distinguishes the cell type and darker means finer;
-the right panel follows the peak field of each family as its cells get finer.
-Hover a curve for its cell count and solve time:
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-ramp = np.linspace(0.3, 1, len(targets))
-shades = {
-    "cuboids": px.colors.sample_colorscale("Blues", ramp),
-    "tetrahedra": px.colors.sample_colorscale("Oranges", ramp),
+runs = {
+    "cuboids": [(n, t, error(v)) for n, t, v in zip(cuboids.cells, cuboids.seconds, cuboids.values, strict=True)],
+    "tetrahedra": [(n, t, error(magpy.getB(s, line))) for n, t, s in tetrahedra],
 }
-fig = make_subplots(
-    rows=1,
-    cols=2,
-    column_widths=[0.6, 0.4],
-    horizontal_spacing=0.14,
-    subplot_titles=("Bz along y = 0", "Peak |Bz|"),
-)
-for family, results in runs.items():
-    peaks = []
-    for (name, n, B), color in zip(results, shades[family], strict=True):
-        peaks.append(np.abs(B[:, 2]).max() * 1e3)
-        print(f"{name:>30}: peak |Bz| = {peaks[-1]:.2f} mT")
-        fig.add_trace(
-            go.Scatter(
-                x=x * 1e3,
-                y=B[:, 2] * 1e3,
-                name=name,
-                legendgroup=family,
-                showlegend=False,
-                line_color=color,
-            ),
-            row=1,
-            col=1,
-        )
-    fig.add_trace(
-        go.Scatter(
-            x=[n for _, n, _ in results],
-            y=peaks,
-            name=family,
-            legendgroup=family,
-            mode="lines+markers",
-            line_color=shades[family][-1],
-        ),
-        row=1,
-        col=2,
+fig = go.Figure()
+for family, rows in runs.items():
+    for n, t, e in rows:
+        print(f"{n:5,} {family:<10} {t:6.2f} s   {e:6.2%} off the reference")
+    fig.add_scatter(
+        x=[t for _, t, _ in rows], y=[100 * e for _, _, e in rows], name=family, mode="lines+markers",
+        line={"color": COLOURS[family], "width": 2}, text=[f"{n:,} cells" for n, _, _ in rows],
+        hovertemplate="%{text}<br>%{x:.2f} s: %{y:.2f} %<extra></extra>",
     )
-fig.update_xaxes(title_text="x (mm)", row=1, col=1)
-fig.update_yaxes(title_text="Bz (mT)", row=1, col=1)
-fig.update_xaxes(
-    title_text="cells", type="log", tickvals=[100, 300, 1000], row=1, col=2
+fig.add_scatter(
+    x=[solved.face_charge_info["seconds"]], y=[100 * error(B)], name="face charge", mode="markers",
+    marker={"color": COLOURS["face charge"], "size": 10}, hovertemplate="%{x:.2f} s: %{y:.2f} %<extra></extra>",
 )
-fig.update_yaxes(title_text="peak |Bz| (mT)", row=1, col=2)
-fig.update_layout(
-    title="Cuboid vs tetrahedral mesh",
-    height=450,
-    legend={"orientation": "h", "y": -0.2, "x": 0.5, "xanchor": "center"},
-)
+fig.update_xaxes(title_text="solve time (s)", type="log")
+fig.update_yaxes(title_text="error of Bz above the poles (%)", type="log")
+fig.update_layout(height=380, margin={"l": 60, "r": 20, "t": 20, "b": 50}, legend={"orientation": "h", "y": -0.25})
 fig
 ```
 
-+++ {"user_expressions": []}
+Cuboid cells converge slowly here: 37, 15 and 4.9 % off at 88, 704 and 5,632
+cells, the error falling 2.4 and then 3.1 times with each eightfold refinement.
+The study's estimate, 12 %, covers the true 4.9 %: without a reference, it is
+the error bar to quote. Tetrahedra are 2.8, 1.6 and 0.8 % off at 53, 229 and
+1,491 cells: 229 of them beat 5,632 cuboids, in under a fortieth of the time. On
+these three tetrahedral meshes `study_cells` gives no estimate, as their results
+don't yet change steadily. Face charge, at 0.08 %, beats both.
 
-Both discretizations head for the same field, at very different rates. The
-tetrahedral peak barely moves with refinement, while the cuboid family is still
-about 14 % low at 768 cells. The three finest cuboid curves look converged only
-because those meshes differ by 6 % in cell size. A longer study on this model
-shows the climb continuing: the cuboid peak reaches 1.98 mT at 2,232 cells, 2.03
-mT at 3,822 and 2.07 mT at 8,019, and extrapolating that series gives 2.16 mT.
-The tetrahedral peak creeps up from 2.12 mT at about 90 cells to 2.148 mT at
-4,016. The two agree to within 1 %.
+## How hard is the iron driven?
 
-Here the error of the cuboid grid shrinks only about as the cell size to the
-power 1.5: refine by a large factor, not a few percent, before trusting a
-plateau.
+The finest tetrahedral solve gives each cell's polarization. Grouped by where
+the cells sit:
 
-This is not special to the U-core. On a plain cube of the same iron (χ = 1000)
-in a uniform field, 128 tetrahedra put the induced moment within 1.5 % of its
-converged value, while cubes need 1,728 cells to get within 1.2 %. Nor does it
-come from the permeability: at χ = 10⁵ the 768 cuboid cells above still give
-1.95 mT against 2.30 mT for about 440 tetrahedra, so the gap comes from the
-discretization. For high-permeability parts, prefer a tetrahedral mesh, and
-judge convergence over a large range of cell counts.
+```{code-cell} ipython3
+cells = solved_tets.children[0].sources_all
+J = np.linalg.norm([c.polarization for c in cells], axis=1)
+x_c, z_c = np.array([c.centroid for c in cells]).T[[0, 2]]
+yoke = z_c < 0.01  # the yoke spans z from -10 to 10 mm
+for name, where in (
+    ("yoke, middle 20 mm", yoke & (np.abs(x_c) < 0.01)),
+    ("yoke, ends", yoke & (np.abs(x_c) > 0.03)),
+    ("legs", ~yoke),
+):
+    print(f"{name:<19} mean polarization {J[where].mean():.2f} T")
+magpy.show(solved_tets, backend="widget")
+```
 
-+++ {"user_expressions": []}
+The middle of the yoke, inside the coil, carries 0.28 T; the legs carry about a
+third of that, as flux leaves the iron across the gap between them. Iron
+saturates near 1.6 to 2 T, so at 400 ampere-turns the yoke is at under a fifth
+of that, and the linear susceptibility holds. The polarization grows with the
+current: [the same core at high current](saturation.md) runs it to 16 times the
+current, where the linear answer fails.
 
-Notes:
+## The answers
 
-- The material here is linear, with µr = 1000 at any field.
-  [Saturation](saturation.md) solves this U-core on a B–H curve.
+- **Field:** 2.15 mT peak 30 mm above the poles, 71 times what the coil gives
+  alone. Face charge finds it within 0.1 % of the finite-element reference, in
+  under a second.
+- **Mesh:** for cells, tetrahedra. 229 of them put the field above the poles
+  within 1.6 %; 5,632 cuboid cells are still 4.9 % off. With cuboids, refine
+  eightfold per step, and quote `study_cells`'s estimate.
+- **Iron:** 0.28 T in the middle of the yoke, under a fifth of saturation, so
+  the linear model holds at this current.
 
 This model on the <a href="../inside/map.html#ucore">solver map</a>: the path it
 takes through the solver, box by box.

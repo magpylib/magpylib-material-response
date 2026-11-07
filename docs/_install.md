@@ -37,3 +37,12 @@ pip install "git+https://github.com/magpylib/magpylib-material-response"
 
 The `fem` extra installs NGSolve (LGPL-2.1), which has no wheels for Linux on
 ARM or for musl.
+
+The pictures on these pages need two more packages, which solving does not:
+magpylib-studio draws the 3D views, `magpy.show(backend="widget")`, in a
+notebook, and plotly the charts.
+
+```bash
+uv add "magpylib-studio[widget]" plotly       # with uv
+pip install "magpylib-studio[widget]" plotly  # or with pip
+```

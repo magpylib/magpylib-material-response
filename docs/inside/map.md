@@ -5,7 +5,11 @@ html_theme.sidebar_secondary.remove: true
 # The solver map
 
 Each solver, box by box. Pick a model to light up its path through the map, and
-click a box for what happens inside it and the papers it rests on.
+click a box for what happens inside it and the papers it rests on. The pages
+behind it: [face charge](face_charge.md), [cells](cells.md),
+[finite elements](fem.md), [saturation](saturation.md) and
+[error estimates](error_estimates.md); and in the user guide,
+[choosing a solver](../guide/choosing.md).
 
 ```{raw} html
 <iframe id="solver-map" src="../_static/map/index.html" title="Map of the three solvers"

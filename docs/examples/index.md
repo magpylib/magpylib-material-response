@@ -1,10 +1,10 @@
 # Examples
 
-Worked models from engineering, each showing what the package does. They run
-when the documentation is built, or, where that takes minutes, plot results a
-script next to the page stored. Most compare against a reference: finite
-elements, or an exact solution. The pictures are drawn by magpylib-studio from
-each example's model (`docs/gallery_thumbnails.py`).
+Each example takes a design question from sensor or actuator engineering and
+answers it with a solved model. Most run when the docs are built; the slow ones
+plot results stored next to the page. Most check their answer against finite
+elements or an exact solution. The settings behind them are explained in the
+[user guide](../guide/index.md).
 
 `````{grid} 1 2 3 3
 :gutter: 2
@@ -26,7 +26,8 @@ each example's model (`docs/gallery_thumbnails.py`).
 
 **A holding magnet on a steel plate**
 
-The pull against the gap with `getFT`, and how fine a solve a force needs.
+How hard a disc magnet holds on steel, how fast the pull falls with a gap, and
+how fine a solve a force needs.
 
 ````
 
@@ -47,7 +48,8 @@ The pull against the gap with `getFT`, and how fine a solve a force needs.
 
 **A gear-tooth sensor**
 
-A Hall sensor swept past steel teeth, one solve per step, the factorization kept.
+How large a back-biased Hall sensor's signal is over steel teeth, how the air
+gap sets it, and how fast a sweep of solves runs.
 
 ````
 
@@ -68,7 +70,8 @@ A Hall sensor swept past steel teeth, one solve per step, the factorization kept
 
 **An angle sensor on a steel shaft**
 
-How much angle error the shaft makes of a stray field, and how a holder ring takes it away.
+How much angle error a steel shaft makes of a 5 mT stray field, how the air
+gap changes it, and whether a soft holder ring helps.
 
 ````
 
@@ -89,7 +92,8 @@ How much angle error the shaft makes of a stray field, and how a holder ring tak
 
 **A Hall current sensor**
 
-A slotted ferrite ring from CAD around a busbar: sensitivity, slot width, position error, where it saturates.
+A slotted ferrite ring from CAD around a busbar: mT per ampere, the slot's
+width, a busbar off-centre, and the current at which the ferrite saturates.
 
 ````
 
@@ -110,7 +114,9 @@ A slotted ferrite ring from CAD around a busbar: sensitivity, slot width, positi
 
 **Assembly tolerances, by Monte Carlo**
 
-10,000 samples of a magnet, a steel plate and a sensor, two minutes with the factorization kept.
+How far a Hall sensor's reading spreads with assembly tolerances, which one
+drives the spread, and what the steel plate changes: 10,000 samples in two
+minutes.
 
 ````
 
@@ -131,7 +137,8 @@ A slotted ferrite ring from CAD around a busbar: sensitivity, slot width, positi
 
 **A magnet in a steel tube**
 
-What a shield lets through: face charge with `refine=1` within 1 %, where cells are far off.
+How much field a steel tube around a magnet lets through, and which solve to
+trust there: face charge with `refine=1` is within 1 %, cells are far off.
 
 ````
 
@@ -141,18 +148,19 @@ What a shield lets through: face charge with `refine=1` within 1 %, where cells 
 :class-card: magpy-gallery-card
 
 ```{image} ../_static/gallery/ucore_electromagnet-light.jpg
-:alt: U-core electromagnet
+:alt: A U-core electromagnet
 :class: only-light
 ```
 
 ```{image} ../_static/gallery/ucore_electromagnet-dark.jpg
-:alt: U-core electromagnet
+:alt: A U-core electromagnet
 :class: only-dark
 ```
 
-**U-core electromagnet**
+**A U-core electromagnet**
 
-A coil built with the polyline helpers drives a soft core; cuboid cells against tetrahedra.
+A coil wound on a soft-iron U-core: the field above its poles, how much of it is
+the core, how fine a mesh it needs, and how hard the iron is driven.
 
 ````
 
@@ -162,18 +170,20 @@ A coil built with the polyline helpers drives a soft core; cuboid cells against 
 :class-card: magpy-gallery-card
 
 ```{image} ../_static/gallery/saturation-light.jpg
-:alt: Saturation
+:alt: A U-core electromagnet at high current
 :class: only-light
 ```
 
 ```{image} ../_static/gallery/saturation-dark.jpg
-:alt: Saturation
+:alt: A U-core electromagnet at high current
 :class: only-dark
 ```
 
-**Saturation**
+**A U-core electromagnet at high current**
 
-A B–H curve in place of a constant susceptibility: a sphere against its exact answer, and a cube.
+The U-core on a B–H curve from 25 to 400 A per winding: whether the solver
+follows the curve, where the core saturates, what that costs in field and in
+solve time.
 
 ````
 
@@ -183,18 +193,19 @@ A B–H curve in place of a constant susceptibility: a sphere against its exact 
 :class-card: magpy-gallery-card
 
 ```{image} ../_static/gallery/mesh_convergence-light.jpg
-:alt: Mesh convergence
+:alt: Error bars for cells: three parts
 :class: only-light
 ```
 
 ```{image} ../_static/gallery/mesh_convergence-dark.jpg
-:alt: Mesh convergence
+:alt: Error bars for cells: three parts
 :class: only-dark
 ```
 
-**Mesh convergence**
+**Error bars for cells: three parts**
 
-`study_cells` error bars on a flux concentrator, a Halbach array on back iron and a steel shield.
+How fine a mesh a flux concentrator, a Halbach array and a steel shield each
+need, and whether the error bar covers the true error.
 
 ````
 
@@ -204,18 +215,19 @@ A B–H curve in place of a constant susceptibility: a sphere against its exact 
 :class-card: magpy-gallery-card
 
 ```{image} ../_static/gallery/fem_check-light.jpg
-:alt: Checking with finite elements
+:alt: Checking a result with finite elements
 :class: only-light
 ```
 
 ```{image} ../_static/gallery/fem_check-dark.jpg
-:alt: Checking with finite elements
+:alt: Checking a result with finite elements
 :class: only-dark
 ```
 
-**Checking with finite elements**
+**Checking a result with finite elements**
 
-`study_fem` and `compare` against `study_cells`, sensor by sensor: whose error bar is too short.
+An independent finite-element solve of the same model, to check another
+solver's answer and its error bar, sensor by sensor.
 
 ````
 

@@ -30,11 +30,13 @@ html_theme.sidebar_secondary.remove: true
 - **New here:** [Getting started](getting_started.md) solves one model with each
   of the three solvers, in a few minutes.
 - **Which solver for my model:** [Choosing a solver](guide/choosing.md).
+- **Already solving:** [Building a model](guide/model.md),
+  [Many solves](guide/loops.md) and the [API](api.md).
 - **How it works, in detail:** [Inside the solvers](inside/index.md), with an
   interactive map of each solver and the papers behind every step.
 - **Worked models against finite elements:** the [examples](examples/index.md).
-- **With a coding agent:** [Getting started](getting_started.md) has a prompt to
-  paste; every page also exists as Markdown, indexed in
+- **With a coding agent:** [Getting started](getting_started.md) ends with a
+  prompt to paste; every page also exists as Markdown, indexed in
   [llms.txt](https://magpylib-material-response.readthedocs.io/en/latest/llms.txt).
 
 ```{toctree}

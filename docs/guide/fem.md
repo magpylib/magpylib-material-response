@@ -4,11 +4,13 @@
 [NGSolve](https://ngsolve.org/). It is independent of the other two solvers: the
 parts keep their own shapes, the air around them is meshed too, and the field is
 a polynomial on each element. Use it to check a result of `solve_face_charge` or
-`solve_cells`, or where you need an error bar you can trust.
+`solve_cells`, or where you need an error bar you can trust. This page answers
+what it takes, how to set it, what it returns, how far to trust it and what it
+costs.
 
-```{include} ../_install.md
-
-```
+It needs the `fem` extra, `uv add "magpylib-material-response[fem]"`, or with
+pip as [Getting started](../getting_started.md) shows. NGSolve (LGPL-2.1) has no
+wheels for Linux on ARM or for musl.
 
 ```python
 import magpylib as magpy
@@ -28,8 +30,9 @@ print(solved.ndof, solved.seconds, solved.moment)
   own axes, or a `BHCurve`.
 - **Drives:** magnets without susceptibility, a `UniformField`, and currents.
   Currents are never meshed: their field is Magpylib's.
-- **Refused:** a current through a part or through the hole of a ring magnet, an
-  open current path, and parts that overlap.
+
+What it refuses, overlapping parts and some currents among them, is listed in
+[Building a model](model.md#what-is-refused).
 
 ## Settings
 
@@ -57,24 +60,32 @@ magnets' own and the drives', and the solve's `order`, `ndof` (unknowns),
 - **It cannot be saved.** A pickled solution crashes on its first read, so
   pickling is refused: save the values you read, not the solution.
 
+[Reading a solved model](reading.md) reads all three solvers' results side by
+side.
+
 ## Its error bar: `study_fem`
 
-`study_fem(model, quantity, orders=(2, 3, 4))` solves at rising orders on one
-mesh, and takes the last change, times 1.25, as the error of the highest order,
-per entry and in all: with three orders whose changes shrink, otherwise the
-error is NaN, with a warning. `quantity` is a set of positions or sensors, or a
-function of the solution such as `lambda s: s.moment`. On a cube of infinite
-susceptibility it finds the known polarizability to 2e-5 at order 5; it reaches
-0.1 % on every validation case in 24 s at most.
-[How accurate is a result?](accuracy.md) shows how to set it beside the other
-solvers.
+`study_fem(model, quantity)` solves at orders 2, 3 and 4 by default, on one
+mesh, and takes 1.25 times the last change as the error of the highest order. On
+a cube of infinite susceptibility it finds the known magnetic moment to 2e-5 at
+order 5. On 12 validation cases it reaches 0.1 % in 2 to 21 s; on the other
+three their references are not that good ([Face charge](face_charge.md) has the
+table). [How accurate is a result?](accuracy.md) says when the estimate holds,
+which orders to take with a `BHCurve`, and how to set it beside the other
+solvers; [Checking a result with finite elements](../examples/fem_check.md) runs
+it.
 
 ## What it costs
 
 Memory is the limit, not time. The
-[magnet in a steel tube](../examples/shield_tube.md) takes 1.9 million unknowns
-and 8.4 GB at order 4, in 50 s. On the validation cases it reaches 1 % in 0.5 to
-11 s, 3 to 104 times slower than face charge ([Choosing a solver](choosing.md)).
+[magnet in a steel tube](../examples/shield_tube.md) takes 2.0 million unknowns
+and 8.4 GB at order 4, in 50 s. On the validation cases finite elements reach
+1 % in 0.5 to 11 s, 3 to over 100 times later than face charge
+([Choosing a solver](choosing.md)).
 
+## In short
+
+Use `solve_fem` to check, not to sweep: pass `observers`, run `study_fem` for an
+error bar, and keep the values, not the solution.
 [Inside finite elements](../inside/fem.md) shows the formulation: the
 potentials, the exact open boundary and the treatment of currents.

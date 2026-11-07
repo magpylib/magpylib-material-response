@@ -12,29 +12,30 @@ kernelspec:
   name: python3
 ---
 
-+++ {"user_expressions": []}
+# Error bars for cells: three parts
 
-# Mesh convergence
+`solve_cells` gives one answer per mesh and no error bar, and a finer mesh costs
+time: eight times the cells take 7 to 13 times as long on the parts below. Two
+questions follow for every part:
 
-The method of moments gives one answer per mesh and no error bar. `study_cells`
-solves a model on meshes four to eight times apart and estimates the error of
-the finest from how the results change between them. The estimate is the grid
-convergence index {cite}`roache1994`, set out as a procedure by
-{cite:t}`celik2008`: Richardson extrapolation {cite}`richardson1911` over the
-three finest meshes, the error relative to the finest value, times a factor of
-safety of 1.25. It gives one error for the whole quantity and one per sensor,
-and none while the results do not yet change steadily.
+- How fine a mesh does it need for the accuracy you want?
+- Can you trust `study_cells` to tell you?
 
-Three parts from sensor and actuator design follow. The levels passed to
-`study_cells`, such as `(4, 8, 16)`, are cells across the thinnest part that
-responds: its default mesher, `mesh_uniform`, cuts every such part into cells of
-that one size, which the solver multiplies by FFT. Finite elements on the same
-models, run separately, show how good the estimate is.
+`study_cells` solves a model on three meshes and estimates the error of the
+finest from how the results change between them;
+[How accurate is a result?](../guide/accuracy.md) sets out the method. Its last
+argument gives the cells across the thinnest part that responds, one value per
+mesh: `(4, 8, 16)` cuts a 2 mm bar into cells of 0.5, 0.25 and 0.125 mm, each
+mesh with eight times the cells of the one before.
 
-The models and the studies are in `mesh_convergence_studies.py`, next to this
-page. The studies take about 40 s on a laptop, so they run once and are stored;
-the page rebuilds each with `MeshStudy.from_values`, which gives the estimate
-`study_cells` gives.
+Three parts from sensor and actuator design follow. Each has a finite-element
+reference, good to 0.003 % or better, which gives the true error of every mesh.
+The references are the stored ones of the repository's validation suite, and
+[Checking a result with finite elements](fem_check.md) shows how to make such a
+check. The three studies take about 40 s, so `mesh_convergence_studies.py`, next
+to this page, ran them once and stored their results with the references in
+`mesh_convergence.json`. The page rebuilds each study with
+`MeshStudy.from_values`, which gives the estimate `study_cells` gives.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -45,166 +46,194 @@ from pathlib import Path
 import magpylib as magpy
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-from mesh_convergence_studies import B0, flux_concentrator, halbach_array, steel_shield
+from mesh_convergence_studies import flux_concentrator, halbach_array, steel_shield
 
+from magpylib_material_response import solve_face_charge
 from magpylib_material_response.convergence import MeshStudy
 
 MM = 1e-3  # lengths in metres, written in millimetres
 STORED = json.loads(Path("mesh_convergence.json").read_text())
 
 
+def sizes(value):
+    """The size of each entry: |B| per sensor for fields, the value itself
+    for gains."""
+    value = np.asarray(value)
+    return np.linalg.norm(value, axis=-1) if value.ndim == 2 else np.abs(value)
+
+
 def stored(name):
-    """The study `mesh_convergence_studies.py` ran and stored."""
+    """The study `mesh_convergence_studies.py` ran and stored, and its
+    finite-element reference."""
     run = STORED[name]
-    return MeshStudy.from_values(run["cells"], [np.asarray(v) for v in run["values"]], run["seconds"])
+    study = MeshStudy.from_values(run["cells"], [np.asarray(v) for v in run["values"]], run["seconds"])
+    return study, np.asarray(run["reference"])
 
 
-def report(study, labels, unit, scale=1.0):
-    print("  cells  " + "  ".join(f"{label:>12}" for label in labels) + "   solve")
-    for n, value, t in zip(study.cells, study.values, study.seconds, strict=True):
-        cols = np.linalg.norm(value, axis=-1) if np.ndim(value) == 2 else value
-        print(f"{n:7d}  " + "  ".join(f"{v * scale:9.3f} {unit}" for v in cols) + f" {t:6.1f} s")
-    if study.order is None:
-        print(f"not steady yet: no estimate; last change {study.last_change:.1%}")
-    else:
-        print(f"order {study.order:.2f}; error of the finest mesh {study.error:.2%}, per entry:")
-        print("  " + ", ".join(f"{label} {e:.2%}" for label, e in zip(labels, study.errors, strict=True)))
+def off(value, reference):
+    """Relative error of `value` against the reference, per sensor."""
+    return sizes(np.asarray(value) - reference) / sizes(reference)
+
+
+def report(name, labels, unit="", scale=1.0):
+    """Each mesh's values and worst error, then the finest mesh's error per
+    sensor against what study_cells estimated."""
+    study, reference = stored(name)
+    print(f"{'cells':>7} {'solve':>7}  " + "".join(f"{label:>10}" for label in labels) + f"{'worst error':>13}")
+    for n, t, value in zip(study.cells, study.seconds, study.values, strict=True):
+        cols = "".join(f"{v * scale:10.3f}" for v in sizes(value))
+        print(f"{n:7,d} {t:6.1f}s  {cols}  {off(value, reference).max():11.2%}")
+    print(f"{'finite elements':>17}" + "".join(f"{v * scale:10.3f}" for v in sizes(reference)) + f"  {unit}")
+    print(f"order {study.order:.2f}; the finest mesh's error per sensor:")
+    print(f"{'true':>17}" + "".join(f"{e:10.2%}" for e in off(study.values[-1], reference)))
+    print(f"{'estimated':>17}" + "".join(f"{e:10.2%}" for e in study.errors))
 ```
-
-+++ {"user_expressions": []}
 
 ## A flux concentrator
 
-A bar of soft nickel–iron (susceptibility 4,000), 16 × 2 × 2 mm, gathers the
-Earth's field into a sensor beside its tip. What matters is the gain: the field
-at the sensor over the 50 µT around it.
+A bar of soft nickel–iron (χ = 4000), 16 × 2 × 2 mm, gathers the Earth's field
+into a sensor beside its tip. What matters is the gain: the field at the sensor
+over the 50 µT around it. How fine must the bar's cells be for the gain, and
+does `study_cells` say so?
 
 ```{literalinclude} mesh_convergence_studies.py
 :pyobject: flux_concentrator
 ```
 
-```{code-cell} ipython3
-concentrator = stored("concentrator")  # study_cells(*flux_concentrator(), (4, 8, 16))
-report(concentrator, ["0.5 mm", "1 mm", "2 mm"], "", 1)
+```python
+study = study_cells(*flux_concentrator(), (4, 8, 16))
 ```
 
-+++ {"user_expressions": []}
+```{code-cell} ipython3
+:tags: [hide-input]
 
-The gain 0.5 mm from the tip falls from 4.34 to 4.27 as the cells shrink, while
-the gain 2 mm out rises. Finite elements put the gains at 4.259, 3.347 and
-2.168, to within 0.001 %. Against these, the finest mesh here is 0.29 %, 0.06 %
-and 0.11 % off; `study_cells` said 0.44 %, 0.13 % and 0.17 %.
+report("concentrator", ["0.5 mm", "1 mm", "2 mm"], "(gains at 0.5, 1 and 2 mm from the tip)")
+```
+
+The gain 0.5 mm from the tip is the hardest to get: 2.0 % off with 4 cells
+across the bar, 0.81 % with 8 and 0.29 % with 16, which takes 7.5 s. The order,
+1.29, is the rate at which the error falls: as the cell size to that power, so
+halving the cells' size cuts it by about 2.4. At every sensor the estimate is
+above the true error: 0.44 % against 0.29 % at the tip.
 
 ## A Halbach array on back iron
 
 Five 6 mm NdFeB cubes, their polarizations turning by 90° from one to the next
-(a Halbach array {cite}`halbach1980`), sit on a steel plate. Such arrays drive
-linear motors and magnetic encoders, and the field profile above them is what
-the design is judged by.
+(a Halbach array {cite}`halbach1980`), sit on a 3 mm steel plate. Such arrays
+drive linear motors and magnetic encoders, and the field profile 2 mm above them
+is what the design is judged by. How fine must the plate's cells be for that
+profile?
 
 ```{literalinclude} mesh_convergence_studies.py
 :pyobject: halbach_array
 ```
 
+```python
+study = study_cells(*halbach_array(), (2, 4, 8))
+```
+
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 array, profile = halbach_array()
-x = profile[:, 0] / MM
-halbach = stored("halbach")  # study_cells(array, profile, (2, 4, 8))
-print(f"cells {halbach.cells.tolist()}, order {halbach.order:.2f}, solve of the finest {halbach.seconds[-1]:.1f} s")
-print(f"error of the whole profile {halbach.error:.3%}, of the worst point {np.nanmax(halbach.errors):.3%}")
 magpy.show(array, backend="widget")
 ```
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-finest = halbach.values[-1] * 1e3
-band = halbach.errors * np.linalg.norm(finest, axis=-1)
-fig = go.Figure()
+halbach, reference = stored("halbach")
+true = off(halbach.values[-1], reference)
+for n, t, value in zip(halbach.cells, halbach.seconds, halbach.values, strict=True):
+    print(f"{n:6,d} cells in {t:4.1f} s: worst error {off(value, reference).max():.2%}")
+print(f"order {halbach.order:.2f}; the finest mesh's error over the whole profile: "
+      f"{np.linalg.norm(halbach.values[-1] - reference) / np.linalg.norm(reference):.3%} true, "
+      f"{halbach.error:.3%} estimated")
+print(f"at the worst point: {true.max():.3%} true, {halbach.errors[np.argmax(true)]:.3%} estimated; "
+      f"estimate above the true error at {(true <= halbach.errors).sum()} of {true.size} points")
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+x = profile[:, 0] / MM
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=(0.55, 0.45))
 for k, name in ((0, "Bx"), (2, "Bz")):
-    fig.add_trace(go.Scatter(x=x, y=finest[:, k], name=name, mode="lines+markers",
-                             error_y={"type": "data", "array": band, "visible": True}))
-fig.update_layout(xaxis_title="x (mm)", yaxis_title="B 2 mm above the array (mT)", height=360,
-                  margin={"l": 60, "r": 20, "t": 20, "b": 40})
+    fig.add_trace(go.Scatter(x=x, y=halbach.values[-1][:, k] * 1e3, name=name, mode="lines+markers"), 1, 1)
+fig.add_trace(go.Scatter(x=x, y=100 * halbach.errors, name="estimated error", mode="lines+markers",
+                         line={"dash": "dash"}), 2, 1)
+fig.add_trace(go.Scatter(x=x, y=100 * true, name="true error", mode="lines+markers"), 2, 1)
+fig.update_yaxes(title_text="B 2 mm above (mT)", row=1, col=1)
+fig.update_yaxes(title_text="error of the finest mesh (%)", row=2, col=1)
+fig.update_xaxes(title_text="x (mm)", row=2, col=1)
+fig.update_layout(height=520, margin={"l": 60, "r": 20, "t": 20, "b": 40}, legend={"orientation": "h", "y": -0.15})
 fig
 ```
 
-+++ {"user_expressions": []}
-
-The bars are the estimated error at each point, too small to see on the scale of
-the field: 0.03 % for the whole profile, 0.1 % at the worst point, at the end of
-the array. Against finite elements, good to 0.001 %, the finest mesh here is
-0.02 % off overall and 0.08 % at that point, under the estimate at all 21
-points.
+Coarse cells serve here: 2 cells across the plate already put the profile within
+0.59 % everywhere, 4 within 0.23 %, and 8, in 4.9 s, within 0.08 %. The largest
+errors sit at the ends of the array. The estimate is above the true error at all
+21 points: 0.028 % against 0.022 % over the whole profile.
 
 ## A steel sheet shielding a sensor
 
-A 1 mm steel sheet (susceptibility 1,000), 24 × 24 mm, sits 3 mm above a 6 mm
-magnet and shields three sensors 2 mm behind it. The field there is what is left
-after the shield, so the coarse meshes overestimate it: the error has to be
-measured against the finest value, not against the larger coarse ones.
+A 1 mm steel sheet (χ = 1000), 24 × 24 mm, sits 3 mm above a 6 mm magnet and
+shields three sensors 2 mm behind it. The field there is what the shield lets
+through, so it is small, and the coarse meshes overestimate it. How fine must
+the sheet's cells be for that residual field?
 
 ```{literalinclude} mesh_convergence_studies.py
 :pyobject: steel_shield
 ```
 
-```{code-cell} ipython3
-shield = stored("shield")  # study_cells(*steel_shield(), (1, 2, 4))
-report(shield, ["axis", "6 mm out", "12 mm out"], "mT", 1e3)
-```
-
-+++ {"user_expressions": []}
-
-On the axis the residual field falls from 12.4 mT on the coarsest mesh to 6.1
-mT. Finite elements put the three sensors at 5.53, 5.85 and 8.80 mT, to within
-0.002 %. Against these, the finest mesh here is 9.9 %, 3.1 % and 0.30 % off, and
-`study_cells` said 13.6 %, 4.7 % and 0.23 %. The last falls 0.07 % short: the
-error is an estimate, not a bound.
-
-<details>
-<summary>The reference values: finite elements at orders 3 to 5, with the
-<code>fem</code> extra (under 3 minutes, not run here)</summary>
-
-The same models are cases of the repository's validation suite
-(`validation/cases.py`), whose stored references these are.
-
 ```python
-from magpylib_material_response import compare
-from magpylib_material_response import study_fem
-
-bar_model, _ = flux_concentrator()
-sensors = np.array([(8.5, 0, 0), (9, 0, 0), (10, 0, 0)]) * MM
-fem = [
-    study_fem(bar_model, sensors, orders=(3, 4, 5)),
-    study_fem(*halbach_array(), orders=(3, 4, 5)),
-    study_fem(*steel_shield(), orders=(3, 4, 5)),
-]
-print(f"gains {fem[0].estimate[:, 0] / B0}, within {fem[0].errors}")
-for study, reference in zip((halbach, shield), fem[1:], strict=True):
-    comparison = compare(study, reference)
-    off = comparison.difference / np.linalg.norm(comparison.b, axis=-1)
-    print(f"finest mesh here off by {off}, estimated {study.errors}")
+study = study_cells(*steel_shield(), (1, 2, 4))
 ```
 
-</details>
+```{code-cell} ipython3
+:tags: [hide-input]
 
-## Notes
+report("shield", ["axis", "6 mm out", "12 mm out"], "mT, |B| behind the sheet", 1e3)
+```
 
-- **Choose meshes 4 to 8 times apart.** Meshes closer than that change little
-  without being converged. `study_cells` warns when the cell count grows by less
-  than 2.2 times, cells 1.3 times smaller, the least {cite:t}`celik2008`
-  recommend. The finest solve takes most of the time.
-- **No estimate** means the three finest results do not change steadily yet: the
-  coarsest is too coarse for the error to follow a power law. Refine once more.
-- **What it measures** is the error of the mesh. A faceted surface stays
-  faceted, and a linear susceptibility does not saturate: neither shows here.
-- **Tetrahedra** follow the surface they are given: on a detailed one, such as a
-  64-sided cylinder, TetGen made several thousand cells whatever the target. The
-  warning above then says so.
-- **One physical quantity per study:** the entries of a function's result share
-  one norm, so a force and a field in one array would be weighed against each
-  other.
+These meshes are as fine as a few seconds allow, and not fine enough. On the
+axis the residual field falls from 12.4 mT on the coarsest mesh to 6.1 mT on the
+finest, which is still 9.9 % above finite elements after 11.5 s. The estimates,
+13.6 % and 4.7 %, cover the two inner sensors; at the outer one, 0.23 % falls
+short of the true 0.30 %. The error is an estimate, not a bound.
 
-This model on the <a href="../inside/map.html#halbach">solver map</a>: the path
-it takes through the solver, box by box.
+Face charge needs no cells through the sheet's thickness: it puts panels on its
+faces ([Face charge](../guide/face_charge.md) gives the settings for thin
+sheets).
+
+```{code-cell} ipython3
+import time
+
+model, behind = steel_shield()
+start = time.perf_counter()
+solved = solve_face_charge(model, level=1)
+seconds = time.perf_counter() - start
+_, reference = stored("shield")
+errors = off(magpy.getB(solved, behind), reference)
+print(f"face charge, level 1: {solved.face_charge_info['unknowns']:,} unknowns in {seconds:.1f} s, "
+      f"errors {', '.join(f'{e:.2%}' for e in errors)}")
+```
+
+At level 1 face charge is within 0.24 % at all three sensors, in under a second.
+
+## The answers
+
+- **How fine:** for the concentrator's gain, 16 cells across the bar give 0.29 %
+  in 7.5 s. For the Halbach profile, 4 cells across the plate give 0.23 % and 8
+  give 0.08 %. Behind the steel sheet, 4 cells across leave 9.9 % after 11.5 s;
+  face charge gets 0.24 % in under a second.
+- **Trust in `study_cells`:** its estimate was above the true error at 26 of the
+  27 sensors. The one miss, 0.23 % against 0.30 %, is behind the sheet, where
+  the error is smallest. It is an estimate, not a bound:
+  [Checking a result with finite elements](fem_check.md) shows how to check it.
+
+These studies on the solver map: the <a href="../inside/map.html#study">flux
+concentrator</a>, the <a href="../inside/map.html#halbach">Halbach array</a> and
+the <a href="../inside/map.html#sheet">steel sheet</a>, each path box by box.

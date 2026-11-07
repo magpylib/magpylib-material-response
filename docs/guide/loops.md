@@ -1,23 +1,30 @@
-# Many solves
+# Many solves: sweeps, moving parts, Monte Carlo
 
 A tolerance study, a magnet moving past a sensor, a sweep of a coil's current:
-each step is a solve. This page is about doing many of them fast.
+each step is a solve. Why can't one solve serve every step, and how do you make
+many solves fast? This page answers in order: why each step needs its own solve,
+how `reuse=` keeps the factorization, how `field_matrix` reads a field map in
+one product, how to solve a solved model again, and what cells and finite
+elements keep between calls.
 
 ## A solved model is a snapshot
 
-A solve is not a source you can move things around in: a magnet moved after the
-solve leaves the part's charge as it was. B at the sensor stays right, and its
-sensitivity to the magnet is wrong. For a plate under a magnet, the field
-changes by 218 mT per mm of magnet shift, as finite elements agree, and by 146
-mT if the magnet moves after one solve, as if the plate were not there. So a
-tolerance study needs a solve per sample.
+Moving a magnet after the solve leaves the parts' response where it was. For a
+plate under a magnet, B at the sensor changes by 218 mT per mm of magnet shift,
+in face charge and in finite elements alike. Moving the magnet in the solved
+model gives 146 mT per mm, as if the plate were not there. So a tolerance study
+needs a solve per sample.
+
+A model whose objects move along a Magpylib path is refused
+([Building a model](model.md#what-is-refused)): loop over the steps instead,
+building the model at each.
 
 ## Keep the factorization: `reuse=`
 
 The matrix of a face-charge solve depends only on the solved parts. A loop that
 changes only what drives them, such as a magnet's pose, a coil's current or a
 `UniformField`, or that moves all solved parts as one, can keep its
-factorization:
+factorization. Start with `reuse=True`, so that the first solve keeps it:
 
 ```python
 solved = True
@@ -27,18 +34,23 @@ for pose in poses:
 ```
 
 Each call compares its meshed parts with the previous result's. If they make the
-same matrix it takes only a new load and a back-substitution, as
-`face_charge_info["reused"]` tells; if not, it solves afresh and keeps that
-factorization instead. So a poor match costs time, never a wrong field. Fields
-agree with a fresh solve to 1e-13 of the largest, 2e-11 at a weak observer.
+same matrix, it takes only a new load and a back-substitution, and
+`face_charge_info["reused"]` is `True`. If not, it solves afresh and keeps that
+factorization instead. A poor match costs time, never a wrong field: the fields
+match a fresh solve to rounding error.
+
+[A gear-tooth sensor](../examples/gear_tooth_sensor.md),
+[An angle sensor on a steel shaft](../examples/angle_sensor.md) and
+[Assembly tolerances, by Monte Carlo](../examples/tolerance_monte_carlo.md)
+solve in such loops.
 
 ### What keeps the matrix
 
 The matrix depends on the solved parts' panels, their susceptibilities and their
 poses relative to each other. Everything else enters only the load. A cuboid
-magnet close to a part regrades the part's panels toward its footprint: close
-means within 20 % of the largest half-side of the smaller of the two, 0.5 mm for
-a 5 mm magnet. Measured on a 20 × 20 × 2 mm plate with χ 1000 at level 2:
+magnet close to a part regrades the part's panels toward its footprint. Close
+means within a tenth of the smaller one's largest side: 0.5 mm for a 5 mm
+magnet. Measured on a 20 × 20 × 2 mm plate with χ = 1000 at level 2:
 
 | What changes between solves                                                      | Matrix kept |
 | -------------------------------------------------------------------------------- | ----------- |
@@ -53,15 +65,22 @@ a 5 mm magnet. Measured on a 20 × 20 × 2 mm plate with χ 1000 at level 2:
 | Solved parts moving against each other, or a magnet with a susceptibility moving | no          |
 | A solved part's size                                                             | no          |
 
-For the plate under a magnet, a call takes 72 ms at level 3 and then 18 ms, and
-1.15 s at 9,558 unknowns and then 0.12 s. The call that factors takes up to
-twice as long as a plain solve from 2,000 unknowns on, 1.9 s at 9,558, which the
-first match pays back.
+### What it saves
 
-The factorization takes 8 n² bytes for n unknowns, on the result: it goes when
-the result goes. Keep the last result only, as the loop above does. A loop in
-which every call changes the matrix gains nothing from `reuse`: the rows marked
-"no" above.
+For a plate under a magnet, the time per call:
+
+| Unknowns | Plain solve | First call with `reuse` | Later calls |
+| -------: | ----------: | ----------------------: | ----------: |
+|    1,518 |       72 ms |                   75 ms |       18 ms |
+|    9,558 |      1.15 s |                   1.9 s |      0.12 s |
+
+The first call keeps the factorization, which from about 2,000 unknowns takes up
+to twice as long as a plain solve; the first match pays that back. A loop in
+which every call changes the matrix, the rows marked "no" above, gains nothing
+from `reuse` and pays that extra on every call.
+
+The factorization takes 8 n² bytes for n unknowns and lives on the result: it
+goes when the result goes. Keep the last result only, as the loop above does.
 
 ## A field map in a loop: `field_matrix`
 
@@ -95,11 +114,12 @@ took 43 ms to build: the build is paid back by the second field. The two agree
 to 3e-15 of the largest field.
 
 The matrix holds `3 M n` numbers for M observers and n unknowns, three per
-panel: 62 MB for those 2,601 points and 996 unknowns, or 31 MB with
-`dtype=np.float32`, which stays within 1e-6 of the largest field around the
-sheets. A sheet whose mesh or pose differs from the matrix's is refused, so a
-magnet close enough to grade a part's panels, or a part that moves, needs a new
-matrix.
+panel: 62 MB for those 2,601 points and 996 unknowns. With `dtype=np.float32` it
+takes 31 MB and stays within 1e-6 of the largest field around the sheets, but
+far away, at 2,000 times a plate's size, it is up to 4e-3 off: keep float64 for
+observers far away. A sheet whose mesh or pose differs from the matrix's is
+refused, so a magnet close enough to grade a part's panels, or a part that
+moves, needs a new matrix.
 
 ## Solve a solved model again
 
@@ -120,32 +140,24 @@ level = solved.face_charge_info["level"]
 again = solve_face_charge(magpy.Collection(*parts, *drives), level=level)
 ```
 
-The parts are copies, so `solved` stays as it was. Moving a sheet of `solved`
-instead moves its field too, without solving, and its part with it. Each `copy`
-of a drive adds a suffix to its label, as magpylib's does.
+The parts are copies, so `solved` stays as it was. Pass `reuse=solved` as well,
+if the first solve had `reuse=True`, to keep its factorization when only the
+drives moved. Leave the sheets out: one kept beside its own part counts its
+response twice, and warns.
 
-Pass `reuse=solved` as well, if the first solve had `reuse=True`, to keep its
-factorization when only the drives moved. Leave the sheets out: one kept beside
-its own part counts its response twice, and warns.
-
-`to_json` keeps it, so a triangle-mesh part holds its mesh twice in the file. A
-result solved with `refine` cannot be reproduced exactly from its parts, as the
-panels it split are not kept. A sheet built without `part=`, with its mesh or
-charge changed, or kept as a fixed source of a later solve has no part, nor has
-a result solved before version 0.9.1: solve its original model instead. Inside a
-studio `@scene` function, build the parts with their class: a part read from
-`part` is not recorded, and the scene refuses it.
-
-## Paths
-
-A model whose objects move along a Magpylib path is refused by every solver: one
-solve is one configuration. Loop over the steps as above, with
-`magpy.Collection` built at each step. What a solve along a whole path would
-take, step by step and for each kind of change, is recorded in
-[#184](https://github.com/magpylib/magpylib-material-response/issues/184).
+`to_json` keeps each sheet's part, so a result loaded from a file
+([Saving and loading](saving.md)) can be solved again too. A sheet without a
+part, such as one built by hand, cannot, and a result solved with `refine` comes
+back without its split panels: solve the original model instead.
 
 ## Cells and finite elements in a loop
 
 `solve_cells` and `solve_fem` keep nothing between calls: each solves afresh.
 For `solve_cells` on a grid of identical cuboids that is fast anyway, as the
 iterative solver never builds the matrix ([Inside cells](../inside/cells.md)).
+
+## In short
+
+Solve once per configuration. When only the drives change, pass `reuse=` and
+keep the last result. To read the same points after every solve, build a
+`field_matrix` once.

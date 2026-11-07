@@ -56,12 +56,12 @@ force, torque = magpy.getFT(solved.children[1], magnet, meshing=2000)
 print(f"pull at contact: {-force[2]:.1f} N")
 ```
 
-`getFT` takes the plate's solved sheet as the source and the magnet as the
-target, cut into about 2,000 cells. The warning, printed above, is face charge's
-own: a disc touching a block cannot have the block's panels follow its round
-footprint, so the field there converges slowly. `refine=2` adds two rounds of
-finer panels where the charge varies most. How much that matters is the next
-section.
+`getFT` ([Reading a solved model](../guide/reading.md#forces-and-torques)) takes
+the plate's solved sheet as the source and the magnet as the target, cut into
+about 2,000 cells. The warning, printed above, is face charge's own: a disc
+touching a block cannot have the block's panels follow its round footprint, so
+the field there converges slowly. `refine=2` adds two rounds of finer panels
+where the charge varies most. How much that matters is the next section.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -156,8 +156,8 @@ for row in stored["thickness"]:
 The linear pull barely moves as the plate thins, but at 1 mm the flux density
 passes what steel can carry: there the real pull is lower, and the linear one
 only an upper bound. Give the plate a `BHCurve` and solve it with `solve_cells`,
-which follows saturation ([Saturation](saturation.md)). Face charge refuses a
-part on a curve.
+which follows saturation ([Saturation](../guide/saturation.md)). Face charge
+refuses a part on a curve.
 
 ## The answers
 

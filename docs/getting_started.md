@@ -20,29 +20,13 @@ itself and pulls the flux in. A permanent magnet loses a little of its
 polarization in its own field. This package computes that answer, the **material
 response**, and hands back a model that Magpylib reads like any other.
 
+This page solves a magnet on an iron plate and asks two questions: how much does
+the plate change the field above the magnet, and which of the three solvers to
+use?
+
 ```{include} _install.md
 
 ```
-
-````{tip}
-**Start with an AI assistant.** The package ships an Agent Skill, and these
-pages exist as Markdown for agents ([llms.txt](https://magpylib-material-response.readthedocs.io/en/latest/llms.txt)).
-Paste this into Claude Code, Cursor or any coding agent, with your model in
-place of the brackets:
-
-```text
-I use magpylib-material-response to compute magnetic fields of
-magnets near soft-magnetic parts. Install it with `uv add
-magpylib-material-response` (or pip), then run `uvx
-library-skills` to add its Agent Skill to this project, and
-read it. The documentation is at
-https://magpylib-material-response.readthedocs.io/en/latest/llms.txt.
-My model: [the parts and their materials, the magnets or
-coils, where I read the field]. Choose the solver as the skill
-says, solve, and report the field at my sensors with its error
-estimate. Check one result with solve_fem.
-```
-````
 
 ## A magnet on an iron plate
 
@@ -51,11 +35,8 @@ part responds when it has a `susceptibility`. A magnet without one keeps its
 polarization.
 
 ```{code-cell} ipython3
-import time
-
 import magpylib as magpy
 import numpy as np
-import plotly.graph_objects as go
 
 from magpylib_material_response import solve_cells, solve_face_charge, solve_fem
 from magpylib_material_response.meshing import mesh_uniform
@@ -92,8 +73,9 @@ B_solved = magpy.getB(solved, line[0])[2]
 print(f"Bz 0.5 mm above the magnet: {B_alone * 1e3:.0f} mT alone, {B_solved * 1e3:.0f} mT on the plate")
 ```
 
-The plate raises the field above the magnet by about 30 %: the magnet's south
-face rests on the iron, which gives its flux a short way back below.
+The plate raises the field above the magnet by about 30 %. The magnet's south
+face sits on the iron, so its flux returns through the iron instead of through
+air.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -109,34 +91,35 @@ north pole facing the magnet's south face.
 
 ## Three solvers, one answer
 
-The package has three solvers for the same model. They differ in what they can
-do and what they cost.
+The package has three solvers for the same model. Finite elements serve as the
+reference here, at order 4: the polynomial order of the elements, higher being
+more accurate.
 
 ```{code-cell} ipython3
-results = {}
-t0 = time.perf_counter()
-results["face charge"] = solve_face_charge(model)
-results["face charge", "s"] = time.perf_counter() - t0
+import time
 
-t0 = time.perf_counter()
-results["cells"] = solve_cells(mesh_uniform(model, 4))  # 4 cells across the plate's thickness
-results["cells", "s"] = time.perf_counter() - t0
-
-t0 = time.perf_counter()
-results["finite elements"] = solve_fem(model, order=4, observers=line)
-results["finite elements", "s"] = time.perf_counter() - t0
+results, seconds = {}, {}
+for name, solve in (
+    ("face charge", lambda: solve_face_charge(model)),
+    ("cells", lambda: solve_cells(mesh_uniform(model, 4))),  # 4 cells across the plate's thickness
+    ("finite elements", lambda: solve_fem(model, order=4, observers=line)),
+):
+    t0 = time.perf_counter()
+    results[name] = solve()
+    seconds[name] = time.perf_counter() - t0
 
 reference = magpy.getB(results["finite elements"], line)[:, 2]
-print(f"finite elements: {results['finite elements', 's']:5.2f} s, the reference")
+print(f"finite elements: {seconds['finite elements']:5.2f} s, the reference")
 for name in ("face charge", "cells"):
     Bz = magpy.getB(results[name], line)[:, 2]
     error = np.max(np.abs(Bz - reference) / np.abs(reference))
-    print(f"{name:>15}: {results[name, 's']:5.2f} s, at most {error:.2%} off it")
+    print(f"{name:>15}: {seconds[name]:5.2f} s, at most {error:.2%} off it")
 ```
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
+import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08, row_heights=(0.6, 0.4))
@@ -155,9 +138,9 @@ fig.update_layout(height=480, margin={"l": 60, "r": 20, "t": 20, "b": 40}, legen
 fig
 ```
 
-The three solvers agree. Face charge and finite elements are 0.08 % apart, the
-error left in finite elements at order 4: at order 5 the two agree to 0.01 %.
-Cells, with 4 cells across the plate's thickness, are within 0.6 %.
+The three solvers agree. Face charge is within 0.08 % of finite elements, and
+cells, with 4 cells across the plate's thickness, within 0.6 %. Face charge is
+also done first.
 
 - **`solve_face_charge`** is the default choice. A part that is linear and
   uniform inside, like soft iron below saturation, carries its whole response as
@@ -165,20 +148,46 @@ Cells, with 4 cells across the plate's thickness, are within 0.6 %.
 - **`solve_cells`** cuts the parts into cells and solves one polarization per
   cell. It covers what face charge does not: saturation on a B–H curve, a
   susceptibility that differs along the axes or varies inside a part, and B
-  inside a part. Its error falls slowly with the cell count: here 4 cells across
-  the plate leave 0.6 %.
+  inside a part. Its error falls slowly with the cell count.
 - **`solve_fem`** solves the same model by finite elements, with NGSolve. It is
   slower and needs the `fem` extra, and it is independent of the other two: use
   it to check them.
 
-[Choosing a solver](guide/choosing.md) compares them in detail, and
 [Inside the solvers](inside/index.md) shows how each one works.
 
 ## Next steps
 
+- [Choosing a solver](guide/choosing.md): which solver for which model, and what
+  each one costs.
 - [Building a model](guide/model.md): susceptibilities, fixed magnets, coils and
   applied fields, and what a solved model gives back.
+- [Reading a solved model](guide/reading.md): fields inside the parts, forces
+  with `magpy.getFT`, and what each result reports.
+- [Material values](guide/materials.md): typical susceptibilities of steels,
+  ferrites and magnets, and how to read a datasheet.
 - [How accurate is a result?](guide/accuracy.md): each solver's own error
   estimate, and how to check one solver against another.
+- [Many solves](guide/loops.md): sweeps, moving parts and Monte Carlo, with the
+  factorization kept between solves.
 - [Examples](examples/index.md): worked models, each against a finite-element
   reference.
+
+````{tip}
+**With a coding agent.** The package ships an Agent Skill, and these
+pages exist as Markdown for agents ([llms.txt](https://magpylib-material-response.readthedocs.io/en/latest/llms.txt)).
+Paste this into Claude Code, Cursor or any coding agent, with your model in
+place of the brackets:
+
+```text
+I use magpylib-material-response to compute magnetic fields of
+magnets near soft-magnetic parts. Install it with `uv add
+magpylib-material-response` (or pip), then run `uvx
+library-skills` to add its Agent Skill to this project, and
+read it. The documentation is at
+https://magpylib-material-response.readthedocs.io/en/latest/llms.txt.
+My model: [the parts and their materials, the magnets or
+coils, where I read the field]. Choose the solver as the skill
+says, solve, and report the field at my sensors with its error
+estimate. Check one result with solve_fem.
+```
+````

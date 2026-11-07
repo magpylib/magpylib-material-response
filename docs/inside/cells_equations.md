@@ -1,80 +1,71 @@
 # The cell equations
 
-This page describes the numerical method behind `solve_cells`, from the material
-model to the linear system and the two solvers. For the ideas first, with 3D
-views and charts to play with, see [Inside cells](cells.md).
+`solve_cells` replaces each part by cells of uniform polarization and finds all
+the polarizations at once. In equations, that raises four questions: what holds
+in each cell, how the field of one cell at another is taken, how the system is
+solved, and how close the two solvers come to each other. This page answers them
+in that order. [Inside cells](cells.md) shows the same ideas with 3D views and
+charts.
 
----
-
-## 1. Physical model
+## What holds in each cell
 
 Each cell's material is linear: its polarization $\mathbf{J} = \mu_0 \mathbf{M}$
-(in tesla, the quantity magpylib uses for magnets) responds to the magnetic
-field $\mathbf{H}$ at the cell as
+(in tesla, as Magpylib takes it) responds to the field $\mathbf{H}$ at the cell
+as
 
-$$\mathbf{J} = \mathbf{J}^{(0)} + \chi \, \mu_0 \mathbf{H}$$
+$$
+\mathbf{J} = \mathbf{J}_r + \chi \, \mu_0 \mathbf{H}
+$$
 
-where $\mathbf{J}^{(0)}$ is the remanent polarization (zero for a soft material)
-and $\chi$ the susceptibility: a scalar, or a 3-vector $(\chi_x, \chi_y,
-\chi_z)$ along the **cell's own axes**, which turn with its orientation like its
-polarization. A cell rotated by $R$ responds with the tensor
-$R\,\operatorname{diag}(\chi_x, \chi_y, \chi_z)\,R^\mathsf{T}$ in the global
-frame.
+where $\mathbf{J}_r$ is the remanence (zero for a soft material) and $\chi$ the
+susceptibility: a scalar, or a 3-vector $(\chi_x, \chi_y, \chi_z)$ along the
+**cell's own axes**, which turn with its orientation like its polarization. A
+cell rotated by $R$ responds with the tensor $R\,\operatorname{diag}(\chi_x,
+\chi_y, \chi_z)\,R^\mathsf{T}$ in the global frame.
 
-The field at a cell has three parts, all handled as $\mu_0 \mathbf{H}$ in tesla:
+The field $\mu_0 \mathbf{H}$ at a cell has three parts, all in tesla:
 
-| Part          | Symbol                        | Origin                                                       |
-| ------------- | ----------------------------- | ------------------------------------------------------------ |
-| Applied       | $\mu_0 \mathbf{H}_\text{ext}$ | A `UniformField` in the collection                           |
-| Currents      | $\mu_0 \mathbf{H}_\text{cur}$ | The current sources (`magpylib.current.*`) in the collection |
-| Demagnetizing | $\mu_0 \mathbf{H}_\text{d}$   | The polarization of all cells, the cell itself included      |
+| Part           | Symbol                      | Origin                                                       |
+| -------------- | --------------------------- | ------------------------------------------------------------ |
+| Applied        | $\mathbf{B}_\text{ext}$     | a `UniformField` in the collection                           |
+| Currents       | $\mathbf{B}_\text{c}$       | the current sources (`magpylib.current.*`) in the collection |
+| The cells' own | $\mu_0 \mathbf{H}_\text{d}$ | the polarization of every magnet, the cell itself included   |
 
-Inside a polarized cell this is not the flux density: $\mathbf{B} = \mu_0
-\mathbf{H} + \mathbf{J}$.
+Every magnet in the collection is a cell; one without a susceptibility keeps its
+polarization and acts only as a source. Inside a polarized cell
+$\mu_0\mathbf{H}$ is not the flux density: $\mathbf{B} = \mu_0 \mathbf{H} +
+\mathbf{J}$.
 
 Self-consistency requires, for every cell $i$ at once,
 
-$$\mathbf{J}_i = \mathbf{J}_i^{(0)} + \chi_i \, \mu_0 \bigl( \mathbf{H}_{\text{ext},i} + \mathbf{H}_{\text{cur},i} + \mathbf{H}_{\text{d},i} \bigr)$$
+$$
+\mathbf{J}_i = \mathbf{J}_{r,i} + \chi_i \bigl( \mathbf{B}_{\text{ext}} + \mathbf{B}_{\text{c},i} + \mu_0\mathbf{H}_{\text{d},i} \bigr)
+$$
 
----
+## One linear system
 
-## 2. Method of Moments
+With a uniform polarization $\mathbf{J}_j$ in each of the $N$ cells (cuboids,
+cylinder segments, tetrahedra), the cells' own field is linear in the
+polarizations:
 
-### Discretization
+$$
+\mu_0 \mathbf{H}_{\text{d},i} = \sum_{j=1}^{N} \mathsf{T}_{ij} \, \mathbf{J}_j
+$$
 
-The body is divided into $N$ cells (cuboids, cylinder segments, tetrahedra),
-each carrying a **uniform polarization** $\mathbf{J}_j$. The demagnetizing field
-is then linear in the polarizations:
-
-$$\mu_0 \mathbf{H}_{\text{d},i} = \sum_{j=1}^{N} \mathsf{T}_{ij} \, \mathbf{J}_j$$
-
-where the dimensionless 3×3 block $\mathsf{T}_{ij}$ gives $\mu_0 \mathbf{H}$ at
-cell $i$ per unit polarization of cell $j$, taken at the centroid of cell $i$ or
-averaged over it (section 3).
-
-### Linear system
-
-Stacking the polarizations of all cells into one $3N$-vector gives
+The dimensionless 3×3 block $\mathsf{T}_{ij}$ gives $\mu_0 \mathbf{H}$ at cell
+$i$ per unit polarization of cell $j$. Stacking the polarizations of all cells
+into one $3N$-vector gives
 
 $$
 \boxed{(\mathbf{I} - \mathbf{S}\,\mathbf{T})\,\mathbf{J} =
-         \mathbf{J}^{(0)} + \mathbf{S}\,\mu_0 (\mathbf{H}_\text{ext} + \mathbf{H}_\text{cur})}
+         \mathbf{J}_r + \mathbf{S}\,(\mathbf{B}_\text{ext} + \mathbf{B}_\text{c})}
 $$
 
-where:
+with $\mathbf{S}$ the susceptibilities, block-diagonal, one 3×3 tensor per cell,
+and $\mathbf{T}$ the interaction matrix of the blocks $\mathsf{T}_{ij}$. This is
+the magnetostatic method of moments {cite}`chadebec2006`.
 
-- $\mathbf{J} \in \mathbb{R}^{3N}$ — the unknown polarizations, stacked
-  component by component: $[J_{x,1},\ldots,J_{x,N},\, J_{y,1},\ldots,J_{z,N}]$
-- $\mathbf{S}$ — the susceptibilities, block-diagonal: cell $i$ contributes its
-  3×3 tensor $R_i \operatorname{diag}(\boldsymbol{\chi}_i) R_i^\mathsf{T}$
-- $\mathbf{T} \in \mathbb{R}^{3N \times 3N}$ — the interaction matrix, with the
-  blocks $\mathsf{T}_{ij}$
-
----
-
-## 3. The interaction tensor
-
-### Two interaction rules
+## The field of one cell at another
 
 A cell's field is known exactly; the method only has to decide _where_ in the
 observer cell to take it. `solve_cells` offers two answers, chosen per solve
@@ -85,8 +76,7 @@ with `interaction` and applied to **every pair**:
 | `"point"` (default) | at the centroid of cell $i$ ¹       | any cell type and orientation          |
 | `"newell"`          | averaged over the whole of cell $i$ | cuboid cells, all with one orientation |
 
-¹ Averaged over cell $i$ between cylinder segments close together, from a
-susceptibility of 1; see [point matching](#point-matching).
+¹ Close cylinder segments with χ ≥ 1 are averaged, as set out below.
 
 **Volume averaging** is the Galerkin form of the problem. For a soft body with a
 positive susceptibility in a uniform applied field, the induced moment along the
@@ -98,51 +88,33 @@ soft plate its moment overshoots and then falls back as the mesh is refined.
 At equal cell count neither rule is more accurate in general. On cubic cells
 they agree to fourth order in cell size over distance. On a soft cube of 1,728
 cells, point matching is closer on the field above it (0.43 % against 0.52 %)
-and volume averaging on its moment (1.1 % against 1.2 %). Both converge to the
-same answer.
+and volume averaging on its moment (1.1 % against 1.2 %), as the
+[moment study in Inside cells](cells.md) shows. Both converge to the same
+answer.
 
-The rules are never mixed within a solve. A mix would use volume averaging only
-between parallel cuboids, so turning one of two touching bodies by any angle,
-however small, would switch their interaction to point matching: the result
-would jump (0.28 % for a magnet and an iron block turned by a millionth of a
-degree), and the lower bound would be lost. `interaction="newell"` therefore
-raises when the cells are not all cuboids with one orientation. Cylinder
-segments close together are the one exception, below: their cell type alone
-decides it, so turning a body never switches it.
+One rule holds for every pair of a solve. A mix would switch a pair's rule when
+one of two touching bodies turns by any angle, however small: the result would
+jump (0.28 % for a magnet and an iron block turned by a millionth of a degree),
+and the lower bound would be lost. `interaction="newell"` therefore raises when
+the cells are not all cuboids with one orientation.
 
-### Point matching
+### At the centroid (point matching)
 
 Each block $\mathsf{T}_{ij}$ is $\mu_0$ times the field $\mathbf{H}$ that cell
 $j$, carrying a unit polarization along $x$, $y$ or $z$, produces at the
 **centroid** of cell $i$ {cite}`chadebec2006`, from Magpylib's closed-form field
-of the cell type. For cuboid source cells this is
-{func}`~magpylib_material_response.newell.point_block`: the tensor depends only
-on the displacement and the source shape, so cells sharing a shape and
-orientation get the same fast paths as volume averaging (section 5). Beyond 50
-source sides it switches to the far-field expansion below, where magpylib's
-closed form slowly loses precision.
+of the cell type.
 
-**Cylinder segments close together** take the field averaged over cell $i$
-instead, by Gauss quadrature with two points along each of radius, angle and
-height, symmetrized so that $V_i\mathsf{T}_{ij}=V_j\mathsf{T}_{ji}^\mathsf{T}$
-as for the exact average. At the centroid, curved cells give $\mathsf{T}$
-positive eigenvalues, which no demagnetizing field has; above $1/\chi$ they
-leave the system indefinite, and a tube with a 1 mm wall at $\chi = 1000$, in
-cells 16 around and 16 along, comes out −10 %, −68 % and +2 % from its moment
-with 1, 2 and 3 cells across the wall
-([#92](https://github.com/magpylib/magpylib-material-response/issues/92)).
-Averaged, every eigenvalue is negative and the moment holds at −12 %, −11 % and
-−11 %; what is left falls as cells are added around the ring. Pairs farther
-apart than twice the sum of their half-diagonals keep the centroid, which
-changes that tube's moment by 0.13 points at most; at a reach of 1 a positive
-eigenvalue comes back, and at 0.75 the system is indefinite again. A pair with
-both susceptibilities below 1 keeps the centroid too: the positive eigenvalues
-reach 0.27 at most, on short thin tubes, so $\chi$ times them stays far from 1,
-and a meshed cylinder of 110 cells at $\chi = 0.5$ solves in 0.8 s instead of
-4.4 s. On a thin tube the field moves by up to 16 % at some points where $\chi$
-crosses 1, the two schemes' difference on a coarse mesh.
+Between close cylinder segments the centroid value can make the equations
+unsolvable at a high χ: curved cells give $\mathsf{T}$ positive eigenvalues,
+which no demagnetizing field has. A tube with a 1 mm wall at χ = 1000 came out
+−68 % off its moment with two cells across the wall. Those pairs are therefore
+averaged over cell $i$ by Gauss quadrature, which holds the tube at −11 %, an
+error that falls as more cells go around the ring. Pairs with both
+susceptibilities below 1, or farther apart than twice the sum of their
+half-diagonals, keep the centroid.
 
-### Volume averaging (Newell)
+### Averaged over the cell (Newell)
 
 For **identical, axis-aligned** rectangular prisms of sides $(a, b, c)$, the
 field averaged over the observer cell has a closed form {cite}`newell1993`. The
@@ -169,15 +141,15 @@ $$
 
 It satisfies the volume-weighted reciprocity $V_\text{obs}
 \mathsf{N}(\mathbf{d}; s, o) = V_\text{src}\, \mathsf{N}(\mathbf{d}; o,
-s)^\mathsf{T}$, which gives reverse blocks by transposition. Implemented in
-`demag_block` and `demag_block_general`, and checked against Gauss–Legendre
-volume averages of magpylib's cuboid field.
+s)^\mathsf{T}$, and is checked against Gauss–Legendre volume averages of
+Magpylib's cuboid field.
 
-### Far field
+### Far apart
 
 Far apart, the exact formulas lose precision: Newell's differences cancel nearly
-equal terms. Beyond a switch distance both rules use the far-field expansion of
-the tensor, the point dipole plus its leading cell-size correction,
+equal terms, and Magpylib's closed form does too beyond 50 source sides. There
+both rules use the far-field expansion of the tensor, the point dipole plus its
+leading cell-size correction,
 
 $$
 \mathsf{N}(\mathbf{r}) \approx -\frac{V_\text{src}}{4\pi}
@@ -187,20 +159,10 @@ $$
 
 accurate to $(h_\text{max}/r)^4$, with $a$ and $b$ the source and observer sides
 ($b = 0$ for point matching). Volume averaging switches where the two errors
-meet, at $r^{10} = 10^{15}\, h_\text{max}^4 V_\text{src} V_\text{obs}$,
-calibrated against 60-digit evaluations of the exact formulas: the worst error
-from 5 to 10,000 cell sizes is $3 \times 10^{-7}$ for cubes and $1.2 \times
-10^{-5}$ for 10:1 rods. Without the switch, an iron cube 3 m from a magnet
-meshed with 1 mm cells received 300 times its induced polarization.
+meet, where the error is $3 \times 10^{-7}$ for cubes and $2 \times 10^{-5}$ for
+10:1 rods.
 
-### Layout
-
-`demag_tensor` returns the blocks with shape $(3, N, N, 3)$: polarization
-component, source cell, observer cell, field component, as $\mathbf{H}$ in A/m
-per tesla. `solve_cells` multiplies them by $\mu_0$ and arranges them into
-$\mathbf{T}$ in the component-major layout of $\mathbf{J}$.
-
-### Self-demagnetization
+### A cell on itself
 
 The diagonal block is $\mathsf{T}_{ii} = -\mathsf{N}_i$, the demagnetizing
 tensor of cell $i$: at its centroid under point matching, averaged over it (the
@@ -210,49 +172,39 @@ tensor at a point is $\mathsf{N} = -\nabla\nabla\psi$ with $\psi(\mathbf{r}) =
 Poisson's equation gives $\nabla^2\psi = -1$ inside the cell; the average over
 the cell keeps the trace {cite}`moskowitz1966`:
 
-$$N_{xx}^{(i)} + N_{yy}^{(i)} + N_{zz}^{(i)} = 1$$
+$$
+N_{xx}^{(i)} + N_{yy}^{(i)} + N_{zz}^{(i)} = 1
+$$
 
 For a cube both rules give $N_{xx} = N_{yy} = N_{zz} = \tfrac{1}{3}$. Under
 point matching the centroid must lie inside the cell: `mesh_Cylinder` cuts thin
 rings into enough sectors that it does.
 
----
+## Solving the system
 
-## 4. Solvers
+### Direct
 
-### 4.1 Direct solver (`solver="direct"`)
+`solver="direct"` assembles the full $3N \times 3N$ matrix $\mathbf{Q} =
+\mathbf{I} - \mathbf{S}\,\mathbf{T}$, builds the right-hand side from the
+remanence and the applied field at the cell centroids, and factors $\mathbf{Q}$
+with LAPACK {cite}`lapack1999`. The answer is exact up to floating-point
+rounding. Memory grows with $N^2$, the matrix alone taking $(3N)^2 \times 8$
+bytes, 650 MB for 3,000 cells, and time with up to $N^3$.
 
-1. Assemble the full $3N \times 3N$ matrix $\mathbf{Q} = \mathbf{I} -
-   \mathbf{S}\,\mathbf{T}$, block by block under the chosen rule (section 5
-   gives the shortcuts).
-2. Build the right-hand side from the remanent polarizations and the field of
-   the current sources and any `UniformField` at the cell centroids.
-3. Factor $\mathbf{Q}$ in place with LAPACK {cite}`lapack1999`
-   (`scipy.linalg.solve`) and write each cell's polarization back, expressed in
-   the cell's own frame.
+### Iterative
 
-The solve is direct, exact up to floating-point rounding. Memory grows with
-$N^2$ — the matrix alone takes $(3N)^2 \times 8$ bytes, 650 MB for 3,000 cells —
-and time with up to $N^3$. The matrix is assembled in Fortran order, every chunk
-of a block written straight into it, so the solve stays within about 1.1 times
-the matrix (a C-ordered matrix would be copied before the factorization, twice
-the matrix in memory).
-
-### 4.2 Iterative solver (`solver="iterative"`)
-
-GMRES {cite}`saad1986`, as SciPy implements it {cite}`scipy2020`, never
-assembles $\mathbf{Q}$: it only needs the product $\mathbf{v} \mapsto
-\mathbf{Q}\,\mathbf{v}$, which the FFT kernels and the stored blocks of section
-5 provide. Both solvers apply the same entries, so they solve the same system.
+`solver="iterative"` runs GMRES {cite}`saad1986`, as SciPy implements it
+{cite}`scipy2020`. It never assembles $\mathbf{Q}$: it only needs the product
+$\mathbf{v} \mapsto \mathbf{Q}\,\mathbf{v}$, with the same entries as the direct
+solver, so both solve the same system.
 
 GMRES stops when the residual falls below `solver_tol` relative to the
-right-hand side, which bounds the residual, not the error. Measured against the
-direct solve, the polarizations agree to about 2 × `solver_tol` for hard
-magnets. For soft iron at $\chi = 1000$ the gap grows with the cell count, to
-160 × `solver_tol` at 4,096 cells and 580 × at 32,768: tighten `solver_tol` for
-high susceptibilities. `max_iter` caps the iterations, rounded up to restart
-cycles of 100; GMRES that does not converge raises `RuntimeError` rather than
-return a partial result. The solve starts from the right-hand side.
+right-hand side, which bounds the residual, not the error. Against the direct
+solve, the polarizations agree within about 2 × `solver_tol` for hard magnets
+and susceptibilities up to 3. For soft iron at χ = 1000 the gap grows with the
+cell count, to 160 × `solver_tol` at 4,096 cells and 580 × at 32,768: tighten
+`solver_tol` for high susceptibilities. GMRES that does not converge within
+`max_iter` raises `RuntimeError` rather than return a partial result.
 
 The preconditioner is block-Jacobi, one 3×3 block per cell:
 
@@ -261,180 +213,51 @@ $$
 $$
 
 with $\boldsymbol{\chi}_i$ the cell's susceptibility tensor and $\mathsf{N}_i$
-its self-demagnetizing tensor under the solve's rule, in the global frame. For
-cuboids that is the cell's own block of $\mathbf{Q}$, rotated with the cell.
-Other cells take $\mathsf{N}_i = \mathbf{I}/3$, the isotropic part of their own
-block, whose trace is 1 for any cell with its centroid inside. Their full
-point-matched blocks vary with the cell's shape, and scaling tetrahedra by them
-triples the iterations; leaving such cells unscaled puts them about $\chi$ away
-from the scaled cuboids, where GMRES stalls. A grid with 650 tetrahedra at χ =
-1000 converges in 80 iterations this way, and not in 1,000 without.
+its self-demagnetizing tensor, in the global frame. Cells other than cuboids
+take $\mathsf{N}_i = \mathbf{I}/3$, the isotropic part of their own block: a
+grid with 650 tetrahedra at χ = 1000 converges in 80 iterations this way, and
+not in 1,000 without a preconditioner on them.
 
-(auto-solver)=
-
-### 4.3 Automatic choice (`solver="auto"`, the default)
-
-The two solvers give the same polarization, so the choice is one of time and
-memory, and it follows from the cell structure that section 5 detects. `"auto"`
-counts the entries of the interaction matrix that FFT products cover: the cells
-of each uniform grid among themselves, and large grids of one spacing between
-each other. From a tenth on, it takes the iterative solver. Below, it takes the
-direct one: GMRES applies the rest as blocks built pair by pair, as the direct
-solver builds them, and many small bodies or cells off any grid make it slower.
-Measured on soft iron at $\chi = 1000$, out of 39 models:
-
-| Model                         | Cells | FFT   | Direct         | Iterative      | `"auto"`  |
-| ----------------------------- | ----- | ----- | -------------- | -------------- | --------- |
-| one cube, identical cells     | 4,096 | 100 % | 3.1 s, 1.4 GB  | 0.41 s, 0.2 GB | iterative |
-| three cubes, three cell sizes | 3,240 | 40 %  | 9.0 s, 1.4 GB  | 8.3 s, 1.0 GB  | iterative |
-| a grid and 3,900 tetrahedra   | 8,031 | 26 %  | 112 s, 5.7 GB  | 99 s, 4.4 GB   | iterative |
-| 100 cubes of 27 cells         | 2,700 | 1 %   | 5.1 s, 0.6 GB  | 6.2 s, 0.7 GB  | direct    |
-| voxelized sphere              | 1,304 | 100 % | 0.30 s, 0.3 GB | 0.20 s, 0.1 GB | iterative |
-| tetrahedra                    | 1,937 | 0     | 3.3 s, 0.9 GB  | 3.3 s, 1.0 GB  | direct    |
-| cuboids of 216 sizes          | 1,728 | 0     | 34 s, 0.3 GB   | 61 s, 0.4 GB   | direct    |
-
-The rows with one cube, three cubes and the voxelized sphere are measured with
-the direct solver's current table chunks of 200,000 pairs; the others were
-measured with chunks of 2,000,000, and those holding grids now peak somewhat
-lower. The row of tetrahedra is measured with magpylib 6.1, whose threads make
-it about 2.7 times faster; the others with magpylib 6.0.
-
-Under `"auto"` GMRES runs to `solver_tol / 100`, so the polarization stays
-within about `solver_tol` of the direct solve on a few thousand cells and within
-10 × `solver_tol` on 32,768. If GMRES does not converge, `"auto"` falls back to
-the direct solver when its matrix takes at most 2 GB (about 5,000 cells), and
-raises otherwise.
-
----
-
-## 5. Fast paths
-
-### 5.1 FFT convolution on a uniform grid
+### FFT products on a grid
 
 When cells share one shape and orientation and their centres fill a regular grid
 of shape $(N_x, N_y, N_z)$, the interaction depends only on the offset between
 cells, $\mathsf{T}_{ij} = \mathsf{T}(\mathbf{r}_j - \mathbf{r}_i)$, and the
 product $\mathbf{T}\,\mathbf{J}$ is a 3-D discrete convolution: an FFT on the
-grid zero-padded to twice its size computes it in $O(N \log N)$
-{cite}`hayashi1996`. The kernel, the six independent components of the chosen
-rule's tensor, is built once by `build_fft_kernel` and reused at every GMRES
-iteration (`demag_fft_matvec`). The grid spacing may exceed the cell size. A
-body on one lattice that does not fill its box, such as a voxelized sphere, runs
-the same way when its cells fill at least an eighth of the box
-(`MIN_LATTICE_FILL`) and it is at least four cells deep along every axis
-(`MIN_LATTICE_LAYERS`): the empty places hold zero polarization, and the box
-holds at most eight times as many sites as cells. A thinner body with holes,
-such as a voxelized washer one to three cells thick, keeps full boxes and loose
-cells: FFTs over its flat, mostly empty box are slower.
+grid zero-padded to twice its size computes it in $O(N \log N)$ time
+{cite}`hayashi1996`. A body on one lattice that does not fill its box, such as a
+voxelized sphere, runs the same way when its cells fill at least an eighth of
+the box and it is at least four cells deep along every axis: the empty places
+hold zero polarization. Large blocks between two grids of one spacing are
+convolutions too.
 
-### 5.2 Clusters
+The iterative solver applies every other block as a stored matrix. A large one
+may be stored sparse: its smallest entries are dropped only while the operator
+changes by at most a tenth of the tolerance,
+$\|\mathbf{S}(\mathbf{T}-\tilde{\mathbf{T}})\|_\infty \le 0.1\,
+\varepsilon_\text{tol}$, with $\varepsilon_\text{tol}$ the `solver_tol`. Many
+separate bodies, cells of many sizes or cells off any grid leave little to the
+FFT, and then the iterative solver is no faster than the direct one.
 
-`analyze_structure` sorts the cells into **clusters**, and every cell lands in
-exactly one:
+### Which one runs
 
-- **grid**: identical cuboids with one orientation on a uniform grid, one
-  cluster per meshed body. Bodies are told apart by the Collection their mesher
-  put the cells in, so a yoke with its legs is three grids. Cells on one lattice
-  that do not fill a box, such as a voxelized sphere or touching bodies whose
-  cells were flattened into one Collection, are one grid with holes when they
-  fill at least an eighth of their box and are four cells deep, and else the
-  full boxes they fill. Parts of one body far apart are tried apart;
-- **loose**: identical parallel cuboids without that grid;
-- **generic**: everything else — other cell types, rotated singletons and, under
-  point matching, groups smaller than `MIN_CLUSTER_CELLS` (8).
+`solver="auto"` takes the iterative solver when FFT products cover enough of the
+interaction matrix, and runs it to `solver_tol / 100`, so its answer stays
+within about `solver_tol` of the direct solve on a few thousand cells and within
+10 × `solver_tol` on 32,768. [Cells](../guide/cells.md) gives the rule, and
+[Cells: direct and iterative solvers, measured](cells_performance.md) the
+measurements behind it.
 
-Clusters only decide _how fast_ a block is computed, never which rule it
-follows. Grid self-blocks are FFT convolutions in the iterative solver (a grid
-smaller than `MIN_GRID_CELLS`, 16, is treated as loose), and so is the block
-between two grids of one spacing and orientation when it is large
-(`FFT_CROSS_MIN_ENTRIES`): the displacement is
+## In short
 
-$$
-\mathbf{o}_A - \mathbf{o}_B + \mathbf{p} \odot (\mathbf{i} - \mathbf{j})
-$$
+<!-- prettier-ignore -->
+Each cell obeys $\mathbf{J} = \mathbf{J}_r + \chi\,\mu_0\mathbf{H}$, and the
+cells' own field is linear in their polarizations, so one linear system
+$(\mathbf{I} - \mathbf{S}\mathbf{T})\mathbf{J} = \mathbf{J}_r +
+\mathbf{S}(\mathbf{B}_\text{ext} + \mathbf{B}_\text{c})$ holds the whole model.
+The field of one cell at another is taken at the centroid or averaged over the
+cell; the average gives a lower bound on a soft part's moment. The direct solver
+factors the matrix exactly; the iterative one applies it, by FFT on grids, to
+within its tolerance.
 
-for grid indices $\mathbf{i}$, $\mathbf{j}$, a convolution on a box of $N_A +
-N_B - 1$ per axis. The same index differences give the dense solver that block
-from one table, without sorting. Every other block is computed once per distinct
-displacement when fewer than 25 % of the displacements are distinct, and reverse
-blocks follow by reciprocity where it is exact,
-
-$$
-\mathsf{T}_{BA} = (V_A / V_B)\,\mathsf{T}_{AB}^\mathsf{T}
-$$
-
-for volume averaging between parallel cuboid clusters, $\mathsf{T}_{BA} =
-\mathsf{T}_{AB}^\mathsf{T}$ for point matching when both clusters share one cell
-shape and orientation. Each FFT block works in its cluster's own frame, rotating
-the polarization in and the field back, so the solve runs in the global frame.
-
-### 5.3 Bounded sparsification of large blocks
-
-In the iterative solver, a block with more than `DENSE_BLOCK_MAX_ENTRIES`
-entries is stored sparse when that pays: at least 64 observers, drawn at random
-across the body, must show that at least 90 % of the entries can go
-(`SPARSIFY_MIN_DROP`). A sparse product runs on one thread: at 90 % dropped it
-takes about 1.7 times as long as the dense one, for a sixth of the memory. When
-the explicit blocks would pass `DENSE_BLOCK_MAX_BYTES` (2 GB) dense in all,
-memory comes first and 60 % suffices (`SPARSIFY_MIN_DROP_LARGE`): a sparse
-matrix takes 12 bytes per kept entry against 8 per dense entry, and about 20
-while it is built. At high susceptibility the budget below rarely allows either,
-and blocks stay dense at any size. When the explicit blocks pass
-`DENSE_BLOCK_MAX_BYTES` in all, the solve logs a warning. Entries are dropped
-per observer row, smallest first, only while the sum of the dropped magnitudes
-stays within a budget:
-
-$$
-\sum_{\text{dropped } j} |T_{ij}| \;\le\; \varepsilon_\text{row} = \frac{0.1\, \varepsilon_\text{tol}}{\max(1, \|\mathbf{S}\|_\infty)\, K}
-$$
-
-where $\varepsilon_\text{tol}$ is `solver_tol`, $\|\mathbf{S}\|_\infty$ the
-largest row sum of the cells' $|\boldsymbol{\chi}_i|$, and $K$ the number of
-clusters. Summed over the at most $K$ blocks in a row, the operator changes by
-at most
-
-$$
-\|\mathbf{S}(\mathbf{T}-\tilde{\mathbf{T}})\|_\infty \;\le\; 0.1\, \varepsilon_\text{tol}
-$$
-
----
-
-## 6. Algorithm flow
-
-```text
-solve_cells(collection, solver=..., interaction=...)
-│
-├─ 1. Collect the magnet cells; one 3×3 susceptibility tensor per cell,
-│      R diag(χ) Rᵀ; check the rule ("newell": all cells cuboid, one
-│      orientation, else raise); refuse objects with paths
-│
-├─ 2. analyze_structure → clusters (grid / loose / generic)
-│
-├─ 3. Build the interaction operator under the chosen rule
-│      ├─ [direct]     every cluster-pair block into the dense (3N × 3N) T
-│      └─ [iterative]  grid self-blocks as FFT kernels, other blocks dense,
-│                      or sparse where the error budget drops most of them,
-│                      reverse blocks by reciprocity where it is exact
-│
-├─ 4. Solve (I − S T) J = J⁽⁰⁾ + S μ0 (H_ext + H_cur)       [global frame]
-│      ├─ [direct]     scipy.linalg.solve(Q, rhs)                  O(N³)
-│      └─ [iterative]  GMRES with the block-Jacobi preconditioner
-│
-└─ 5. Write the self-consistent polarizations back to the magnet cells
-```
-
----
-
-## 7. Complexity
-
-| Configuration         | Operator build                         | Product per GMRES iteration |
-| --------------------- | -------------------------------------- | --------------------------- |
-| Single uniform grid   | $O(N \log N)$                          | $O(N \log N)$               |
-| $K$ grid clusters     | $O(N \log N + \sum_{A\neq B} n_A n_B)$ | $O(N \log N + \text{nnz})$  |
-| Loose / generic cells | $O(n^2)$ for those cells               | $O(n^2)$ or $O(\text{nnz})$ |
-
-Measured on one meshed cube (Apple Silicon, $\chi = 3$, `solver_tol=1e-8`, point
-matching): the iterative solver is about 10 times faster than the direct one at
-$N = 3{,}375$, 0.2 s against 2.0 s, and solves $N = 27{,}000$ in under 2 s,
-where the dense matrix alone would take 52 GB. Several separate bodies are
-slower: their blocks against each other are not convolutions.
+Code: `src/magpylib_material_response/cells.py`, `newell.py` and `demag_fft.py`.

@@ -209,9 +209,11 @@ def tolerance_monte_carlo():
 
 
 def saturation():
-    cube = soft(magpy.magnet.Cuboid(dimension=(10 * MM,) * 3, polarization=(0, 0, 0)))
-    solved = solve_face_charge(magpy.Collection(cube, UniformField(B=(0, 0, 0.01))))
-    return [solved.children[0]]
+    sys.path.insert(0, str(HERE / "examples"))
+    from ucore_model import coil, core  # noqa: PLC0415
+
+    model = magpy.Collection(core(), coil(400))
+    return list(solve_face_charge(model, level=2).children)
 
 
 EXAMPLES = [

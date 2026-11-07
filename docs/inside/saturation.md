@@ -2,8 +2,8 @@
 
 A `BHCurve` makes the problem non-linear: a cell's susceptibility depends on the
 field inside it, which depends on every cell's polarization. `solve_cells` and
-`solve_fem` both solve it as a sequence of linear solves. Code references are to
-`src/magpylib_material_response/_saturation.py`.
+`solve_fem` both solve it as a sequence of linear solves. How is the curve read,
+how does the iteration run, what does it cost, and how close does it come?
 
 ## The curve
 
@@ -13,7 +13,7 @@ cubic (PCHIP), so the curve never wiggles between measurements; past the last
 point J keeps its last value, and B rises with the slope of vacuum. A curve
 whose J passes 5 T warns: its columns are swapped or its units wrong.
 
-## The fixed point
+## The iteration
 
 Each cell on a curve takes the **secant** susceptibility at its own field,
 
@@ -21,8 +21,8 @@ $$
 \chi = \frac{J(H)}{\mu_0 H},
 $$
 
-the line from the origin to its point on the curve. That is the way Radia treats
-non-linear iron {cite}`chubar1998`. Then:
+the line from the origin to its point on the curve, as the Radia magnetostatics
+code does {cite}`chubar1998`. Then:
 
 1. Solve the linear problem with every cell's current $\chi$.
 2. Read the field $\mu_0 H$ in each cell, from the interaction operator.
@@ -56,6 +56,17 @@ solve holds.
 ## How well it does
 
 A sphere in a uniform field stays uniformly polarized while it saturates, so its
-answer is exact: $\mu_0 H$ inside is $B_0 - J/3$, with $J$ on the curve at that
-field. `solve_cells` is within 1 % of it along the whole curve
-([Saturation](../examples/saturation.md)).
+answer is exact: $\mu_0 H$ inside is $B_\text{ext} - J/3$, with $J$ on the curve
+at that field. `solve_cells` on 517 tetrahedra is at most 0.02 % off it, from
+0.05 to 2 T applied ([the saturation example](../examples/saturation.md)).
+
+## In short
+
+Each cell or element takes the secant susceptibility of its field, and the
+linear solve repeats, accelerated, until no susceptibility moves: a few to a few
+dozen solves. Cells build their interaction matrix once; finite elements
+assemble theirs each time; face charge refuses a curve.
+[Saturation](../guide/saturation.md) in the user guide shows how to enter a
+curve and check the result.
+
+Code: `src/magpylib_material_response/_saturation.py`.

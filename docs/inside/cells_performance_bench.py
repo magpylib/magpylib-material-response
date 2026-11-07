@@ -1,8 +1,8 @@
-"""The measurements behind `cells_performance.md`, stored in
-`cells_performance.json`. The docs are built on a machine with 2 CPUs, whose
+"""The measurements behind `cells_performance.md`, stored next to this script
+in `cells_performance.json`. The docs are built on a machine with 2 CPUs, whose
 timings would say little, so the page plots these instead.
 
-    uv run --group docs python docs/guide/cells_performance_bench.py
+    uv run --group docs python docs/inside/cells_performance_bench.py
 
 Run it on a quiet machine after a change to the solvers, and commit the JSON.
 """

@@ -1,142 +1,120 @@
+---
+jupytext:
+  formats: md:myst,ipynb
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.17.0
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
+
 # Logging
 
-The magpylib-material-response package uses
-[Loguru](https://loguru.readthedocs.io/) to emit informative messages about
-computation progress and debugging information.
+A solve makes choices you don't see: which solver `"auto"` took and why, how
+many unknowns face charge set up, how large its jump indicator is, and how long
+each step took. Turn on logging to see them. This page answers how to turn it
+on, how to set what it shows and where, and how to turn it off again.
 
-## Default Behavior
+## Turn it on
 
-Following the
-[recommended pattern for libraries](https://loguru.readthedocs.io/en/stable/resources/recipes.html#configuring-loguru-to-be-used-by-a-library-or-an-application),
-the package is **disabled at import time** and produces no output until the user
-opts in. Importing the package never adds, removes or replaces any loguru sinks
-already configured by the host application.
+`configure_logging()` turns logging on. The package logs with
+[Loguru](https://loguru.readthedocs.io/), and Loguru has a sink of its own that
+would print every record a second time: the first line removes it.
 
-## Enabling Logging
-
-To see log messages from the library, call `configure_logging()`:
-
-```python
-from magpylib_material_response import configure_logging
-from magpylib_material_response import solve_cells
-
-# Enable logging with default settings (INFO level, colored output to stderr)
-configure_logging()
-```
-
-`configure_logging()` adds a sink that only receives records emitted from within
-the `magpylib_material_response` package. It is safe to call multiple times;
-each call replaces only the sink it added previously, leaving any other loguru
-sinks untouched.
-
-```{note}
-By default, loguru ships with a pre-installed `sys.stderr` sink (handler id
-`0`). Because `configure_logging()` does not touch sinks it did not add, you
-may see each package record appear **twice**: once via loguru's default
-handler and once via the sink added by `configure_logging`. To avoid this,
-remove the default handler before configuring:
-
-    from loguru import logger
-    logger.remove(0)
-    configure_logging()
-```
-
-## Configuration Options
-
-### Log Level
-
-```python
-configure_logging(level="DEBUG")  # detailed internal operations
-configure_logging(level="WARNING")  # only warnings and errors
-# Available: DEBUG, INFO, WARNING, ERROR, CRITICAL
-```
-
-### Output Destination
-
-```python
+```{code-cell} ipython3
 import sys
 
-configure_logging(sink=sys.stdout)  # stdout instead of stderr
-configure_logging(sink="/path/to/file.log")  # log file
+import magpylib as magpy
+from loguru import logger
+from magpylib_material_response import configure_logging, disable_logging, solve_cells, solve_face_charge
+from magpylib_material_response.meshing import mesh_uniform
+
+logger.remove(0)
+configure_logging(sink=sys.stdout, show_time=False, enable_colors=False)
+
+MM = 1e-3  # lengths are in metres; this writes them in millimetres
+magnet = magpy.magnet.Cuboid(
+    dimension=(10 * MM, 10 * MM, 5 * MM),
+    position=(0, 0, 5.5 * MM),
+    polarization=(0, 0, 1.2),
+)
+plate = magpy.magnet.Cuboid(dimension=(40 * MM, 40 * MM, 6 * MM), polarization=(0, 0, 0))
+plate.susceptibility = 1000
+model = magpy.Collection(magnet, plate)
+
+cells = solve_cells(mesh_uniform(model, 4))
+sheets = solve_face_charge(model)
 ```
 
-### Disable Colors and Time
+Each solve first names the magnets it keeps fixed. `solve_cells` then counts the
+clusters of cells and says which solver `"auto"` took: here the iterative one,
+as the plate's cells form one grid. `solve_face_charge` gives its unknowns, its
+largest jump indicator ([How accurate is a result?](accuracy.md)) and the
+largest mean polarization of a solved part: compare it with the knee of the
+part's B–H curve to see whether saturation matters.
+[Inside cells](../inside/cells.md#solving-direct-or-iterative) shows the
+`"auto"` choice on a model of mixed cells.
+
+## Silent by default
+
+Importing the package logs nothing and leaves every Loguru sink as it was,
+following Loguru's
+[recipe for libraries](https://loguru.readthedocs.io/en/stable/resources/recipes.html#configuring-loguru-to-be-used-by-a-library-or-an-application).
+`configure_logging()` adds one sink that receives only the package's records.
+Calling it again replaces that sink and no other.
+
+## What it shows, and where
+
+`configure_logging` takes these arguments; each has an environment variable that
+sets its default.
+
+| Argument        | Default      | Environment variable    | Sets                                         |
+| --------------- | ------------ | ----------------------- | -------------------------------------------- |
+| `level`         | `"INFO"`     | `MAGPYLIB_LOG_LEVEL`    | the least severe level shown                 |
+| `sink`          | `sys.stderr` |                         | a stream, a file path or a function          |
+| `enable_colors` | `True`       | `MAGPYLIB_LOG_COLORS`   | coloured output; turn off for a file         |
+| `show_time`     | `True`       | `MAGPYLIB_LOG_TIME`     | a time stamp on each line                    |
+| `min_log_time`  | `1.0`        | `MAGPYLIB_LOG_MIN_TIME` | the shortest step, in seconds, that is timed |
 
 ```python
-configure_logging(enable_colors=False)  # useful for log files
-configure_logging(show_time=False)
+configure_logging(level="DEBUG")  # internal steps too
+configure_logging(sink="solve.log", enable_colors=False)  # to a file
+configure_logging(min_log_time=0)  # time every step
 ```
 
-### Step Timing Threshold
+A step that takes longer than `min_log_time` logs "Completed: …" with its
+duration. `solve_cells`, `solve_face_charge`, `solve_fem`, `study_fem` and
+`cells.demag_tensor` take a `min_log_time` of their own; left at `None`, it is
+the one set here.
 
-The library wraps long-running steps in a `timelog` context that emits a
-"Completed: ..." record when the step exceeds a duration threshold. The default
-is `1.0` second.
+## Turn it off
 
-```python
-# Log every step, regardless of duration:
-configure_logging(min_log_time=0)
-
-# Only log very long steps:
-configure_logging(min_log_time=10)
-```
-
-This setting is also picked up by `solve_cells`, `demag_tensor`,
-`solve_face_charge`, `solve_fem` and `study_fem` whenever their own
-`min_log_time` argument is left at its default (`None`). Passing an explicit
-value to those functions still overrides the global setting for that call.
-
-## Environment Variables
-
-```bash
-export MAGPYLIB_LOG_LEVEL=DEBUG
-export MAGPYLIB_LOG_COLORS=false
-export MAGPYLIB_LOG_TIME=false
-export MAGPYLIB_LOG_MIN_TIME=0
-```
-
-## Disabling Logging
-
-```python
-from magpylib_material_response import disable_logging
-
+```{code-cell} ipython3
 disable_logging()
 ```
 
-This re-disables the package and removes only the sink previously added by
-`configure_logging`.
+This removes the sink `configure_logging` added and silences the package again.
 
-## Custom Application-Side Configuration
+## With your own Loguru setup
 
-If your application already configures loguru, you do not need to call
-`configure_logging()` at all. Instead, simply enable the package and let your
-own sinks handle the records:
+An application that configures Loguru itself needs no `configure_logging`:
+enabling the package sends its records to the application's sinks.
 
 ```python
 from loguru import logger
 
 logger.enable("magpylib_material_response")
-# your existing logger.add(...) sinks now also receive package records
 ```
 
-## Example Usage
+## In short
 
-```python
-import magpylib as magpy
-from magpylib_material_response import configure_logging
-from magpylib_material_response import solve_cells
-from magpylib_material_response.meshing import mesh_Cuboid
-
-configure_logging(level="INFO")
-
-magnet = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.02), polarization=(0, 0, 1))
-magnet.susceptibility = 0.1
-
-meshed = mesh_Cuboid(magnet, target_elems=1000, verbose=True)
-solve_cells(meshed, inplace=True)
-```
-
-## See Also
-
-- [Loguru Documentation](https://loguru.readthedocs.io/) - Complete reference
-  for the underlying logging library
+- `configure_logging()` shows what a solve chose and how long it took;
+  `disable_logging()` silences it again.
+- Remove Loguru's own sink first, `logger.remove(0)`, or each record prints
+  twice.
+- `level`, `sink`, `min_log_time` and the environment variables set what is
+  shown and where.

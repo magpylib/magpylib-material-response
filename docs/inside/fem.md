@@ -2,8 +2,9 @@
 
 `solve_fem` hands the model to NGSolve {cite}`schoberl2014`. It is built to be
 independent of the other two solvers: the parts keep their shapes, the air is
-meshed, and the open space is closed exactly. Code references are to
-`src/magpylib_material_response/fem/`.
+meshed, and the open space is closed exactly. Which potential does it solve for,
+how is open space closed, how is the mesh made, and what comes back?
+[Finite elements](../guide/fem.md) in the user guide gives the settings.
 
 ## The potentials
 
@@ -28,10 +29,11 @@ coil is never meshed. In soft iron the field is small against a coil's, and the
 reduced potential would have to cancel the coil's field there almost exactly. So
 the parts take the total potential $\psi$, $\mu_0\mathbf{H} = -\nabla\psi$, and
 the air keeps the reduced one, $\mu_0\mathbf{H} = \mathbf{B}_\text{ext} +
-\mathbf{B}_c - \nabla u$ {cite}`simkin1979`. On a part's surface the two are
-joined through a potential of the applied field there, projected on each solve's
-elements, so the unknowns and the matrix stay those of the solve without
-currents; only the right-hand side changes.
+\mathbf{B}_c - \nabla u$ {cite}`simkin1979`. On a part's surface the two
+potentials are joined by a potential of the applied field,
+$\mathbf{B}_\text{ext} + \mathbf{B}_c$, projected on the solve's elements. Only
+the right-hand side changes: the unknowns and the matrix are those of the solve
+without currents.
 
 ## The open boundary
 
@@ -63,7 +65,7 @@ the parts as OpenCASCADE solids).
   mesh is refined geometrically: `edge_layers` layers, 4 by default, each 0.3
   times as thick as the last. With high orders this gives an error that falls
   geometrically with the order {cite}`babuska1996`.
-- **At the observers** passed as `observers`, the elements shrink to a share of
+- **At the observers** passed as `observers`, the elements shrink to 0.3 times
   their distance to the nearest part: 0.03 mm at 0.1 mm from a 1 mm cube's edge
   converged the field there to 0.006 mT, where the parts' element size left it 1
   mT off.
@@ -77,10 +79,7 @@ conjugate gradients {cite}`hestenes1952` with a BDDC preconditioner
 {cite}`dohrmann2003`, to `solver_tol`, 1e-10 by default.
 
 A part on a `BHCurve` repeats the linear solve until its susceptibility stops
-moving, as `solve_cells` does ([Saturation](saturation.md)). Here the
-susceptibility is a field on each element, its logarithm linear across it, and
-each solve assembles the matrix again: 5 to 40 solves, at most 70. The iteration
-stops when the susceptibility on the worst element moves by less than 1e-3.
+moving, assembling the matrix each time ([Inside saturation](saturation.md)).
 
 ## The result
 
@@ -88,6 +87,16 @@ A `FemSolution` is a Magpylib source. Its `getB` reads the solution at any
 point: inside the ball from the elements, outside from their image in the Kelvin
 ball. It holds the field of the whole model, drives included, and its `moment`.
 
-It cannot be pickled: a pickled NGSolve solution crashes on its first read, so
-pickling is refused. `study_fem` raises the order on one mesh and estimates the
-error of the highest ([Error estimates](error_estimates.md)).
+It cannot be saved ([Finite elements](../guide/fem.md) says why). `study_fem`
+raises the order on one mesh and estimates the error of the highest
+([Inside the error estimates](error_estimates.md)).
+
+## In short
+
+A reduced scalar potential in the air, a total one in the parts when coils drive
+them, a Kelvin transform that closes open space exactly, and a mesh graded
+toward edges, corners and observers: high orders on it converge geometrically.
+That independence from the other two solvers makes finite elements the reference
+to check them against.
+
+Code: `src/magpylib_material_response/fem/`.
