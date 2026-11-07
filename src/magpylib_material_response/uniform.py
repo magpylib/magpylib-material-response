@@ -75,7 +75,7 @@ class UniformField(magpy.misc.CustomSource):
     _style_class = magpy.graphics.style.DipoleStyle
     _style_family = ("dipole",)
     _autosize = True  # show() passes the scene's size to get_trace
-    _scene_box = True  # and, with magpylib#1079, the box the scene fills
+    _scene_box = True  # and, from magpylib 6.3, the box the scene fills
 
     def __init__(
         self,
@@ -152,8 +152,8 @@ class UniformField(magpy.misc.CustomSource):
         """An arrow along B above the scene's centre, ``style.size`` times
         three tenths of the scene long, or ``style.size`` metres with
         ``style.sizemode="absolute"``. A field of zero is a dot. Without the
-        scene's box, shown alone or by a magpylib without #1079, it is drawn at
-        the field's position."""
+        scene's box, shown alone or by a magpylib before 6.3, it is drawn at the
+        field's position."""
         style = self.style
         size = style.size
         if autosize is not None and style.sizemode == "scaled":

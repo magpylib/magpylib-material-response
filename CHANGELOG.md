@@ -12,9 +12,7 @@ and this project adheres to
 
 - `magpy.show` draws a `UniformField` as an arrow along its field, above the
   scene, instead of a dot at the origin; `style.size` sets its length. Above the
-  scene needs a Magpylib with
-  [magpylib#1079](https://github.com/magpylib/magpylib/pull/1079); before, the
-  arrow is at the field's position
+  scene needs Magpylib 6.3; before, the arrow is at the field's position
   ([#187](https://github.com/magpylib/magpylib-material-response/pull/187))
 - `study_face_charge` puts an error bar on a face-charge result, as `study_fem`
   does on finite elements: it solves at levels 2, 3 and 4 and takes 1.25 times
