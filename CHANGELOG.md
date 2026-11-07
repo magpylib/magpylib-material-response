@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-07
+
 ### Added
 
 - `magpy.show` draws a `UniformField` as an arrow along its field, above the
@@ -32,7 +34,12 @@ and this project adheres to
   the package does as you scroll, on real solves; getting started with the three
   solvers on one model, a guide to choosing between them, a user guide per
   solver, an "Inside the solvers" section with an interactive map of each
-  solver, and one bibliography that credits the papers behind every step
+  solver, and one bibliography that credits the papers behind every step. Every
+  number in it is measured again, and the shipped skill points to Magpylib's own
+  skill
+  ([#183](https://github.com/magpylib/magpylib-material-response/pull/183),
+  [#185](https://github.com/magpylib/magpylib-material-response/pull/185),
+  [#188](https://github.com/magpylib/magpylib-material-response/pull/188))
 
 ## [0.10.2] - 2026-11-05
 
@@ -669,7 +676,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.10.2...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.11.0...HEAD
+[0.11.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.10.2...0.11.0
 [0.10.2]:
   https://github.com/magpylib/magpylib-material-response/compare/0.10.1...0.10.2
 [0.10.1]:
