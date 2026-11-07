@@ -140,6 +140,43 @@ def fem_check():
     return [*soft_magnets(), sensors]
 
 
+def holding_magnet():
+    magnet = magpy.magnet.Cylinder(
+        dimension=(10 * MM, 5 * MM), position=(0, 0, 2.5 * MM), polarization=(0, 0, 1.3)
+    )
+    plate = soft(
+        magpy.magnet.Cuboid(
+            dimension=(40 * MM, 40 * MM, 6 * MM),
+            position=(0, 0, -3 * MM),
+            polarization=(0, 0, 0),
+        )
+    )
+    return list(solve_face_charge(magpy.Collection(magnet, plate)).children)
+
+
+def gear_tooth_sensor():
+    base = magpy.magnet.Cuboid(
+        dimension=(28 * MM, 6 * MM, 2 * MM),
+        position=(0, 0, -1 * MM),
+        polarization=(0, 0, 0),
+    )
+    teeth = [
+        magpy.magnet.Cuboid(
+            dimension=(2 * MM, 6 * MM, 3 * MM),
+            position=(x * MM, 0, 1.5 * MM),
+            polarization=(0, 0, 0),
+        )
+        for x in (-12, -8, -4, 0, 4, 8, 12)
+    ]
+    rack = soft(magpy.Collection(base, *teeth))
+    magnet = magpy.magnet.Cylinder(
+        dimension=(5 * MM, 4 * MM), position=(0, 0, 6.5 * MM), polarization=(0, 0, 1.2)
+    )
+    sensor = magpy.Sensor(position=(0, 0, 4 * MM))
+    solved = solve_face_charge(magpy.Collection(rack, magnet), level=2)
+    return [*solved.children, sensor]
+
+
 def shield_tube():
     magnet = magpy.magnet.Cylinder(
         polarization=(0, 0, 1.22), dimension=(25 * MM, 10 * MM)
@@ -178,6 +215,8 @@ def saturation():
 
 
 EXAMPLES = [
+    holding_magnet,
+    gear_tooth_sensor,
     cuboids_demagnetization,
     soft_magnets,
     ucore_electromagnet,
