@@ -1,0 +1,192 @@
+<link rel="stylesheet" href="_static/landing/landing.css" />
+<div class="mrl" id="mrl">
+  <div class="mrl-story">
+    <div class="mrl-stage">
+      <canvas aria-hidden="true"></canvas>
+      <div class="mrl-hud" aria-hidden="true">
+        <div data-hud="chi"><span>susceptibility χ</span><b>0</b></div>
+        <div data-hud="gap"><span>gap</span><b>0 mm</b></div>
+        <div data-hud="force"><span>pull on the magnet</span><b>33 N</b></div>
+        <div data-hud="bz">
+          <span>B<sub>z</sub> 0.5 mm above it</span><b>367 mT</b>
+        </div>
+      </div>
+      <div class="mrl-hint" aria-hidden="true">Scroll</div>
+    </div>
+
+    <div class="mrl-beats">
+      <section class="mrl-beat mrl-hero">
+        <p class="mrl-eyebrow">Magpylib Material Response</p>
+        <h2 class="mrl-title">Fields that know<br />the iron is there.</h2>
+        <p class="mrl-lead">
+          The field of magnets and coils next to steel, soft iron and other
+          magnets: solved, and handed back to Magpylib.
+        </p>
+        <p class="mrl-cta">
+          <a class="mrl-btn" href="getting_started.html">Get started</a>
+          <button
+            class="mrl-pill"
+            type="button"
+            data-copy="uv add magpylib-material-response"
+          >
+            <code>uv add magpylib-material-response</code><span>copy</span>
+          </button>
+          <a class="mrl-skip" href="#in-short">Skip to the docs ↓</a>
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <h3>A magnet, in empty space.</h3>
+        <p>
+          Magpylib computes its field in closed form, at any point. These are
+          its field lines, cut through the middle.
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <h3>Now set it on a steel plate.</h3>
+        <p>
+          To Magpylib the plate isn't there. Its magnets have a fixed
+          polarization, and nothing else answers: the field stays as it was.
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <h3>But steel answers.</h3>
+        <p>
+          The magnet's field magnetizes the plate, and the plate's field adds to
+          the magnet's. Turn up its susceptibility, and the flux takes the short
+          way back, through the steel.
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <p class="mrl-big"><span data-fill="gain">+29</span> %</p>
+        <p>
+          Half a millimetre above the magnet the field is
+          <b data-fill="bz-plate">473 mT</b>, not
+          <b data-fill="bz-alone">367 mT</b>. Magpylib alone misses that; this
+          package computes it.
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <h3>And the plate holds on.</h3>
+        <p>
+          Lift the magnet: the pull falls from
+          <b data-fill="force-contact">33 N</b> at contact to
+          <b data-fill="force-far">0.5 N</b> at 8 mm. A solved model is a
+          Magpylib source, so <code>magpy.getFT</code> reads the force off it.
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <p class="mrl-kicker">Three solvers, one model</p>
+        <h3>Face charge solves the surface.</h3>
+        <p>
+          A part that is linear and uniform inside carries its whole response as
+          a charge on its faces: north red, south green. No volume mesh;
+          <b data-fill="panels">… panels</b>,
+          <b data-fill="t-face charge">0.17 s</b>.
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <h3>Cells solve the volume.</h3>
+        <p>
+          One polarization per cell, for what face charge can't do: saturation
+          on a B–H curve, anisotropy, B inside a part.
+          <b data-fill="cells">2,916 cells</b>,
+          <b data-fill="t-cells">0.8 s</b>.
+        </p>
+      </section>
+
+      <section class="mrl-beat">
+        <h3>Finite elements mesh the air too.</h3>
+        <p>
+          NGSolve, independent of the other two, to check them.
+          <b data-fill="elements">14,229 elements</b>,
+          <b data-fill="t-finite elements">4.3 s</b>.
+        </p>
+      </section>
+    </div>
+  </div>
+
+  <section class="mrl-agree">
+    <p class="mrl-kicker">Three solvers, one answer</p>
+    <h3>Drawn three times, it's one line.</h3>
+    <p class="mrl-sub">
+      B<sub>z</sub> on the axis above the magnet, on the plate and alone.
+    </p>
+    <svg
+      class="mrl-chart"
+      viewBox="0 0 800 400"
+      role="img"
+      aria-label="Bz above the magnet: the three solvers give one curve, well above the magnet's alone"
+    ></svg>
+    <div class="mrl-race" aria-label="Solve time of each solver on this model">
+      <p class="mrl-race-title">Each solve, at its real pace</p>
+      <div class="mrl-race-row" data-solver="face charge">
+        <b class="mrl-race-name">Face charge</b>
+        <span class="mrl-race-track"
+          ><span class="mrl-race-bar mrl-fc"></span
+        ></span>
+        <span class="mrl-race-time">0.00 s</span>
+        <span class="mrl-race-acc"
+          >within <i data-fill="err-face charge">0.08 %</i> of finite
+          elements</span
+        >
+      </div>
+      <div class="mrl-race-row" data-solver="cells">
+        <b class="mrl-race-name">Cells</b>
+        <span class="mrl-race-track"
+          ><span class="mrl-race-bar mrl-cells"></span
+        ></span>
+        <span class="mrl-race-time">0.00 s</span>
+        <span class="mrl-race-acc"
+          >within <i data-fill="err-cells">0.6 %</i>, 4 cells across the
+          plate</span
+        >
+      </div>
+      <div class="mrl-race-row" data-solver="finite elements">
+        <b class="mrl-race-name">Finite elements</b>
+        <span class="mrl-race-track"
+          ><span class="mrl-race-bar mrl-fem"></span
+        ></span>
+        <span class="mrl-race-time">0.00 s</span>
+        <span class="mrl-race-acc">the reference, order 4</span>
+      </div>
+      <p class="mrl-race-head">
+        Face charge is done <b data-fill="speedup">26×</b> sooner than finite
+        elements.
+        <button class="mrl-replay" type="button">Run again</button>
+      </p>
+    </div>
+    <p class="mrl-note">
+      Timed on <span data-fill="machine">an Apple M4 Pro</span>.
+    </p>
+  </section>
+
+  <section class="mrl-code">
+    <p class="mrl-kicker">In code</p>
+    <h3>Give a part a susceptibility. Solve. Read.</h3>
+    <pre><code><span class="mrl-line"><i>import</i> magpylib <i>as</i> magpy</span>
+<span class="mrl-line"><i>from</i> magpylib_material_response <i>import</i> solve_face_charge</span>
+<span class="mrl-line"> </span>
+<span class="mrl-line">magnet = magpy.magnet.Cuboid(</span>
+<span class="mrl-line">    dimension=(<em>0.01</em>, <em>0.01</em>, <em>0.005</em>), position=(<em>0</em>, <em>0</em>, <em>0.0055</em>), polarization=(<em>0</em>, <em>0</em>, <em>1.2</em>)</span>
+<span class="mrl-line">)</span>
+<span class="mrl-line">plate = magpy.magnet.Cuboid(dimension=(<em>0.04</em>, <em>0.04</em>, <em>0.006</em>), polarization=(<em>0</em>, <em>0</em>, <em>0</em>))</span>
+<span class="mrl-line">plate.susceptibility = <em>1000</em>  <s># soft iron</s></span>
+<span class="mrl-line"> </span>
+<span class="mrl-line">solved = solve_face_charge(magpy.Collection(magnet, plate))</span>
+<span class="mrl-line">magpy.getB(solved, (<em>0</em>, <em>0</em>, <em>0.0085</em>))  <s># Bz: 0.473 T, and 0.367 without the plate</s></span></code></pre>
+    <p class="mrl-cta">
+      <a class="mrl-btn" href="getting_started.html">Get started</a>
+      <a class="mrl-link" href="guide/choosing.html"
+        >Which solver for my model →</a
+      >
+    </p>
+  </section>
+</div>
+<script src="_static/landing/landing.js"></script>

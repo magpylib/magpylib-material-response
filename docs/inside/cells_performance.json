@@ -1,0 +1,107 @@
+{
+  "machine": "Apple M4 Pro, 8 threads",
+  "date": "2026-11-07",
+  "versions": {
+    "magpylib": "6.2.0",
+    "magpylib-material-response": "0.10.3.dev3+g92f930c86"
+  },
+  "scaling": [
+    {
+      "solver": "direct",
+      "cells": 216,
+      "time": 0.017980500007979572,
+      "peak_mb": 10.898435
+    },
+    {
+      "solver": "direct",
+      "cells": 512,
+      "time": 0.06628066601115279,
+      "peak_mb": 50.273489
+    },
+    {
+      "solver": "direct",
+      "cells": 1000,
+      "time": 0.19423841600655578,
+      "peak_mb": 145.633222
+    },
+    {
+      "solver": "direct",
+      "cells": 1728,
+      "time": 0.5619951660046354,
+      "peak_mb": 432.826699
+    },
+    {
+      "solver": "iterative",
+      "cells": 216,
+      "time": 0.018909291975433007,
+      "peak_mb": 2.139265
+    },
+    {
+      "solver": "iterative",
+      "cells": 512,
+      "time": 0.0371102079807315,
+      "peak_mb": 5.023144
+    },
+    {
+      "solver": "iterative",
+      "cells": 1000,
+      "time": 0.07142166601261124,
+      "peak_mb": 9.782923
+    },
+    {
+      "solver": "iterative",
+      "cells": 1728,
+      "time": 0.12059525001677684,
+      "peak_mb": 16.924358
+    },
+    {
+      "solver": "iterative",
+      "cells": 4096,
+      "time": 0.26868354200269096,
+      "peak_mb": 40.078799
+    },
+    {
+      "solver": "iterative",
+      "cells": 8000,
+      "time": 0.5001895829918794,
+      "peak_mb": 70.171962
+    }
+  ],
+  "topology": [
+    {
+      "topology": "single body",
+      "cells": 1000,
+      "structure": "1 grid",
+      "iter / direct time": 0.68,
+      "agreement": "4e-09"
+    },
+    {
+      "topology": "4 bodies",
+      "cells": 864,
+      "structure": "4 grid",
+      "iter / direct time": 0.58,
+      "agreement": "2e-09"
+    },
+    {
+      "topology": "24 bodies",
+      "cells": 1536,
+      "structure": "24 grid",
+      "iter / direct time": 0.71,
+      "agreement": "2e-09"
+    },
+    {
+      "topology": "24 bodies, individually rotated",
+      "cells": 1536,
+      "structure": "24 grid",
+      "iter / direct time": 0.92,
+      "agreement": "2e-09"
+    },
+    {
+      "topology": "meshed cylinder",
+      "cells": 110,
+      "structure": "1 generic",
+      "iter / direct time": 1.0,
+      "agreement": "4e-09"
+    }
+  ]
+}

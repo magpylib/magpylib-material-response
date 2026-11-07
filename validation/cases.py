@@ -125,8 +125,8 @@ def _line(start, stop, n):
 
 
 def _cuboids():
-    """Three cuboids, each magnetized and soft, turned against each other: the
-    model of docs/examples/cuboids_demagnetization.md, its 301 sensors below."""
+    """Three cuboids, each magnetized and soft, turned against each other, and
+    301 sensors below them: the model of a former docs example, kept here."""
     cube1 = magpy.magnet.Cuboid(
         polarization=(0, 0, 1), dimension=(1 * MM,) * 3, style_label="1 T, χ = 0.3"
     )
@@ -234,8 +234,8 @@ def _wound_core():
 
 
 def _soft_magnets():
-    """A magnet and a turned soft cube (chi = 3999): the model of
-    docs/examples/soft_magnets.md, on its three sensor lines."""
+    """A magnet and a turned soft cube (chi = 3999), on three sensor lines: the
+    model of docs/examples/fem_check.md, and of a former docs example."""
     magnet = magpy.magnet.Cuboid(
         polarization=(0, 0, 1),
         dimension=(1 * MM, 1 * MM, 2 * MM),

@@ -50,3 +50,31 @@ html[data-theme="dark"]
   background: none;
   padding: 0;
 }
+
+/* The examples gallery: cards with a 4:3 picture, as magpylib-studio's */
+.magpy-gallery-card .sd-card-body {
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.magpy-gallery-card .sd-card-body img {
+  display: block;
+  width: calc(100% + 1.5rem);
+  max-width: none;
+  margin: -0.75rem -0.75rem 0.6rem;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.magpy-gallery-card .sd-card-body p {
+  margin-bottom: 0.4rem;
+}
+
+/* On a phone the package's long name pushed the header's buttons past the
+screen's edge, and every page scrolled sideways: there the logo stands alone. */
+@media (max-width: 480px) {
+  .navbar-brand .title {
+    display: none;
+  }
+}
