@@ -7,19 +7,18 @@ import warnings
 
 import magpylib as magpy
 import numpy as np
-from magpylib._src.style import DipoleStyle
 from scipy.spatial.transform import Rotation
 
 MU0 = magpy.mu_0
 B_WARN = 10.0  # T: stronger is most likely H in A/m given as B
 #: Context variables of recorders of magpylib calls, by name: magpylib's hook
 #: and studio's ``@scene``. Their default is None, recording nothing.
-#: The arrow's length, in tenths of the scene (magpylib's autosize) per unit of
-#: ``style.size``: a dipole's is one.
-ARROW_LENGTH = 3
 RECORDERS = ("magpylib_recorder", "magpylib_studio_building")
 #: Set while from_json loads: a field saved as B may have been given as H.
 LOADING = contextvars.ContextVar("magpylib_material_response_loading", default=False)
+#: The arrow's length, in tenths of the scene (magpylib's autosize) per unit of
+#: ``style.size``: a dipole's is one.
+ARROW_LENGTH = 3
 
 
 def unseen(function, *args):
@@ -61,7 +60,7 @@ class UniformField(magpy.misc.CustomSource):
         frame. Give one of them: in vacuum ``B = mu0 H``.
     position, orientation, style, **kwargs
         As for any magpylib source. It turns with its orientation; its position
-        changes nothing. The style is a dipole's: ``show`` draws an arrow above
+        changes no field. The style is a dipole's: ``show`` draws an arrow above
         the scene, ``style.size`` times three tenths of the scene long.
 
     Examples
@@ -73,10 +72,10 @@ class UniformField(magpy.misc.CustomSource):
     >>> model = magpy.Collection(soft, UniformField(B=(0, 0, 0.1)))
     """
 
-    _style_class = DipoleStyle
+    _style_class = magpy.graphics.style.DipoleStyle
     _style_family = ("dipole",)
     _autosize = True  # show() passes the scene's size to get_trace
-    _scene_box = True  # and, from magpylib 6.3, the box the scene fills
+    _scene_box = True  # and, with magpylib#1079, the box the scene fills
 
     def __init__(
         self,
@@ -153,8 +152,8 @@ class UniformField(magpy.misc.CustomSource):
         """An arrow along B above the scene's centre, ``style.size`` times
         three tenths of the scene long, or ``style.size`` metres with
         ``style.sizemode="absolute"``. A field of zero is a dot. Without the
-        scene's box, shown alone or by a magpylib before 6.3, it is drawn at the
-        field's position."""
+        scene's box, shown alone or by a magpylib without #1079, it is drawn at
+        the field's position."""
         style = self.style
         size = style.size
         if autosize is not None and style.sizemode == "scaled":
