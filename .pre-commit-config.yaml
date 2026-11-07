@@ -36,9 +36,9 @@ repos:
         types_or: [yaml, markdown, html, css, scss, javascript, json]
         args: [--prose-wrap=always]
         # copied from magpylib, kept close for comparison; the validation's
-        # JSON files are written by its scripts, and the solver map is a
-        # self-contained page, edited as it is
-        exclude: ^(docs/_static/(webcode|map)/|validation/.*\.json$)
+        # JSON files and the docs' stored results are written by their scripts,
+        # and the solver map is a self-contained page, edited as it is
+        exclude: ^(docs/_static/(webcode|map)/|(validation|docs)/.*\.json$)
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.16.10"

@@ -10,7 +10,8 @@ and this project adheres to
 
 ### Changed
 
-- The documentation is rewritten for engineers: getting started with the three
+- The documentation is rewritten for engineers: a landing page that tells what
+  the package does as you scroll, on real solves; getting started with the three
   solvers on one model, a guide to choosing between them, a user guide per
   solver, an "Inside the solvers" section with an interactive map of each
   solver, and one bibliography that credits the papers behind every step

@@ -1,4 +1,18 @@
+---
+html_theme.sidebar_secondary.remove: true
+---
+
 # magpylib-material-response
+
+<!-- the scrolling story, data from landing_data.py; not in the Markdown twin -->
+
+````{only} not sphinx_llm_markdown
+```{raw} html
+:file: _static/landing/landing.html
+```
+````
+
+## In short
 
 ```{include} ../README.md
 :start-after: <!-- SPHINX-START -->

@@ -165,8 +165,8 @@ html_js_files = [
 
 # Static files (CSS/JS)
 html_static_path = ["_static"]
-# the solver map takes the whole width
-html_sidebars = {"inside/map": []}
+# the landing page and the solver map take the whole width
+html_sidebars = {"index": [], "inside/map": []}
 html_css_files = ["fullwidth.css"]
 
 # ── Fix MathJax on pages with plotly figures ────────────────────────────────
