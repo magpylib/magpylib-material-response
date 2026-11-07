@@ -67,14 +67,20 @@ with the grade, the heat treatment and the field, so take your supplier's values
 where they matter. A datasheet's initial and maximum μr bracket the linear
 range. Above μr of about 100, χ = μr − 1 is μr in all but name.
 
-| Material                                | μr, typical                       | Saturates near |
-| --------------------------------------- | --------------------------------- | -------------- |
-| structural and low-carbon steel         | a few hundred to about 2,000      | 2 T            |
-| soft iron, annealed                     | a few thousand to over 10,000     | 2.1 T          |
-| electrical steel (silicon iron)         | a few thousand to 10,000 and more | 2 T            |
-| MnZn ferrite                            | 1,000 to 15,000                   | 0.3 to 0.5 T   |
-| NiZn ferrite                            | 10 to 2,000                       | 0.2 to 0.4 T   |
-| permalloy, mu-metal (about 80 % nickel) | 10,000 to 100,000 and more        | 0.7 to 0.8 T   |
+| Material                                | μr, typical                                     | Saturates near |
+| --------------------------------------- | ----------------------------------------------- | -------------- |
+| structural and low-carbon steel         | up to about 2,000                               | 2 to 2.1 T     |
+| soft iron, annealed                     | a few thousand to over 10,000                   | 2.1 T          |
+| electrical steel (silicon iron)         | a few thousand to 10,000 and more               | 2 T            |
+| MnZn ferrite                            | 1,000 to 15,000                                 | 0.3 to 0.55 T  |
+| NiZn ferrite                            | 10 to 2,000                                     | 0.2 to 0.4 T   |
+| permalloy, mu-metal (about 80 % nickel) | tens of thousands to several hundred thousand ¹ | 0.7 to 0.8 T   |
+
+¹ Annealed; bending and machining after the anneal lower it many times over.
+
+Sources: VAC's soft magnetic materials catalogue (PHT-001) for iron, silicon
+iron and nickel iron; Cleveland-Cliffs DI-MAX sheets for electrical steel;
+Ferroxcube and Fair-Rite material sheets for ferrites.
 
 A linear χ holds while the part stays below the knee of its curve. Ferrites and
 nickel alloys reach it at a fraction of a steel's flux density: check them as
@@ -87,16 +93,21 @@ part's own axes ([Building a model](model.md)), describes that.
 Typical values at room temperature, rounded. The remanence falls as a magnet
 warms: take Br at the working temperature.
 
-| Material       | Br            | μrec                                | χ = μrec − 1 |
-| -------------- | ------------- | ----------------------------------- | ------------ |
-| sintered NdFeB | 1.1 to 1.5 T  | 1.03 to 1.10                        | 0.03 to 0.10 |
-| SmCo           | 0.85 to 1.2 T | 1.02 to 1.10                        | 0.02 to 0.10 |
-| hard ferrite   | 0.2 to 0.45 T | 1.05 to 1.2                         | 0.05 to 0.2  |
-| AlNiCo         | 0.6 to 1.35 T | from about 1.3 to several, by grade | 0.3 and more |
+| Material       | Br             | μrec                       | χ = μrec − 1 |
+| -------------- | -------------- | -------------------------- | ------------ |
+| sintered NdFeB | 1.1 to 1.5 T   | 1.03 to 1.10               | 0.03 to 0.10 |
+| SmCo           | 0.85 to 1.2 T  | 1.02 to 1.10               | 0.02 to 0.10 |
+| hard ferrite   | 0.2 to 0.45 T  | 1.05 to 1.2                | 0.05 to 0.2  |
+| AlNiCo         | 0.55 to 1.35 T | 1.3 to about 6, by grade ² | 0.3 to 5     |
 
-The recoil line is linear only above the knee of the demagnetization curve. A
-magnet driven past it, as an AlNiCo is easily, loses remanence until it is
-magnetized again; a susceptibility does not follow that.
+² Arnold's AlNiCo grades: 1.3 for AlNiCo 9, about 2 for 5-7 and 8, about 4 for
+5, 6 for 2. The other rows follow MMPA 0100-00, VAC's VACODYM and VACOMAX sheets
+and Arnold's catalogues.
+
+The demagnetization curve is a straight line of slope μrec only above its knee.
+A magnet driven past the knee, as an AlNiCo is easily, keeps a lower remanence:
+it returns along a parallel line below the first until it is magnetized again. A
+susceptibility does not follow that.
 
 ## How much does the exact value matter?
 
@@ -120,8 +131,8 @@ its Br.
 ## In short
 
 - χ = μr − 1; a magnet's `polarization` is its Br, its χ its μrec − 1.
-- Soft iron and steels: χ in the hundreds to over ten thousand, saturating near
+- Soft iron and steels: χ in the thousands to tens of thousands, saturating near
   2 T; ferrites and nickel alloys saturate far lower.
-- Magnets: χ from 0.02 to 0.2, except AlNiCo.
+- Magnets: χ from 0.02 to 0.2, AlNiCo 0.3 to 5.
 - Where the part has air around it, a large χ need not be exact; a magnet's Br
   must be.

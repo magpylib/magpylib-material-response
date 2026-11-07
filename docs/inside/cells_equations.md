@@ -200,11 +200,12 @@ solver, so both solve the same system.
 
 GMRES stops when the residual falls below `solver_tol` relative to the
 right-hand side, which bounds the residual, not the error. Against the direct
-solve, the polarizations agree within about 2 × `solver_tol` for hard magnets
-and susceptibilities up to 3. For soft iron at χ = 1000 the gap grows with the
-cell count, to 160 × `solver_tol` at 4,096 cells and 580 × at 32,768: tighten
-`solver_tol` for high susceptibilities. GMRES that does not converge within
-`max_iter` raises `RuntimeError` rather than return a partial result.
+solve, the polarizations agree within a few times `solver_tol` for hard magnets:
+0.03 to 3.4 times on four models at χ 0.05 to 0.2. For soft iron at χ = 1000 the
+gap grows with the cell count, to 160 × `solver_tol` at 4,096 cells and 580 × at
+32,768: tighten `solver_tol` for high susceptibilities. GMRES that does not
+converge within `max_iter` raises `RuntimeError` rather than return a partial
+result.
 
 The preconditioner is block-Jacobi, one 3×3 block per cell:
 
