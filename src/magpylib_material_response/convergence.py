@@ -216,6 +216,18 @@ def _last_change_estimate(values):
     return ratio, change, SAFETY_FACTOR * change, errors
 
 
+def _increasing_integers(name, steps):
+    """``steps`` as a list of ints, checked: at least two positive integers,
+    increasing. ``name`` names them in the error."""
+    if len(steps) < 2 or any(int(m) != m or m < 1 for m in steps):
+        msg = f"{name} must be at least two positive integers; got {steps}."
+        raise ValueError(msg)
+    if np.any(np.diff(steps) <= 0):
+        msg = f"{name} must increase; got {steps}."
+        raise ValueError(msg)
+    return [int(m) for m in steps]
+
+
 def _evaluator(quantity):
     """What a study reads from each solve: ``quantity`` itself when it is a
     function of the solved model, else B at its observers, one row each."""
@@ -451,10 +463,11 @@ def compare(a, b) -> Comparison:
 
     Parameters
     ----------
-    a, b : MeshStudy, FemStudy or alike
+    a, b : MeshStudy, FaceChargeStudy, FemStudy or alike
         Studies of the same quantity, such as B at the same observers: any
         objects with ``values``, of which the last is compared, and relative
-        ``errors`` per entry for it, as :func:`study_cells` and
+        ``errors`` per entry for it, as :func:`study_cells`,
+        :func:`~magpylib_material_response.face_charge.study_face_charge` and
         :func:`~magpylib_material_response.fem.study_fem` give them.
 
     Returns

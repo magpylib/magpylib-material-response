@@ -10,6 +10,7 @@ import pickle
 import subprocess
 import sys
 import time
+import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 
@@ -2361,7 +2362,7 @@ def test_study_face_charge_bounds_the_error_on_a_cylinder():
     true = np.linalg.norm(study.values[-1] - reference) / np.linalg.norm(reference)
     assert study.ratio < 1
     assert true <= study.error < 0.01
-    assert compare(study, study).agree.all()
+    assert compare(study, study_face_charge(model, observers, (2, 3, 4))).agree.all()
 
 
 def test_study_face_charge_warns_on_a_sphere():
@@ -2371,6 +2372,14 @@ def test_study_face_charge_warns_on_a_sphere():
     model = magpy.Collection(sphere, UniformField(B=(0, 0, 0.01)))
     with pytest.warns(UserWarning, match="sphere"):
         study_face_charge(model, [(0, 0, 0.008)], (1, 2, 3))
+    sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 1))  # fixed
+    cube = magpy.magnet.Cuboid(
+        dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(0.02, 0, 0)
+    )
+    cube.susceptibility = 100
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        study_face_charge(magpy.Collection(sphere, cube), [(0.02, 0, 0.01)], (1, 2, 3))
 
 
 @pytest.mark.parametrize("levels", [(2,), (3, 2), (0, 1, 2), (1.5, 2, 3)])

@@ -360,16 +360,20 @@ def test_segment_cells_are_averaged_from_a_susceptibility_of_one(
 def test_alike_segment_pairs_share_one_average():
     """A meshed cylinder's pairs repeat, turned about its axis and shifted
     along it, and are averaged once: the blocks are those of averaging every
-    pair in the global frame, for a turned cylinder and loose segments."""
+    pair in the global frame, for a turned cylinder, loose segments and a
+    cylinder 10,000 times smaller in the same model."""
     turned = magpy.magnet.Cylinder(polarization=(0, 0, 0), dimension=(3e-3, 2e-3))
-    turned.rotate_from_angax(37, (1, 2, 0.5)).move((1e-3, -1e-3, 0))
+    turned.rotate_from_angax(37, (1, 2, 0.5)).move((1e-2, -1e-3, 0))
     loose = magpy.magnet.CylinderSegment(
         polarization=(0, 0, 0),
         dimension=(0, 1e-3, 1e-3, -50, 130),
-        position=(0, 0, 2e-3),
+        position=(1e-2, 0, 2e-3),
     )
     loose.rotate_from_angax(70, "x")
+    tiny = magpy.magnet.Cylinder(polarization=(0, 0, 0), dimension=(3e-7, 2e-7))
+    # at the origin, where the global-frame average below keeps its digits
     segments = [*mesh_Cylinder(turned, 40).sources_all, loose]
+    segments += mesh_Cylinder(tiny, 40).sources_all
     rows, cols, blocks = cells._segment_averages(
         segments, np.arange(len(segments)), np.ones(len(segments), bool)
     )
@@ -401,8 +405,9 @@ def test_alike_segment_pairs_share_one_average():
             for p, (i, j) in enumerate(zip(rows, cols, strict=True))
         ]
     )
+    # the kernel itself moves by up to 1e-10 with the frame for cells this close
     np.testing.assert_allclose(
-        blocks, expected, rtol=0, atol=1e-12 * np.abs(expected).max()
+        blocks, expected, rtol=0, atol=1e-9 * np.abs(expected).max()
     )
 
 

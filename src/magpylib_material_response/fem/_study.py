@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from magpylib_material_response.convergence import (
+    _increasing_integers,
     _last_change_estimate,
     _warn_no_estimate,
 )
@@ -125,13 +126,7 @@ def study_fem(
       version of the finite element method. Comput. Methods Appl. Mech. Eng.
       133(3-4), 319-346.
     """
-    if len(orders) < 2 or any(int(p) != p or p < 1 for p in orders):
-        msg = f"orders must be at least two positive integers; got {orders}."
-        raise ValueError(msg)
-    if np.any(np.diff(orders) <= 0):
-        msg = f"orders must increase; got {orders}."
-        raise ValueError(msg)
-    orders = [int(p) for p in orders]
+    orders = _increasing_integers("orders", orders)
     if len(orders) < 3:  # said before the solves, which may take minutes
         _warn_no_estimate("orders", 2, "a higher order", stacklevel=2)
     if callable(quantity):

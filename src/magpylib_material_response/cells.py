@@ -736,9 +736,9 @@ SEGMENT_AVERAGE_FROM_CHI = 1.0
 #: Gauss points per direction (radius, angle, height) of a cell average: 3
 #: instead of 2 moves that tube's moment by 0.5 points, 4 % of its error.
 SEGMENT_AVERAGE_POINTS = 2
-#: Decimals to which a pair of cylinder-segment cells is described, in the
-#: largest cell's size, its angles in turns, before alike pairs share one
-#: average: far below the rounding of the averages themselves.
+#: Decimals to which a pair of cylinder-segment cells is described, its
+#: lengths in the observer cell's size, its angles in turns, before alike pairs
+#: share one average: far below the rounding of the averages themselves.
 SEGMENT_PAIR_DIGITS = 10
 
 
@@ -814,9 +814,12 @@ def _segment_averages(magnets_list, indices, strong):
     canon[:, 3], canon[:, 4] = 0.0, phi2 - phi1
     turned = np.einsum("pki,pkj->pij", frames[i], frames[j])  # j's frame in i's
     shift = np.einsum("pki,pk->pi", frames[i], positions[j] - positions[i])
-    size = rho.max()
+    # lengths in the observer cell's own size, which the key holds too: cells
+    # of very different sizes keep their digits in one model
+    size = rho[i][:, None]
     key = np.hstack(
         [
+            np.log(size),
             canon[i][:, [0, 1, 2]] / size,
             canon[i][:, [4]] / 360,
             canon[j][:, [0, 1, 2]] / size,
@@ -826,7 +829,11 @@ def _segment_averages(magnets_list, indices, strong):
         ]
     )
     key = np.round(key, SEGMENT_PAIR_DIGITS) + 0.0  # + 0.0: -0.0 as 0.0
-    _, first, alike = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    # one row as one opaque value: unique on rows sorts far slower
+    rows = np.ascontiguousarray(key).view(
+        np.dtype((np.void, key.itemsize * key.shape[1]))
+    )
+    _, first, alike = np.unique(rows.ravel(), return_index=True, return_inverse=True)
     alike = alike.reshape(-1)
 
     with timelog(
@@ -835,11 +842,13 @@ def _segment_averages(magnets_list, indices, strong):
         gauss, weights = _segment_quadrature(canon)
         q = gauss.shape[1]
         own = np.empty((len(first), 3, 3))  # in the observer's turned frame
+        rotations = R.from_matrix(turned[first])
         step = max(1, KERNEL_PAIRS_PER_CALL // q)
         for start in range(0, len(first), step):
             pairs = first[start : start + step]
             ii, jj = i[pairs], j[pairs]
             src = np.repeat(pairs, q)
+            rotation = rotations[np.repeat(np.arange(start, start + len(pairs)), q)]
             for k in range(3):
                 # the unit polarization along the observer's k, in each source's
                 # frame
@@ -849,12 +858,12 @@ def _segment_averages(magnets_list, indices, strong):
                     canon[np.repeat(jj, q)],
                     turned[src, k, :],
                     shift[src],
-                    R.from_matrix(turned[src]),
+                    rotation,
                 ).reshape(len(ii), q, 3)
                 own[start : start + step, :, k] = magpy.mu_0 * np.einsum(
                     "pqm,pq->pm", H, weights[ii]
                 )
-        blocks = np.einsum("pab,pbc,pdc->pad", frames[i], own[alike], frames[i])
+        blocks = frames[i] @ own[alike] @ frames[i].transpose(0, 2, 1)
 
     volumes = np.array([s.volume for s in segments])
     order = np.lexsort((j, i))

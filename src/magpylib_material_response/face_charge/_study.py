@@ -11,10 +11,12 @@ import numpy as np
 
 from magpylib_material_response.convergence import (
     _evaluator,
+    _increasing_integers,
     _last_change_estimate,
     _warn_no_estimate,
 )
 from magpylib_material_response.face_charge._apply import solve_face_charge
+from magpylib_material_response.meshing import _responds
 
 
 @dataclass(frozen=True)
@@ -116,17 +118,13 @@ def study_face_charge(
     levels 3-5; a warning says so. Fields at single observers do not converge
     monotonically, so the per-observer errors are indicative.
     """
-    levels = list(levels)
-    if len(levels) < 2 or any(int(m) != m or m < 1 for m in levels):
-        msg = f"levels must be at least two positive integers; got {levels}."
-        raise ValueError(msg)
-    if np.any(np.diff(levels) <= 0):
-        msg = f"levels must increase; got {levels}."
-        raise ValueError(msg)
-    levels = [int(m) for m in levels]
+    levels = _increasing_integers("levels", list(levels))
     if len(levels) < 3:  # said before the solves
         _warn_no_estimate("levels", 2, "a higher level", stacklevel=2)
-    if any(isinstance(src, magpy.magnet.Sphere) for src in collection.sources_all):
+    if any(
+        isinstance(src, magpy.magnet.Sphere) and _responds(src)
+        for src in getattr(collection, "sources_all", ())  # solve says what else
+    ):
         warnings.warn(
             "A sphere's facets are cut anew at each level and its error falls "
             "unevenly: the estimate can fall short, by up to 2.6 times on a soft "
