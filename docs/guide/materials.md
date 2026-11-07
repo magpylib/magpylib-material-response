@@ -95,8 +95,8 @@ warms: take Br at the working temperature.
 | AlNiCo         | 0.6 to 1.35 T | from about 1.3 to several, by grade | 0.3 and more |
 
 The recoil line is linear only above the knee of the demagnetization curve. A
-magnet driven past it, as an AlNiCo is easily, loses remanence until it is magnetized again; a
-susceptibility does not follow that.
+magnet driven past it, as an AlNiCo is easily, loses remanence until it is
+magnetized again; a susceptibility does not follow that.
 
 ## How much does the exact value matter?
 
@@ -121,8 +121,7 @@ its Br.
 
 - χ = μr − 1; a magnet's `polarization` is its Br, its χ its μrec − 1.
 - Soft iron and steels: χ in the hundreds to over ten thousand, saturating near
-  2 T;
-  ferrites and nickel alloys saturate far lower.
+  2 T; ferrites and nickel alloys saturate far lower.
 - Magnets: χ from 0.02 to 0.2, except AlNiCo.
 - Where the part has air around it, a large χ need not be exact; a magnet's Br
   must be.

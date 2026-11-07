@@ -16,12 +16,12 @@ kernelspec:
 
 A susceptibility χ is linear: a part with χ = 1000 carries any flux it is given,
 while real steel saturates between about 1.5 and 2.1 T
-([Material values](materials.md)). A part that carries more than its
-steel can needs its B–H curve. That raises five questions: does a part saturate?
-How does a datasheet's curve go in? Which solver follows it? How do you check
-the result? What does it cost? This page answers them on a 4 × 4 × 8 mm steel
-pin standing on a 20 × 20 × 10 mm NdFeB magnet, a pole piece that gathers the
-magnet's flux into its tip.
+([Material values](materials.md)). A part that carries more than its steel can
+needs its B–H curve. That raises five questions: does a part saturate? How does
+a datasheet's curve go in? Which solver follows it? How do you check the result?
+What does it cost? This page answers them on a 4 × 4 × 8 mm steel pin standing
+on a 20 × 20 × 10 mm NdFeB magnet, a pole piece that gathers the magnet's flux
+into its tip.
 
 ## Does the part saturate?
 
@@ -51,8 +51,8 @@ print(f"mean polarization of the pin: {linear.children[1].mean_polarization[2]:.
 ```
 
 That is past this page's curve, which saturates at 1.58 T, and near the limit of
-any steel: the linear answer overstates the pin, and the
-field at its tip. Below the knee of the curve, the linear solve holds.
+any steel: the linear answer overstates the pin, and the field at its tip. Below
+the knee of the curve, the linear solve holds.
 
 The mean is only a mean. Where the flux turns inside a part, as in a plate under
 a magnet, flux in opposite directions cancels in it, and the mean stays low

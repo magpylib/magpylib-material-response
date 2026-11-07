@@ -183,9 +183,9 @@ print(f"finite elements: {by_fem.moment[2]:.4f} A m²")
 ## Drawing it
 
 `magpy.show()` draws all three results with any Magpylib backend. With plotly
-and pyvista a sheet is coloured by its charge, a north pole red and a south pole green; parts solved
-together share one colour scale, `style.charge.level`, in A/m.
-`style.mesh.grid.show` draws the panels. The `"widget"` backend comes with
+and pyvista a sheet is coloured by its charge, a north pole red and a south pole
+green; parts solved together share one colour scale, `style.charge.level`, in
+A/m. `style.mesh.grid.show` draws the panels. The `"widget"` backend comes with
 magpylib-studio and adds field lines; Magpylib's own backends draw the parts
 alone.
 
