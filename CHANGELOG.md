@@ -10,6 +10,12 @@ and this project adheres to
 
 ### Added
 
+- `fem.from_step` reads a part from a STEP file as a `TriangularMesh` that keeps
+  its exact solid: Magpylib computes and draws its triangles, and `solve_fem`
+  meshes the solid itself, its elements curved onto the real bores and fillets.
+  A cylinder read this way solves as the `Cylinder` within 0.05 %, where its own
+  triangles are 1.5 % off. `to_json` keeps the STEP text
+  ([#195](https://github.com/magpylib/magpylib-material-response/issues/195))
 - `solve_face_charge(..., widen_curves=True)`, and `study_face_charge`, read a
   `TriangularMesh`'s smooth edges as facets of curved faces, as a CAD export
   cuts a bore or a fillet, and move their vertices out so that the part keeps

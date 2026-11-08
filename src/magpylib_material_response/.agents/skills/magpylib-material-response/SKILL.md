@@ -161,7 +161,9 @@ J = [c.polarization for c in solved.sources_all if hasattr(c, "polarization")]
 - `solve_fem(model, order=3)` meshes by itself. Start at order 3: on a curve
   order 2 can stop with "did not settle". It refuses a coil through a hole in a
   magnet, and pass `observers=` to refine the mesh where you read. Its result
-  cannot be pickled or saved.
+  cannot be pickled or saved. A CAD part from a STEP file:
+  `fem.from_step("part.step", polarization=(0, 0, 0))` (millimetres to metres)
+  is a `TriangularMesh` whose exact solid `solve_fem` meshes.
 
 ## Many solves, read at the same points
 

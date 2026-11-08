@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import pickle
 
 import magpylib as magpy
@@ -9,7 +10,8 @@ from scipy.spatial.transform import Rotation
 
 pytest.importorskip("ngsolve")
 
-from magpylib_material_response.fem import _solve, solve_fem, study_fem
+from magpylib_material_response import UniformField, from_json, to_json
+from magpylib_material_response.fem import _solve, from_step, solve_fem, study_fem
 
 B_EXT = 0.01
 
@@ -590,3 +592,70 @@ def test_refuses_what_it_cannot_model(model, kwargs, error, match):
     kwargs = {"observers": [(0, 0, 5)], **kwargs}
     with pytest.raises(error, match=match):
         solve_fem(model(), 2, **kwargs)
+
+
+# ── a part read from a STEP file (from_step) ───────────────────────────────
+
+
+def _cylinder_step(folder):
+    """A Ø10 x 8 mm cylinder written as a STEP file, by netgen's OpenCASCADE."""
+    from netgen import occ  # noqa: PLC0415
+
+    path = folder / "cylinder.step"
+    occ.Cylinder(occ.Pnt(0, 0, -4), occ.Z, r=5, h=8).WriteStep(str(path))
+    return path
+
+
+def test_from_step_solves_the_exact_solid(tmp_path):
+    """Finite elements on a from_step part solve its exact solid: as the
+    Cylinder itself, where its own triangles alone are 30 times further off."""
+    B0 = np.array([0.004, 0.003, 0.008])
+    obs = np.array(
+        [
+            (6e-3 * np.cos(a), 6e-3 * np.sin(a), z)
+            for a in (0.1, 1.3, 2.9)
+            for z in (-3e-3, 0, 3.5e-3)
+        ]
+    )
+
+    def solved(src):
+        src.susceptibility = 1000
+        model = magpy.Collection(src, UniformField(B=B0))
+        return solve_fem(model, order=3, observers=obs).getB(obs)
+
+    part = from_step(_cylinder_step(tmp_path), polarization=(0, 0, 0))
+    B = solved(magpy.magnet.Cylinder(polarization=(0, 0, 0), dimension=(10e-3, 8e-3)))
+    own = np.linalg.norm(B - B0)
+    assert np.linalg.norm(solved(part) - B) / own < 2e-3
+    triangles = magpy.magnet.TriangularMesh(
+        polarization=(0, 0, 0), vertices=part.vertices, faces=part.faces
+    )
+    assert np.linalg.norm(solved(triangles) - B) / own > 5e-3
+
+
+def test_from_step_keeps_its_solid_and_refuses(tmp_path):
+    from netgen import occ  # noqa: PLC0415
+
+    from magpylib_material_response.fem._step import exact_solid  # noqa: PLC0415
+
+    path = _cylinder_step(tmp_path)
+    part = from_step(path, polarization=(0, 0, 0), facet_angle=7.5)
+    assert len(part.faces) > len(from_step(path, polarization=(0, 0, 0)).faces)
+    np.testing.assert_allclose(part.volume, np.pi * 25e-6 * 8e-3, rtol=5e-3)
+    loaded = from_json(to_json(part))
+    for kept in (
+        copy.deepcopy(part),
+        loaded[0] if isinstance(loaded, list) else loaded,
+    ):
+        assert len(exact_solid(kept).faces) == 3  # side, top, bottom: the solid
+    two = tmp_path / "two.step"
+    occ.Glue(
+        [
+            occ.Box(occ.Pnt(0, 0, 0), occ.Pnt(1, 1, 1)),
+            occ.Box(occ.Pnt(2, 0, 0), occ.Pnt(3, 1, 1)),
+        ]
+    ).WriteStep(str(two))
+    with pytest.raises(ValueError, match="2 solids"):
+        from_step(two)
+    with pytest.raises(ValueError, match="between 1 and 30"):
+        from_step(path, facet_angle=45)

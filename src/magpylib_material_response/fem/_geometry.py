@@ -22,6 +22,7 @@ from magpylib_material_response.cells import (
     get_susceptibilities,
     warn_if_solved,
 )
+from magpylib_material_response.fem._step import exact_solid
 from magpylib_material_response.meshing import _thinnest as _thinnest_part
 from magpylib_material_response.meshing_utils import SOLIDS, mask_inside
 from magpylib_material_response.uniform import UniformField, refuse_both
@@ -313,8 +314,12 @@ def _corners(src):
 
 def solid(src, center, length):
     """`src` as an OCC solid in scaled coordinates, and its sharp edges and
-    corners marked for geometric refinement."""
-    if isinstance(src, magpy.magnet.Cuboid):
+    corners marked for geometric refinement. A part read by `from_step` is its
+    exact solid, not its triangles."""
+    exact = exact_solid(src)
+    if exact is not None:
+        shape = exact.Scale(occ.Pnt(0, 0, 0), 1 / length)
+    elif isinstance(src, magpy.magnet.Cuboid):
         a, b, c = np.asarray(src.dimension, dtype=float) / (2 * length)
         shape = occ.Box(occ.Pnt(-a, -b, -c), occ.Pnt(a, b, c))
     elif isinstance(src, magpy.magnet.Cylinder):
