@@ -32,11 +32,7 @@ from magpylib_material_response.face_charge._bodies import (
     solve_system,
 )
 from magpylib_material_response.face_charge._kept import solve_kept
-from magpylib_material_response.face_charge._mesh import (
-    WIDEN_DOUBLY,
-    WIDEN_SINGLY,
-    widen_curved,
-)
+from magpylib_material_response.face_charge._mesh import widened_vertices
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.face_charge._triangle import frames
 from magpylib_material_response.face_charge._tribody import (
@@ -229,7 +225,9 @@ def solve_face_charge(
 
     # widened once, whatever level is tried: a mesh's facets are its own
     widened = {
-        id(obj): _widened(obj)
+        id(obj): widened_vertices(
+            *_closed_surface(obj), repr(obj), _outside_this_package()
+        )
         for obj, _ in solved
         if widen_curves and isinstance(obj, magpy.magnet.TriangularMesh)
     }
@@ -516,21 +514,6 @@ def _split(collection):
             stacklevel=_outside_this_package(),
         )
     return solved, fixed
-
-
-def _widened(obj):
-    """A TriangularMesh's vertices, its curved facets widened (widen_curves)."""
-    vertices, faces = _closed_surface(obj)
-    vertices, too_coarse = widen_curved(vertices, faces)
-    if too_coarse:
-        warnings.warn(
-            f"{obj!r}: {too_coarse} vertices of curved faces are faceted too "
-            f"coarsely to widen ({WIDEN_SINGLY:g}° per facet on a face curved one way, "
-            f"{WIDEN_DOUBLY:g}° on one curved two ways) and stay as exported: "
-            "export the part more finely.",
-            stacklevel=_outside_this_package(),
-        )
-    return vertices
 
 
 def _part(obj, chi, applied, level, widened=None):
