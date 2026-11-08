@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-08
+
 ### Added
 
 - `fem.from_step` reads a part from a STEP file as a `TriangularMesh` that keeps
@@ -15,7 +17,8 @@ and this project adheres to
   meshes the solid itself, its elements curved onto the real bores and fillets.
   A cylinder read this way solves as the `Cylinder` within 0.05 %, where its own
   triangles are 1.5 % off. `to_json` keeps the STEP text
-  ([#195](https://github.com/magpylib/magpylib-material-response/issues/195))
+  ([#195](https://github.com/magpylib/magpylib-material-response/issues/195),
+  [#199](https://github.com/magpylib/magpylib-material-response/pull/199))
 - `solve_face_charge(..., widen_curves=True)`, and `study_face_charge`, read a
   `TriangularMesh`'s smooth edges as facets of curved faces, as a CAD export
   cuts a bore or a fillet, and move their vertices out so that the part keeps
@@ -733,7 +736,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.12.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.13.0...HEAD
+[0.13.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.12.0...0.13.0
 [0.12.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.11.0...0.12.0
 [0.11.0]:
