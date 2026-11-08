@@ -1,0 +1,1120 @@
+{
+ "accuracy_plate": {
+  "doc": "jump_indicator against the worst error, refine against uniform levels,\nand the 1.25 x last-change bar per sensor, on the validation plate.",
+  "result": {
+   "rows": [
+    {
+     "level": 1,
+     "refine": 0,
+     "unknowns": 324,
+     "seconds": 0.02065787502215244,
+     "jump_indicator": 0.1417862558818411,
+     "worst": {
+      "above the magnet": 0.00020403120241451993,
+      "beside the magnet": 0.004864770796620415,
+      "under the plate": 0.028159693665973495,
+      "off the side": 0.04090087027176162
+     },
+     "per_sensor": {
+      "above the magnet": [
+       0.00020403120241451993,
+       0.00019320923384206768,
+       0.00013469976313279944,
+       8.744574761697275e-05
+      ],
+      "beside the magnet": [
+       0.004864770796620415,
+       0.0018023403651551478,
+       0.0011699373267740865,
+       0.00013912417976124427
+      ],
+      "under the plate": [
+       0.028159693665973495,
+       0.02027204148371773,
+       0.012030290624540925,
+       0.004154231645411734
+      ],
+      "off the side": [
+       0.04090087027176162,
+       0.01433093611904781,
+       0.007225499829991326,
+       0.0006076174536753533
+      ]
+     }
+    },
+    {
+     "level": 2,
+     "refine": 0,
+     "unknowns": 1203,
+     "seconds": 0.09157162500196137,
+     "jump_indicator": 0.046555166930638214,
+     "worst": {
+      "above the magnet": 6.769279465388809e-05,
+      "beside the magnet": 0.0021380694641753312,
+      "under the plate": 0.007349805259047981,
+      "off the side": 0.008781756975769812
+     },
+     "per_sensor": {
+      "above the magnet": [
+       6.769279465388809e-05,
+       6.317405987812224e-05,
+       5.1644316387698046e-05,
+       3.1580948797399926e-05
+      ],
+      "beside the magnet": [
+       0.0021380694641753312,
+       0.000836705818125689,
+       0.00024905499944114754,
+       2.3580483427490253e-05
+      ],
+      "under the plate": [
+       0.007349805259047981,
+       0.006140161086295005,
+       0.004068641079443762,
+       0.001298477148676716
+      ],
+      "off the side": [
+       0.008781756975769812,
+       0.0018930422505960874,
+       0.0010894199621919968,
+       0.00026057198223687687
+      ]
+     }
+    },
+    {
+     "level": 3,
+     "refine": 0,
+     "unknowns": 2640,
+     "seconds": 0.20560479100095108,
+     "jump_indicator": 0.024588295757216837,
+     "worst": {
+      "above the magnet": 2.063055957555269e-05,
+      "beside the magnet": 0.0006090909918726159,
+      "under the plate": 0.002760302418142273,
+      "off the side": 0.0017176036323204727
+     },
+     "per_sensor": {
+      "above the magnet": [
+       2.063055957555269e-05,
+       1.78197246693616e-05,
+       1.4163505700088236e-05,
+       8.838865101260697e-06
+      ],
+      "beside the magnet": [
+       0.0006090909918726159,
+       0.00027246234373160645,
+       8.440727392939031e-05,
+       9.005554044242663e-06
+      ],
+      "under the plate": [
+       0.002760302418142273,
+       0.001940350089411026,
+       0.0011516103648590015,
+       0.00037364560581935706
+      ],
+      "off the side": [
+       0.0017176036323204727,
+       0.0002677341240626691,
+       0.0003695901919979008,
+       0.00015873986296313308
+      ]
+     }
+    },
+    {
+     "level": 4,
+     "refine": 0,
+     "unknowns": 4464,
+     "seconds": 0.37913191702682525,
+     "jump_indicator": 0.015373175290660132,
+     "worst": {
+      "above the magnet": 8.382056134338946e-06,
+      "beside the magnet": 0.00022704331115831365,
+      "under the plate": 0.0012889219378406456,
+      "off the side": 0.0005663587891317391
+     },
+     "per_sensor": {
+      "above the magnet": [
+       8.382056134338946e-06,
+       6.3482927305120115e-06,
+       4.70774727641861e-06,
+       2.8186513347439855e-06
+      ],
+      "beside the magnet": [
+       0.00022704331115831365,
+       8.183933291841025e-05,
+       1.3887759887139299e-05,
+       4.550375472782022e-06
+      ],
+      "under the plate": [
+       0.0012889219378406456,
+       0.0007681550307932923,
+       0.0004091437443194569,
+       0.00014150243426065047
+      ],
+      "off the side": [
+       0.0005663587891317391,
+       0.0003547214293954737,
+       0.0002018903228707754,
+       5.676299169666511e-05
+      ]
+     }
+    },
+    {
+     "level": 5,
+     "refine": 0,
+     "unknowns": 6975,
+     "seconds": 0.8046867090160958,
+     "jump_indicator": 0.01061148438592658,
+     "worst": {
+      "above the magnet": 3.884127407918782e-06,
+      "beside the magnet": 9.660445523455933e-05,
+      "under the plate": 0.00023747698221825156,
+      "off the side": 0.00021816703768011894
+     },
+     "per_sensor": {
+      "above the magnet": [
+       3.884127407918782e-06,
+       2.539171711337087e-06,
+       1.6810086177052872e-06,
+       1.190973733149306e-06
+      ],
+      "beside the magnet": [
+       9.660445523455933e-05,
+       3.7069139704467985e-05,
+       6.960285131234717e-06,
+       1.7017503167723388e-06
+      ],
+      "under the plate": [
+       0.00023562257283745927,
+       0.00023747698221825156,
+       0.00015732869338366706,
+       7.338788071515754e-05
+      ],
+      "off the side": [
+       0.00021816703768011894,
+       0.00017977227382795006,
+       0.00010394675021581812,
+       2.8929319371273422e-05
+      ]
+     }
+    },
+    {
+     "level": 3,
+     "refine": 1,
+     "unknowns": 4944,
+     "seconds": 0.6507677500194404,
+     "jump_indicator": 0.012268221046529719,
+     "worst": {
+      "above the magnet": 9.385713272097796e-06,
+      "beside the magnet": 0.000737384557481279,
+      "under the plate": 0.0012487608928194141,
+      "off the side": 0.0021456474340370633
+     },
+     "per_sensor": {
+      "above the magnet": [
+       9.385713272097796e-06,
+       6.853188782423904e-06,
+       4.626757155868332e-06,
+       7.969727101567322e-06
+      ],
+      "beside the magnet": [
+       0.000737384557481279,
+       4.084610395776723e-05,
+       5.697592836772066e-05,
+       1.1816485480721542e-05
+      ],
+      "under the plate": [
+       0.0012487608928194141,
+       0.0009682642490255201,
+       0.000631573835517801,
+       0.0003605770934890582
+      ],
+      "off the side": [
+       0.0021456474340370633,
+       0.00045463496078468845,
+       0.0003746974948331069,
+       0.00011381656449095404
+      ]
+     }
+    },
+    {
+     "level": 3,
+     "refine": 2,
+     "unknowns": 9840,
+     "seconds": 2.1200910420157015,
+     "jump_indicator": 0.006132062995530851,
+     "worst": {
+      "above the magnet": 8.640572515090485e-06,
+      "beside the magnet": 0.0008428920809428447,
+      "under the plate": 0.001127917588455696,
+      "off the side": 0.002149865753617768
+     },
+     "per_sensor": {
+      "above the magnet": [
+       8.640572515090485e-06,
+       6.01651495599275e-06,
+       3.955794190000991e-06,
+       8.303322151068603e-06
+      ],
+      "beside the magnet": [
+       0.0008428920809428447,
+       3.991580934806682e-05,
+       5.639520091179499e-05,
+       1.2498792040097133e-05
+      ],
+      "under the plate": [
+       0.001127917588455696,
+       0.0008994740542209793,
+       0.0005973288735122679,
+       0.0003638282232319031
+      ],
+      "off the side": [
+       0.002149865753617768,
+       0.0004338964989772815,
+       0.0003689285498331422,
+       0.00011329600759435014
+      ]
+     }
+    }
+   ],
+   "reference_errors": {
+    "above the magnet": 1.7334093785720303e-06,
+    "beside the magnet": 9.005167823849436e-06,
+    "under the plate": 4.360240957419421e-05,
+    "off the side": 5.886144145507774e-05
+   },
+   "bar_L3_L4": [
+    1.531281294882673e-05,
+    1.4340173664082946e-05,
+    1.1823065122258589e-05,
+    7.692990043558663e-06,
+    0.00047968180745666813,
+    0.00024015885922372356,
+    9.238183244260987e-05,
+    7.0754051434505205e-06,
+    0.0018795942425271354,
+    0.001470186600546543,
+    0.0009288802071135315,
+    0.0002986046239343531,
+    0.001682904145695059,
+    0.00028106506377646853,
+    0.0003302889876947992,
+    0.00013371335256340912
+   ],
+   "error_L4": [
+    8.382056134338946e-06,
+    6.3482927305120115e-06,
+    4.70774727641861e-06,
+    2.8186513347439855e-06,
+    0.00022704331115831365,
+    8.183933291841025e-05,
+    1.3887759887139299e-05,
+    4.550375472782022e-06,
+    0.0012889219378406456,
+    0.0007681550307932923,
+    0.0004091437443194569,
+    0.00014150243426065047,
+    0.0005663587891317391,
+    0.0003547214293954737,
+    0.0002018903228707754,
+    5.676299169666511e-05
+   ],
+   "short": 1,
+   "sensors": 16,
+   "short_factor": 1.2620616188626852
+  },
+  "wall_s": 4.363774792000186,
+  "peak_GB": 2.891988992,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "accuracy_quarter": {
+  "doc": "The validation plate, B 0.25 mm above and below it: the worst error against\nthe jump indicator, refine from level 3 against uniform levels, against\nfinite elements at order 5 (order 4 to check the reference).",
+  "result": {
+   "rows": [
+    {
+     "level": 1,
+     "refine": 0,
+     "unknowns": 324,
+     "seconds": 0.023085624998202547,
+     "jump_indicator": 0.1417862558818411,
+     "worst": 0.15927958160971484,
+     "worst_top": 0.12367406162930383,
+     "worst_under": 0.15927958160971484,
+     "worst_at_mm": [
+      9.5,
+      0.0,
+      -2.75
+     ],
+     "worst_over_jump": 1.12337814846068
+    },
+    {
+     "level": 2,
+     "refine": 0,
+     "unknowns": 1203,
+     "seconds": 0.11369637498864904,
+     "jump_indicator": 0.046555166930638214,
+     "worst": 0.05401045397099329,
+     "worst_top": 0.05401045397099329,
+     "worst_under": 0.030167292002827414,
+     "worst_at_mm": [
+      -5.0,
+      -6.0,
+      2.75
+     ],
+     "worst_over_jump": 1.160138767227762
+    },
+    {
+     "level": 3,
+     "refine": 0,
+     "unknowns": 2640,
+     "seconds": 0.2615999169938732,
+     "jump_indicator": 0.024588295757216837,
+     "worst": 0.02026583917076358,
+     "worst_top": 0.02026583917076358,
+     "worst_under": 0.013385367913965808,
+     "worst_at_mm": [
+      -5.0,
+      -6.0,
+      2.75
+     ],
+     "worst_over_jump": 0.8242067433573722
+    },
+    {
+     "level": 4,
+     "refine": 0,
+     "unknowns": 4464,
+     "seconds": 0.4522418749984354,
+     "jump_indicator": 0.015373175290660132,
+     "worst": 0.010986366583564132,
+     "worst_top": 0.010986366583564132,
+     "worst_under": 0.005310012909347832,
+     "worst_at_mm": [
+      -9.5,
+      -6.0,
+      2.75
+     ],
+     "worst_over_jump": 0.7146452424983942
+    },
+    {
+     "level": 5,
+     "refine": 0,
+     "unknowns": 6975,
+     "seconds": 0.8689420000009704,
+     "jump_indicator": 0.01061148438592658,
+     "worst": 0.010256564958658548,
+     "worst_top": 0.010256564958658548,
+     "worst_under": 0.003717196950178112,
+     "worst_at_mm": [
+      -9.5,
+      -6.0,
+      2.75
+     ],
+     "worst_over_jump": 0.9665532724395521
+    },
+    {
+     "level": 6,
+     "refine": 0,
+     "unknowns": 10044,
+     "seconds": 1.8158084579918068,
+     "jump_indicator": 0.00781408823979621,
+     "worst": 0.0024696342939718565,
+     "worst_top": 0.0024696342939718565,
+     "worst_under": 0.002078828715805235,
+     "worst_at_mm": [
+      1.5,
+      -6.0,
+      2.75
+     ],
+     "worst_over_jump": 0.3160489385561718
+    },
+    {
+     "level": 3,
+     "refine": 1,
+     "unknowns": 4944,
+     "seconds": 0.792358124977909,
+     "jump_indicator": 0.012268221046529719,
+     "worst": 0.020272790401792626,
+     "worst_top": 0.020272790401792626,
+     "worst_under": 0.013499858342575891,
+     "worst_at_mm": [
+      -5.0,
+      -6.0,
+      2.75
+     ],
+     "worst_over_jump": 1.6524637373995752
+    },
+    {
+     "level": 3,
+     "refine": 2,
+     "unknowns": 9840,
+     "seconds": 2.4277512500120793,
+     "jump_indicator": 0.006132062995530851,
+     "worst": 0.020273564946717944,
+     "worst_top": 0.020273564946717944,
+     "worst_under": 0.013601796339466156,
+     "worst_at_mm": [
+      -5.0,
+      -6.0,
+      2.75
+     ],
+     "worst_over_jump": 3.3061573179358485
+    }
+   ],
+   "fem5_s": 16.26790658402024,
+   "fem4_vs_5_worst": 0.0037496809663543074
+  },
+  "wall_s": 31.685996542015346,
+  "peak_GB": 4.380540928,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "bh_solves": {
+  "doc": "How many linear solves the B-H iteration takes: the pin of the saturation\nguide and the holding magnet's plate, with cells and finite elements.",
+  "result": {
+   "pin_cells_4": 25,
+   "pin_cells_8": 29,
+   "pin_fem_3": 21,
+   "pin_fem_4": 19,
+   "holder_2mm_cells_2": 15,
+   "holder_2mm_fem_3": 18,
+   "pin_cells_16": 32,
+   "holder_2mm_cells_3": 17
+  },
+  "wall_s": 355.58550275000744,
+  "peak_GB": 2.17776128,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "cells_rule_jump": {
+  "doc": "A magnet on an iron block: B under each rule, the jump a mixed rule would make.",
+  "result": {
+   "point_vs_newell": 0.0025559768229161516,
+   "per_point": [
+    0.00022497799617996232,
+    0.00392143402134742,
+    0.035412211270139125
+   ]
+  },
+  "wall_s": 0.1669502499862574,
+  "peak_GB": 0.148389888,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "cells_rules": {
+  "doc": "Point matching against volume averaging (newell): the soft cube's moment\nand the field above it at 1,728 cells; a thin plate's moment with refinement.",
+  "result": {
+   "cube_1728": {
+    "point": {
+     "moment_err": -0.011996265294503483,
+     "field_above_err": 0.0028019054644187608
+    },
+    "newell": {
+     "moment_err": -0.011335859145724214,
+     "field_above_err": 0.003259291933066447
+    }
+   },
+   "plate_fc_level5_moment": 0.011089293185708863,
+   "plate": [
+    {
+     "across_thickness": 1,
+     "point": 0.010081780876359041,
+     "cells": 100,
+     "newell": 0.010097131118438836
+    },
+    {
+     "across_thickness": 2,
+     "point": 0.010702909041531419,
+     "cells": 800,
+     "newell": 0.0107206669921776
+    },
+    {
+     "across_thickness": 3,
+     "point": 0.01088922710066826,
+     "cells": 2700,
+     "newell": 0.010900070197792506
+    },
+    {
+     "across_thickness": 4,
+     "point": 0.010964665750731671,
+     "cells": 6400,
+     "newell": 0.010971985558681471
+    }
+   ]
+  },
+  "wall_s": 14.388513083016733,
+  "peak_GB": 3.307323392,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "cells_tetra_gmres": {
+  "doc": "GMRES iterations on a grid and tetrahedra at chi 1000, with the tr/3\nblocks of the tetrahedra and with their blocks left out.",
+  "result": {
+   "cells": {
+    "UniformField": 1,
+    "Cuboid": 1331,
+    "Tetrahedron": 902
+   },
+   "with_tr3": 69,
+   "without": "no convergence in 1000: GMRES did not converge to tol=1e-06 within 1000 iterations. Increase max_iter, loosen solver_tol, or use solver='direct'."
+  },
+  "wall_s": 7.290082250023261,
+  "peak_GB": 0.992165888,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "cells_threads": {
+  "doc": "A tetrahedra-only solve with magpylib's threads against one thread.",
+  "result": {
+   "cells": 1842,
+   "threads": "8",
+   "seconds_threads": 3.1018718749983236,
+   "seconds_one": 9.491691125003854,
+   "ratio": 3.059988132169058
+  },
+  "wall_s": 25.53715545797604,
+  "peak_GB": 1.194704896,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "fc_array": {
+  "doc": "25 cube magnets on a soft yoke: unknowns per level, level 2 against 3 and 4.",
+  "result": {
+   "rows": [
+    {
+     "level": 2,
+     "unknowns": 7068,
+     "seconds": 1.5861328339960892
+    },
+    {
+     "level": 3,
+     "unknowns": 15519,
+     "seconds": 4.085269499977585
+    },
+    {
+     "level": 4,
+     "unknowns": 27264,
+     "seconds": 13.62890370900277
+    }
+   ],
+   "L2_vs_L3_above_worst": 1.552865793766149e-05,
+   "L2_vs_L3_between_worst": 0.0008379567933318614,
+   "L2_vs_L3_between_rms": 0.0007148290061008283,
+   "L2_vs_L4_above_worst": 1.9385889210987122e-05,
+   "L2_vs_L4_between_worst": 0.0010727518352402884,
+   "L2_vs_L4_between_rms": 0.0009172911836435827
+  },
+  "wall_s": 19.35222329199314,
+  "peak_GB": 10.131996672,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "fc_disc": {
+  "doc": "A disc magnet on a soft cube: face charge levels against finite elements.",
+  "result": {
+   "rows": [
+    {
+     "level": 2,
+     "unknowns": 288,
+     "seconds": 0.01668541700928472,
+     "near_worst": 0.4361939107251276,
+     "near_rms": 0.32481494401443217,
+     "below_worst": 0.08283142375426956
+    },
+    {
+     "level": 3,
+     "unknowns": 648,
+     "seconds": 0.039711334015009925,
+     "near_worst": 0.16076026415312028,
+     "near_rms": 0.13352344281785974,
+     "below_worst": 0.028165583936865007
+    },
+    {
+     "level": 4,
+     "unknowns": 1152,
+     "seconds": 0.05339383298996836,
+     "near_worst": 0.14143578382448613,
+     "near_rms": 0.14065349520763143,
+     "below_worst": 0.0105230110200135
+    },
+    {
+     "level": 5,
+     "unknowns": 1800,
+     "seconds": 0.09156304199132137,
+     "near_worst": 0.10092775655107232,
+     "near_rms": 0.09736040096838855,
+     "below_worst": 0.03412876260101014
+    }
+   ],
+   "fem5_seconds": 12.105345624993788,
+   "fem4_vs_5_near": 0.00103033890764012
+  },
+  "wall_s": 18.496670292021008,
+  "peak_GB": 4.670685184,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "fc_memory": {
+  "doc": "Peak RSS of one large part solved just under max_unknowns.",
+  "result": {
+   "level": 16,
+   "unknowns": 18432,
+   "seconds": 5.480312416999368,
+   "peak_GB": 6.158925824
+  },
+  "wall_s": 5.480553833011072,
+  "peak_GB": 6.158925824,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "fc_sphere": {
+  "doc": "A soft sphere in a uniform field: face charge levels 1 to 4 against the\nexact field, 1 mm off its surface.",
+  "result": {
+   "rows": [
+    {
+     "level": 1,
+     "unknowns": 960,
+     "seconds": 0.10014854100882076,
+     "worst": 0.007897596267512479,
+     "along_axis": 0.0003739723711725448,
+     "across_axis": 0.0015928144589155582
+    },
+    {
+     "level": 2,
+     "unknowns": 2160,
+     "seconds": 0.2585626670042984,
+     "worst": 0.0034299012994695602,
+     "along_axis": 0.0002756625134031932,
+     "across_axis": 0.0008210028356718674
+    },
+    {
+     "level": 3,
+     "unknowns": 3840,
+     "seconds": 0.5501246250059921,
+     "worst": 0.001935732251694213,
+     "along_axis": 0.00017724814174868743,
+     "across_axis": 0.00046400747684730476
+    },
+    {
+     "level": 4,
+     "unknowns": 7260,
+     "seconds": 1.3591066670196597,
+     "worst": 0.0010287758607480343,
+     "along_axis": 9.231685134574596e-05,
+     "across_axis": 0.0002406810400361753
+    }
+   ]
+  },
+  "wall_s": 2.4258293750172015,
+  "peak_GB": 2.148089856,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "fc_thin_sheet": {
+  "doc": "A 0.5 mm plate under a magnet: level 2 against level 3.",
+  "result": {
+   "L2": {
+    "unknowns": 5304,
+    "seconds": 0.37238016599440016
+   },
+   "L3": {
+    "unknowns": 9870,
+    "seconds": 1.1168611660250463
+   },
+   "L2_vs_L3_worst": 0.0001790315015048814,
+   "L2_vs_L3_group_norm": 1.3548385999056572e-05
+  },
+  "wall_s": 4.630838000011863,
+  "peak_GB": 2.255601664,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "fem_check_16": {
+  "doc": null,
+  "result": {
+   "cells": 12288,
+   "seconds": 38.04674520899425,
+   "x_mm": 1.5,
+   "cells_B": [
+    -0.018160798662123,
+    -6.690094916310223e-16,
+    -0.004366363863176812
+   ],
+   "fem_value": [
+    -0.018162198297824828,
+    -7.833944687423311e-08,
+    -0.004449710203526116
+   ],
+   "fem_error_bar": 0.00011871603297098753
+  },
+  "wall_s": 45.39178350000293,
+  "peak_GB": 6.212026368,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "fem_shield_tube": {
+  "doc": "The shield tube at order 4: unknowns, seconds and the peak, in its own process.",
+  "result": {
+   "seconds": 46.18369587502093,
+   "peak_GB": 8.734818304,
+   "counts": {
+    "seconds": "{'prepare': 3.5958333339949604, 'solve': 42.45355937498971, 'getB': 0.13108020898653194}",
+    "counts": "{'unknowns': 1916350}"
+   }
+  },
+  "wall_s": 46.189302666985895,
+  "peak_GB": 8.734818304,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "hundred_cubes_l2": {
+  "doc": "The validation's 100 small bodies at face-charge level 2, max_unknowns raised.",
+  "result": {
+   "unknowns": 28800,
+   "seconds": 22.9481473750202,
+   "peak_GB": 10.107584512,
+   "group_errors": {
+    "1 mm above the layer": 0.014733448569167876,
+    "30 mm away": 0.01811796762665714
+   },
+   "reference_errors": {
+    "1 mm above the layer": 0.011872430894405504,
+    "30 mm away": 0.015292107881016904
+   }
+  },
+  "wall_s": 22.996638207987417,
+  "peak_GB": 10.107584512,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "loops_field_matrix": {
+  "doc": null,
+  "result": {
+   "triangles": 560,
+   "unknowns": 840,
+   "points": 2601,
+   "getB_s": 0.020662875002017245,
+   "matrix_product_s": 0.00030683301156386733,
+   "build_s": 0.04584029200486839,
+   "agree_rel_max": 1.6838414763373252e-15,
+   "matrix_MB": 52.43616,
+   "matrix32_MB": 26.21808,
+   "f32_near_rel": 1.520250361014767e-07,
+   "f32_far_rel": 0.00030905564748374335
+  },
+  "wall_s": 0.3754182909906376,
+  "peak_GB": 0.972734464,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "loops_reuse": {
+  "doc": "Time per call: plain solve, first call with reuse, later calls.",
+  "result": {
+   "rows": [
+    {
+     "level": 2,
+     "unknowns": 1848,
+     "plain_s": 0.09463312500156462,
+     "first_reuse_s": 0.09548799999174662,
+     "later_s": 0.021065792010631412
+    },
+    {
+     "level": 3,
+     "unknowns": 3534,
+     "plain_s": 0.21182704099919647,
+     "first_reuse_s": 0.2746071250003297,
+     "later_s": 0.03994729198166169
+    },
+    {
+     "level": 4,
+     "unknowns": 5760,
+     "plain_s": 0.4412949999968987,
+     "first_reuse_s": 0.6066037499986123,
+     "later_s": 0.06748566598980688
+    },
+    {
+     "level": 5,
+     "unknowns": 8526,
+     "plain_s": 0.8982440420077182,
+     "first_reuse_s": 1.2971493340155575,
+     "later_s": 0.1076986670086626
+    }
+   ]
+  },
+  "wall_s": 8.491164915991249,
+  "peak_GB": 2.533752832,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "loops_snapshot": {
+  "doc": "dBz/dx at a sensor beside the magnet, solved afresh against moving the\nmagnet in the solved model.",
+  "result": {
+   "face_charge_mT_per_mm": 16.7600413441751,
+   "moved_in_solved_mT_per_mm": 1.9223499094017835,
+   "magnet_alone_mT_per_mm": 1.9223499094017835,
+   "fem_order3_mT_per_mm_step_0.25": 15.773854657046574
+  },
+  "wall_s": 8.292102792009246,
+  "peak_GB": 1.662353408,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "reading_force": {
+  "doc": null,
+  "result": {
+   "face_charge": {
+    "1000": 32.993851221703515,
+    "2000": 33.32971556026824,
+    "4000": 33.445777787748185,
+    "8000": 33.57772183817171,
+    "16000": 33.621993050779686
+   },
+   "cells": {
+    "3": {
+     "pull_N": 24.965819586831344,
+     "seconds": 0.2299584999855142
+    },
+    "6": {
+     "pull_N": 32.13689847143708,
+     "seconds": 1.8610106669948436
+    }
+   }
+  },
+  "wall_s": 25.4969198339968,
+  "peak_GB": 4.916609024,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "saturation_pin": {
+  "doc": null,
+  "result": {
+   "cells_8_mT": 352.27683086429954,
+   "cells_16": {
+    "mT": 348.03329676449994,
+    "seconds": 11.874295457993867,
+    "cells": 8192
+   },
+   "fem_order3": {
+    "mT": 346.3293230918381,
+    "seconds": 60.91555149998749,
+    "info": {}
+   },
+   "fem_order4": {
+    "mT": 346.3501146060241,
+    "seconds": 94.96317591698607,
+    "info": {}
+   }
+  },
+  "wall_s": 172.25845616700826,
+  "peak_GB": 2.45047296,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "tube_92": {
+  "doc": "The thin ring of #92 (see the probe).",
+  "result": {
+   "1": {
+    "averaged": -0.12354745744087625,
+    "point": -0.09601462810208872
+   },
+   "2": {
+    "averaged": -0.10872129994515045,
+    "point": -0.6788702755111405
+   },
+   "3": {
+    "averaged": -0.10635805854272518,
+    "point": 0.02166691408839516
+   }
+  },
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "ucore_closed_mesh": {
+  "doc": "The U-core's iron as one closed TriangularMesh with the case's coil, face\ncharge levels 1 to 3 against the validation reference.",
+  "result": {
+   "rows": [
+    {
+     "level": 1,
+     "unknowns": 1104,
+     "seconds": 0.13552633399376646,
+     "errors": {
+      "30 mm above the poles": 0.005329545569388348
+     }
+    },
+    {
+     "level": 2,
+     "unknowns": 3288,
+     "seconds": 0.4316891669877805,
+     "errors": {
+      "30 mm above the poles": 0.00159685311987626
+     }
+    },
+    {
+     "level": 3,
+     "unknowns": 6624,
+     "seconds": 1.7457765830040444,
+     "errors": {
+      "30 mm above the poles": 0.001048412608843054
+     }
+    }
+   ],
+   "reference_errors": {
+    "30 mm above the poles": 0.0025131240747023735
+   },
+   "coil_sources": 16
+  },
+  "wall_s": 2.3962644579878543,
+  "peak_GB": 1.918222336,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ },
+ "ucore_iron_alone": {
+  "doc": "The U-core's iron alone in a uniform field along the core: cells at 2, 4 and\n8 across against finite elements, 30 mm above the poles.",
+  "result": {
+   "x": {
+    "rows": [
+     {
+      "across": 2,
+      "cells": 88,
+      "seconds": 0.029727250017458573,
+      "err": 0.12185843725623434
+     },
+     {
+      "across": 4,
+      "cells": 704,
+      "seconds": 0.19039662499562837,
+      "err": 0.05076240912486388
+     },
+     {
+      "across": 8,
+      "cells": 5632,
+      "seconds": 2.9240536669967696,
+      "err": 0.016395362062915416
+     }
+    ],
+    "fem4_vs_5": 0.0004948263192937763,
+    "fem5_s": 6.679998499981593
+   },
+   "z": {
+    "rows": [
+     {
+      "across": 2,
+      "cells": 88,
+      "seconds": 0.027115166012663394,
+      "err": 0.024204182269328245
+     },
+     {
+      "across": 4,
+      "cells": 704,
+      "seconds": 0.17360483299125917,
+      "err": 0.009273512040270453
+     },
+     {
+      "across": 8,
+      "cells": 5632,
+      "seconds": 2.69268912501866,
+      "err": 0.003086355735490291
+     }
+    ],
+    "fem4_vs_5": 0.00036945520049271806,
+    "fem5_s": 6.652763709018473
+   }
+  },
+  "wall_s": 27.38018191701849,
+  "peak_GB": 4.063985664,
+  "versions": {
+   "magpylib_material_response": "0.10.3.dev5+g833d845a7.d20261107",
+   "magpylib": "6.1.0",
+   "threads": "8",
+   "machine": "macOS-26.4-arm64-arm-64bit-Mach-O"
+  }
+ }
+}
