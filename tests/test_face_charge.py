@@ -2577,3 +2577,22 @@ def test_widen_curves_refuses_and_warns(value, raises, match):
     else:
         with pytest.warns(UserWarning, match=match):
             solve_face_charge(model, level=1, widen_curves=value)
+
+
+def test_a_segment_magnet_touching_a_part_reads_as_with_a_gap():
+    # magpylib gives B = 0 on a CylinderSegment's surfaces (magpylib#1073), and
+    # the part's Gauss points lie on the segment's phi = 0 face
+    def solve(gap):
+        magnet = magpy.magnet.CylinderSegment(
+            dimension=(0.005, 0.01, 0.01, 0, 90), polarization=(0, -1, 0)
+        )
+        part = magpy.magnet.Cuboid(
+            dimension=(0.005, 0.004, 0.01), position=(0.0075, -0.002 - gap, 0)
+        )
+        part.susceptibility = 100
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            solved = solve_face_charge(magpy.Collection(magnet, part))
+        return solved.getB((0.0075, -0.006, 0))
+
+    assert solve(0) == pytest.approx(solve(1e-9), rel=1e-3, abs=1e-9)

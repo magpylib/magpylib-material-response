@@ -21,6 +21,17 @@ and this project adheres to
   ([#195](https://github.com/magpylib/magpylib-material-response/issues/195),
   [#197](https://github.com/magpylib/magpylib-material-response/pull/197))
 
+### Fixed
+
+- A `CylinderSegment` magnet touching a part that `solve_face_charge` solves no
+  longer reads 29 % low there: magpylib gives B = 0 on every surface of a
+  segment, so each segment is read a little off where it gives exactly 0, and
+  the warning about its footprint no longer promises a few percent
+  ([#193](https://github.com/magpylib/magpylib-material-response/issues/193)).
+- Meshing no longer drops parts of a `CylinderSegment` whose angles pass ±360°,
+  nor the axis when `r1 = 0`
+  ([#194](https://github.com/magpylib/magpylib-material-response/issues/194)).
+
 ## [0.12.0] - 2026-11-08
 
 ### Changed

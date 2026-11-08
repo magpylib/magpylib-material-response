@@ -226,6 +226,13 @@ def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
     h = abs(h)
     z1, z2 = -h / 2, h / 2
 
+    # the phi test below needs angles within +-360 deg, so a section reaching
+    # past that shifts by full turns (as magpylib does since 6.3)
+    past = (abs(phi1) > 360 - 1e-9) | (abs(phi2) > 360 - 1e-9)
+    turns = np.where(past, np.round((phi1 + phi2) / 720), 0)
+    phi1 = phi1 - 360 * turns
+    phi2 = phi2 - 360 * turns
+
     # transform dim deg->rad
     phi1 = phi1 / 180 * np.pi
     phi2 = phi2 / 180 * np.pi
@@ -248,6 +255,8 @@ def mask_inside_CylinderSegment(obj, positions, tolerance=1e-14):
     mask_phi_in = (np.sign(phio1 - phi1) != np.sign(phio1 - phi2)) | (
         np.sign(phio2 - phi1) != np.sign(phio2 - phi2)
     )
+    # with r1 = 0 the axis belongs to every section, whatever its phi is
+    mask_phi_in |= (r1 < tol_r) & (r < tol_r)
     mask_z_in = (z1 - tol_z < z) & (z < z2 + tol_z)
 
     # inside
