@@ -2447,23 +2447,90 @@ def _volume(V, F):
     return np.einsum("ij,ij->i", V[F[:, 0]], np.cross(V[F[:, 1]], V[F[:, 2]])).sum() / 6
 
 
+def _rounded_prism_export(k, a=6e-3, rf=2e-3, h=4e-3):
+    """A square prism with filleted vertical edges, k facets a fillet, flat
+    sides between them, caps fanned from the centre."""
+    c = a / 2 - rf
+    ring = np.concatenate(
+        [
+            [
+                (sx * c + rf * np.cos(t), sy * c + rf * np.sin(t))
+                for t in q * np.pi / 2 + np.linspace(0, np.pi / 2, k + 1)
+            ]
+            for q, (sx, sy) in enumerate([(1, 1), (-1, 1), (-1, -1), (1, -1)])
+        ]
+    )
+    n = len(ring)
+    V = np.r_[
+        np.c_[ring, np.full(n, -h / 2)],
+        np.c_[ring, np.full(n, h / 2)],
+        [(0, 0, -h / 2), (0, 0, h / 2)],
+    ]
+    j = np.arange(n)
+    j1 = (j + 1) % n
+    F = np.r_[
+        np.c_[np.full(n, 2 * n), j1, j],
+        np.c_[j, j1, n + j1],
+        np.c_[j, n + j1, n + j],
+        np.c_[np.full(n, 2 * n + 1), n + j, n + j1],
+    ]
+    keep = (
+        np.linalg.norm(V[F[:, 1]] - V[F[:, 0]], axis=1) > 0
+    )  # drop the zero-length sides
+    return V, F[
+        keep
+        & (
+            np.linalg.norm(
+                np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]), axis=1
+            )
+            > 0
+        )
+    ]
+
+
 @pytest.mark.parametrize(
     ("export", "exact", "rtol", "too_coarse"),
     [
         # curved one way: the exact volume back, up to 15 degrees per facet
         (_cylinder_export(24), np.pi * 25e-6 * 8e-3, 1e-12, 0),
         (_cylinder_export(48), np.pi * 25e-6 * 8e-3, 1e-12, 0),
-        # curved two ways at 7.5 degrees: -0.71 % exported, -0.014 % widened
-        (_sphere_export(48), 4 / 3 * np.pi * 125e-9, 2e-4, 0),
+        # curved two ways at 7.5 degrees: -0.71 % exported, -0.022 % widened
+        (_sphere_export(48), 4 / 3 * np.pi * 125e-9, 3e-4, 0),
         # a cube's edges are real: nothing moves
         (_cylinder_export(4, r=5e-3 * 2**0.5), 1e-4 * 8e-3, 1e-12, 0),
+        # an STL's float32, 0.2 m off: 15 degrees all the same, and float32
+        (
+            (_cylinder_export(24)[0] + 0.2).astype(np.float32),
+            np.pi * 25e-6 * 8e-3,
+            1e-5,
+            0,
+        ),
     ],
 )
 def test_widen_curved_gives_back_the_curves_volume(export, exact, rtol, too_coarse):
-    V, F = export
+    V, F = (
+        export
+        if isinstance(export, tuple)
+        else (export.astype(float), _cylinder_export(24)[1])
+    )
     W, coarse = widen_curved(V, F)
     assert coarse == too_coarse
-    np.testing.assert_allclose(_volume(W, F), exact, rtol=rtol)
+    np.testing.assert_allclose(_volume(W - V.mean(0), F), exact, rtol=rtol)
+    if np.array_equal(V, V.astype(np.float32)):
+        assert np.array_equal(W, W.astype(np.float32))
+
+
+def test_widen_curved_keeps_flat_faces_flat_and_coarse_curves_still():
+    V, F = _rounded_prism_export(6)  # 15 degree fillets meeting flat sides
+    W, _ = widen_curved(V, F)
+    side = np.isclose(np.abs(V[:, 0]), 3e-3) | np.isclose(np.abs(V[:, 1]), 3e-3)
+    assert side.sum() == 16  # the flat sides' corners
+    np.testing.assert_array_equal(W[side], V[side])
+    assert np.any(W != V)  # the fillets did widen
+    V, F = _sphere_export(24)  # curved two ways at 15 degrees: too coarse
+    W, coarse = widen_curved(V, F)
+    assert coarse > 200
+    assert np.any(W != V, axis=1).sum() <= 2  # only the poles, faceted finely round
 
 
 def test_widen_curves_solves_an_export_as_the_cylinder_itself():

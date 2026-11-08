@@ -135,7 +135,7 @@ part = magpy.magnet.TriangularMesh.from_pyvista(
     polydata=surface, polarization=(0, 0, 0), check_open="raise"
 )
 part.susceptibility = 1000
-solved = solve_face_charge(magpy.Collection(part, magnet), level=2, widen_curves=True)
+solved = solve_face_charge(magpy.Collection(part, magnet), level=2)
 ```
 
 ![The validation's CAD part in a 10 mT field along a direction no symmetry helps with, and the U-core as one closed mesh with its coil, each solved at level 2 and drawn by show() with its graded triangles.](../_static/images/face_charge_triangles.png)
@@ -155,7 +155,7 @@ solved = solve_face_charge(magpy.Collection(part, magnet), level=2, widen_curves
   costs: 1.8 % near the fillets of a plate exported at 15°, 0.46 % at 7.5°.
   `widen_curves=True` moves the facets' vertices out so that the part keeps the
   volume of its curves, as the solver does with the facets it cuts a `Cylinder`
-  into: 0.15 % and 0.13 % there, 0.054 % beside a sphere exported at 7.5° (0.65
+  into: 0.12 % and 0.14 % there, 0.054 % beside a sphere exported at 7.5° (0.65
   % without). It widens faces curved one way up to 15° per facet, faces curved
   two ways up to 10°, and warns about coarser ones; it is off by default, for a
   part whose facets are its real shape

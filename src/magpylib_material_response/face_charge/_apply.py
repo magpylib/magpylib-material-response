@@ -136,13 +136,15 @@ def solve_face_charge(
         bore or a fillet, and move their vertices out so that the part keeps the
         volume of its curves, as the solver does with the facets it cuts a
         ``Cylinder`` into. An export's facets lie inside its curves, and set a
-        floor on the error that no level lowers: beside a 3 mm fillet cut at
-        7.5°, 0.6 to 0.8 % of the part's own field, 0.07 to 0.3 % widened
-        (MR #195). Measured right up to 15° per facet on faces curved one way,
-        10° on faces curved two ways; vertices faceted more coarsely stay as
-        they are, with a warning. Facets that turn by 20° or more read as real
-        edges and are left alone without one. Leave it off for a part whose
-        facets are its real shape.
+        floor on the error that no level lowers: beside the fillets of a plate
+        exported at 7.5°, 0.46 % of the part's own field, 0.14 % widened;
+        beside a sphere, 0.65 % and 0.054 % (issue #195). Measured right up to
+        15° per facet on faces curved one way, 10° on faces curved two ways;
+        vertices faceted more coarsely stay as they are, with a warning.
+        Facets that turn by 20° or more read as real edges and are left alone
+        without one, and where a curve meets a flat face its vertices stay, so
+        that flat faces stay flat. Leave it off for a part whose facets are
+        its real shape.
 
     Returns
     -------
@@ -225,9 +227,22 @@ def solve_face_charge(
     boxes = [_box(src) for src in fixed if isinstance(src, BaseMagnet)]
     applied = get_H_ext(*(obj for obj, _ in solved))
 
+    # widened once, whatever level is tried: a mesh's facets are its own
+    widened = {
+        id(obj): _widened(obj)
+        for obj, _ in solved
+        if widen_curves and isinstance(obj, magpy.magnet.TriangularMesh)
+    }
+
     def meshed(level):
         bodies = [
-            _part(obj, chi, np.asarray(h_ext, float) / magpy.mu_0, level, widen_curves)
+            _part(
+                obj,
+                chi,
+                np.asarray(h_ext, float) / magpy.mu_0,
+                level,
+                widened.get(id(obj)),
+            )
             for (obj, chi), h_ext in zip(solved, applied, strict=True)
         ]
         add_contact_lines(bodies, outlines)
@@ -478,8 +493,24 @@ def _split(collection):
     return solved, fixed
 
 
-def _part(obj, chi, applied, level, widen_curves=False):
-    """The body that solves ``obj``: a cuboid's panels, or a triangle mesh."""
+def _widened(obj):
+    """A TriangularMesh's vertices, its curved facets widened (widen_curves)."""
+    vertices, faces = _closed_surface(obj)
+    vertices, too_coarse = widen_curved(vertices, faces)
+    if too_coarse:
+        warnings.warn(
+            f"{obj!r}: {too_coarse} vertices of curved faces are faceted too "
+            f"coarsely to widen ({WIDEN_SINGLY:g}° per facet on a face curved one way, "
+            f"{WIDEN_DOUBLY:g}° on one curved two ways) and stay as exported: "
+            "export the part more finely.",
+            stacklevel=_outside_this_package(),
+        )
+    return vertices
+
+
+def _part(obj, chi, applied, level, widened=None):
+    """The body that solves ``obj``: a cuboid's panels, or a triangle mesh,
+    with `widened` vertices in place of its own if given."""
     J0 = (
         None
         if obj.polarization is None or not np.any(obj.polarization)
@@ -507,16 +538,8 @@ def _part(obj, chi, applied, level, widen_curves=False):
             "reorient_faces=True."
         )
         raise ValueError(msg)
-    if widen_curves and isinstance(obj, magpy.magnet.TriangularMesh):
-        vertices, too_coarse = widen_curved(vertices, faces)
-        if too_coarse:
-            warnings.warn(
-                f"{obj!r}: {too_coarse} vertices of curved faces are faceted too "
-                f"coarsely to widen ({WIDEN_SINGLY:g}° per facet on a face curved one way, "
-                f"{WIDEN_DOUBLY:g}° on one curved two ways) and stay as exported: "
-                "export the part more finely.",
-                stacklevel=_outside_this_package(),
-            )
+    if widened is not None:
+        vertices = widened
     return TriBody(
         vertices, faces, obj.position, R, chi, J0=J0, applied=applied, m=level
     )
