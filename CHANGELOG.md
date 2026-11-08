@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-08
+
 ### Changed
 
 - **Breaking, with an error:** `move_grid_along_polyline` takes the
@@ -701,7 +703,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.11.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.12.0...HEAD
+[0.12.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.11.0...0.12.0
 [0.11.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.10.2...0.11.0
 [0.10.2]:
