@@ -68,13 +68,19 @@ def run(part):
         magnet = as_magnet(V, F, label=f"{part} {arm} {n}")
         model = magpy.Collection(magnet, UniformField(B=FIELD))
         best = None
-        for _ in range(2):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                t0 = time.perf_counter()
-                solved = solve_face_charge(model, level=level)
-                dt = time.perf_counter() - t0
-            best = dt if best is None else min(best, dt)
+        try:
+            for _ in range(2):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    t0 = time.perf_counter()
+                    solved = solve_face_charge(model, level=level)
+                    dt = time.perf_counter() - t0
+                best = dt if best is None else min(best, dt)
+        except ValueError as e:  # over max_unknowns
+            rows.append({"part": part, "arm": arm, "facets_per_turn": n, "widened": widen,
+                         "level": level, "refused": str(e)[:120]})
+            print(f"{arm:6s} {n:3d}/turn widen={widen!s:5} L{level}: refused", flush=True)
+            continue
         B = magpy.getB(solved, sensors)
         row = {
             "part": part,
