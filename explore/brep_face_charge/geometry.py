@@ -184,3 +184,75 @@ def faceted(part, n_turn, widen):
     if part == "plate":
         return plate_faceted(n_turn // 4, n_turn, widen)
     return pole_faceted(n_turn, n_turn // 4, widen)
+
+
+# ── widening from the mesh alone: what a solver could do with an export
+
+SHARP = 20.0  # degrees: the face-charge solver's own sharp-edge threshold
+
+
+def mesh_widen(V, F, sharp=SHARP):
+    """Move an export's curved-face vertices out as the solver widens its own
+    facets, from the mesh alone: each smooth edge (its faces turn by less than
+    `sharp`) is a polygon corner of a curve across it, of turning angle theta
+    and local radius r = width / (2 sin(theta / 2)), the width being the
+    narrower adjacent facet's extent across the edge; it moves out by
+    r (sqrt(theta / sin theta) - 1), away from the curve's centre. A vertex
+    takes the mean of its edges along one direction, summed over directions.
+    `F` must be wound consistently outward."""
+    V = np.asarray(V, float)
+    F = np.asarray(F, int)
+    T = V[F]
+    n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    n /= np.linalg.norm(n, axis=1)[:, None]
+    edges = {}
+    for f, tri in enumerate(F):
+        for k in range(3):
+            a, b = tri[k], tri[(k + 1) % 3]
+            edges.setdefault((min(a, b), max(a, b)), []).append((f, tri[(k + 2) % 3]))
+    moves = {}  # vertex -> list of (edge direction, displacement)
+    for (a, b), side in edges.items():
+        if len(side) != 2:
+            continue
+        (f1, c1), (f2, c2) = side
+        cos = np.clip(n[f1] @ n[f2], -1, 1)
+        theta = np.arccos(cos)
+        if theta < 1e-6 or np.degrees(theta) >= sharp:
+            continue
+        e = V[b] - V[a]
+        e /= np.linalg.norm(e)
+
+        def width(c):
+            d = V[c] - V[a]
+            return np.linalg.norm(d - (d @ e) * e)
+
+        r = min(width(c1), width(c2)) / (2 * np.sin(theta / 2))
+        delta = r * (np.sqrt(theta / np.sin(theta)) - 1)
+        m = n[f1] + n[f2]
+        m /= np.linalg.norm(m)
+        convex = n[f1] @ (V[c2] - V[a]) < 0
+        d = (delta if convex else -delta) * m
+        for v in (a, b):
+            moves.setdefault(v, []).append((e, d))
+    W = V.copy()
+    for v, items in moves.items():
+        groups = []  # edges along one direction
+        for e, d in items:
+            for g in groups:
+                if abs(g[0] @ e) > np.cos(np.radians(15)):
+                    g[1].append(d)
+                    break
+            else:
+                groups.append((e, [d]))
+        W[v] += sum(np.mean(ds, axis=0) for _, ds in groups)
+    return W
+
+
+def export_mesh_widened(part, n_turn):
+    """`part` exported at n_turn facets per turn, then widened from the mesh."""
+    V, F = faceted(part, n_turn, False)
+    oriented = magpy.magnet.TriangularMesh(
+        polarization=(0, 0, 0), vertices=V, faces=F, reorient_faces=True
+    )
+    F = np.asarray(oriented.faces)
+    return mesh_widen(V, F), F
