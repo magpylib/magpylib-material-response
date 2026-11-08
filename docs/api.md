@@ -15,6 +15,8 @@ the cells solver come last.
 .. autofunction:: magpylib_material_response.cells.solve_cells
 
 .. autofunction:: magpylib_material_response.fem.solve_fem
+
+.. autofunction:: magpylib_material_response.fem.from_step
 ```
 
 ## Model inputs

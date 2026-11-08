@@ -25,7 +25,8 @@ print(solved.ndof, solved.seconds, solved.moment)
 ## What it takes
 
 - **Shapes:** cuboids, cylinders, cylinder segments, spheres, tetrahedra and
-  closed triangle meshes, unmeshed.
+  closed triangle meshes, unmeshed; and parts read from a STEP file, meshed on
+  their exact solid (next section).
 - **Materials:** remanence and a susceptibility, isotropic or along the part's
   own axes, or a `BHCurve`.
 - **Drives:** magnets without susceptibility, a `UniformField`, and currents.
@@ -33,6 +34,29 @@ print(solved.ndof, solved.seconds, solved.moment)
 
 What it refuses, overlapping parts and some currents among them, is listed in
 [Building a model](model.md#what-is-refused).
+
+## CAD parts: `from_step`
+
+A triangle mesh exported from CAD is faceted: finite elements solve the facets,
+not the bores and fillets they stand for. `from_step` reads the STEP file
+itself, which holds the exact geometry, and returns a `TriangularMesh` that
+keeps it: Magpylib computes and draws its triangles, `solve_fem` meshes the
+exact solid, its elements curved onto the real curves.
+
+```python
+from magpylib_material_response import UniformField
+from magpylib_material_response.fem import from_step, solve_fem
+
+part = from_step("pole.step", polarization=(0, 0, 0))  # millimetres to metres
+part.susceptibility = 1000
+solved = solve_fem(magpy.Collection(part, UniformField(B=(0, 0, 0.01))), order=3)
+```
+
+A Ø10 × 8 mm cylinder read this way solves as the `Cylinder` itself, within 0.05
+%; solved on its own triangles (15° facets), it is 1.5 % off. The file must hold
+one solid; `to_json` and copies keep it. For face charge, which solves the
+triangles, a CAD tool's own STL with `widen_curves=True` costs fewer unknowns
+([Face charge](face_charge.md)).
 
 ## Settings
 

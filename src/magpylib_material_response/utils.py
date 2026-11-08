@@ -196,6 +196,13 @@ def _serialize_recursive(obj, parent="warn"):
     elif isinstance(obj, magpy.magnet.TriangularMesh):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
         dd["faces"] = {"value": obj.faces.tolist()}
+        if getattr(obj, "_step", None) is not None:  # read by fem.from_step
+            step = obj._step
+            dd["step"] = {
+                "text": step["text"],
+                "scale": {"value": step["scale"], "unit": "m"},
+                "vertices": step["vertices"],
+            }
     elif isinstance(obj, magpy.current.Polyline | magpy.current.TriangleStrip):
         dd["vertices"] = {"value": obj.vertices.tolist(), "unit": "m"}
     elif isinstance(obj, magpy.current.TriangleSheet):
@@ -336,6 +343,13 @@ def _deserialize_recursive(inp):
     finally:
         LOADING.reset(token)
 
+    if inp.get("step") is not None:  # the exact solid of a fem.from_step part
+        _check_unit("STEP scale", inp["step"]["scale"], "m")
+        obj._step = {
+            "text": inp["step"]["text"],
+            "scale": float(inp["step"]["scale"]["value"]),
+            "vertices": inp["step"]["vertices"],
+        }
     if inp.get("susceptibility") is not None:
         saved = inp["susceptibility"]
         if "H" in saved:

@@ -38,6 +38,7 @@ if importlib.util.find_spec("ngsolve") is None:  # pragma: no cover
 
 from magpylib_material_response._renamed import old_names
 from magpylib_material_response.fem._solve import FemSolution, solve_fem
+from magpylib_material_response.fem._step import from_step
 from magpylib_material_response.fem._study import FemStudy, study_fem
 
 # pylint: disable=undefined-all-variable
@@ -46,6 +47,7 @@ __all__ = [  # the old names too, for `import *`, through __getattr__ below
     "FemStudy",
     "fem_solve",
     "fem_study",
+    "from_step",
     "solve_fem",
     "study_fem",
 ]
