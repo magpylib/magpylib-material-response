@@ -21,7 +21,11 @@ from magpylib_material_response.meshing import (
     slice_Cuboid,
     voxelize,
 )
-from magpylib_material_response.meshing_utils import get_volume, trimesh_from_model3d
+from magpylib_material_response.meshing_utils import (
+    get_volume,
+    mask_inside_CylinderSegment,
+    trimesh_from_model3d,
+)
 
 
 def test_mesh_Cuboid():
@@ -772,3 +776,32 @@ def test_mesh_thin_CylinderSegment_with_cuboids_refuses_a_parents_anisotropy():
     magpy.Collection(seg).susceptibility = (1, 50, 1)
     with pytest.raises(ValueError, match="same along x and y"):
         mesh_thin_CylinderSegment_with_cuboids(seg, target_elems=20)
+
+
+@pytest.mark.parametrize(
+    "dimension",
+    [
+        (0.5, 1, 2, 200, 500),
+        (0.5, 1, 2, 360, 450),
+        (0.5, 1, 2, -400, -300),
+        (0.5, 1, 2, 0, 360),
+        (0.5, 1, 2, -350, 10),
+        (0, 1, 2, 300, 420),
+    ],
+)
+def test_segment_mask_is_the_section_whatever_its_angles_start_at(dimension):
+    # a section is the same shifted by full turns; (0, 90, ...) are the reference
+    turns = np.round((dimension[3] + dimension[4]) / 720)
+    shifted = (*dimension[:3], dimension[3] - 360 * turns, dimension[4] - 360 * turns)
+    points = np.random.default_rng(0).uniform(-1.2, 1.2, (4000, 3))
+    seg = magpy.magnet.CylinderSegment(dimension=dimension)
+    expected = mask_inside_CylinderSegment(
+        magpy.magnet.CylinderSegment(dimension=shifted), points
+    )
+    assert expected.any()
+    assert np.array_equal(mask_inside_CylinderSegment(seg, points), expected)
+
+
+def test_segment_mask_holds_the_axis_when_the_inner_radius_is_zero():
+    seg = magpy.magnet.CylinderSegment(dimension=(0, 1, 2, 30, 120))
+    assert mask_inside_CylinderSegment(seg, np.array([[0, 0, 0.3]])).all()

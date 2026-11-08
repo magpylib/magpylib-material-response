@@ -247,16 +247,37 @@ def solve_face_charge(
         if not fixed:
             return np.zeros((len(points), 3))
         # one call: magpylib computes many segments at many points in chunks
+        others = [
+            src for src in fixed if not isinstance(src, magpy.magnet.CylinderSegment)
+        ]
+        segments = [
+            src for src in fixed if isinstance(src, magpy.magnet.CylinderSegment)
+        ]
         with np.errstate(invalid="ignore", divide="ignore"):
-            B = magpy.getB(fixed, points, sumup=True)
-            # close to a magnet's edge magpylib can give NaN; the field is
-            # singular there but integrable: take it a little off, a step
-            # 100 times longer each time it is still NaN
-            for step in nudges:
-                bad = ~np.isfinite(B).all(axis=1)
-                if not bad.any():
-                    break
-                B[bad] = magpy.getB(fixed, points[bad] + step, sumup=True)
+            B = np.zeros((len(points), 3))
+            if others:
+                B = magpy.getB(others, points, sumup=True)
+                # close to a magnet's edge magpylib can give NaN; the field is
+                # singular there but integrable: take it a little off, a step
+                # 100 times longer each time it is still NaN
+                for step in nudges:
+                    bad = ~np.isfinite(B).all(axis=1)
+                    if not bad.any():
+                        break
+                    B[bad] = magpy.getB(others, points[bad] + step, sumup=True)
+            # a CylinderSegment gives B = 0 on every one of its surfaces
+            # (magpylib#1073), where a magnet touching a solved part has its
+            # Gauss points; B's normal part is the same on both sides, so
+            # each segment is read a little off where it gives exactly 0
+            # (apart, since the others' sum would hide its zero)
+            for src in segments:
+                Bs = magpy.getB(src, points)
+                for step in nudges:
+                    bad = ~(Bs != 0).any(axis=1) | ~np.isfinite(Bs).all(axis=1)
+                    if not bad.any():
+                        break
+                    Bs[bad] = magpy.getB(src, points[bad] + step)
+                B = B + Bs
         return B / magpy.mu_0
 
     for rnd in range(refine + 1):
@@ -920,7 +941,9 @@ def _warn_unaligned(bodies, solved, boxes, fixed):
             warnings.warn(
                 f"{src} touches {obj}, which face charge solves, and is not a "
                 "cuboid aligned with it: the panels cannot follow its footprint, "
-                "where its field jumps. Expect errors of a few percent near it, "
-                "falling slowly with level; refine= helps, and solve_fem checks it.",
+                "where its field jumps. Expect errors "
+                f"{'' if isinstance(src, magpy.magnet.CylinderSegment) else 'of a few percent '}"
+                "near it, falling slowly with level; refine= helps, and solve_fem "
+                "checks it.",
                 stacklevel=3,
             )
