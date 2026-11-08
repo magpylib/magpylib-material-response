@@ -73,3 +73,50 @@ spheres and tori faceted by level and widened, other surfaces tessellated
 finely as a fallback; finite elements would mesh the exact solid as the
 reference here does. Next checks: a magnet close to a curved face, and a
 part with free-form (NURBS) faces.
+
+## Adversarial review (measured, not argued)
+
+The first result was tested where it could break (`scenarios.py`,
+`reference_adv.py`, `adv_arms.py`): dense sensors all round the curved faces
+(32 on the plate, 28 on the pole, not four chosen points), three drives
+(oblique, along z, along x) and a 1 T magnet 1 mm off a curved face; 8 exact
+references (0.04 % of the part's own field or better near the curves), 120
+face-charge solves. And the alternative that needs no B-rep: the export
+widened from its mesh alone (`geometry.mesh_widen`: each smooth edge's turning
+angle and its facets' width give the local radius).
+
+![Worst error over the four scenarios against unknowns](results/adversarial.png)
+
+Worst error near the curves over the four scenarios, % of the part's own field:
+
+| Arm | Plate | Pole |
+| --- | --- | --- |
+| B-rep, widened, level 3 | 0.133 % with 11,256 unknowns | 0.290 % with 6,390 |
+| export 7.5°, widened from the mesh, level 3 | 0.129 % with 11,712 | 0.302 % with 6,756 |
+| export 15°, widened from the mesh, level 3 | 0.152 % with 7,839 | **2.93 %** with 2,928 |
+| export 3.75°, level 3 | 0.356 % with 17,952 | 0.308 % with 19,350 |
+| export 7.5°, level 3 | 0.461 % with 11,256 | 0.803 % with 6,390 |
+
+1. **Widening survives every scenario:** dense sensors, all three drives and
+   the magnet. It is the B-rep arms' and the mesh-widened arms' whole edge.
+2. **With the magnet 1 mm off the pole's fillet, the B-rep's edge is cost
+   only:** 0.290 % against the 3.75° export's 0.308 %, with 3 times fewer
+   unknowns; no gain in accuracy.
+3. **Widening from the mesh alone matches the B-rep** when the export is 7.5°
+   or finer (both parts, every scenario, within 15 %), and on the plate even at
+   15°, with fewer unknowns than the B-rep.
+4. **It fails on a coarse export of a doubly curved face:** the pole's fillet
+   at 15° comes out at 2.93 %, worse than not widening (2.83 %). The volume
+   check showed why: the two curvatures add up and overshoot (+0.43 %).
+
+**Revised conclusion.** The benefit is real and robust, but it is the
+widening, not the B-rep. A solver can widen an export's curved facets from the
+mesh, without a CAD kernel, and gets the B-rep's accuracy for exports of 7.5°
+or finer. What only a B-rep adds: correct widening of coarse exports of doubly
+curved faces, and facets finer than the export where the level asks for them.
+Not measured here, so not weighed: how many users bring curved CAD parts, and
+how the remaining error compares with their material data.
+
+**Next, if pursued:** mesh widening inside face charge for smooth regions,
+guarded to exports fine enough for it (or with the doubly curved case fixed
+first); the B-rep part only if coarse doubly curved exports turn out to matter.
