@@ -22,7 +22,7 @@ from magpylib_material_response.cells import (
     get_susceptibilities,
     warn_if_solved,
 )
-from magpylib_material_response.fem._step import exact_solid
+from magpylib_material_response.fem._step import exact_box, exact_inside, exact_solid
 from magpylib_material_response.meshing import _thinnest as _thinnest_part
 from magpylib_material_response.meshing_utils import SOLIDS, mask_inside
 from magpylib_material_response.uniform import UniformField, refuse_both
@@ -239,7 +239,12 @@ def contains(src, points):
         v = np.asarray(src.vertices, dtype=float)
         weights = np.linalg.solve((v[1:] - v[0]).T, (local - v[0]).T).T
         return np.all(weights >= -1e-12, axis=1) & (weights.sum(axis=1) <= 1 + 1e-12)
-    return mask_inside(src, local)
+    inside = mask_inside(src, local)
+    box = exact_box(src)
+    if box is not None:  # the exact solid bulges past its triangles: ask it
+        near = ~inside & np.all((local >= box[0]) & (local <= box[1]), axis=1)
+        inside |= exact_inside(src, local, near)
+    return inside
 
 
 def _thinnest(src):
@@ -289,8 +294,11 @@ def distance(src, points):
         radial = np.maximum(np.maximum(r1 - rho, rho - r2), 0)
         axial = np.maximum(np.abs(local[:, 2]) - h / 2, 0)
         return np.hypot(radial, axial)
-    vertices = np.asarray(src.vertices, dtype=float)
-    lo, hi = vertices.min(axis=0), vertices.max(axis=0)
+    box = exact_box(src)  # a from_step part: its solid's box, past its triangles
+    if box is None:
+        vertices = np.asarray(src.vertices, dtype=float)
+        box = vertices.min(axis=0), vertices.max(axis=0)
+    lo, hi = box
     return np.linalg.norm(np.maximum(np.maximum(lo - local, local - hi), 0), axis=1)
 
 
@@ -307,6 +315,8 @@ def _corners(src):
     elif isinstance(src, magpy.magnet.Sphere):
         r = src.diameter / 2
         local = np.array(np.meshgrid([-r, r], [-r, r], [-r, r])).T.reshape(-1, 3)
+    elif (box := exact_box(src)) is not None:  # a from_step part's solid
+        local = np.array(np.meshgrid(*np.transpose(box))).T.reshape(-1, 3)
     else:
         local = np.asarray(src.vertices, dtype=float)
     return src.orientation.apply(local).reshape(-1, 3) + np.ravel(src.position)

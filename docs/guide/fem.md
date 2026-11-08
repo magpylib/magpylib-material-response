@@ -44,6 +44,7 @@ keeps it: Magpylib computes and draws its triangles, `solve_fem` meshes the
 exact solid, its elements curved onto the real curves.
 
 ```python
+from magpylib_material_response import UniformField
 from magpylib_material_response.fem import from_step, solve_fem
 
 part = from_step("pole.step", polarization=(0, 0, 0))  # millimetres to metres

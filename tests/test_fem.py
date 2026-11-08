@@ -608,7 +608,7 @@ def _cylinder_step(folder):
 
 def test_from_step_solves_the_exact_solid(tmp_path):
     """Finite elements on a from_step part solve its exact solid: as the
-    Cylinder itself, where its own triangles alone are 30 times further off."""
+    Cylinder itself, where its own triangles alone are 28 times further off."""
     B0 = np.array([0.004, 0.003, 0.008])
     obs = np.array(
         [
@@ -626,17 +626,21 @@ def test_from_step_solves_the_exact_solid(tmp_path):
     part = from_step(_cylinder_step(tmp_path), polarization=(0, 0, 0))
     B = solved(magpy.magnet.Cylinder(polarization=(0, 0, 0), dimension=(10e-3, 8e-3)))
     own = np.linalg.norm(B - B0)
-    assert np.linalg.norm(solved(part) - B) / own < 2e-3
+    exact = np.linalg.norm(solved(part) - B) / own  # 5e-4: the FEM's own error
     triangles = magpy.magnet.TriangularMesh(
         polarization=(0, 0, 0), vertices=part.vertices, faces=part.faces
     )
-    assert np.linalg.norm(solved(triangles) - B) / own > 5e-3
+    faceted = np.linalg.norm(solved(triangles) - B) / own  # 1.5e-2
+    assert exact < 2e-3
+    assert faceted > 10 * exact
 
 
 def test_from_step_keeps_its_solid_and_refuses(tmp_path):
     from netgen import occ  # noqa: PLC0415
 
+    from magpylib_material_response.fem import _geometry  # noqa: PLC0415
     from magpylib_material_response.fem._step import exact_solid  # noqa: PLC0415
+    from magpylib_material_response.meshing_utils import mask_inside  # noqa: PLC0415
 
     path = _cylinder_step(tmp_path)
     part = from_step(path, polarization=(0, 0, 0), facet_angle=7.5)
@@ -659,3 +663,24 @@ def test_from_step_keeps_its_solid_and_refuses(tmp_path):
         from_step(two)
     with pytest.raises(ValueError, match="between 1 and 30"):
         from_step(path, facet_angle=45)
+    with pytest.raises(ValueError, match="positive"):
+        from_step(path, scale=-1e-3)
+    with pytest.raises(ValueError, match="do not pass them"):
+        from_step(path, vertices=part.vertices)
+    from_step(path, polarization=(0, 0, 0), check_open="warn")  # ours to override
+
+    # a point between a facet and the true surface is inside the part
+    part = from_step(path, polarization=(0, 0, 0))
+    T = part.vertices[part.faces]
+    normal = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    side = np.abs(normal[:, 2]) < 1e-3 * np.linalg.norm(normal, axis=1)
+    centre = T[side][0].mean(axis=0)  # on a side facet, inside the curve
+    r = np.linalg.norm(centre[:2])
+    gap = (*(centre[:2] * (r + 5e-3) / 2 / r), centre[2])  # facet to true surface
+    assert not mask_inside(part, np.array([gap]))[0]
+    assert _geometry.contains(part, np.array([gap]))[0]
+
+    # changed vertices are no longer the solid's: the triangles, with a warning
+    part.vertices = part.vertices * 2
+    with pytest.warns(UserWarning, match="vertices changed"):
+        assert exact_solid(part) is None
