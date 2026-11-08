@@ -74,6 +74,7 @@ def study_face_charge(
     refine=0,
     max_unknowns=20_000,
     min_log_time=None,
+    widen_curves=False,
 ) -> FaceChargeStudy:
     """Solve `collection` by face charge at increasing panel levels and
     estimate the error of the highest.
@@ -90,7 +91,7 @@ def study_face_charge(
     levels : sequence of int, default (2, 3, 4)
         Panel levels, increasing. Three or more give an error estimate, two
         only a warning.
-    refine, max_unknowns, min_log_time
+    refine, max_unknowns, min_log_time, widen_curves
         As for :func:`solve_face_charge`, at every level.
 
     Returns
@@ -141,6 +142,7 @@ def study_face_charge(
             refine=refine,
             max_unknowns=max_unknowns,
             min_log_time=min_log_time,
+            widen_curves=widen_curves,
         )
         values.append(np.asarray(evaluate(solved), dtype=float))
         seconds.append(time.perf_counter() - start)

@@ -19,6 +19,8 @@ import heapq
 import itertools
 
 import numpy as np
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
 
 def rounding(V):
@@ -706,3 +708,151 @@ def cut_cells(cells, h, tol, ell):
     double_area = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
     longest = np.linalg.norm(np.roll(T, -1, axis=1) - T, axis=-1).max(axis=1)
     return T[double_area > 1e-6 * ell * longest]
+
+
+#: Widening reads a smooth edge as a facet corner of a curved face. Measured
+#: against exact references (MR #195): faces curved one way, a bore or a
+#: fillet, are widened right up to 15 degrees per facet; faces curved two ways
+#: up to 10 (a sphere exported at 7.5 degrees, whose split quads turn its
+#: triangles by a little more: 0.65 % of its own field off, 0.054 % widened; a
+#: filleted rim at 10 degrees: 1.40 %, 0.44 %). At 15 degrees the two
+#: curvatures' moves add up and overshoot.
+WIDEN_SINGLY = 15.0
+WIDEN_DOUBLY = 10.0
+#: Degrees above a limit still within it: an STL's float32 coordinates turn a
+#: 15 degree facet by up to a few thousandths of a degree more.
+ANGLE_SLACK = 0.05
+#: Radians below which two triangles are one flat face: float32 rounding turns
+#: the halves of a flat quad by up to about 1e-5.
+FLAT = 1e-4
+#: Where a curve meets a flat face, the flat face is wider across the edge
+#: than the curve's facet, and the faces turn there by half the curve's angle,
+#: its first facet starting tangent to the flat face: wider by at least
+#: TANGENT_WIDER, turning by at most TANGENT_TURN of the facet's steepest edge.
+#: Its vertices stay, so that the flat face stays flat. Measured: it finds
+#: every such edge of a plate, a pole piece and a prism with 2 mm flat lands
+#: between 2 mm fillets (only 3.8 times wider), and none on a sphere, whose
+#: facets narrow toward its poles up to 3.0 times.
+TANGENT_WIDER = 1.5
+TANGENT_TURN = 0.75
+
+
+def widen_curved(V, F, sharp=20.0):
+    """Move the vertices of a closed, outward mesh's curved faces out, as the
+    solver widens the facets it cuts itself, so that a CAD export's faceted
+    curves keep the volume of the curves they stand for; and how many curved
+    vertices were too coarsely faceted to move.
+
+    Each smooth edge (its two triangles turn by theta, between ``FLAT`` and
+    ``sharp`` degrees) is read as a polygon corner of a curve across it, of
+    radius ``r = w / (2 sin(theta / 2))``, ``w`` the narrower triangle's width
+    across the edge; its vertices move by ``r (sqrt(theta / sin theta) - 1)``,
+    away from the curve's centre: the factor that keeps a polygon's area that
+    of its circle. A vertex takes the mean of its edges along one direction,
+    summed over directions. A vertex stays where it is on an edge where a
+    curve meets a flat face (wider across it than the curve's facet, the
+    faces turning there by about half the curve's angle), so that flat faces
+    stay flat, and on a curve faceted coarser than
+    ``WIDEN_SINGLY`` (curved one way) or ``WIDEN_DOUBLY`` (two ways). A mesh
+    in float32 coordinates, as an STL holds, stays in float32."""
+    V = np.asarray(V, float)
+    F = np.asarray(F, int)
+    T = V[F]
+    n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    area = 0.5 * np.linalg.norm(n, axis=1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        n /= (2 * area)[:, None]
+    # each edge's two triangles and the vertex opposite it in each
+    a = F[:, [0, 1, 2]].ravel()
+    b = F[:, [1, 2, 0]].ravel()
+    c = F[:, [2, 0, 1]].ravel()
+    tri = np.repeat(np.arange(len(F)), 3)
+    key = np.minimum(a, b) * len(V) + np.maximum(a, b)
+    order = np.argsort(key, kind="stable")
+    key, a, b, c, tri = key[order], a[order], b[order], c[order], tri[order]
+    first = np.flatnonzero(np.r_[True, key[1:] != key[:-1]])
+    pair = first[np.diff(np.r_[first, len(key)]) == 2]  # closed: all are pairs
+    ea, eb = a[pair], b[pair]
+    c1, c2, t1, t2 = c[pair], c[pair + 1], tri[pair], tri[pair + 1]
+    with np.errstate(invalid="ignore"):
+        theta = np.arccos(np.clip(np.einsum("ij,ij->i", n[t1], n[t2]), -1, 1))
+    degrees = np.degrees(theta)
+    smooth = (theta > FLAT) & (degrees < sharp)  # NaN, a triangle of no area: no
+
+    # flat faces: triangles joined across flat edges; a face's width across
+    # an edge is its area over the edge's length
+    flat = theta <= FLAT
+    graph = coo_matrix((np.ones(flat.sum()), (t1[flat], t2[flat])), shape=(len(F),) * 2)
+    _, face = connected_components(graph, directed=False)
+    face_area = np.bincount(face, weights=area, minlength=face.max() + 1)
+    length = np.linalg.norm(V[eb] - V[ea], axis=1)
+    w1, w2 = face_area[face[t1]] / length, face_area[face[t2]] / length
+    # the steepest smooth edge of each flat face, against which a tangent
+    # edge turns by half
+    steepest_of = np.zeros(len(face_area))
+    np.maximum.at(steepest_of, face[t1][smooth], theta[smooth])
+    np.maximum.at(steepest_of, face[t2][smooth], theta[smooth])
+    narrow = np.where(w1 < w2, face[t1], face[t2])
+    tangent = (
+        smooth
+        & (np.maximum(w1, w2) > TANGENT_WIDER * np.minimum(w1, w2))
+        & (theta < TANGENT_TURN * steepest_of[narrow])
+    )
+    coarse = smooth & (degrees > WIDEN_SINGLY + ANGLE_SLACK)
+    W = V.copy()
+    held = np.zeros(len(V), bool)  # vertices that stay
+    held[np.r_[ea[tangent], eb[tangent]]] = True
+    too_coarse = np.zeros(len(V), bool)
+    too_coarse[np.r_[ea[coarse], eb[coarse]]] = True
+
+    use = smooth & ~tangent
+    if use.any():
+        ea, eb, c1, c2, t1, t2, theta = (
+            x[use] for x in (ea, eb, c1, c2, t1, t2, theta)
+        )
+        e = V[eb] - V[ea]
+        e /= np.linalg.norm(e, axis=1)[:, None]
+
+        def width(cv):
+            d = V[cv] - V[ea]
+            return np.linalg.norm(d - np.einsum("ij,ij->i", d, e)[:, None] * e, axis=1)
+
+        r = np.minimum(width(c1), width(c2)) / (2 * np.sin(theta / 2))
+        delta = r * (np.sqrt(theta / np.sin(theta)) - 1)
+        m = n[t1] + n[t2]
+        m /= np.linalg.norm(m, axis=1)[:, None]
+        convex = np.einsum("ij,ij->i", n[t1], V[c2] - V[ea]) < 0
+        d = np.where(convex, delta, -delta)[:, None] * m
+        d[coarse[use]] = 0  # seen for the directions, not moved by
+
+        # each vertex's edges grouped by direction, a round per direction
+        vert = np.r_[ea, eb]
+        dirs, disp, ang = np.r_[e, e], np.r_[d, d], np.r_[theta, theta]
+        group = np.full(len(vert), -1)
+        cos_same = np.cos(np.radians(15.0))
+        for k in range(len(vert)):
+            free = np.flatnonzero(group < 0)
+            if not free.size:
+                break
+            ref = np.zeros((len(V), 3))
+            _, firsts = np.unique(vert[free], return_index=True)
+            ref[vert[free[firsts]]] = dirs[free[firsts]]
+            same = np.abs(np.einsum("ij,ij->i", dirs[free], ref[vert[free]])) > cos_same
+            group[free[same]] = k
+        cell = vert * (group.max() + 1) + group
+        cells, at = np.unique(cell, return_inverse=True)
+        sums = np.zeros((len(cells), 3))
+        np.add.at(sums, at, disp)
+        counts = np.bincount(at, minlength=len(cells))
+        cell_vert = cells // (group.max() + 1)
+        move = np.zeros((len(V), 3))
+        np.add.at(move, cell_vert, sums / counts[:, None])
+        groups = np.bincount(cell_vert, minlength=len(V))
+        steepest = np.zeros(len(V))
+        np.maximum.at(steepest, vert, np.degrees(ang))
+        too_coarse |= (groups > 1) & (steepest > WIDEN_DOUBLY + ANGLE_SLACK)
+        go = ~held & ~too_coarse
+        W[go] += move[go]
+    if np.array_equal(V, V.astype(np.float32)):  # an STL's float32 stays float32
+        W = W.astype(np.float32).astype(float)
+    return W, int((too_coarse & ~held).sum())
