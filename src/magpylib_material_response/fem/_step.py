@@ -77,9 +77,13 @@ def from_step(path, *, scale=1e-3, facet_angle=15.0, **kwargs):
     vertices = np.array([p.p for p in mesh.Points()]) * scale
     faces = np.array([[v.nr - 1 for v in el.vertices] for el in mesh.Elements2D()])
     part = magpy.magnet.TriangularMesh(
-        vertices=vertices, faces=faces, reorient_faces=True, check_open="raise", **kwargs
+        vertices=vertices,
+        faces=faces,
+        reorient_faces=True,
+        check_open="raise",
+        **kwargs,
     )
-    part._step = {"text": text, "scale": float(scale)}  # noqa: SLF001
+    part._step = {"text": text, "scale": float(scale)}
     return part
 
 
