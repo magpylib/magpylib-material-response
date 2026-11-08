@@ -143,6 +143,20 @@ def test_move_grid_closed_loop_closes_onto_its_start():
 
 
 @pytest.mark.parametrize(
+    ("scale", "gap", "closed"), [(1e-6, 0, True), (1e-6, 5e-9, False)]
+)
+def test_move_grid_closed_relative_to_size(scale, gap, closed):
+    """A polyline is closed when its ends meet within 1e-9 of its size: a
+    micrometre loop counts, a micrometre lead open by 0.5 % does not."""
+    verts = scale * np.array(
+        [[0, 0, 0], [2, 0, 0], [1, 2, 0.5], [1, 2, -0.5], [0, 0, 0]]
+    )
+    verts[-1, 0] += gap
+    out = move_grid_along_polyline(verts, [[0, 0.1 * scale]])
+    assert np.array_equal(out[0, 0], out[0, -1]) is closed
+
+
+@pytest.mark.parametrize(
     ("verts", "grid", "axis", "match"),
     [
         (_L, [[0, 0, 0.1]], None, "Before version 0.12"),
@@ -158,6 +172,18 @@ def test_move_grid_closed_loop_closes_onto_its_start():
         ([[0, 0], [1, 0]], [0.1], [0, 0, 1], "3D polylines"),
         ([[0, 0, 0], [2, 0, 0], [0, 0, 0]], [[0, 0.1]], [0, 0, 1], "turns back"),
         ([[0, 0, 0], [1, 0, 0], [1, 0, 0], [1, 1, 0]], [[0, 0.1]], None, "same point"),
+        # a repeated first vertex: no first segment to put the frame across
+        ([[0, 0, 0], [0, 0, 0], [1, 0, 0], [1, 1, 0]], [[0, 0.1]], None, "same point"),
+        # nearly 180°: the mitre would throw the windings 4e4 away
+        ([[0, 0, 0], [2, 0, 0], [0, 1e-5, 0]], [[0, 0.1]], [0, 0, 1], "turns back"),
+        # a straight line with 1e-6 of noise: its frame would follow the noise
+        (
+            [[0, 0, 0], [0.5, 1e-6, -1e-6], [1, -1e-6, 1e-6], [1.5, 0, 0]],
+            [[0, 0.1]],
+            None,
+            "straight polyline",
+        ),
+        ([[0, 0, 0]], [[0, 0.1]], None, "at least two vertices"),
     ],
 )
 def test_move_grid_errors(verts, grid, axis, match):

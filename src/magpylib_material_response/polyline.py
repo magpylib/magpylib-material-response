@@ -287,7 +287,10 @@ def cross_section_frame(
         Used in place of the vector area, for a 3D polyline. Only its part
         across the first segment counts. Required where the vector area has
         no part across it: a straight polyline, or one that encloses as much
-        area turning one way as the other, like a figure of eight.
+        area turning one way as the other, like a figure of eight. Less than
+        1e-4 of the square of the polyline's size (its bounding box diagonal)
+        counts as none: the frame of a nearly straight polyline would follow
+        its noise.
     angle : float, default 0
         Turn of the frame about ``t``, in degrees, for a 3D polyline.
 
@@ -303,7 +306,9 @@ def cross_section_frame(
     ------
     ValueError
         If the vector area, or ``axis``, has no part across the first segment,
-        or ``axis`` or ``angle`` is given for a 2D polyline.
+        ``axis`` or ``angle`` is given for a 2D polyline, the polyline has fewer
+        than two vertices, two consecutive vertices are the same point, or it
+        turns back on itself (within 0.1° of 180°).
 
     Examples
     --------
@@ -317,6 +322,8 @@ def cross_section_frame(
     (array([1., 0., 0.]), array([0., 1., 0.]))
     """
     verts = np.asarray(verts, dtype=float)
+    angle = float(angle)
+    _check_polyline(verts)
     if verts.shape[1] == 2:
         if axis is not None or angle:
             msg = (
@@ -325,14 +332,13 @@ def cross_section_frame(
             )
             raise ValueError(msg)
         verts = np.column_stack([verts, np.zeros(len(verts))])
-        area = _vector_area(verts)
-        if abs(area[2]) <= 1e-9 * _span(verts) ** 2:
+        if abs(_vector_area(verts)[2]) <= _NO_AREA * _span(verts) ** 2:
             axis = np.array([0.0, 0.0, 1.0])
     d = verts[1] - verts[0]
     t = d / np.linalg.norm(d)
     if axis is None:
         ref = _vector_area(verts)
-        scale = _span(verts) ** 2
+        tol = _NO_AREA * _span(verts) ** 2
         what = (
             "The polyline's vector area has no part across its first segment "
             "(a straight polyline, or a figure of eight), so it does not orient "
@@ -343,14 +349,14 @@ def cross_section_frame(
         if ref.shape != (3,):
             msg = f"axis must be a 3-vector, got shape {ref.shape}."
             raise ValueError(msg)
-        scale = np.linalg.norm(ref)
-        if scale == 0:
+        tol = 1e-9 * np.linalg.norm(ref)
+        if tol == 0:
             msg = "axis is the zero vector: it has no direction."
             raise ValueError(msg)
         what = "axis is parallel to the polyline's first segment."
     u = ref - (ref @ t) * t
     norm = np.linalg.norm(u)
-    if norm <= 1e-9 * scale:
+    if norm <= tol:
         raise ValueError(what)
     u /= norm
     v = np.cross(t, u)
@@ -369,6 +375,27 @@ def _vector_area(verts: np.ndarray) -> np.ndarray:
 def _span(verts: np.ndarray) -> float:
     """Length of the polyline's bounding box diagonal: its scale."""
     return float(np.linalg.norm(np.ptp(verts, axis=0)))
+
+
+#: A vector area under this share of the polyline's span squared orients
+#: nothing: below it, the frame of a nearly straight polyline follows noise.
+_NO_AREA = 1e-4
+
+
+def _is_closed(verts: np.ndarray) -> bool:
+    """Whether the last vertex is on the first, relative to the polyline's size."""
+    return bool(np.linalg.norm(verts[-1] - verts[0]) <= 1e-9 * _span(verts))
+
+
+def _check_polyline(verts: np.ndarray) -> None:
+    """Refuse what has no frame or no mitre."""
+    if verts.ndim != 2 or verts.shape[1] not in (2, 3) or len(verts) < 2:
+        msg = (
+            "verts must be at least two vertices, of shape (n, 3) or (n, 2); "
+            f"got shape {verts.shape}."
+        )
+        raise ValueError(msg)
+    _check_segments(verts, _is_closed(verts))
 
 
 def move_grid_along_polyline(
@@ -392,7 +419,9 @@ def move_grid_along_polyline(
         Points of the cross-section, relative to ``verts[0]``: a point
         ``(a, b)`` sits at ``verts[0] + a*u + b*v``, in the frame
         `cross_section_frame` returns. For a 2D polyline a point is the offset
-        ``b`` along ``v``.
+        ``b`` along ``v``. On a closed polyline the windings start and end on
+        the mitre at ``verts[0]``, the plane halfway between the last segment
+        and the first: each point is moved along ``t`` onto it.
     axis : array-like, shape (3,), optional
         Passed to `cross_section_frame`: used in place of the polyline's
         vector area, required where that has no part across the first segment.
@@ -404,14 +433,15 @@ def move_grid_along_polyline(
     -------
     np.ndarray, shape (m, n, 3) or (m, n, 2)
         One polyline per cross-section point. When the polyline is closed (its
-        last vertex on its first), so is each of them.
+        last vertex on its first, within 1e-9 of its size), so is each of
+        them.
 
     Raises
     ------
     ValueError
-        If ``grid`` does not have one column fewer than ``verts``, the frame
-        is undefined (see `cross_section_frame`), two consecutive vertices
-        are the same point, or the polyline turns back on itself.
+        If ``grid`` does not have one column fewer than ``verts``, or
+        `cross_section_frame` raises: the frame is undefined, or the polyline
+        has a repeated vertex or turns back on itself.
 
     Notes
     -----
@@ -442,9 +472,8 @@ def move_grid_along_polyline(
             "grid in absolute coordinates."
         )
         raise ValueError(msg)
-    closed = np.allclose(verts[0], verts[-1])
-    _check_segments(verts, closed)
     u, v = cross_section_frame(verts, axis=axis, angle=angle)
+    closed = _is_closed(verts)
     # 2D inputs are lifted to z=0 (the plane intersection is 3D-only) and
     # sliced back at the end.
     is_2d = dim == 2
@@ -460,7 +489,9 @@ def move_grid_along_polyline(
 
 
 def _check_segments(verts: np.ndarray, closed: bool) -> None:
-    """Refuse what has no mitre: a segment of zero length, a 180° turn."""
+    """Refuse what has no mitre: a segment of zero length, a turn within
+    0.1° of 180°, whose mitre would be over 1,000 times wider than the
+    cross-section."""
     d = np.diff(verts, axis=0)
     length = np.linalg.norm(d, axis=1)
     short = np.flatnonzero(length <= 1e-12 * length.max())
@@ -471,12 +502,13 @@ def _check_segments(verts: np.ndarray, closed: bool) -> None:
     t = d / length[:, np.newaxis]
     turns = np.einsum("ij,ij->i", t, np.roll(t, -1, axis=0))
     turns = turns if closed else turns[:-1]
-    back = np.flatnonzero(turns < -1 + 1e-12)
+    back = np.flatnonzero(turns < -1 + 1e-6)
     if back.size:
         i = (back[0] + 1) % len(t)
         msg = (
-            f"The polyline turns back on itself at verts[{i}]: a 180° turn has "
-            "no mitre to carry the cross-section through."
+            f"The polyline turns back on itself at verts[{i}]: a turn within "
+            "0.1° of 180° has no usable mitre to carry the cross-section "
+            "through."
         )
         raise ValueError(msg)
 

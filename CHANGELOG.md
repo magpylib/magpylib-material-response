@@ -20,15 +20,18 @@ and this project adheres to
   the frame about `t`. The grid used to be absolute, so a cross-section drawn
   around the origin missed a polyline that did not start there; a grid with as
   many columns as the polyline now raises, saying so
-  ([#18](https://github.com/magpylib/magpylib-material-response/issues/18))
+  ([#18](https://github.com/magpylib/magpylib-material-response/issues/18),
+  [#191](https://github.com/magpylib/magpylib-material-response/pull/191))
 
 ### Fixed
 
 - `move_grid_along_polyline` closes each winding onto itself on a closed
   polyline that is not flat: the mitres brought the cross-section back turned
   about the wire (86° on a four-segment loop), and each winding jumped onto
-  another's start. The turn is now undone along the loop. A 180° turn or a
-  repeated vertex raises instead of returning NaN
+  another's start. The turn is now undone along the loop. A turn within 0.1° of
+  180° or a repeated vertex raises instead of returning NaN or windings thrown
+  far off
+  ([#191](https://github.com/magpylib/magpylib-material-response/pull/191))
 
 ## [0.11.0] - 2026-11-07
 
