@@ -151,7 +151,9 @@ J = [c.polarization for c in solved.sources_all if hasattr(c, "polarization")]
   magnet arrays and thin parts at `level=2`. It refuses a `BHCurve`, per-axis χ
   and paths, and above `max_unknowns` (20,000 by default). In a loop that only
   changes what drives the parts, `reuse=True` and then `reuse=previous` keep the
-  factorization.
+  factorization. For a CAD export (`TriangularMesh`) with bores or fillets, pass
+  `widen_curves=True`: its facets lie inside the curves, an error no level
+  removes; it is off by default because a mesh may be the real shape.
 - `solve_cells` solves the cells it is given, so mesh first: `mesh_uniform`,
   `mesh_all`, `mesh_Cuboid`, `mesh_Cylinder`, `voxelize`, and
   `mesh_TriangularMesh` with the `tetgen` extra. A magnet left unmeshed is one
