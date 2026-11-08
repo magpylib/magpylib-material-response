@@ -26,6 +26,6 @@ curved elements, orders 3 to 5, as `validation/references.py` makes one.
 | Step | What | Status | Result |
 | --- | --- | --- | --- |
 | 1 | Geometry: exact solids, facetings, volumes | done | widened facetings keep the exact volume; unwidened lose 0.4 % (plate) to 5 % (pole) at 12/turn |
-| 2 | Exact references, plate and pole | running | |
+| 2 | Exact references, plate and pole | done | plate 0.012 % of B near the curves (35 s, 4.6 GB); pole 0.004 % (29 s, 11.4 GB); the solver checked to mesh the exact solid |
 | 3 | Arms, plate and pole | | |
 | 4 | Figures and conclusion | | |
