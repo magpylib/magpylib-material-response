@@ -158,7 +158,8 @@ solved = solve_face_charge(magpy.Collection(part, magnet), level=2, widen_curves
   into: 0.15 % and 0.13 % there, 0.054 % beside a sphere exported at 7.5° (0.65
   % without). It widens faces curved one way up to 15° per facet, faces curved
   two ways up to 10°, and warns about coarser ones; it is off by default, for a
-  part whose facets are its real shape (#195).
+  part whose facets are its real shape
+  ([#195](https://github.com/magpylib/magpylib-material-response/issues/195)).
 - **Limits:** the mesh must be closed. A curved face exported as many narrow
   facets keeps a charge per facet, so a fine export costs unknowns; give a
   cylinder or a sphere as itself (next section).
