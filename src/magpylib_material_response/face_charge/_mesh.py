@@ -706,3 +706,95 @@ def cut_cells(cells, h, tol, ell):
     double_area = np.linalg.norm(np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]), axis=1)
     longest = np.linalg.norm(np.roll(T, -1, axis=1) - T, axis=-1).max(axis=1)
     return T[double_area > 1e-6 * ell * longest]
+
+
+#: Widening reads a smooth edge as a facet corner of a curved face. Measured
+#: against exact references (MR #195): faces curved one way, a bore or a
+#: fillet, are widened right up to 15 degrees per facet; faces curved two ways
+#: up to 10 (a sphere exported at 7.5 degrees, whose split quads turn its
+#: triangles by a little more: 0.65 % of its own field off, 0.054 % widened; a
+#: filleted rim at 10 degrees: 1.40 %, 0.81 %). At 15 degrees the two
+#: curvatures' moves add up and overshoot.
+WIDEN_SINGLY = 15.0
+WIDEN_DOUBLY = 10.0
+
+
+def widen_curved(V, F, sharp=20.0):
+    """Move the vertices of a closed, outward mesh's curved faces out, as the
+    solver widens the facets it cuts itself, so that a CAD export's faceted
+    curves keep the volume of the curves they stand for; and how many curved
+    vertices were too coarsely faceted to move.
+
+    Each smooth edge (its two triangles turn by theta, under ``sharp``
+    degrees) is read as a polygon corner of a curve across it, of radius
+    ``r = w / (2 sin(theta / 2))``, ``w`` the narrower triangle's width across
+    the edge; its two vertices move by ``r (sqrt(theta / sin theta) - 1)``,
+    away from the curve's centre: the factor that keeps a polygon's area that
+    of its circle. A vertex takes the mean of its edges along one direction,
+    summed over directions."""
+    V = np.asarray(V, float)
+    F = np.asarray(F, int)
+    n = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+    with np.errstate(invalid="ignore", divide="ignore"):
+        n /= np.linalg.norm(n, axis=1)[:, None]
+    # each edge's two triangles and the vertex opposite it in each
+    a = F[:, [0, 1, 2]].ravel()
+    b = F[:, [1, 2, 0]].ravel()
+    c = F[:, [2, 0, 1]].ravel()
+    tri = np.repeat(np.arange(len(F)), 3)
+    key = np.minimum(a, b) * len(V) + np.maximum(a, b)
+    order = np.argsort(key, kind="stable")
+    key, a, b, c, tri = key[order], a[order], b[order], c[order], tri[order]
+    first = np.flatnonzero(np.r_[True, key[1:] != key[:-1]])
+    pair = first[np.diff(np.r_[first, len(key)]) == 2]  # closed: all are pairs
+    i, j = pair, pair + 1
+    ea, eb, c1, c2, t1, t2 = a[i], b[i], c[i], c[j], tri[i], tri[j]
+    with np.errstate(invalid="ignore"):
+        theta = np.arccos(np.clip(np.einsum("ij,ij->i", n[t1], n[t2]), -1, 1))
+    degrees = np.degrees(theta)
+    smooth = (theta > 1e-6) & (degrees < sharp)  # NaN, a triangle of no area: no
+    coarse = smooth & (degrees > WIDEN_SINGLY + 1e-6)  # the limits are included
+    keep = smooth & ~coarse
+    too_coarse = int(np.unique(np.r_[a[i][coarse], b[i][coarse]]).size)
+    if not keep.any():
+        return V.copy(), too_coarse
+    ea, eb, c1, c2, t1, t2, theta = (x[keep] for x in (ea, eb, c1, c2, t1, t2, theta))
+    e = V[eb] - V[ea]
+    e /= np.linalg.norm(e, axis=1)[:, None]
+
+    def width(cv):
+        d = V[cv] - V[ea]
+        return np.linalg.norm(d - np.einsum("ij,ij->i", d, e)[:, None] * e, axis=1)
+
+    r = np.minimum(width(c1), width(c2)) / (2 * np.sin(theta / 2))
+    delta = r * (np.sqrt(theta / np.sin(theta)) - 1)
+    m = n[t1] + n[t2]
+    m /= np.linalg.norm(m, axis=1)[:, None]
+    convex = np.einsum("ij,ij->i", n[t1], V[c2] - V[ea]) < 0
+    d = np.where(convex, delta, -delta)[:, None] * m
+
+    # per vertex: the mean along each direction, summed over directions
+    vert = np.r_[ea, eb]
+    dirs, disp, ang = np.r_[e, e], np.r_[d, d], np.r_[theta, theta]
+    order = np.argsort(vert, kind="stable")
+    vert, dirs, disp, ang = vert[order], dirs[order], disp[order], ang[order]
+    starts = np.flatnonzero(np.r_[True, vert[1:] != vert[:-1]])
+    stops = np.r_[starts[1:], len(vert)]
+    W = V.copy()
+    lone = stops - starts == 1
+    W[vert[starts[lone]]] += disp[starts[lone]]
+    cos_same = np.cos(np.radians(15.0))
+    for s, t in zip(starts[~lone], stops[~lone], strict=True):
+        groups = []  # (direction, displacements) of edges along one direction
+        for k in range(s, t):
+            for g in groups:
+                if abs(g[0] @ dirs[k]) > cos_same:
+                    g[1].append(disp[k])
+                    break
+            else:
+                groups.append((dirs[k], [disp[k]]))
+        if len(groups) > 1 and np.degrees(ang[s:t].max()) > WIDEN_DOUBLY + 1e-6:
+            too_coarse += 1  # curved two ways, too coarsely to widen right
+            continue
+        W[vert[s]] += sum(np.mean(ds, axis=0) for _, ds in groups)
+    return W, too_coarse

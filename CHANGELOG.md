@@ -8,6 +8,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `solve_face_charge(..., widen_curves=True)`, and `study_face_charge`, read a
+  `TriangularMesh`'s smooth edges as facets of curved faces, as a CAD export
+  cuts a bore or a fillet, and move their vertices out so that the part keeps
+  the volume of its curves, as the solver already does with a `Cylinder`'s
+  facets. An export's facets lie inside its curves and set a floor on the error
+  that no level lowers: near the curves, 0.46 % becomes 0.13 % on a 7.5° export
+  of a filleted plate, 0.65 % becomes 0.054 % on a sphere. Off by default, for
+  parts whose facets are their real shape
+  ([#195](https://github.com/magpylib/magpylib-material-response/issues/195))
+
 ## [0.12.0] - 2026-11-08
 
 ### Changed

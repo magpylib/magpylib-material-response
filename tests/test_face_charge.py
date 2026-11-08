@@ -43,6 +43,7 @@ from magpylib_material_response.face_charge._mesh import (
     _merge_coplanar,
     graded_triangles,
     rounding,
+    widen_curved,
 )
 from magpylib_material_response.face_charge._parallel import run
 from magpylib_material_response.face_charge._rectangle import (
@@ -2389,3 +2390,123 @@ def test_study_face_charge_refuses_levels_it_cannot_climb(levels):
     cube.susceptibility = 100
     with pytest.raises(ValueError, match="levels must"):
         study_face_charge(magpy.Collection(cube), [(0, 0, 0.01)], levels)
+
+
+# ── widening an export's curved facets (widen_curves) ──────────────────────
+
+
+def _cylinder_export(n, r=5e-3, h=8e-3):
+    """A cylinder as a CAD export cuts it: n strips round, caps fanned."""
+    a = 2 * np.pi * np.arange(n) / n
+    ring = np.c_[r * np.cos(a), r * np.sin(a)]
+    V = np.r_[
+        np.c_[ring, np.full(n, -h / 2)],
+        np.c_[ring, np.full(n, h / 2)],
+        [(0, 0, -h / 2), (0, 0, h / 2)],
+    ]
+    k = np.arange(n)
+    k1 = (k + 1) % n
+    F = np.r_[
+        np.c_[np.full(n, 2 * n), k1, k],
+        np.c_[k, k1, n + k1],
+        np.c_[k, n + k1, n + k],
+        np.c_[np.full(n, 2 * n + 1), n + k, n + k1],
+    ]
+    return V, F
+
+
+def _sphere_export(n, r=5e-3):
+    """A sphere as a CAD export cuts it: n facets round, n / 2 pole to pole."""
+    t = np.pi * np.arange(1, n // 2) / (n // 2)
+    a = 2 * np.pi * np.arange(n) / n
+    rings = r * np.stack(
+        [
+            np.outer(np.sin(t), np.cos(a)),
+            np.outer(np.sin(t), np.sin(a)),
+            np.outer(np.cos(t), np.ones(n)),
+        ],
+        -1,
+    ).reshape(-1, 3)
+    V = np.r_[[(0, 0, r)], rings, [(0, 0, -r)]]
+
+    def at(i, j):
+        return 1 + i * n + j % n
+
+    F = [(0, at(0, j), at(0, j + 1)) for j in range(n)]
+    for i in range(n // 2 - 2):
+        for j in range(n):
+            F += [
+                (at(i, j), at(i + 1, j), at(i + 1, j + 1)),
+                (at(i, j), at(i + 1, j + 1), at(i, j + 1)),
+            ]
+    F += [(len(V) - 1, at(n // 2 - 2, j + 1), at(n // 2 - 2, j)) for j in range(n)]
+    return V, np.array(F)
+
+
+def _volume(V, F):
+    return np.einsum("ij,ij->i", V[F[:, 0]], np.cross(V[F[:, 1]], V[F[:, 2]])).sum() / 6
+
+
+@pytest.mark.parametrize(
+    ("export", "exact", "rtol", "too_coarse"),
+    [
+        # curved one way: the exact volume back, up to 15 degrees per facet
+        (_cylinder_export(24), np.pi * 25e-6 * 8e-3, 1e-12, 0),
+        (_cylinder_export(48), np.pi * 25e-6 * 8e-3, 1e-12, 0),
+        # curved two ways at 7.5 degrees: -0.71 % exported, -0.014 % widened
+        (_sphere_export(48), 4 / 3 * np.pi * 125e-9, 2e-4, 0),
+        # a cube's edges are real: nothing moves
+        (_cylinder_export(4, r=5e-3 * 2**0.5), 1e-4 * 8e-3, 1e-12, 0),
+    ],
+)
+def test_widen_curved_gives_back_the_curves_volume(export, exact, rtol, too_coarse):
+    V, F = export
+    W, coarse = widen_curved(V, F)
+    assert coarse == too_coarse
+    np.testing.assert_allclose(_volume(W, F), exact, rtol=rtol)
+
+
+def test_widen_curves_solves_an_export_as_the_cylinder_itself():
+    """At level 3 the solver cuts a Cylinder into 48 widened facets: a 48-facet
+    export, widened, is the same part; not widened, 0.4 % off."""
+    B0 = np.array([0.004, 0.003, 0.008])
+    obs = np.array(
+        [
+            (6e-3 * np.cos(a), 6e-3 * np.sin(a), z)
+            for a in (0.1, 1.3, 2.9)
+            for z in (-3e-3, 0, 3.5e-3)
+        ]
+    )
+
+    def solved(part, **kw):
+        part.susceptibility = 1000
+        return solve_face_charge(
+            magpy.Collection(part, UniformField(B=B0)), level=3, **kw
+        ).getB(obs)
+
+    B = solved(magpy.magnet.Cylinder(polarization=(0, 0, 0), dimension=(10e-3, 8e-3)))
+    V, F = _cylinder_export(48)
+
+    def export():
+        return magpy.magnet.TriangularMesh(polarization=(0, 0, 0), vertices=V, faces=F)
+
+    off = np.linalg.norm(B - B0)
+    assert np.linalg.norm(solved(export(), widen_curves=True) - B) / off < 1e-12
+    assert np.linalg.norm(solved(export()) - B) / off > 3e-3
+
+
+@pytest.mark.parametrize(
+    ("value", "raises", "match"),
+    [("yes", TypeError, "True or False"), (True, UserWarning, "too\\s+coarsely")],
+)
+def test_widen_curves_refuses_and_warns(value, raises, match):
+    V, F = _sphere_export(24)  # 15 degrees, curved two ways: too coarse
+    part = magpy.magnet.TriangularMesh(polarization=(0, 0, 0), vertices=V, faces=F)
+    part.susceptibility = 1000
+    model = magpy.Collection(part, UniformField(B=(0, 0, 0.01)))
+    if raises is TypeError:
+        with pytest.raises(TypeError, match=match):
+            solve_face_charge(model, level=1, widen_curves=value)
+    else:
+        with pytest.warns(UserWarning, match=match):
+            solve_face_charge(model, level=1, widen_curves=value)

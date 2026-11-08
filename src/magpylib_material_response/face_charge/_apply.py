@@ -32,6 +32,11 @@ from magpylib_material_response.face_charge._bodies import (
     solve_system,
 )
 from magpylib_material_response.face_charge._kept import solve_kept
+from magpylib_material_response.face_charge._mesh import (
+    WIDEN_DOUBLY,
+    WIDEN_SINGLY,
+    widen_curved,
+)
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.face_charge._triangle import frames
 from magpylib_material_response.face_charge._tribody import (
@@ -63,6 +68,7 @@ def solve_face_charge(
     max_unknowns=20_000,
     min_log_time=None,
     reuse=False,
+    widen_curves=False,
 ):
     """Solve the collection's linear magnets on their surfaces.
 
@@ -124,6 +130,19 @@ def solve_face_charge(
         ``reuse`` from 2,000 unknowns on, which the first match pays back. Fields
         agree with a fresh solve to 1e-13 of the largest, 2e-11 at a weak observer.
         It needs one layout, so it cannot go with ``refine``.
+    widen_curves : bool, default False
+        Read each ``TriangularMesh``'s smooth edges, where two triangles turn by
+        less than 20°, as facet corners of curved faces, as a CAD export cuts a
+        bore or a fillet, and move their vertices out so that the part keeps the
+        volume of its curves, as the solver does with the facets it cuts a
+        ``Cylinder`` into. An export's facets lie inside its curves, and set a
+        floor on the error that no level lowers: beside a 3 mm fillet cut at
+        7.5°, 0.6 to 0.8 % of the part's own field, 0.07 to 0.3 % widened
+        (MR #195). Measured right up to 15° per facet on faces curved one way,
+        10° on faces curved two ways; vertices faceted more coarsely stay as
+        they are, with a warning. Facets that turn by 20° or more read as real
+        edges and are left alone without one. Leave it off for a part whose
+        facets are its real shape.
 
     Returns
     -------
@@ -161,6 +180,9 @@ def solve_face_charge(
     except TypeError:
         msg = f"level and refine must be integers; got level={level!r}, refine={refine!r}."
         raise TypeError(msg) from None
+    if not isinstance(widen_curves, bool):
+        msg = f"widen_curves must be True or False; got {widen_curves!r}."
+        raise TypeError(msg)
     if level < 1 or refine < 0:
         msg = f"level must be 1 or more and refine 0 or more; got level={level}, refine={refine}."
         raise ValueError(msg)
@@ -205,7 +227,7 @@ def solve_face_charge(
 
     def meshed(level):
         bodies = [
-            _part(obj, chi, np.asarray(h_ext, float) / magpy.mu_0, level)
+            _part(obj, chi, np.asarray(h_ext, float) / magpy.mu_0, level, widen_curves)
             for (obj, chi), h_ext in zip(solved, applied, strict=True)
         ]
         add_contact_lines(bodies, outlines)
@@ -456,7 +478,7 @@ def _split(collection):
     return solved, fixed
 
 
-def _part(obj, chi, applied, level):
+def _part(obj, chi, applied, level, widen_curves=False):
     """The body that solves ``obj``: a cuboid's panels, or a triangle mesh."""
     J0 = (
         None
@@ -485,6 +507,16 @@ def _part(obj, chi, applied, level):
             "reorient_faces=True."
         )
         raise ValueError(msg)
+    if widen_curves and isinstance(obj, magpy.magnet.TriangularMesh):
+        vertices, too_coarse = widen_curved(vertices, faces)
+        if too_coarse:
+            warnings.warn(
+                f"{obj!r}: {too_coarse} vertices of curved faces are faceted too "
+                f"coarsely to widen ({WIDEN_SINGLY:g}° per facet on a face curved one way, "
+                f"{WIDEN_DOUBLY:g}° on one curved two ways) and stay as exported: "
+                "export the part more finely.",
+                stacklevel=_outside_this_package(),
+            )
     return TriBody(
         vertices, faces, obj.position, R, chi, J0=J0, applied=applied, m=level
     )
