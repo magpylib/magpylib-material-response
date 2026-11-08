@@ -268,16 +268,20 @@ def solve_face_charge(
             # a CylinderSegment gives B = 0 on every one of its surfaces
             # (magpylib#1073), where a magnet touching a solved part has its
             # Gauss points; B's normal part is the same on both sides, so
-            # each segment is read a little off where it gives exactly 0
-            # (apart, since the others' sum would hide its zero)
-            for src in segments:
-                Bs = magpy.getB(src, points)
+            # each segment is read a little off where it gives exactly 0; one
+            # call for all, not summed, since the others' sum would hide a zero
+            if segments:
+                Bs = magpy.getB(segments, points, squeeze=False)
+                Bs = Bs.reshape(len(segments), len(points), 3)
                 for step in nudges:
-                    bad = ~(Bs != 0).any(axis=1) | ~np.isfinite(Bs).all(axis=1)
-                    if not bad.any():
+                    bad = ~(Bs != 0).any(axis=2) | ~np.isfinite(Bs).all(axis=2)
+                    rows = bad.any(axis=0)
+                    if not rows.any():
                         break
-                    Bs[bad] = magpy.getB(src, points[bad] + step)
-                B = B + Bs
+                    off = magpy.getB(segments, points[rows] + step, squeeze=False)
+                    off = off.reshape(len(segments), -1, 3)
+                    Bs[:, rows] = np.where(bad[:, rows, None], off, Bs[:, rows])
+                B = B + Bs.sum(axis=0)
         return B / magpy.mu_0
 
     for rnd in range(refine + 1):
