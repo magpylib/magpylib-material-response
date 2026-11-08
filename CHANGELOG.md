@@ -18,7 +18,8 @@ and this project adheres to
   that no level lowers: near the curves, 0.46 % becomes 0.13 % on a 7.5° export
   of a filleted plate, 0.65 % becomes 0.054 % on a sphere. Off by default, for
   parts whose facets are their real shape
-  ([#195](https://github.com/magpylib/magpylib-material-response/issues/195))
+  ([#195](https://github.com/magpylib/magpylib-material-response/issues/195),
+  [#197](https://github.com/magpylib/magpylib-material-response/pull/197))
 
 ## [0.12.0] - 2026-11-08
 
