@@ -18,7 +18,7 @@ license: BSD-3-Clause
 
 Official skill for Magpylib-Material-Response 0.x, shipped inside the package
 and versioned with it. Prefer it over recalled API knowledge: the names in this
-skill are from 0.10, and the package is in alpha. For the field computation
+skill are from 0.12, and the package is in alpha. For the field computation
 itself (`getB`, sources, paths, sensors), use Magpylib's own skill, shipped in
 the `magpylib` package from 6.2.
 
@@ -103,6 +103,29 @@ iron = BHCurve(H=H, B=1000 * mu0H / (1 + 1000 * mu0H / 1.6) + mu0H)  # Js = 1.6 
 What drives a part is every other source in the collection: magnets, currents,
 and any number of `UniformField(B=...)` or `UniformField(H=...)`, which add up.
 A source outside the collection is not seen.
+
+A coil of several windings comes from one turn: `move_grid_along_polyline`
+sweeps a winding pack along it, one polyline per wire. The pack is `(u, v)` per
+wire, relative to the turn's start, in the frame `cross_section_frame(turn)`
+returns: `u` along the turn's vector area made perpendicular to its first
+segment, `v = t x u`. For a coil turn, `u` is its axis and `v` points outward,
+wherever the turn sits. A straight polyline needs `axis=`.
+
+```python
+from magpylib_material_response.polyline import (
+    create_polyline_fillet,
+    move_grid_along_polyline,
+)
+
+h = 0.014  # a square turn round a 20 mm core, starting mid-edge
+square = [(0, h, 0), (0, h, h), (0, -h, h), (0, -h, -h), (0, h, -h), (0, h, 0)]
+turn = create_polyline_fillet(square, max_radius=0.006, N=6)
+pack = [(a, b) for a in (-0.0022, 0, 0.0022) for b in (0.0011, 0.0033)]
+wires = move_grid_along_polyline(turn, pack)  # (6, n, 3)
+coil = magpy.Collection(
+    *(magpy.current.Polyline(current=25, vertices=w) for w in wires)
+)
+```
 
 ## Which solver
 
@@ -235,5 +258,8 @@ measurement is still the final check.
 - **A sharp knee can stop the iteration:** a curve rising within about 100 A/m
   can raise "did not converge" or "did not settle", at any order. Give it more
   points or a gentler rise, or beside a strong magnet try `solver="direct"`.
+- **`move_grid_along_polyline` took an absolute grid before 0.12.** A grid with
+  as many columns as the polyline now raises: give the pack as `(u, v)`,
+  relative to the polyline's start, as in [A model](#a-model).
 - **magpylib-studio does not draw a `UniformField` yet:** its field lines leave
   it out, and warn, and there is no arrow.
