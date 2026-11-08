@@ -60,7 +60,7 @@ curved elements, orders 3 to 5, as `validation/references.py` makes one.
 **Conclusion.** Worth doing for parts whose curved faces matter: keeping the
 B-rep lets the solver cut curved faces by level and widen them, which a
 tessellated export cannot do. On the pole piece that is a 5 times smaller
-system, about 25 times less memory, for the same accuracy. On a part that is
+system, 28 times less memory (it goes with the square of the unknowns), for the same accuracy. On a part that is
 mostly flat, the gain is smaller (plate: 1.6 times).
 
 **Limits.** Two parts, one field direction, a uniform drive with no magnet
