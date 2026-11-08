@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import heapq
 import itertools
+import warnings
 
 import numpy as np
 from scipy.sparse import coo_matrix
@@ -856,3 +857,18 @@ def widen_curved(V, F, sharp=20.0):
     if np.array_equal(V, V.astype(np.float32)):  # an STL's float32 stays float32
         W = W.astype(np.float32).astype(float)
     return W, int((too_coarse & ~held).sum())
+
+
+def widened_vertices(vertices, faces, name, stacklevel):
+    """`widen_curved`'s vertices, and a warning naming `name` if some curved
+    vertices were too coarsely faceted to move (``widen_curves``)."""
+    vertices, too_coarse = widen_curved(vertices, faces)
+    if too_coarse:
+        warnings.warn(
+            f"{name}: {too_coarse} vertices of curved faces are faceted too "
+            f"coarsely to widen ({WIDEN_SINGLY:g}° per facet on a face curved one way, "
+            f"{WIDEN_DOUBLY:g}° on one curved two ways) and stay as exported: "
+            "export the part more finely.",
+            stacklevel=stacklevel,
+        )
+    return vertices
