@@ -31,7 +31,8 @@ field, a child of the model like any source.
 ### Parts and coils
 
 A closed triangle mesh from a Magpylib `model3d`, and a coil: a polyline with
-rounded corners, and a winding pack moved along it.
+rounded corners, a winding pack moved along it, and the frame the pack is drawn
+in.
 
 ```{eval-rst}
 .. autofunction:: magpylib_material_response.meshing_utils.trimesh_from_model3d
@@ -39,6 +40,8 @@ rounded corners, and a winding pack moved along it.
 .. autofunction:: magpylib_material_response.polyline.create_polyline_fillet
 
 .. autofunction:: magpylib_material_response.polyline.move_grid_along_polyline
+
+.. autofunction:: magpylib_material_response.polyline.cross_section_frame
 ```
 
 ## Meshing for cells

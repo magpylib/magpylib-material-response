@@ -191,11 +191,7 @@ def _ucore():
     turn = create_polyline_fillet(square, max_radius=6 * MM, N=6)
     pitch = 2.2 * MM
     pack = np.array(
-        [
-            (x, y, 0)
-            for x in (np.arange(8) - 3.5) * pitch
-            for y in h + np.arange(2) * pitch
-        ]
+        [(x, y) for x in (np.arange(8) - 3.5) * pitch for y in np.arange(2) * pitch]
     )
     coil = magpy.Collection(
         *(
