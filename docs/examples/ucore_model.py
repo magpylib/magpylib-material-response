@@ -22,14 +22,11 @@ def coil(current=25.0):
         [[0, h, 0], [0, h, h], [0, -h, h], [0, -h, -h], [0, h, -h], [0, h, 0]]
     )
     turn = create_polyline_fillet(square, max_radius=6 * MM, N=6)
-    # the winding pack: wire positions in the turn's plane, at its start
+    # the winding pack, across the turn at its start: along the coil's
+    # axis, and outward from the turn
     pitch = 2.2 * MM
     pack = np.array(
-        [
-            (x, y, 0)
-            for x in (np.arange(8) - 3.5) * pitch
-            for y in h + np.arange(2) * pitch
-        ]
+        [(x, y) for x in (np.arange(8) - 3.5) * pitch for y in np.arange(2) * pitch]
     )
     windings = move_grid_along_polyline(turn, pack)  # one turn per position
     return magpy.Collection(

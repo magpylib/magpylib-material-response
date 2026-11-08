@@ -8,6 +8,31 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking, with an error:** `move_grid_along_polyline` takes the
+  cross-section relative to the polyline's start, in a frame of the polyline's
+  own that `cross_section_frame` returns: `(u, v)` per point for a 3D polyline,
+  one offset along `v` for a 2D one. `u` is the polyline's vector area made
+  perpendicular to its first segment `t`, and `v = t × u`: for a coil turn, its
+  axis and outward, whatever the turn's position, rotation or start. `axis`
+  replaces the vector area, needed for a straight polyline, and `angle` turns
+  the frame about `t`. The grid used to be absolute, so a cross-section drawn
+  around the origin missed a polyline that did not start there; a grid with as
+  many columns as the polyline now raises, saying so
+  ([#18](https://github.com/magpylib/magpylib-material-response/issues/18),
+  [#191](https://github.com/magpylib/magpylib-material-response/pull/191))
+
+### Fixed
+
+- `move_grid_along_polyline` closes each winding onto itself on a closed
+  polyline that is not flat: the mitres brought the cross-section back turned
+  about the wire (86° on a four-segment loop), and each winding jumped onto
+  another's start. The turn is now undone along the loop. A turn within 0.1° of
+  180° or a repeated vertex raises instead of returning NaN or windings thrown
+  far off
+  ([#191](https://github.com/magpylib/magpylib-material-response/pull/191))
+
 ## [0.11.0] - 2026-11-07
 
 ### Added

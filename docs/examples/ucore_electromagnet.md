@@ -27,8 +27,10 @@ The core is iron with χ = 999 (μr = 1000), as three cuboids of 20 mm square
 section: a 100 mm yoke and two 60 mm legs. The coil comes from the `polyline`
 helpers: `create_polyline_fillet` rounds the corners of one square turn, and
 `move_grid_along_polyline` sweeps a grid of wire positions, 8 along the yoke in
-2 layers, along that turn, one closed polyline per winding. Both functions are
-in [`ucore_model.py`](ucore_model.py), which
+2 layers, along that turn, one closed polyline per winding. The grid is drawn
+across the turn at its start, in the frame `cross_section_frame` gives: along
+the coil's axis, and outward. Both functions are in
+[`ucore_model.py`](ucore_model.py), which
 [the same core at high current](saturation.md) shares:
 
 ```{literalinclude} ucore_model.py
