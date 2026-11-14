@@ -9,12 +9,13 @@ build:
     python: "3.14"
   jobs:
     build:
-      # the default command, one notebook at a time: with -j 2 two of the
-      # heaviest (up to 3.3 GB each) could run side by side, and from
-      # 2026-11-08 builds hung at the 15-minute limit now and then
+      # the default command, one notebook at a time, stopped after 12 min so
+      # that a stalled build still saves its log (the builder's limit is 15
+      # min, and a build it stops saves nothing): from 2026-11-08 builds
+      # stalled at that limit now and then
       html:
-        - uv run --no-sync --no-dev sphinx-build -T -b html -d _build/doctrees
-          -D language=en docs $READTHEDOCS_OUTPUT/html
+        - timeout 720 uv run --no-sync --no-dev sphinx-build -T -b html -d
+          _build/doctrees -D language=en docs $READTHEDOCS_OUTPUT/html
 
 sphinx:
   configuration: docs/conf.py
