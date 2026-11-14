@@ -8,6 +8,10 @@ build:
   tools:
     python: "3.14"
   jobs:
+    pre_build:
+      # the builder's memory: its limit and what is free before the build
+      - cat /sys/fs/cgroup/memory.max
+        /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null; free -m; nproc
     build:
       # the default command, with -j 2: the builder has 2 CPUs, and two
       # notebooks running side by side keep the build under five minutes
