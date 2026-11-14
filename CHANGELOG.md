@@ -11,10 +11,11 @@ and this project adheres to
 ### Added
 
 - Docs example: iron pole pieces that make the field between two disc magnets
-  uniform, as in a simple NMR magnet. The iron's low-field permeability sets the
-  uniformity (88 ppm at χ = 3,999, 203 ppm at 300); finite elements are the
-  fastest for one design, face charge with `reuse` for a sweep of the magnets,
-  and cells miss a variation of 100 ppm
+  uniform, as in a simple NMR magnet: 5.4 times more uniform than the magnets
+  alone in the same air gap, for 44 % of the field. The iron's low-field
+  permeability sets the uniformity (88 ppm at χ = 3,999, 203 ppm at 300); finite
+  elements are the fastest for one design, face charge with `reuse` for a sweep
+  of the magnets, and cells miss a variation of 100 ppm
   ([#85](https://github.com/magpylib/magpylib-material-response/issues/85),
   [#204](https://github.com/magpylib/magpylib-material-response/pull/204))
 

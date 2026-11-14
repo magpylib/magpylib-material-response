@@ -23,9 +23,11 @@ the iron makes the field in the gap between them more uniform. The model here,
 asked for in
 [#33](https://github.com/magpylib/magpylib-material-response/issues/33), has
 made-up dimensions: ferrite discs (0.39 T, as a Y30BH) and iron discs, all 120
-mm across and 20 mm thick, with a 40 mm gap between the iron discs. The
-uniformity is the peak-to-peak variation of Bz over ±5 mm from the centre,
-relative to Bz there, in parts per million (ppm).
+mm across and 20 mm thick, with a 40 mm gap between the iron discs. Without the
+iron, the magnets move in to keep the same 40 mm air gap, so that both designs
+leave the same space for a sample. The uniformity is the peak-to-peak variation
+of Bz over ±5 mm from the centre, relative to Bz there, in parts per million
+(ppm).
 
 Four questions:
 
@@ -88,11 +90,12 @@ for name, B in fields.items():
     print("  over ±5 mm: " + ", ".join(f"{variation(B[line], line):,.0f} ppm {line}" for line in LINES))
 ```
 
-The iron discs make the field 65 to 70 times more uniform: from 6,049 to 88 ppm
-along the axis, and from 3,059 to 48 ppm across the gap. They cost 12 % of the
-field at the centre, 59.4 to 52.2 mT. In the plane y = 0, the field stays within
-100 ppm of its centre value out to about 7 mm from the axis and 5 mm along it
-with the iron; without it, to less than 1 mm either way:
+In the same air gap, the iron discs make the field 5.4 times more uniform along
+the axis, from 471 to 88 ppm, and 4 times across the gap, from 194 to 48 ppm.
+They cost 44 % of the field at the centre, 93.0 to 52.2 mT, as the magnets sit
+20 mm further from the gap. In the plane y = 0, the field stays within 100 ppm
+of its centre value out to about 7 mm from the axis and 5 mm along it with the
+iron; without it, to about 3.5 mm and 2.5 mm:
 
 ```{code-cell} ipython3
 :tags: [hide-input]
@@ -248,12 +251,12 @@ for check in stored["variants"]:
           f"finite elements {variation(check['B']['along the axis'], 'along the axis'):.1f}")
 ```
 
-A polarization off the axis puts a transverse field at the centre: 1° gives 259
-µT of the magnets alone and 2.7 µT with the iron discs, a hundred times less,
-and the variation hardly changes. A weaker or stronger magnet adds a gradient
-along the axis: the point between the magnets where the field is flattest moves
-toward the weaker one. 2 % adds 1,230 ppm without the iron and 230 ppm with it.
-The iron forgives an angle almost wholly, an uneven strength five times.
+A polarization off the axis puts a transverse field at the centre: 1° gives 406
+µT of the magnets alone and 2.7 µT with the iron discs, 150 times less, and the
+variation hardly changes. A weaker or stronger magnet adds a gradient along the
+axis: the point between the magnets where the field is flattest moves toward the
+weaker one. 2 % weaker adds 1,475 ppm without the iron and 229 ppm with it. The
+iron forgives an angle almost wholly, an uneven strength six times.
 
 Each variant takes under half a second, field included, after a first solve of
 about 10 s, and lands within 3 ppm of finite elements. Finite elements at that
@@ -318,23 +321,27 @@ carries.
 
 ## The answers
 
-- **How much more uniform:** 65 to 70 times, from 6,049 to 88 ppm along the axis
-  and from 3,059 to 48 ppm across the gap over ±5 mm, for 12 % of the field.
+- **How much more uniform:** in the same 40 mm air gap, 5.4 times along the axis
+  (471 to 88 ppm) and 4 times across the gap (194 to 48 ppm) over ±5 mm, for 44
+  % of the field.
 - **Which solve:** for one design, finite elements at order 4, within 0.1 ppm in
   5 s; for many variants of the magnets, face charge with `reuse`, under half a
   second each, within 3 ppm and about seven times faster than finite elements at
   that accuracy. Cells miss the variation by 1.5 to 56 times, even where their
   centre field is within 0.05 %. Judge the variation by how it changes with the
   order, level or mesh, not by an error bar on the field.
-- **Magnets that differ:** a polarization 1° off the axis gives a hundred times
-  less transverse field with the iron; a 2 % weaker magnet adds 230 ppm instead
-  of 1,230.
+- **Magnets that differ:** a polarization 1° off the axis gives 150 times less
+  transverse field with the iron; a 2 % weaker magnet adds 229 ppm instead of
+  1,475.
 - **The material:** the iron's bulk stays under 0.6 T, far from saturation, but
   the low-field permeability sets the variation: 88 ppm at χ = 3,999, 203 ppm at
   300, 161 ppm on the TEAM 13 steel.
 
 These numbers compare designs: one iron disc against another, a magnet's
-tolerance against its effect. An NMR magnet's absolute uniformity also depends
-on what no model here holds, such as the machining of the iron's faces and how
-uniform the magnets' polarization is, and is usually brought to the last ppm by
+tolerance against its effect. The paper reports about 400 ppm at 57 mT, measured
+as the NMR line width, 90 Hz at 2.45 MHz, and places the iron discs to
+compensate the uneven magnetization within its ferrite magnets. The model here,
+with made-up dimensions and perfectly uniform magnets, gives 88 ppm over ±5 mm
+at 52 mT. What real magnets add, along with the machining of the iron's faces,
+is not in the model; an NMR magnet is usually brought to its last ppm by
 shimming.
