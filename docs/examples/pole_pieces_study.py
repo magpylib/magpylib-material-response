@@ -47,9 +47,10 @@ ORDER = 4  # finite elements for the stored comparisons
 def pole_pieces(iron=IRON, angle=0.0, strength=1.0, ferrite=None):
     """Two ferrite discs polarized along z, an iron disc on the inner face of
     each, a gap between the iron discs. `iron` is their susceptibility (None:
-    no iron discs, and the magnets move in to keep the same air gap). The top magnet's polarization is turned `angle` degrees
-    off the axis, about y, and is `strength` times the bottom one's. `ferrite`
-    is the magnets' own susceptibility (None: fixed polarization)."""
+    no iron discs, and the magnets move in to keep the same air gap). The top
+    magnet's polarization is turned `angle` degrees off the axis, about y, and
+    is `strength` times the bottom one's. `ferrite` is the magnets' own
+    susceptibility (None: fixed polarization)."""
     parts = []
     for side in (-1, 1):
         magnet = magpy.magnet.Cylinder(

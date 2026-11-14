@@ -90,7 +90,7 @@ for name, B in fields.items():
     print("  over ±5 mm: " + ", ".join(f"{variation(B[line], line):,.0f} ppm {line}" for line in LINES))
 ```
 
-In the same air gap, the iron discs make the field 5.4 times more uniform along
+In the same air gap, the iron discs make the field 5.3 times more uniform along
 the axis, from 471 to 88 ppm, and 4 times across the gap, from 194 to 48 ppm.
 They cost 44 % of the field at the centre, 93.0 to 52.2 mT, as the magnets sit
 20 mm further from the gap. In the plane y = 0, the field stays within 100 ppm
@@ -252,11 +252,13 @@ for check in stored["variants"]:
 ```
 
 A polarization off the axis puts a transverse field at the centre: 1° gives 406
-µT of the magnets alone and 2.7 µT with the iron discs, 150 times less, and the
-variation hardly changes. A weaker or stronger magnet adds a gradient along the
-axis: the point between the magnets where the field is flattest moves toward the
-weaker one. 2 % weaker adds 1,475 ppm without the iron and 229 ppm with it. The
-iron forgives an angle almost wholly, an uneven strength six times.
+µT of the magnets alone and 2.7 µT with the iron discs, 150 times less. The
+variation along the axis hardly changes; across the gap it grows from 194 to 852
+ppm without the iron, from 49 to 52 ppm with it. A weaker or stronger magnet
+adds a gradient along the axis: the point between the magnets where the field is
+flattest moves toward the weaker one. 2 % weaker adds 1,475 ppm without the iron
+and 229 ppm with it. The iron forgives an angle almost wholly, an uneven
+strength six times.
 
 Each variant takes under half a second, field included, after a first solve of
 about 10 s, and lands within 3 ppm of finite elements. Finite elements at that
@@ -321,7 +323,7 @@ carries.
 
 ## The answers
 
-- **How much more uniform:** in the same 40 mm air gap, 5.4 times along the axis
+- **How much more uniform:** in the same 40 mm air gap, 5.3 times along the axis
   (471 to 88 ppm) and 4 times across the gap (194 to 48 ppm) over ±5 mm, for 44
   % of the field.
 - **Which solve:** for one design, finite elements at order 4, within 0.1 ppm in
@@ -338,10 +340,11 @@ carries.
   300, 161 ppm on the TEAM 13 steel.
 
 These numbers compare designs: one iron disc against another, a magnet's
-tolerance against its effect. The paper reports about 400 ppm at 57 mT, measured
-as the NMR line width, 90 Hz at 2.45 MHz, and places the iron discs to
-compensate the uneven magnetization within its ferrite magnets. The model here,
-with made-up dimensions and perfectly uniform magnets, gives 88 ppm over ±5 mm
-at 52 mT. What real magnets add, along with the machining of the iron's faces,
-is not in the model; an NMR magnet is usually brought to its last ppm by
-shimming.
+tolerance against its effect. The paper reports a homogeneity of about 4 × 10⁻⁴
+at 57 mT and a spectral resolution of about 90 Hz at 2.45 MHz, and places the
+iron discs to compensate the uneven magnetization within its ferrite magnets.
+The model here, with made-up dimensions and perfectly uniform magnets, gives 52
+mT and 88 ppm over ±5 mm; without the paper's dimensions and the size of its
+sample, the two uniformities cannot be compared. What real magnets add, along
+with the machining of the iron's faces, is not in the model; an NMR magnet is
+usually brought to its last ppm by shimming.
