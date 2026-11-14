@@ -212,27 +212,26 @@ change, which is the next question.
 The top magnet's polarization turned off the axis by up to 2°, and 2 % weaker or
 stronger than the bottom one's: nine variants. Face charge at level 2 keeps its
 factorization from the first solve (`reuse=True`) and solves each variant from
-it; the magnets alone need no solve.
+it:
+
+```{literalinclude} pole_pieces_study.py
+:pyobject: sweep
+```
+
+The sweep takes about 13 s on an Apple M4 Pro, so `pole_pieces_study.py` runs it
+and stores the fields; the magnets alone need no solve.
 
 ```{code-cell} ipython3
-import warnings
+:tags: [hide-input]
 
-from magpylib_material_response import solve_face_charge
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message=".*touches.*")  # discussed above
-    t0 = time.perf_counter()
-    first = solve_face_charge(pole_pieces(), level=2, reuse=True)
-    print(f"first solve, factorization kept: {time.perf_counter() - t0:.1f} s")
-
-    variants, t0 = {}, time.perf_counter()
-    for angle in (0.0, 1.0, 2.0):
-        for strength in (0.98, 1.0, 1.02):
-            solved = solve_face_charge(pole_pieces(angle=angle, strength=strength), level=2, reuse=first)
-            variants[angle, strength] = {
-                "no iron": by_line(magpy.getB(pole_pieces(iron=None, angle=angle, strength=strength), lines())),
-                "iron": by_line(magpy.getB(solved, lines()))}
-    print(f"{len(variants)} variants: {(time.perf_counter() - t0) / len(variants):.2f} s each")
+sweep = stored["sweep"]
+print(f"first solve, factorization kept: {sweep['first seconds']:.1f} s")
+print(f"{len(sweep['variants'])} variants: {sweep['seconds each']:.2f} s each")
+variants = {
+    (v["angle"], v["strength"]): {
+        "no iron": by_line(magpy.getB(pole_pieces(iron=None, angle=v["angle"], strength=v["strength"]), lines())),
+        "iron": v["B"]}
+    for v in sweep["variants"]}
 ```
 
 ```{code-cell} ipython3
@@ -261,7 +260,7 @@ and 229 ppm with it. The iron forgives an angle almost wholly, an uneven
 strength six times.
 
 Each variant takes under half a second, field included, after a first solve of
-about 10 s, and lands within 3 ppm of finite elements. Finite elements at that
+about 9 s, and lands within 3 ppm of finite elements. Finite elements at that
 accuracy, order 3 (4.4 ppm), take 3.2 s for each variant; order 4 takes 4.8 s.
 At matched accuracy face charge is ahead from the fourth variant on and about
 seven times faster per variant. A sweep of the iron's shape changes the matrix,

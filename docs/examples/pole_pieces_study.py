@@ -13,12 +13,18 @@ import json
 import sys
 import time
 import tracemalloc
+import warnings
 from pathlib import Path
 
 import magpylib as magpy
 import numpy as np
 
-from magpylib_material_response import BHCurve, solve_cells, study_face_charge
+from magpylib_material_response import (
+    BHCurve,
+    solve_cells,
+    solve_face_charge,
+    study_face_charge,
+)
 from magpylib_material_response.fem import solve_fem, study_fem
 from magpylib_material_response.meshing import mesh_uniform, voxelize
 
@@ -196,6 +202,32 @@ def variants():
     return out
 
 
+#: the top magnet's variants of the sweep: its polarization's angle off the axis,
+#: in degrees, and its strength against the bottom one's
+ANGLES, STRENGTHS = (0.0, 1.0, 2.0), (0.98, 1.0, 1.02)
+
+
+def sweep():
+    """Face charge at level 2 for every variant of the top magnet: the first
+    solve keeps its factorization, and each variant reuses it."""
+    with warnings.catch_warnings():
+        # each magnet touches an iron disc: errors of a few percent there only
+        warnings.filterwarnings("ignore", message=".*touches.*")
+        t0 = time.perf_counter()
+        first = solve_face_charge(pole_pieces(), level=2, reuse=True)
+        first_seconds = time.perf_counter() - t0
+        variants, t0 = [], time.perf_counter()
+        for angle in ANGLES:
+            for strength in STRENGTHS:
+                model = pole_pieces(angle=angle, strength=strength)
+                solved = solve_face_charge(model, level=2, reuse=first)
+                B = by_line(magpy.getB(solved, lines()))
+                variants.append({"angle": angle, "strength": strength, "B": B})
+        each = (time.perf_counter() - t0) / len(variants)
+    return {"first seconds": round(first_seconds, 2), "seconds each": round(each, 3),
+            "variants": variants}  # fmt: skip
+
+
 def mesh():
     """Finite elements at ORDER on a finer mesh: half the element size in the
     discs, and 1 mm at the observers, a sixth to a half of the default
@@ -251,7 +283,7 @@ def iron():
 
 SECTIONS = {
     f.__name__: f
-    for f in (fem, mesh, ferrite, face_charge, cells, field_map, variants, iron)
+    for f in (fem, mesh, ferrite, face_charge, cells, field_map, variants, sweep, iron)
 }
 
 

@@ -9,12 +9,10 @@ build:
     python: "3.14"
   jobs:
     build:
-      # the default command, one notebook at a time, stopped after 12 min so
-      # that a stalled build still saves its log (the builder's limit is 15
-      # min, and a build it stops saves nothing): from 2026-11-08 builds
-      # stalled at that limit now and then
+      # the default command, with -j 2: the builder has 2 CPUs, and two
+      # notebooks running side by side keep the build under five minutes
       html:
-        - timeout 720 uv run --no-sync --no-dev sphinx-build -T -b html -d
+        - uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d
           _build/doctrees -D language=en docs $READTHEDOCS_OUTPUT/html
 
 sphinx:
