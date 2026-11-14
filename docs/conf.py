@@ -58,8 +58,6 @@ bibtex_reference_style = "author_year"
 # of seconds locally; give slower CI builders comfortable headroom over the
 # myst-nb default of 30 s per cell.
 nb_execution_timeout = 120
-# BISECT, to revert: build without running the new page
-nb_execution_excludepatterns = ["examples/pole_pieces.md"]
 
 source_suffix = [".rst", ".md"]
 exclude_patterns = [

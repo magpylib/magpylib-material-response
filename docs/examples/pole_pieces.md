@@ -38,8 +38,8 @@ Four questions:
   the axis, or one magnet weaker than the other?
 - Does the iron's material matter: its susceptibility, its saturation?
 
-Times on this page are from an Apple M4 Pro, except those the cells print as
-they run, which come from the machine that built the page.
+The solves are stored by [`pole_pieces_study.py`](pole_pieces_study.py), and
+their times are from an Apple M4 Pro.
 
 ## The model
 
@@ -71,20 +71,22 @@ The magnets' polarization is held fixed. The ferrite's own susceptibility, about
 
 ## How much more uniform?
 
-Finite elements at order 4 solve the model in a few seconds; the magnets alone
-need no solve.
+Finite elements at order 4 solve the model in about 5 s on an Apple M4 Pro; the
+magnets alone need no solve. The page reads the solve that
+[`pole_pieces_study.py`](pole_pieces_study.py) stores, made by the call
 
-```{code-cell} ipython3
-import time
-
+```python
 from magpylib_material_response.fem import solve_fem
 
-t0 = time.perf_counter()
 solved = solve_fem(pole_pieces(), order=4, observers=lines())
-print(f"{solved.ndof:,} unknowns, {time.perf_counter() - t0:.1f} s")
+```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+stored = json.loads(Path("pole_pieces.json").read_text())
 fields = {"magnets alone": by_line(magpy.getB(pole_pieces(iron=None), lines())),
-          "with the iron discs": by_line(magpy.getB(solved, lines()))}
+          "with the iron discs": stored["fem"]["B"][stored["fem"]["orders"].index(4)]}
 for name, B in fields.items():
     print(f"{name}: Bz {B['along the axis'][15][2] * 1e3:.2f} mT at the centre")
     print("  over ±5 mm: " + ", ".join(f"{variation(B[line], line):,.0f} ppm {line}" for line in LINES))
@@ -100,7 +102,6 @@ iron; without it, to about 3.5 mm and 2.5 mm:
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-stored = json.loads(Path("pole_pieces.json").read_text())
 X, Z = np.meshgrid(MAP_X, MAP_Z, indexing="ij")
 points = np.stack([X, 0 * X, Z], axis=-1).reshape(-1, 3)
 maps = {"magnets alone": magpy.getB(pole_pieces(iron=None), points)[:, 2].reshape(X.shape),
