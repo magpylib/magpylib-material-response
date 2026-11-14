@@ -30,9 +30,10 @@ jobs:
       - name: Install the docs group
         run: uv sync --group docs
 
-      - name: Build, logging memory every 15 s
+      - name: Build on 2 CPUs, logging memory every 15 s
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           ( while true; do echo "== $(date +%T) $(free -m | awk '/Mem/{print "used " $3 " MB, available " $7 " MB"}')"; sleep 15; done ) &
-          timeout 1200 uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d _build/doctrees -D language=en docs _build/html
+          nproc; taskset -c 0,1 nproc  # Read the Docs has 2 CPUs
+          timeout 1200 taskset -c 0,1 uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d _build/doctrees -D language=en docs _build/html
