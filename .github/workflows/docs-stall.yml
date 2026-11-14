@@ -1,0 +1,38 @@
+# TEMPORARY, to remove before merging #204: the docs build as Read the Docs runs
+# it, with a live log, to find where it stalls there.
+name: Docs build probe
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  docs:
+    name: Docs build, as on Read the Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install the docs group
+        run: uv sync --group docs
+
+      - name: Build, logging memory every 15 s
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          ( while true; do echo "== $(date +%T) $(free -m | awk '/Mem/{print "used " $3 " MB, available " $7 " MB"}')"; sleep 15; done ) &
+          timeout 1200 uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d _build/doctrees -D language=en docs _build/html
