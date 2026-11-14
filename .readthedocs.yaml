@@ -12,8 +12,13 @@ build:
       # the default command, with -j 2: the builder has 2 CPUs, and two
       # notebooks running side by side keep the build under five minutes
       html:
-        - uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d
-          _build/doctrees -D language=en docs $READTHEDOCS_OUTPUT/html
+        # DIAGNOSTIC, to revert: the output goes to a file, which a hung
+        # notebook kernel (in its own session) cannot hold open, and the build
+        # stops at 700 s, then prints the log and what is still running
+        - timeout 700 uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d
+          _build/doctrees -D language=en docs $READTHEDOCS_OUTPUT/html >
+          build.log 2>&1; status=$?; cat build.log; ps -eo
+          pid,etime,pcpu,rss,args | cut -c1-200; exit $status
 
 sphinx:
   configuration: docs/conf.py
