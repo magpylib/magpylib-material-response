@@ -4,8 +4,9 @@ inside Read the Docs' 15 minutes as the docs grow.
     sphinx-build ... 2>&1 | tee build.log
     python docs/check_budget.py build.log
 
-Times are those of the CI docs job, a 4-CPU GitHub runner; Read the Docs, with
-2 CPUs, takes up to 1.7 times as long. A page that needs longer moves its slow
+Times are those of the CI docs job, a 4-CPU GitHub runner. The same build took
+1.45 times as long on 2 CPUs there; Read the Docs, with 2 CPUs, took about the
+same as this runner on the builds it finished. A page that needs longer moves its slow
 solves to a study script and stores their results, as the examples do.
 """
 
