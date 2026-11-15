@@ -11,15 +11,10 @@ build:
     build:
       # the default command, with -j 2: the builder has 2 CPUs, and two
       # notebooks running side by side keep the build under five minutes
-      # DIAGNOSTIC, not to merge: the build in the background, reported on
-      # every few minutes by commands that end and so keep their log
+      # TEST: quiet, so that little goes through the build's log channel
       html:
-        - bash docs/rtd_probe.sh start
-        - bash docs/rtd_probe.sh report 180
-        - bash docs/rtd_probe.sh report 180
-        - bash docs/rtd_probe.sh report 180
-        - bash docs/rtd_probe.sh report 120
-        - bash docs/rtd_probe.sh wait
+        - uv run --no-sync --no-dev sphinx-build -q -j 2 -T -b html -d
+          _build/doctrees -D language=en docs $READTHEDOCS_OUTPUT/html
 
 sphinx:
   configuration: docs/conf.py
