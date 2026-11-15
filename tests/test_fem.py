@@ -16,6 +16,7 @@ from magpylib_material_response.fem import _solve, from_step, solve_fem, study_f
 B_EXT = 0.01
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("chi", "polarization", "rotvec", "field"),
     [
@@ -606,6 +607,7 @@ def _cylinder_step(folder):
     return path
 
 
+@pytest.mark.slow
 def test_from_step_solves_the_exact_solid(tmp_path):
     """Finite elements on a from_step part solve its exact solid: as the
     Cylinder itself, where its own triangles alone are 28 times further off."""

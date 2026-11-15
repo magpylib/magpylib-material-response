@@ -94,6 +94,7 @@ def exact_sphere(B0):
     return brentq(lambda J: polarization((B0 - J / 3) / MU0) - J, 0.0, 3 * B0)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("B0", [0.3, 1.0, 2.0])
 def test_a_sphere_follows_its_curve(B0):
     pytest.importorskip("tetgen")
@@ -322,6 +323,7 @@ def _in_a_magnets_field(curve):
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("solver", ["auto", "iterative"])
 @pytest.mark.parametrize("curve", S_SHAPED, ids=list(S_SHAPED))
 def test_a_curve_that_starts_flat_responds_beside_a_magnet(curve, solver):
@@ -336,6 +338,7 @@ def test_a_curve_that_starts_flat_responds_beside_a_magnet(curve, solver):
     assert np.abs(got - _big_magnet().getB(point)).max() > 1e-3
 
 
+@pytest.mark.slow
 def test_a_mesh_study_of_a_flat_start_sees_the_part():
     """Three meshes of a part at J = 0 agreed exactly, and the study said so."""
     part = magpy.magnet.Cuboid(dimension=(0.02,) * 3, polarization=(0, 0, 0))
@@ -497,6 +500,7 @@ def test_a_curve_that_starts_flat_solves():
     assert 0.5 * JS < max(J_cells) < 1.001 * JS  # the iteration stops at 1e-4
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("B0", [0.3, 1.0, 2.0])
 def test_finite_elements_follow_a_curve(B0):
     """A sphere stays uniform while it saturates, so its answer is exact, inside
@@ -515,6 +519,7 @@ def test_finite_elements_follow_a_curve(B0):
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=2e-3)
 
 
+@pytest.mark.slow
 @pytest.mark.filterwarnings("ignore:This B-H curve reaches")
 def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     """A part a billionth of the other's volume converges too: the iteration
@@ -594,6 +599,7 @@ def test_finite_elements_say_what_to_do_when_a_curve_does_not_settle(monkeypatch
         _solve.solve_fem(model, order=1)
 
 
+@pytest.mark.slow
 def test_finite_elements_and_cells_agree_on_a_coil_in_a_saturating_core():
     """A coil at a current that saturates the bar: the reduced and the total
     potential both take chi from the curve, and the two methods agree."""

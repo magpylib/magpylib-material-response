@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import time
+
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -23,3 +26,23 @@ def _getH_tensor(cells):
 @pytest.fixture
 def getH_tensor():
     return _getH_tensor
+
+
+#: seconds a test may take unless marked slow, on the CI job that runs every
+#: test (MR_TEST_BUDGET set to it there); a slower test proves its behaviour on
+#: a smaller model, or is marked slow and runs on that job and on main only
+BUDGET = float(os.environ.get("MR_TEST_BUDGET") or "inf")
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_call(item):
+    start = time.perf_counter()
+    result = yield
+    seconds = time.perf_counter() - start
+    if seconds > BUDGET and item.get_closest_marker("slow") is None:
+        pytest.fail(
+            f"took {seconds:.1f} s, over the {BUDGET:.0f} s a test may take "
+            "unless marked slow",
+            pytrace=False,
+        )
+    return result

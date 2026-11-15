@@ -717,6 +717,7 @@ def test_mesh_all_returns_the_mesh_of_a_magnet_in_a_collection():
     assert len(meshed.sources_all) == 8
 
 
+@pytest.mark.slow
 def test_a_mesh_stays_one_sealed_object_until_its_cells_become_sheets():
     def cuboid():
         part = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.01, 0.01, 0.02))
