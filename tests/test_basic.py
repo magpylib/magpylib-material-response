@@ -357,6 +357,7 @@ def test_segment_cells_are_averaged_from_a_susceptibility_of_one(
     assert np.array_equal(J, solve()) is not averaged
 
 
+@pytest.mark.slow
 def test_alike_segment_pairs_share_one_average():
     """A meshed cylinder's pairs repeat, turned about its axis and shifted
     along it, and are averaged once: the blocks are those of averaging every

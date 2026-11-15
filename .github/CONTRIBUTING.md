@@ -51,8 +51,14 @@ You can also/alternatively run `pre-commit run` (changes only) or
 Use pytest to run the unit checks:
 
 ```bash
-uv run pytest
+uv run pytest                 # every test
+uv run pytest -m "not slow"   # without the slow ones, as most CI jobs of a pull request
 ```
+
+A test may take 10 s on the CI job of Ubuntu with Python 3.14; a slower one
+fails there unless it is marked `@pytest.mark.slow`. Prefer proving the
+behaviour on a smaller model. On a pull request the slow tests run in a job of
+their own, beside the others; on `main` every job runs every test.
 
 # Coverage
 
@@ -75,3 +81,8 @@ You can build the docs only with:
 ```bash
 nox -s docs --non-interactive
 ```
+
+The CI docs job builds the docs as Read the Docs does and checks the time of
+each page against `docs/check_budget.py`: 60 s a page on its runner, 480 s in
+all. A page that needs longer stores its slow solves from a study script, as the
+examples do.

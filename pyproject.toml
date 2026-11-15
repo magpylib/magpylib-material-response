@@ -93,7 +93,9 @@ env-vars.PYTHONWARNDEFAULTENCODING = "1"
 minversion = "9.0"
 addopts = ["-ra", "--showlocals"]
 strict = true
-markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
+markers = [
+  "slow: over the test budget of tests/conftest.py; a pull request runs these in a CI job of their own",
+]
 filterwarnings = [
   "error",
   # H_ext goes in the next release, and its tests and validation cases with it

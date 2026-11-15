@@ -540,6 +540,7 @@ def _bars(as_mesh):
     return [mesh]
 
 
+@pytest.mark.slow
 def test_touching_parts_of_one_material_solve_as_one():
     """#112: across a face where parts of one material touch, nothing changes,
     so it carries no charge. Both parts' charges there, which had to cancel,
@@ -736,6 +737,7 @@ def _mesh_at(V, F):
     return magpy.magnet.TriangularMesh(vertices=V, faces=F, polarization=(0, 0, 0))
 
 
+@pytest.mark.slow
 @pytest.mark.filterwarnings("ignore:Observers inside a solved part")
 @pytest.mark.parametrize(
     "case",
@@ -864,6 +866,7 @@ def test_returns_a_solved_copy():
     assert np.linalg.norm(solved.getB(far)) < 1e-4
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("shape", "factor"), [("cuboid", 5), ("disc", 2)], ids=["panels", "triangles"]
 )
@@ -2346,6 +2349,7 @@ def test_a_sheet_tests_the_same_observers_once(monkeypatch):
     assert len(tested) == 3
 
 
+@pytest.mark.slow
 def test_study_face_charge_bounds_the_error_on_a_cylinder():
     """The error bar of the highest level covers the error against a far finer
     solve, and compare takes the study."""
@@ -2533,6 +2537,7 @@ def test_widen_curved_keeps_flat_faces_flat_and_coarse_curves_still():
     assert np.any(W != V, axis=1).sum() <= 2  # only the poles, faceted finely round
 
 
+@pytest.mark.slow
 def test_widen_curves_solves_an_export_as_the_cylinder_itself():
     """At level 3 the solver cuts a Cylinder into 48 widened facets: a 48-facet
     export, widened, is the same part; not widened, 0.4 % off."""
@@ -2579,6 +2584,7 @@ def test_widen_curves_refuses_and_warns(value, raises, match):
             solve_face_charge(model, level=1, widen_curves=value)
 
 
+@pytest.mark.slow
 def test_a_segment_magnet_touching_a_part_reads_as_with_a_gap():
     # magpylib gives B = 0 on a CylinderSegment's surfaces (magpylib#1073), and
     # the part's Gauss points lie on the segment's phi = 0 face

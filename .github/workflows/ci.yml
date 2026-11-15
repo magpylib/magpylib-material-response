@@ -69,15 +69,49 @@ jobs:
       - name: Install package
         run: uv sync
 
+      # a pull request runs the fast tests here and the slow ones in the job
+      # below, side by side; main runs them all here. Ubuntu with Python 3.14
+      # holds every test not marked slow to the budget of tests/conftest.py
       - name: Test package
-        run: >-
-          uv run pytest -ra --cov --cov-report=xml --cov-report=term
-          --durations=20
+        env:
+          MR_TEST_BUDGET:
+            ${{ matrix.runs-on == 'ubuntu-latest' && matrix.python-version ==
+            '3.14' && '10' || '' }}
+          SELECT:
+            ${{ github.event_name == 'pull_request' && 'not slow' || 'all' }}
+        shell: bash
+        run: |
+          if [ "$SELECT" = all ]; then marks=(); else marks=(-m "$SELECT"); fi
+          uv run pytest -ra --cov --cov-report=xml --cov-report=term --durations=20 "${marks[@]}"
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  slow:
+    name: Slow tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install package
+        run: uv sync
+
+      - name: Test package
+        run: uv run pytest -ra -m slow --durations=20
 
   bare:
     name: Without the extras
@@ -102,7 +136,9 @@ jobs:
           uv pip install . "pytest>=9"
 
       - name: Test package
-        run: .venv/bin/python -m pytest -ra
+        run: >-
+          .venv/bin/python -m pytest -ra ${{ github.event_name == 'pull_request'
+          && '-m "not slow"' || '' }}
 
   lowest:
     name: At the lowest pins
@@ -158,15 +194,52 @@ jobs:
           EOF
 
       - name: Test package
-        run: .venv/bin/python -m pytest -ra
+        run: >-
+          .venv/bin/python -m pytest -ra ${{ github.event_name == 'pull_request'
+          && '-m "not slow"' || '' }}
+
+  docs:
+    name: Docs, within their time budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install the docs group
+        run: uv sync --group docs
+
+      # the build of .readthedocs.yaml, with a live log, which Read the Docs
+      # does not keep for a build it stops at its 15 minutes
+      - name: Build the docs
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -o pipefail
+          uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d _build/doctrees -D language=en docs _build/html 2>&1 | tee docs-build.log
+
+      - name: Check the time budget
+        run: python docs/check_budget.py docs-build.log
 
   pass:
     if: always()
-    needs: [lint, checks, bare, lowest]
+    needs: [lint, checks, slow, bare, lowest, docs]
     runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@release/v1
         with:
+          # the slow tests run in their own job on a pull request only
+          allowed-skips: slow
           jobs: ${{ toJSON(needs) }}
