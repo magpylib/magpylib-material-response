@@ -9,11 +9,14 @@ build:
     python: "3.14"
   jobs:
     build:
-      # the default command, with -j 2: the builder has 2 CPUs, and two
-      # notebooks running side by side keep the build under five minutes
+      # the default command, with -j 2 (the builder has 2 CPUs), run in the
+      # background and waited for in short steps: see docs/rtd_build.sh. The
+      # last step shows the warnings and the end of the log
       html:
-        - uv run --no-sync --no-dev sphinx-build -j 2 -T -b html -d
-          _build/doctrees -D language=en docs $READTHEDOCS_OUTPUT/html
+        - bash docs/rtd_build.sh start
+        - bash docs/rtd_build.sh wait 240
+        - bash docs/rtd_build.sh wait 240
+        - bash docs/rtd_build.sh last 240
 
 sphinx:
   configuration: docs/conf.py
