@@ -143,6 +143,28 @@ trust there: face charge with `refine=1` is within 1 %, cells are far off.
 ````
 
 ````{grid-item-card}
+:link: pole_pieces
+:link-type: doc
+:class-card: magpy-gallery-card
+
+```{image} ../_static/gallery/pole_pieces-light.jpg
+:alt: Iron pole pieces for a uniform field
+:class: only-light
+```
+
+```{image} ../_static/gallery/pole_pieces-dark.jpg
+:alt: Iron pole pieces for a uniform field
+:class: only-dark
+```
+
+**Iron pole pieces for a uniform field**
+
+How much more uniform iron discs make the field between two magnets, which
+solve can judge 100 ppm, and whether the iron's material matters.
+
+````
+
+````{grid-item-card}
 :link: ucore_electromagnet
 :link-type: doc
 :class-card: magpy-gallery-card
@@ -243,6 +265,7 @@ angle_sensor
 hall_current_sensor
 tolerance_monte_carlo
 shield_tube
+pole_pieces
 ucore_electromagnet
 saturation
 mesh_convergence

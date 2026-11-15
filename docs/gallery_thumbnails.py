@@ -216,6 +216,13 @@ def saturation():
     return list(solve_face_charge(model, level=2).children)
 
 
+def pole_pieces():
+    sys.path.insert(0, str(HERE / "examples"))
+    from pole_pieces_study import pole_pieces as model  # noqa: PLC0415
+
+    return list(solve_face_charge(model(), level=1).children)
+
+
 EXAMPLES = [
     holding_magnet,
     gear_tooth_sensor,
@@ -223,6 +230,7 @@ EXAMPLES = [
     mesh_convergence,
     fem_check,
     shield_tube,
+    pole_pieces,
     hall_current_sensor,
     angle_sensor,
     tolerance_monte_carlo,
