@@ -94,7 +94,7 @@ minversion = "9.0"
 addopts = ["-ra", "--showlocals"]
 strict = true
 markers = [
-  "slow: over the test budget of tests/conftest.py; run on the CI job that runs every test, and on main",
+  "slow: over the test budget of tests/conftest.py; a pull request runs these in a CI job of their own",
 ]
 filterwarnings = [
   "error",

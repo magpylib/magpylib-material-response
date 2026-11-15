@@ -28,9 +28,10 @@ def getH_tensor():
     return _getH_tensor
 
 
-#: seconds a test may take unless marked slow, on the CI job that runs every
-#: test (MR_TEST_BUDGET set to it there); a slower test proves its behaviour on
-#: a smaller model, or is marked slow and runs on that job and on main only
+#: seconds a test may take unless marked slow, on the CI job of Ubuntu with
+#: Python 3.14 (MR_TEST_BUDGET set to it there); a slower test proves its
+#: behaviour on a smaller model, or is marked slow, which a pull request runs
+#: in a job of its own
 BUDGET = float(os.environ.get("MR_TEST_BUDGET") or "inf")
 
 

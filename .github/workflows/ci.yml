@@ -69,18 +69,16 @@ jobs:
       - name: Install package
         run: uv sync
 
-      # a pull request runs the slow tests on one job only, which also holds
-      # every other test to the budget of tests/conftest.py; main runs them all
+      # a pull request runs the fast tests here and the slow ones in the job
+      # below, side by side; main runs them all here. Ubuntu with Python 3.14
+      # holds every test not marked slow to the budget of tests/conftest.py
       - name: Test package
         env:
           MR_TEST_BUDGET:
-            ${{ (github.event_name != 'pull_request' || (matrix.runs-on ==
-            'ubuntu-latest' && matrix.python-version == '3.14')) && '10' || ''
-            }}
+            ${{ matrix.runs-on == 'ubuntu-latest' && matrix.python-version ==
+            '3.14' && '10' || '' }}
           SELECT:
-            ${{ (github.event_name != 'pull_request' || (matrix.runs-on ==
-            'ubuntu-latest' && matrix.python-version == '3.14')) && 'all' ||
-            'not slow' }}
+            ${{ github.event_name == 'pull_request' && 'not slow' || 'all' }}
         shell: bash
         run: |
           if [ "$SELECT" = all ]; then marks=(); else marks=(-m "$SELECT"); fi
@@ -90,6 +88,30 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  slow:
+    name: Slow tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install package
+        run: uv sync
+
+      - name: Test package
+        run: uv run pytest -ra -m slow --durations=20
 
   bare:
     name: Without the extras
@@ -211,11 +233,13 @@ jobs:
 
   pass:
     if: always()
-    needs: [lint, checks, bare, lowest, docs]
+    needs: [lint, checks, slow, bare, lowest, docs]
     runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@release/v1
         with:
+          # the slow tests run in their own job on a pull request only
+          allowed-skips: slow
           jobs: ${{ toJSON(needs) }}
