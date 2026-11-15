@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # The docs build on Read the Docs, run in the background and waited for in
-# steps of at most 4 minutes. From 2026-11-08 a build run as one command often
-# stopped at the 15-minute limit with no log, a commit that stalled once passing
-# on another try; the same build run this way passed every time (#207). The
-# cause on Read the Docs' side is not known.
+# steps. From 2026-11-08 a build run as one command often stopped at the
+# 15-minute limit with no log, a commit that stalled once passing on another
+# try; run this way, the same build passed every time (#207, #209). The cause on
+# Read the Docs' side is not known, and so neither is which part of this avoids
+# it: the steps are the arrangement that passed, not a known requirement.
+# A step returns as soon as the build is done, so the build takes as long as
+# Sphinx; three steps of at most 240 s keep it under Read the Docs' 15 minutes,
+# setup included, and fail it with its log if it is still running then.
 #   rtd_build.sh start           start the build in the background
 #   rtd_build.sh wait SECONDS    wait up to SECONDS; if done, show the log's end
 #                                and exit with the build's status
