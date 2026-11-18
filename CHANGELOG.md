@@ -10,6 +10,13 @@ and this project adheres to
 
 ### Added
 
+- Face charge builds the coupling between separate triangle-mesh and curved
+  parts by adaptive cross approximation, from a few hundred of each block's rows
+  and columns: whole solves 2 to 11 times faster (the pole pieces 2.3 times at
+  level 3, eight discs in a row 11 times), fields within 3e-8 of the dense
+  blocks'. Small parts, parts within 5 % of their size and cuboids keep the
+  dense blocks
+  ([#103](https://github.com/magpylib/magpylib-material-response/issues/103))
 - Docs example: iron pole pieces that make the field between two disc magnets
   uniform, as in a simple NMR magnet: 5.3 times more uniform than the magnets
   alone in the same air gap, for 44 % of the field. The iron's low-field

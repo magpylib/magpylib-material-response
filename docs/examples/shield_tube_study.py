@@ -1,6 +1,5 @@
 """The face-charge solves of `shield_tube.md`, stored in `shield_tube.json`: the
-finest takes 20 s here and more than a minute on the 2 CPUs the docs are built
-on.
+finest takes 12 s here, on an Apple M4 Pro.
 
     uv run --group docs python docs/examples/shield_tube_study.py
 

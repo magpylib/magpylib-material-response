@@ -2602,3 +2602,52 @@ def test_a_segment_magnet_touching_a_part_reads_as_with_a_gap():
         return solved.getB((0.0075, -0.006, 0))
 
     assert solve(0) == pytest.approx(solve(1e-9), rel=1e-3, abs=1e-9)
+
+
+def _soft_body(x, level, small=False):
+    """A soft part 2 cm across at ``x``: a cylinder, or a coarse closed mesh of
+    116 triangles."""
+    from magpylib_material_response.face_charge._apply import _part  # noqa: PLC0415
+
+    if small:
+        rng = np.random.default_rng(0)
+        points = rng.normal(size=(60, 3))
+        points *= 0.01 / np.linalg.norm(points, axis=1, keepdims=True)
+        part = magpy.magnet.TriangularMesh.from_ConvexHull(
+            points=points, position=(x, 0, 0), polarization=(0, 0, 0)
+        )
+    else:
+        part = magpy.magnet.Cylinder(
+            dimension=(0.02, 0.01), position=(x, 0, 0), polarization=(0, 0, 0)
+        )
+    body = _part(part, 1000.0, np.zeros(3), level)
+    body.mesh()
+    return body
+
+
+@pytest.mark.parametrize(
+    ("gap", "small", "by_aca"),
+    [
+        (0.02, False, True),  # apart by their size: low rank
+        (0.0005, False, False),  # 0.5 mm apart, 2.5 % of their size: dense
+        (0.02, True, False),  # few unknowns: dense, where ACA does not pay
+    ],
+    ids=["apart", "close", "small"],
+)
+def test_coupling_between_parts_apart_is_built_by_aca(monkeypatch, gap, small, by_aca):
+    from magpylib_material_response.face_charge import _aca  # noqa: PLC0415
+    from magpylib_material_response.face_charge._bodies import (  # noqa: PLC0415
+        coupling_block,
+    )
+
+    level = 1 if small else 2  # a cylinder at level 2: 2,556 unknowns
+    a, b = _soft_body(0.0, level, small), _soft_body(0.02 + gap, level, small)
+    G = _aca.coupling_by_aca(a, b)
+    assert (G is not None) is by_aca
+    if by_aca:
+        monkeypatch.setattr(_aca, "coupling_by_aca", lambda *_: None)
+        dense = coupling_block(a, b)
+        assert np.abs(G - dense).max() <= 1e-7 * np.abs(dense).max()
+        # a block whose rank passes the cap is left to the dense path
+        entries = _aca._Entries(a, b)
+        assert _aca.low_rank(entries, a.n_dofs, b.n_dofs, max_rank=5) is None

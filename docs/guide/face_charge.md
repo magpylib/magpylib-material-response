@@ -201,7 +201,10 @@ field of a sphere, on one Apple M4 Pro:
   0.5 mm plate under a 5 mm magnet is within 0.02 % of level 3 there, in 0.37 s
   instead of 1.1 s.
 - **Many parts.** They form one dense system: 100 small cubes take 7,200
-  unknowns at level 1 and four times as many at level 2.
+  unknowns at level 1 and four times as many at level 2. Between separate curved
+  or meshed parts of 2,000 unknowns or more, the coupling is built by cross
+  approximation, which makes such solves faster, not smaller: eight discs in a
+  row solve 11 times faster at level 2.
 - **A few weak magnets on their own.** `solve_cells` reaches the same accuracy
   faster.
 

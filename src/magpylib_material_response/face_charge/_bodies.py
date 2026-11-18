@@ -524,11 +524,21 @@ def _add_contact(G, pa, pb, ta, j, corners, plane, Rab, cb):
 
 def coupling_block(a, b):
     """``G_ab``: the flux of b's charge through a's test functions. Between
-    two cuboids by :func:`cross_block`; otherwise by b's quadrature, which
+    two cuboids by :func:`cross_block`; between two triangle bodies well apart
+    by adaptive cross approximation (:mod:`._aca`); otherwise by b's quadrature, which
     holds for bodies apart by about their panels' size or more, and where
     faces of the two lie in one plane, by the exact contact term."""
     if isinstance(a, Body) and isinstance(b, Body):
         return cross_block(a, [b])
+    # two triangle bodies well apart: low rank, by ACA (_aca imports _tribody,
+    # which imports this module)
+    from magpylib_material_response.face_charge._aca import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        coupling_by_aca,
+    )
+
+    G = coupling_by_aca(a, b)
+    if G is not None:
+        return G
     # faces closer than this to parallel ones take the exact contact term: the
     # source's points, a gap far below their spacing away, cannot resolve the
     # flux through the test panels, which jumps across them as the gap closes
