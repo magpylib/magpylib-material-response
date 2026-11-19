@@ -203,7 +203,7 @@ within 0.05 % and the variation is 30 ppm instead of 88; with 37,000, 60 ppm. It
 does not converge.
 
 For one design, finite elements are the fastest: within 0.1 ppm in 5 s, where
-face charge needs 20 s at level 3 for 2 ppm. `solve_fem` keeps nothing between
+face charge needs 11 s at level 3 for 2 ppm. `solve_fem` keeps nothing between
 solves, though, so every design is a new solve, even one that changes only the
 magnets. Face charge factors its matrix once and keeps it while only the magnets
 change, which is the next question.
@@ -219,7 +219,7 @@ it:
 :pyobject: sweep
 ```
 
-The sweep takes about 13 s on an Apple M4 Pro, so `pole_pieces_study.py` runs it
+The sweep takes about 9 s on an Apple M4 Pro, so `pole_pieces_study.py` runs it
 and stores the fields; the magnets alone need no solve.
 
 ```{code-cell} ipython3
@@ -261,9 +261,9 @@ and 229 ppm with it. The iron forgives an angle almost wholly, an uneven
 strength six times.
 
 Each variant takes under half a second, field included, after a first solve of
-about 9 s, and lands within 3 ppm of finite elements. Finite elements at that
+about 5 s, and lands within 3 ppm of finite elements. Finite elements at that
 accuracy, order 3 (4.4 ppm), take 3.2 s for each variant; order 4 takes 4.8 s.
-At matched accuracy face charge is ahead from the fourth variant on and about
+At matched accuracy face charge is ahead from the second variant on and about
 seven times faster per variant. A sweep of the iron's shape changes the matrix,
 and there finite elements stay the faster.
 

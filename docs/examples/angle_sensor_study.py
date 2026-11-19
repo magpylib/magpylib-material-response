@@ -2,7 +2,7 @@
 sensor over a magnet on a steel shaft, in a uniform stray field, after Infineon's
 US 12,237,730 B2 (shaft 20 mm across, mu_r 4000, a 5 mT stray field, a 1.5 mm
 air gap). The magnet and the soft holder ring around the sensor are stand-ins.
-With the holder, every angle is a new solve, about three minutes in all here, so
+With the holder, every angle is a new solve, about a minute and a half in all here, so
 the results are stored in `angle_sensor.json`.
 
     uv run --group docs python docs/examples/angle_sensor_study.py
