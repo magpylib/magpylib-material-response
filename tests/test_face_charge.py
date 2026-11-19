@@ -2604,9 +2604,9 @@ def test_a_segment_magnet_touching_a_part_reads_as_with_a_gap():
     assert solve(0) == pytest.approx(solve(1e-9), rel=1e-3, abs=1e-9)
 
 
-def _soft_body(x, level, small=False):
-    """A soft part 2 cm across at ``x``: a cylinder, or a coarse closed mesh of
-    116 triangles."""
+def _soft_body(x, level, small=False, turned=False):
+    """A soft part 2 cm across at ``x``: a cylinder (its axis along x if
+    ``turned``), or a coarse closed mesh of 116 triangles."""
     from magpylib_material_response.face_charge._apply import _part  # noqa: PLC0415
 
     if small:
@@ -2620,28 +2620,35 @@ def _soft_body(x, level, small=False):
         part = magpy.magnet.Cylinder(
             dimension=(0.02, 0.01), position=(x, 0, 0), polarization=(0, 0, 0)
         )
+        if turned:
+            part.rotate_from_angax(90, "y")
     body = _part(part, 1000.0, np.zeros(3), level)
     body.mesh()
     return body
 
 
 @pytest.mark.parametrize(
-    ("gap", "small", "by_aca"),
+    ("place", "by_aca"),
     [
-        (0.02, False, True),  # apart by their size: low rank
-        (0.0005, False, False),  # 0.5 mm apart, 2.5 % of their size: dense
-        (0.02, True, False),  # few unknowns: dense, where ACA does not pay
+        ("apart", True),  # their size apart: low rank
+        ("close", False),  # 0.5 mm apart, 2.5 % of their size: dense
+        ("beside a face", False),  # 0.3 mm off the middle of a curved side: dense
+        ("small", False),  # few unknowns: dense, where ACA does not pay
     ],
-    ids=["apart", "close", "small"],
 )
-def test_coupling_between_parts_apart_is_built_by_aca(monkeypatch, gap, small, by_aca):
+def test_coupling_between_parts_apart_is_built_by_aca(monkeypatch, place, by_aca):
     from magpylib_material_response.face_charge import _aca  # noqa: PLC0415
     from magpylib_material_response.face_charge._bodies import (  # noqa: PLC0415
         coupling_block,
     )
 
+    small = place == "small"
     level = 1 if small else 2  # a cylinder at level 2: 2,556 unknowns
-    a, b = _soft_body(0.0, level, small), _soft_body(0.02 + gap, level, small)
+    a = _soft_body(0.0, level, small)
+    if place == "beside a face":  # end on, its face 0.3 mm from a's curved side
+        b = _soft_body(0.01 + 0.005 + 0.0003, level, turned=True)
+    else:
+        b = _soft_body(0.02 + (0.0005 if place == "close" else 0.02), level, small)
     G = _aca.coupling_by_aca(a, b)
     assert (G is not None) is by_aca
     if by_aca:
@@ -2651,3 +2658,14 @@ def test_coupling_between_parts_apart_is_built_by_aca(monkeypatch, gap, small, b
         # a block whose rank passes the cap is left to the dense path
         entries = _aca._Entries(a, b)
         assert _aca.low_rank(entries, a.n_dofs, b.n_dofs, max_rank=5) is None
+
+
+def test_touching_faces_keep_the_dense_block_and_its_contact_term(monkeypatch):
+    from magpylib_material_response.face_charge import _aca  # noqa: PLC0415
+
+    # end to end: their caps touch. Past the gap test, the contact check alone
+    # must keep the block dense
+    monkeypatch.setattr(_aca, "admissible", lambda *_: True)
+    a, b = _soft_body(0.0, 2), _soft_body(0.0, 2)
+    b.position = np.array([0.0, 0.0, 0.01])
+    assert _aca.coupling_by_aca(a, b) is None

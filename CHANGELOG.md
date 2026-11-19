@@ -12,8 +12,8 @@ and this project adheres to
 
 - Face charge builds the coupling between separate triangle-mesh and curved
   parts by adaptive cross approximation, from a few hundred of each block's rows
-  and columns: whole solves 2 to 11 times faster (the pole pieces 2.2 times at
-  level 3, eight discs in a row 10.6 times), fields within 2.1e-8 of the dense
+  and columns: whole solves up to 10 times faster (the pole pieces 1.9 times at
+  level 3, eight discs in a row 10 times), fields within 1e-8 of the dense
   blocks'. Small parts, parts within 5 % of their size and cuboids keep the
   dense blocks
   ([#103](https://github.com/magpylib/magpylib-material-response/issues/103),

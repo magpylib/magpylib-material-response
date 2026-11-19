@@ -204,7 +204,7 @@ field of a sphere, on one Apple M4 Pro:
   unknowns at level 1 and four times as many at level 2. Between separate curved
   or meshed parts of 2,000 unknowns or more, the coupling is built by cross
   approximation, which makes such solves faster, not smaller: eight discs in a
-  row solve 10.6 times faster at level 2.
+  row solve 10 times faster at level 2.
 - **A few weak magnets on their own.** `solve_cells` reaches the same accuracy
   faster.
 
