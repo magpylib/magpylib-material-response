@@ -105,11 +105,11 @@ shared edge. Panels on one face give each other no flux.
 - **Separate curved or meshed parts**: the block coupling two triangle meshes
   apart is of low rank, and adaptive cross approximation builds it from a few
   hundred of its rows and columns {cite}`bebendorf2000`, to 1e-8 of the block.
-  Whole solves are 2 to 11 times faster: the pole pieces 2.3 times at level 3,
-  eight discs in a row 11 times at level 2, with fields within 3e-8 of the dense
-  blocks'. A block keeps the dense path where that does not pay: parts under
-  2,000 unknowns, parts closer than 5 % of the smaller one's size, and a rank
-  above a third of the block. The system stays dense.
+  Whole solves are 2 to 11 times faster: the pole pieces 2.2 times at level 3,
+  eight discs in a row 10.6 times at level 2, with fields within 2.1e-8 of the
+  dense blocks'. A block keeps the dense path where that does not pay: parts
+  under 2,000 unknowns, parts closer than 5 % of the smaller one's size, and a
+  rank above a third of the block. The system stays dense.
 
 On a cube of infinite susceptibility the method reproduces the known
 polarizability, 3.6443 times the volume {cite}`helsing2013`, from below, as a
