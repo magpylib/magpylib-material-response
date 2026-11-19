@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.16,<2"]
+build-backend = "maturin"
+
+[project]
+name = "mmr-kernels"
+version = "0.1.0"
+description = "Compiled field kernels for magpylib-material-response (prototype, issue #208)"
+requires-python = ">=3.11"
+dependencies = ["numpy"]
+
+[tool.maturin]
+features = ["python"]
+module-name = "mmr_kernels"

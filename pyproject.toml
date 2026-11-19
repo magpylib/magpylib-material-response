@@ -178,6 +178,7 @@ ignore = [
 "tests/**" = ["T20"]
 "scripts/**" = ["T20"]
 "validation/**" = ["T20"]
+"kernels/**" = ["T20"]
 "noxfile.py" = ["T20", "EXE001"]
 
 

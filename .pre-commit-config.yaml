@@ -38,7 +38,7 @@ repos:
         # copied from magpylib, kept close for comparison; the validation's
         # JSON files and the docs' stored results are written by their scripts,
         # and the solver map is a self-contained page, edited as it is
-        exclude: ^(docs/_static/(webcode|map)/|(validation|docs)/.*\.json$)
+        exclude: ^(docs/_static/(webcode|map)/|(validation|docs|kernels)/.*\.json$)
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.16.10"
