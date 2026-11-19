@@ -37,7 +37,8 @@ and this project adheres to
   field variation where the whole magnet gives 91; they now give 90.5. Each
   point is stepped 1e-6 of the parts' size straight off the segments' surfaces
   before they are read
-  ([#205](https://github.com/magpylib/magpylib-material-response/issues/205))
+  ([#205](https://github.com/magpylib/magpylib-material-response/issues/205),
+  [#211](https://github.com/magpylib/magpylib-material-response/pull/211))
 
 ## [0.13.0] - 2026-11-08
 
