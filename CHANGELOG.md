@@ -39,7 +39,8 @@ and this project adheres to
   stepped twice 1e-6 of each segment's size straight off its surfaces before
   they are read, and a field that is still not finite warns
   ([#205](https://github.com/magpylib/magpylib-material-response/issues/205),
-  [#211](https://github.com/magpylib/magpylib-material-response/pull/211))
+  [#211](https://github.com/magpylib/magpylib-material-response/pull/211),
+  [#212](https://github.com/magpylib/magpylib-material-response/pull/212))
 
 ## [0.13.0] - 2026-11-08
 
