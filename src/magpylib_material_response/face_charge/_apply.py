@@ -302,7 +302,7 @@ def solve_face_charge(
                         break
                     B[bad] = magpy.getB(others, points[bad] + step, sumup=True)
             if segments:
-                B = B + segments_field(segments, points, size)
+                B = B + segments_field(segments, points)
         return B / magpy.mu_0
 
     for rnd in range(refine + 1):
