@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-20
+
 ### Added
 
 - Face charge builds the coupling between separate triangle-mesh and curved
@@ -770,7 +772,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.13.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.14.0...HEAD
+[0.14.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.13.0...0.14.0
 [0.13.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.12.0...0.13.0
 [0.12.0]:
