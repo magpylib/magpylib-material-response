@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextvars
 import copy
 import gc
+import itertools
 import os
 import pickle
 import subprocess
@@ -2669,3 +2670,41 @@ def test_touching_faces_keep_the_dense_block_and_its_contact_term(monkeypatch):
     a, b = _soft_body(0.0, 2), _soft_body(0.0, 2)
     b.position = np.array([0.0, 0.0, 0.01])
     assert _aca.coupling_by_aca(a, b) is None
+
+
+@pytest.mark.parametrize("pieces", [2, 4])
+def test_a_magnet_of_touching_segments_reads_as_the_whole_magnet(pieces):
+    # #205: a magnet of CylinderSegments touching a solved part; magpylib's
+    # segment is wrong within about 1e-8 m of its faces, where the part's
+    # Gauss points lie, and next to one segment's edge only the sum is right
+    def model(pieces):
+        iron = magpy.magnet.Cylinder(
+            dimension=(0.02, 0.005), position=(0, 0, 0.0025), polarization=(0, 0, 0)
+        )
+        iron.susceptibility = 1000
+        if pieces == 1:
+            magnets = [
+                magpy.magnet.Cylinder(
+                    dimension=(0.02, 0.005),
+                    position=(0, 0, 0.0075),
+                    polarization=(0, 0, 0.4),
+                )
+            ]
+        else:
+            edges = np.linspace(0, 360, pieces + 1)
+            magnets = [
+                magpy.magnet.CylinderSegment(
+                    dimension=(0, 0.01, 0.005, a, b),
+                    position=(0, 0, 0.0075),
+                    polarization=(0, 0, 0.4),
+                )
+                for a, b in itertools.pairwise(edges)
+            ]
+        return magpy.Collection(iron, *magnets)
+
+    line = np.c_[np.linspace(-0.005, 0.005, 11), np.zeros(11), np.full(11, -0.002)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # the touching magnet's warning
+        whole = solve_face_charge(model(1), level=1).getB(line)
+        split = solve_face_charge(model(pieces), level=1).getB(line)
+    np.testing.assert_allclose(split, whole, rtol=0, atol=1e-5 * np.abs(whole).max())

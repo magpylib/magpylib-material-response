@@ -27,6 +27,19 @@ and this project adheres to
   ([#85](https://github.com/magpylib/magpylib-material-response/issues/85),
   [#204](https://github.com/magpylib/magpylib-material-response/pull/204))
 
+### Fixed
+
+- Face charge read a magnet of touching CylinderSegments, in contact with a
+  solved part, wrongly: magpylib's segment kernel goes wrong within about 1e-8 m
+  of the planes and cylinders that bound it, and fails at 1e-10 m
+  (magpylib#1073), where the part's Gauss points lie, and the step it took off a
+  face was too short. Two halves of a magnet on an iron disc gave 2,928 ppm of
+  field variation where the whole magnet gives 91; they now give 90.5. Each
+  point is stepped 1e-6 of the parts' size straight off the segments' surfaces
+  before they are read
+  ([#205](https://github.com/magpylib/magpylib-material-response/issues/205),
+  [#211](https://github.com/magpylib/magpylib-material-response/pull/211))
+
 ## [0.13.0] - 2026-11-08
 
 ### Added

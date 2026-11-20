@@ -33,6 +33,7 @@ from magpylib_material_response.face_charge._bodies import (
 )
 from magpylib_material_response.face_charge._kept import solve_kept
 from magpylib_material_response.face_charge._mesh import widened_vertices
+from magpylib_material_response.face_charge._segments import segments_field
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.face_charge._triangle import frames
 from magpylib_material_response.face_charge._tribody import (
@@ -300,23 +301,8 @@ def solve_face_charge(
                     if not bad.any():
                         break
                     B[bad] = magpy.getB(others, points[bad] + step, sumup=True)
-            # a CylinderSegment gives B = 0 on every one of its surfaces
-            # (magpylib#1073), where a magnet touching a solved part has its
-            # Gauss points; B's normal part is the same on both sides, so
-            # each segment is read a little off where it gives exactly 0; one
-            # call for all, not summed, since the others' sum would hide a zero
             if segments:
-                Bs = magpy.getB(segments, points, squeeze=False)
-                Bs = Bs.reshape(len(segments), len(points), 3)
-                for step in nudges:
-                    bad = ~(Bs != 0).any(axis=2) | ~np.isfinite(Bs).all(axis=2)
-                    rows = bad.any(axis=0)
-                    if not rows.any():
-                        break
-                    off = magpy.getB(segments, points[rows] + step, squeeze=False)
-                    off = off.reshape(len(segments), -1, 3)
-                    Bs[:, rows] = np.where(bad[:, rows, None], off, Bs[:, rows])
-                B = B + Bs.sum(axis=0)
+                B = B + segments_field(segments, points, size)
         return B / magpy.mu_0
 
     for rnd in range(refine + 1):
