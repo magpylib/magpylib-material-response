@@ -2,22 +2,28 @@
 
 A magnet touching a solved part has the part's Gauss points on its face, and
 segments that meet put them beside each other's planes. There magpylib's
-segment kernel goes wrong: within about 1e-8 m of the planes and cylinders that
-bound it, wherever a point's coordinate meets one of them, on the face or beside
-it, and it fails outright at 1e-10 m (magpylib#1073). Points that close are
-stepped straight off first.
+segment kernel goes wrong (magpylib#1082): within about 1e-7 of the segment's
+own size of the planes and cylinders that bound it, wherever a point's
+coordinate meets one of them, on the face or beside it, and it gives NaN closer
+in still. Points that close are stepped straight off first.
 """
 
 from __future__ import annotations
 
+import warnings
+
 import magpylib as magpy
 import numpy as np
 
-#: a CylinderSegment's field is read this share of the parts' size off its
-#: faces: closer in magpylib's kernel goes wrong (magpylib#1073), and at 1e-10
-#: m it fails outright. B's normal part, all the load takes, is the same on both
-#: sides of a face, and the step is taken straight off the face.
+#: a CylinderSegment's field is read at least this share of its own size off
+#: its surfaces: the kernel's error scales with the segment, about 3e-5 of J at
+#: 1e-6 and 3e-3 at 1e-7 of its size (magpylib#1082). B's normal part, all the
+#: load takes, is the same on both sides of a face, and the step is taken
+#: straight off the face, so it costs about this share too.
 SEGMENT_CLEARANCE = 1e-6
+#: passes over the segments while a step off one surface lands within another's
+#: clearance: near the axis of many wedges each step meets the next cut plane
+PASSES = 16
 
 
 def _segment_frame(segment):
@@ -40,9 +46,8 @@ def _segment_surface_distances(segment, local):
     radial = np.stack([x, y, np.zeros_like(x)], 1) / np.maximum(r, 1e-300)[:, None]
     radial[r == 0] = (1.0, 0.0, 0.0)  # on the axis: any way off it
     dist = [np.abs(np.abs(z) - h / 2)]
-    normal = [
-        np.outer(np.where(np.abs(z) >= h / 2, np.sign(z), -np.sign(z)), [0, 0, 1])
-    ]
+    up = np.where(z < 0, -1.0, 1.0)  # z = 0 on a segment thinner than the clearance
+    normal = [np.outer(np.where(np.abs(z) >= h / 2, up, -up), [0, 0, 1])]
     for radius in (r1, r2):
         dist.append(np.abs(r - radius))
         normal.append(radial * np.where(r >= radius, 1.0, -1.0)[:, None])
@@ -54,21 +59,28 @@ def _segment_surface_distances(segment, local):
     return np.stack(dist, 1), np.stack(normal, 1)
 
 
-def segments_field(segments, points, size):
-    """B of the CylinderSegments at ``points``. A point closer than
-    ``SEGMENT_CLEARANCE`` of ``size`` to a surface of any of them is first
-    stepped straight off it, to that clearance: a magnet touching a solved
-    part has the part's Gauss points on its face, and segments that meet put
-    them beside each other's faces, where one's field alone is large and only
-    the sum is right. One position per point serves every segment, the step
-    being far too short to matter to the others, so all are read in one call;
-    magpylib is never called closer in."""
-    tol = SEGMENT_CLEARANCE * size
+def _clearance(segment):
+    """``SEGMENT_CLEARANCE`` of ``segment``'s own size: its outer radius or its
+    height, the larger."""
+    _, r2, h, *_ = segment.dimension
+    return SEGMENT_CLEARANCE * max(r2, h)
+
+
+def segments_field(segments, points):
+    """B of the CylinderSegments at ``points``. A point closer than a segment's
+    clearance (``_clearance``) to one of its surfaces is first stepped straight
+    off it, to twice that: a magnet touching a solved part has the part's
+    Gauss points on its face, and segments that meet put them beside each
+    other's faces, where one's field alone is large and only the sum is right.
+    One position per point serves every segment, the step being far too short
+    to matter to the others, so all are read in one call. A point no step
+    clears, or a field that is not finite, is a warning, not a silent NaN."""
     at = np.array(points, float)
     poses = [_segment_frame(seg) for seg in segments]
-    for _ in range(4):  # off each surface in turn: an edge, a corner, a seam
+    tols = [_clearance(seg) for seg in segments]
+    for _ in range(PASSES):  # off each surface in turn: an edge, a corner, a seam
         moved = False
-        for seg, (pos, rot) in zip(segments, poses, strict=True):
+        for seg, (pos, rot), tol in zip(segments, poses, tols, strict=True):
             local = rot.inv().apply(at - pos)
             dist, normal = _segment_surface_distances(seg, local)
             close = dist < tol
@@ -76,9 +88,22 @@ def segments_field(segments, points, size):
             if not rows.size:
                 continue
             face = np.argmin(np.where(close[rows], dist[rows], np.inf), axis=1)
-            local[rows] += normal[rows, face] * (tol - dist[rows, face])[:, None]
+            local[rows] += normal[rows, face] * (2 * tol - dist[rows, face])[:, None]
             at[rows] = rot.apply(local[rows]) + pos
             moved = True
         if not moved:
             break
-    return magpy.getB(segments, at, sumup=True, squeeze=False).reshape(-1, 3)
+    else:
+        warnings.warn(
+            "Some load points could not be stepped clear of the CylinderSegments' "
+            "surfaces; their field may be off (magpylib#1082).",
+            stacklevel=4,
+        )
+    B = magpy.getB(segments, at, sumup=True, squeeze=False).reshape(-1, 3)
+    if not np.isfinite(B).all():
+        warnings.warn(
+            "A CylinderSegment's field is not finite at some load points "
+            "(magpylib#1082); the solve that uses it is not to be trusted.",
+            stacklevel=4,
+        )
+    return B

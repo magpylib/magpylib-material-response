@@ -30,13 +30,14 @@ and this project adheres to
 ### Fixed
 
 - Face charge read a magnet of touching CylinderSegments, in contact with a
-  solved part, wrongly: magpylib's segment kernel goes wrong within about 1e-8 m
-  of the planes and cylinders that bound it, and fails at 1e-10 m
-  (magpylib#1073), where the part's Gauss points lie, and the step it took off a
-  face was too short. Two halves of a magnet on an iron disc gave 2,928 ppm of
-  field variation where the whole magnet gives 91; they now give 90.5. Each
-  point is stepped 1e-6 of the parts' size straight off the segments' surfaces
-  before they are read
+  solved part, wrongly: magpylib's segment kernel goes wrong within about 1e-7
+  of the segment's own size of the planes and cylinders that bound it, and gives
+  NaN closer in (magpylib#1082), where the part's Gauss points lie. Two halves
+  of a magnet on an iron disc gave 2,928 ppm of field variation where the whole
+  magnet gives 91; they now give 90.2. A 0.5 mm iron cube on a split 10 cm
+  magnet, which gave NaN, now matches the whole magnet to 6e-7. Each point is
+  stepped twice 1e-6 of each segment's size straight off its surfaces before
+  they are read, and a field that is still not finite warns
   ([#205](https://github.com/magpylib/magpylib-material-response/issues/205),
   [#211](https://github.com/magpylib/magpylib-material-response/pull/211))
 

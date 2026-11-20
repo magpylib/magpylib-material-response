@@ -2672,21 +2672,41 @@ def test_touching_faces_keep_the_dense_block_and_its_contact_term(monkeypatch):
     assert _aca.coupling_by_aca(a, b) is None
 
 
-@pytest.mark.parametrize("pieces", [2, 4])
-def test_a_magnet_of_touching_segments_reads_as_the_whole_magnet(pieces):
-    # #205: a magnet of CylinderSegments touching a solved part; magpylib's
-    # segment is wrong within about 1e-8 m of its faces, where the part's
-    # Gauss points lie, and next to one segment's edge only the sum is right
+@pytest.mark.parametrize(
+    ("pieces", "iron_size"),
+    [
+        (2, 0.02),  # halves of a magnet on an iron disc its size
+        (4, 0.02),  # quarters
+        (2, 0.0005),  # a 0.5 mm iron cube on a 10 cm split magnet, across the seam
+    ],
+)
+def test_a_magnet_of_touching_segments_reads_as_the_whole_magnet(pieces, iron_size):
+    # #205: a magnet of CylinderSegments touching a solved part. magpylib's
+    # segment is wrong within about 1e-7 of its own size of its surfaces
+    # (magpylib#1082), where the part's Gauss points lie, and next to one
+    # segment's edge only the sum is right. The clearance follows the segment,
+    # not the solved part: a small part on a large magnet gave NaN.
+    big = iron_size < 0.01
+    radius, height = (0.05, 0.02) if big else (0.01, 0.005)
+
     def model(pieces):
-        iron = magpy.magnet.Cylinder(
-            dimension=(0.02, 0.005), position=(0, 0, 0.0025), polarization=(0, 0, 0)
-        )
+        if big:  # touching the magnet's bottom face, straddling the seam y = 0
+            iron = magpy.magnet.Cuboid(
+                dimension=(iron_size,) * 3,
+                position=(radius / 2, 0, -iron_size / 2),
+                polarization=(0, 0, 0),
+            )
+        else:
+            iron = magpy.magnet.Cylinder(
+                dimension=(iron_size, height), position=(0, 0, -height / 2),
+                polarization=(0, 0, 0),
+            )  # fmt: skip
         iron.susceptibility = 1000
         if pieces == 1:
             magnets = [
                 magpy.magnet.Cylinder(
-                    dimension=(0.02, 0.005),
-                    position=(0, 0, 0.0075),
+                    dimension=(2 * radius, height),
+                    position=(0, 0, height / 2),
                     polarization=(0, 0, 0.4),
                 )
             ]
@@ -2694,15 +2714,20 @@ def test_a_magnet_of_touching_segments_reads_as_the_whole_magnet(pieces):
             edges = np.linspace(0, 360, pieces + 1)
             magnets = [
                 magpy.magnet.CylinderSegment(
-                    dimension=(0, 0.01, 0.005, a, b),
-                    position=(0, 0, 0.0075),
+                    dimension=(0, radius, height, a, b),
+                    position=(0, 0, height / 2),
                     polarization=(0, 0, 0.4),
                 )
                 for a, b in itertools.pairwise(edges)
             ]
         return magpy.Collection(iron, *magnets)
 
-    line = np.c_[np.linspace(-0.005, 0.005, 11), np.zeros(11), np.full(11, -0.002)]
+    centre = np.array([radius / 2 if big else 0.0, 0.0, 0.0])
+    # below the iron: under the cube, or 2 mm under the disc
+    half, below = (2 * iron_size, 3 * iron_size) if big else (0.005, height + 0.002)
+    line = (
+        centre + np.c_[np.linspace(-half, half, 11), np.zeros(11), np.full(11, -below)]
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # the touching magnet's warning
         whole = solve_face_charge(model(1), level=1).getB(line)
