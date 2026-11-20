@@ -2676,8 +2676,8 @@ def test_touching_faces_keep_the_dense_block_and_its_contact_term(monkeypatch):
     ("pieces", "iron_size"),
     [
         (2, 0.02),  # halves of a magnet on an iron disc its size
-        (4, 0.02),  # quarters
         (2, 0.0005),  # a 0.5 mm iron cube on a 10 cm split magnet, across the seam
+        (4, 0.0005),  # the same on quarters
     ],
 )
 def test_a_magnet_of_touching_segments_reads_as_the_whole_magnet(pieces, iron_size):
