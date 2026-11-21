@@ -1,6 +1,7 @@
 //! The C ABI: one function per kernel, raw pointers and counts, single
 //! threaded. For any language that calls C; Python and the browser have
-//! their own bindings. Returns 0, or -1 for a null pointer.
+//! their own bindings. Returns 0, or -1 for a null pointer. `out` must not
+//! overlap any input.
 
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 

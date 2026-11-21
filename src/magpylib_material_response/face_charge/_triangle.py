@@ -158,7 +158,7 @@ def charge_field(X, V, fr, c):
     # E0 = sum m f + n sign(w) sum beta, Phi = sum P0 f - |w| sum beta, and
     # sum (g.m) L_e with g = c1 e1 + c2 e2, L_e = d_e f - t (R+ - R-)
     E0u = E0v = Phi = SLu = SLv = SLw = 0.0
-    with quiet(xp):
+    with quiet(xp, "divide", "invalid"):
         for tu, tv, P0f, f, dR in _edge_terms(corners, du, dv, R, w2):
             gm = c1 * tv - c2 * tu
             E0u = E0u + tv * f
@@ -247,7 +247,7 @@ def charge_field_far(X, y, charge):
     own charge sums to zero is 6e-8 off; beyond about 1e102 the field is 0."""
     xp = namespace(X, y, charge)
     d = [X[:, k, None, None] - y[..., k] for k in range(3)]
-    with quiet(xp):
+    with quiet(xp, "over", "invalid"):
         r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
         scale = charge / (r2 * xp.sqrt(r2))
         return xp.stack([xp.sum(scale * dk, axis=(1, 2)) for dk in d], axis=1)
@@ -416,12 +416,13 @@ def beyond_far_from(observers, center, far_from):
     """Which observers (M, 3) are at or beyond ``far_from`` from ``center``,
     where a sheet takes the far rule: the one predicate of the sheet and of the
     reference."""
-    return namespace(observers, center).linalg.vector_norm(
-        observers - center, axis=1
-    ) >= far_from
+    return (
+        namespace(observers, center).linalg.vector_norm(observers - center, axis=1)
+        >= far_from
+    )
 
 
-def triangle_charge_field(field, observers, vertices, charge):
+def triangle_linear_charge_field(field, observers, vertices, charge):
     """H in A/m (``field`` 'H') at ``observers`` (M, 3) of the charge ``charge``
     (N, 3), coefficients of ``1, u, v`` in A/m, on the triangles ``vertices``
     (N, 3, 3), summed, by the closed form."""
@@ -431,7 +432,7 @@ def triangle_charge_field(field, observers, vertices, charge):
 
 
 def charge_sheet_field(field, observers, vertices, charge, center, far_from):
-    """:func:`triangle_charge_field`, with the far rule's six point charges
+    """:func:`triangle_linear_charge_field`, with the far rule's six point charges
     per triangle for the observers at or beyond ``far_from`` from ``center``
     (``far_from`` 0: everywhere). ``center`` (3,) and ``far_from`` (a 0-d
     array) are arrays of the observers' namespace."""

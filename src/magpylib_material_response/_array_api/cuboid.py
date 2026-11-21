@@ -62,26 +62,26 @@ def cuboid_B_core(observers, dimensions, polarizations):
     sign_z = xp.where(maskz, -one, one)
     sign_xy, sign_xz, sign_yz = sign_x * sign_y, sign_x * sign_z, sign_y * sign_z
 
-    xma, xpa = x - a, x + a
-    ymb, ypb = y - b, y + b
-    zmc, zpc = z - c, z + c
-    xma2, xpa2 = xma**2, xpa**2
-    ymb2, ypb2 = ymb**2, ypb**2
-    zmc2, zpc2 = zmc**2, zpc**2
+    with quiet(xp, "divide", "invalid", "over"):
+        xma, xpa = x - a, x + a
+        ymb, ypb = y - b, y + b
+        zmc, zpc = z - c, z + c
+        xma2, xpa2 = xma**2, xpa**2
+        ymb2, ypb2 = ymb**2, ypb**2
+        zmc2, zpc2 = zmc**2, zpc**2
 
-    mmm = xp.sqrt(xma2 + ymb2 + zmc2)
-    pmp = xp.sqrt(xpa2 + ymb2 + zpc2)
-    pmm = xp.sqrt(xpa2 + ymb2 + zmc2)
-    mmp = xp.sqrt(xma2 + ymb2 + zpc2)
-    mpm = xp.sqrt(xma2 + ypb2 + zmc2)
-    ppp = xp.sqrt(xpa2 + ypb2 + zpc2)
-    ppm = xp.sqrt(xpa2 + ypb2 + zmc2)
-    mpp = xp.sqrt(xma2 + ypb2 + zpc2)
+        mmm = xp.sqrt(xma2 + ymb2 + zmc2)
+        pmp = xp.sqrt(xpa2 + ymb2 + zpc2)
+        pmm = xp.sqrt(xpa2 + ymb2 + zmc2)
+        mmp = xp.sqrt(xma2 + ymb2 + zpc2)
+        mpm = xp.sqrt(xma2 + ypb2 + zmc2)
+        ppp = xp.sqrt(xpa2 + ypb2 + zpc2)
+        ppm = xp.sqrt(xpa2 + ypb2 + zmc2)
+        mpp = xp.sqrt(xma2 + ypb2 + zpc2)
 
-    def sp(q, radius, t2):
-        return _sqrt_plus_signed(xp, q, radius, t2)
+        def sp(q, radius, t2):
+            return _sqrt_plus_signed(xp, q, radius, t2)
 
-    with quiet(xp):
         ff2x = xp.log(
             sp(xma, mmm, ymb2 + zmc2)
             * (xpa + ppm)
@@ -110,28 +110,28 @@ def cuboid_B_core(observers, dimensions, polarizations):
             (-zmc + pmm) * (-zmc + mpm) * sp(-zpc, mmp, xma2 + ymb2) * sp(-zpc, ppp, xpa2 + ypb2)
         )  # fmt: skip
 
-    at = xp.atan2
-    ff1x = (
-        at(ymb * zmc, xma * mmm) - at(ymb * zmc, xpa * pmm) - at(ypb * zmc, xma * mpm)
-        + at(ypb * zmc, xpa * ppm) - at(ymb * zpc, xma * mmp) + at(ymb * zpc, xpa * pmp)
-        + at(ypb * zpc, xma * mpp) - at(ypb * zpc, xpa * ppp)
-    )  # fmt: skip
-    ff1y = (
-        at(xma * zmc, ymb * mmm) - at(xpa * zmc, ymb * pmm) - at(xma * zmc, ypb * mpm)
-        + at(xpa * zmc, ypb * ppm) - at(xma * zpc, ymb * mmp) + at(xpa * zpc, ymb * pmp)
-        + at(xma * zpc, ypb * mpp) - at(xpa * zpc, ypb * ppp)
-    )  # fmt: skip
-    ff1z = (
-        at(xma * ymb, zmc * mmm) - at(xpa * ymb, zmc * pmm) - at(xma * ypb, zmc * mpm)
-        + at(xpa * ypb, zmc * ppm) - at(xma * ymb, zpc * mmp) + at(xpa * ymb, zpc * pmp)
-        + at(xma * ypb, zpc * mpp) - at(xpa * ypb, zpc * ppp)
-    )  # fmt: skip
+        at = xp.atan2
+        ff1x = (
+            at(ymb * zmc, xma * mmm) - at(ymb * zmc, xpa * pmm) - at(ypb * zmc, xma * mpm)
+            + at(ypb * zmc, xpa * ppm) - at(ymb * zpc, xma * mmp) + at(ymb * zpc, xpa * pmp)
+            + at(ypb * zpc, xma * mpp) - at(ypb * zpc, xpa * ppp)
+        )  # fmt: skip
+        ff1y = (
+            at(xma * zmc, ymb * mmm) - at(xpa * zmc, ymb * pmm) - at(xma * zmc, ypb * mpm)
+            + at(xpa * zmc, ypb * ppm) - at(xma * zpc, ymb * mmp) + at(xpa * zpc, ymb * pmp)
+            + at(xma * zpc, ypb * mpp) - at(xpa * zpc, ypb * ppp)
+        )  # fmt: skip
+        ff1z = (
+            at(xma * ymb, zmc * mmm) - at(xpa * ymb, zmc * pmm) - at(xma * ypb, zmc * mpm)
+            + at(xpa * ypb, zmc * ppm) - at(xma * ymb, zpc * mmp) + at(xpa * ymb, zpc * pmp)
+            + at(xma * ypb, zpc * mpp) - at(xpa * ypb, zpc * ppp)
+        )  # fmt: skip
 
-    # the 'missing' third sign is hidden in ff1x, ff1y, ff1z
-    bx = pol_x * ff1x + pol_y * ff2z * sign_xy + pol_z * ff2y * sign_xz
-    by = pol_x * ff2z * sign_xy + pol_y * ff1y - pol_z * ff2x * sign_yz
-    bz = pol_x * ff2y * sign_xz - pol_y * ff2x * sign_yz + pol_z * ff1z
-    return xp.stack((bx, by, bz), axis=-1) / (4 * xp.pi)
+        # the 'missing' third sign is hidden in ff1x, ff1y, ff1z
+        bx = pol_x * ff1x + pol_y * ff2z * sign_xy + pol_z * ff2y * sign_xz
+        by = pol_x * ff2z * sign_xy + pol_y * ff1y - pol_z * ff2x * sign_yz
+        bz = pol_x * ff2y * sign_xz - pol_y * ff2x * sign_yz + pol_z * ff1z
+        return xp.stack((bx, by, bz), axis=-1) / (4 * xp.pi)
 
 
 def cuboid_field(field, observers, dimension, polarization):
@@ -151,7 +151,9 @@ def cuboid_field(field, observers, dimension, polarization):
     dist = xp.abs(observers) - half  # distance to the faces, per axis
 
     pol_not_null = xp.any(polarization != 0, axis=-1)
-    dim_not_null = xp.all(half != 0, axis=-1)
+    # a product, as magpylib: sizes whose product underflows count as zero
+    hx, hy, hz = xp.unstack(half, axis=-1)
+    dim_not_null = hx * hy * hz != 0
     surf_x, surf_y, surf_z = xp.unstack(xp.abs(dist) < RTOL_SURFACE * half, axis=-1)
     inside_xyz = dist < RTOL_SURFACE * half
     in_x, in_y, in_z = xp.unstack(inside_xyz, axis=-1)

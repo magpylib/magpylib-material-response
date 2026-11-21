@@ -18,9 +18,9 @@ def namespace(*arrays):
     return spaces.pop()
 
 
-def quiet(xp):
-    """NumPy's warnings off, for code where infinities and NaN are expected;
-    other namespaces do not warn."""
+def quiet(xp, *warnings):
+    """NumPy's ``warnings`` ('divide', 'invalid', 'over') off, for code where
+    infinities and NaN are expected; other namespaces do not warn."""
     if xp is np:
-        return np.errstate(divide="ignore", invalid="ignore", over="ignore")
+        return np.errstate(**dict.fromkeys(warnings, "ignore"))
     return nullcontext()

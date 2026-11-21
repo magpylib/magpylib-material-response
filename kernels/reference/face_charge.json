@@ -2,7 +2,7 @@
  "rtol": 1e-12,
  "sources": {
   "tilted": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "three triangles, 1 mm across, at generic orientations off the origin: acute, obtuse, right-angled; the field is their sum; charge with every coefficient nonzero",
    "vertices": [
     [
@@ -28,7 +28,7 @@
    ]
   },
   "plain": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "one triangle, 1 mm across, in the plane z = 0",
    "vertices": [
     [
@@ -42,7 +42,7 @@
    ]
   },
   "sliver": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "a triangle 1e6 times longer than wide",
    "vertices": [
     [
@@ -56,7 +56,7 @@
    ]
   },
   "moved": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "plain moved 4 m from the origin: rounding in the frame",
    "vertices": [
     [
@@ -70,7 +70,7 @@
    ]
   },
   "nm": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "the first tilted triangle scaled to 1 nm: the field of a charge density does not depend on the length unit",
    "vertices": [
     [
@@ -84,7 +84,7 @@
    ]
   },
   "km": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "the first tilted triangle scaled to 1 km",
    "vertices": [
     [
@@ -98,7 +98,7 @@
    ]
   },
   "uncharged": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "plain without charge: field 0",
    "vertices": [
     [
@@ -112,7 +112,7 @@
    ]
   },
   "tilted_cycled": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "tilted with its axes cycled (x, y, z) to (z, x, y): the same charge, turned",
    "vertices": [
     [
@@ -200,7 +200,7 @@
    "polarization": [0.3, -0.5, 1.2]
   },
   "box_surface": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "the cuboid's 12 surface triangles, charge J.n / mu_0 (A/m) on each, outward n",
    "vertices": [
     [
@@ -280,7 +280,7 @@
    ]
   },
   "tri0": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "the first tilted triangle alone: acute, with a linear charge",
    "vertices": [
     [
@@ -294,7 +294,7 @@
    ]
   },
   "tri0_split": {
-   "kind": "triangle_charge",
+   "kind": "triangle_linear_charge",
    "why": "tri0 split in four by its edge midpoints, the same linear charge density in each part's own frame",
    "vertices": [
     [
@@ -324,6 +324,34 @@
     [1.2586690532964226, -0.19999999999999998, 0.6499999999999998],
     [0.7000000000000014, 0.4684718512044683, 0.4929849131860517]
    ]
+  },
+  "tilted_sheet_exact": {
+   "kind": "charge_sheet",
+   "why": "tilted as a sheet centered on the origin, far_from 2^-6 m: a binary-exact distance to the switch",
+   "vertices": [
+    [
+     [0.01, -0.004, 0.007],
+     [0.0107697511313201, -0.00419304057104269, 0.00639154413984003],
+     [0.0101222548094194, -0.00348342721015591, 0.00625119674522174]
+    ],
+    [
+     [-0.006, 0.009, -0.003],
+     [-0.00633682408883347, 0.00869942218378511, -0.00389230180408929],
+     [-0.00621502273969413, 0.0085432585690291, -0.00455809257961428]
+    ],
+    [
+     [0.002, 0.005, -0.011],
+     [0.00153015368960705, 0.00570309697340071, -0.0115337593939266],
+     [0.00188029294983602, 0.00453401096950955, -0.011508452992521]
+    ]
+   ],
+   "charge": [
+    [0.7, -0.4, 1.3],
+    [-1.1, 0.6, 0.2],
+    [0.3, 0.9, -0.8]
+   ],
+   "center": [0.0, 0.0, 0.0],
+   "far_from": 0.015625
   }
  },
  "points": [
@@ -659,6 +687,13 @@
    "source": "tilted_sheet",
    "observer": [0.0073228595910484, 0.0140126202277875, 0.0131795028686947],
    "H": [-2.5469804108614343e-05, 5.216906232899334e-05, 8.15929615471312e-06]
+  },
+  {
+   "id": "sheet-on-far-from",
+   "why": "exactly at far_from (2^-6 m along x, exact in binary): the far rule, at or beyond",
+   "source": "tilted_sheet_exact",
+   "observer": [0.015625, 0.0, 0.0],
+   "H": [0.00014363449693739403, 0.00010958477641712527, -0.00017211530571280262]
   }
  ],
  "relations": [

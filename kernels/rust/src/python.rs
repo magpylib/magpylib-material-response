@@ -11,6 +11,21 @@ fn flat<'a>(a: &'a PyReadonlyArrayDyn<'_, f64>, name: &str) -> PyResult<&'a [f64
         .map_err(|_| PyValueError::new_err(format!("{name} must be C-contiguous float64")))
 }
 
+/// [`flat`], with the array's last axes checked: an (M, 3) array, not (3, M).
+fn shaped<'a>(
+    a: &'a PyReadonlyArrayDyn<'_, f64>,
+    name: &str,
+    tail: &[usize],
+) -> PyResult<&'a [f64]> {
+    if !a.as_array().shape().ends_with(tail) {
+        return Err(PyValueError::new_err(format!(
+            "{name}: its last axes must be {tail:?}, got shape {:?}",
+            a.as_array().shape()
+        )));
+    }
+    flat(a, name)
+}
+
 fn rows(out: Vec<f64>, py: Python<'_>) -> Bound<'_, PyArray2<f64>> {
     let m = out.len() / 3;
     Array2::from_shape_vec((m, 3), out).unwrap().to_pyarray(py)
@@ -28,7 +43,11 @@ fn charge_field<'py>(
     c: PyReadonlyArrayDyn<'py, f64>,
     threads: bool,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-    let (x, v, c) = (flat(&X, "X")?, flat(&V, "V")?, flat(&c, "c")?);
+    let (x, v, c) = (
+        shaped(&X, "X", &[3])?,
+        shaped(&V, "V", &[3, 3])?,
+        shaped(&c, "c", &[3])?,
+    );
     if x.len() % 3 != 0 || v.len() % 9 != 0 || c.len() * 3 != v.len() {
         return Err(PyValueError::new_err(
             "shapes: X (M, 3), V (N, 3, 3), c (N, 3)",
@@ -51,7 +70,11 @@ fn charge_field_far<'py>(
     charge: PyReadonlyArrayDyn<'py, f64>,
     threads: bool,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
-    let (x, y, q) = (flat(&X, "X")?, flat(&y, "y")?, flat(&charge, "charge")?);
+    let (x, y, q) = (
+        shaped(&X, "X", &[3])?,
+        shaped(&y, "y", &[3])?,
+        flat(&charge, "charge")?,
+    );
     if x.len() % 3 != 0 || y.len() != 3 * q.len() {
         return Err(PyValueError::new_err(
             "shapes: X (M, 3), y (6, N, 3), charge (6, N)",
@@ -81,9 +104,9 @@ fn cuboid_field<'py>(
         _ => return Err(PyValueError::new_err("field must be 'B' or 'H'")),
     };
     let (x, d, p) = (
-        flat(&X, "X")?,
-        flat(&dimension, "dimension")?,
-        flat(&polarization, "polarization")?,
+        shaped(&X, "X", &[3])?,
+        shaped(&dimension, "dimension", &[3])?,
+        shaped(&polarization, "polarization", &[3])?,
     );
     if x.len() % 3 != 0 || d.len() != x.len() || p.len() != x.len() {
         return Err(PyValueError::new_err(

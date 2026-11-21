@@ -2,14 +2,14 @@
 implementation of them is checked against (#208), by the rules of
 ``kernels/reference/SPEC.md``.
 
-Each kernel runs on NumPy and on ``array_api_strict``, which allows nothing
-beyond the array API standard; the installed magpylib's cuboid is checked as
-a port."""
+Each kernel runs on NumPy and, where it is installed, on ``array_api_strict``,
+which allows nothing beyond the array API standard; the installed magpylib's
+cuboid is checked as a port. Every point is checked alone and, per file and
+kind, all in one call, so that batches are covered too."""
 
 import json
 from pathlib import Path
 
-import array_api_strict
 import magpylib as magpy
 import numpy as np
 import pytest
@@ -17,6 +17,11 @@ from packaging.version import Version
 
 from magpylib_material_response._array_api import cuboid
 from magpylib_material_response.face_charge import _triangle as T
+
+try:
+    import array_api_strict
+except ImportError:  # a CI job without the test group: NumPy and the port only
+    array_api_strict = None
 
 REFERENCE = Path(__file__).parents[1] / "kernels" / "reference"
 FILES = {p.stem: json.loads(p.read_text()) for p in sorted(REFERENCE.glob("*.json"))}
@@ -27,9 +32,8 @@ BEFORE_1066 = {"beside-edge-1e-12"} | {
     f"near-edge-{e}-{d}" for e in "xyz" for d in ("1e-6", "1e-9", "1e-12")
 }
 OLD_MAGPYLIB = Version(magpy.__version__) <= Version("6.3.0")
-# the kinds whose parameters are shared by all observers; the others take one
-# row per observer
-SHARED = {"triangle_charge", "charge_sheet"}
+# the kinds whose implementations take one row of parameters per observer
+PER_OBSERVER = {"cuboid"}
 
 
 def _decode(a):
@@ -53,38 +57,41 @@ def _magpylib_cuboid(field, X, dimension, polarization):
     return magpy.func.cuboid_field(field, X, dimension, polarization, squeeze=False)
 
 
+def _impls(func, fields):
+    """NumPy, and array_api_strict where installed."""
+    out = {"array-api-numpy": (func, np.asarray, fields)}
+    if array_api_strict is not None:
+        out["array-api-strict"] = (func, array_api_strict.asarray, fields)
+    return out
+
+
 # per kind: the implementations, each a function, its array constructor and the
 # fields it has
 IMPLS = {
-    "cuboid": {
-        "array-api-numpy": (cuboid.cuboid_field, np.asarray, "BHJM"),
-        "array-api-strict": (cuboid.cuboid_field, array_api_strict.asarray, "BHJM"),
-        "magpylib": (_magpylib_cuboid, np.asarray, "BH"),
-    },
-    "triangle_charge": {
-        "array-api-numpy": (T.triangle_charge_field, np.asarray, "H"),
-        "array-api-strict": (T.triangle_charge_field, array_api_strict.asarray, "H"),
-    },
-    "charge_sheet": {
-        "array-api-numpy": (T.charge_sheet_field, np.asarray, "H"),
-        "array-api-strict": (T.charge_sheet_field, array_api_strict.asarray, "H"),
-    },
+    "cuboid": _impls(cuboid.cuboid_field, "BHJM")
+    | {"magpylib": (_magpylib_cuboid, np.asarray, "BH")},
+    "triangle_linear_charge": _impls(T.triangle_linear_charge_field, "H"),
+    "charge_sheet": _impls(T.charge_sheet_field, "H"),
 }
 PORTS = {"magpylib"}  # not in the relations: they cross kinds
 
 
-def _evaluate(doc, impl, field, source, observer):
-    """One field of one source at one observer, by one implementation."""
+def _params(src):
+    return {k: _decode(v) for k, v in src.items() if k not in ("kind", "why")}
+
+
+def _evaluate(doc, impl, field, source, observers):
+    """One field of one source at observers (M, 3), by one implementation."""
     src = doc["sources"][source]
     func, asarray, _ = IMPLS[src["kind"]][impl]
-    params = {k: _decode(v) for k, v in src.items() if k not in ("kind", "why")}
-    if src["kind"] not in SHARED:
-        params = {k: v[None] for k, v in params.items()}
-    X = asarray(_decode([observer]))
+    params = _params(src)
+    X = _decode(observers)
+    if src["kind"] in PER_OBSERVER:
+        params = {k: np.broadcast_to(v, (len(X), *v.shape)) for k, v in params.items()}
     with np.errstate(all="ignore"):
-        return np.asarray(func(field, X, **{k: asarray(v) for k, v in params.items()}))[
-            0
-        ]
+        return np.asarray(
+            func(field, asarray(X), **{k: asarray(v) for k, v in params.items()})
+        )
 
 
 def _cases():
@@ -95,25 +102,76 @@ def _cases():
                 yield pytest.param(name, point, impl, id=f"{name}-{point['id']}-{impl}")
 
 
+def _skipped(impl, point):
+    return impl in PORTS and OLD_MAGPYLIB and point["id"] in BEFORE_1066
+
+
 @pytest.mark.parametrize(("name", "point", "impl"), list(_cases()))
 def test_point(name, point, impl):
     doc = FILES[name]
     kind = doc["sources"][point["source"]]["kind"]
-    if impl in PORTS and OLD_MAGPYLIB and point["id"] in BEFORE_1066:
+    if _skipped(impl, point):
         pytest.skip("magpylib <= 6.3.0 lacks the stable edge logarithms (#1066)")
-    for field in (f for f in FIELDS if f in point and f in IMPLS[kind][impl][2]):
-        got = _evaluate(doc, impl, field, point["source"], point["observer"])
+    fields = [f for f in FIELDS if f in point and f in IMPLS[kind][impl][2]]
+    assert fields, f"{point['id']}: no field to check"
+    for field in fields:
+        got = _evaluate(doc, impl, field, point["source"], [point["observer"]])
         atol = [point.get(f"atol_{field}", 0.0)]
         _within(got, _decode([point[field]]), doc["rtol"], atol, point["why"])
+
+
+def _batches():
+    """Per file, kind and implementation: all that kind's points at once."""
+    for name, doc in FILES.items():
+        kinds = {doc["sources"][p["source"]]["kind"] for p in doc["points"]}
+        for kind in sorted(kinds):
+            for impl in IMPLS[kind]:
+                yield pytest.param(name, kind, impl, id=f"{name}-{kind}-{impl}")
+
+
+@pytest.mark.parametrize(("name", "kind", "impl"), list(_batches()))
+def test_batch(name, kind, impl):
+    """One call per field: the cuboid's points with one row of parameters each
+    (their sources mixed), a shared-parameter kind's points per source."""
+    doc = FILES[name]
+    points = [
+        p
+        for p in doc["points"]
+        if doc["sources"][p["source"]]["kind"] == kind and not _skipped(impl, p)
+    ]
+    groups = (
+        [points]
+        if kind in PER_OBSERVER
+        else [[p for p in points if p["source"] == s] for s in doc["sources"]]
+    )
+    func, asarray, fields = IMPLS[kind][impl]
+    for group in filter(None, groups):
+        X = _decode([p["observer"] for p in group])
+        if kind in PER_OBSERVER:
+            rows = [_params(doc["sources"][p["source"]]) for p in group]
+            params = {k: np.stack([r[k] for r in rows]) for k in rows[0]}
+        else:
+            params = _params(doc["sources"][group[0]["source"]])
+        for field in fields:
+            with np.errstate(all="ignore"):
+                got = np.asarray(
+                    func(
+                        field, asarray(X), **{k: asarray(v) for k, v in params.items()}
+                    )
+                )
+            expected = _decode([p[field] for p in group])
+            atol = [p.get(f"atol_{field}", 0.0) for p in group]
+            _within(got, expected, doc["rtol"], atol, f"{kind} {field} batch")
 
 
 def _relations():
     for name, doc in FILES.items():
         for relation in doc.get("relations", []):
             for impl in ("array-api-numpy", "array-api-strict"):
-                yield pytest.param(
-                    name, relation, impl, id=f"{name}-{relation['id']}-{impl}"
-                )
+                if impl in IMPLS["cuboid"]:
+                    yield pytest.param(
+                        name, relation, impl, id=f"{name}-{relation['id']}-{impl}"
+                    )
 
 
 @pytest.mark.parametrize(("name", "relation", "impl"), list(_relations()))
@@ -122,7 +180,7 @@ def test_relation(name, relation, impl):
     total = 0
     for t in relation["terms"]:
         w = np.asarray(t["weight"], float)
-        f = _evaluate(doc, impl, t["field"], t["source"], t["observer"])
+        f = _evaluate(doc, impl, t["field"], t["source"], [t["observer"]])[0]
         total = total + (w @ f if w.ndim else w * f)
     atol = [relation["atol"]]
     _within(total, _decode(relation["target"]), doc["rtol"], atol, relation["why"])

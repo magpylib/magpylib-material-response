@@ -138,9 +138,10 @@ band-dependent points can state it.
 
 ## Face charge in the new design (2026-11-21, uncommitted)
 
-- Kinds `triangle_charge` (closed form) and `charge_sheet` (far rule from
+- Kinds `triangle_linear_charge` (closed form; renamed from `triangle_charge`,
+  magpylib's name for a uniform charge) and `charge_sheet` (far rule from
   `far_from` out; 0 = everywhere), field `H` in A/m, array API entry points
-  `triangle_charge_field` and `charge_sheet_field` at the end of
+  `triangle_linear_charge_field` and `charge_sheet_field` at the end of
   `face_charge/_triangle.py`. A file may mix kinds: its relations tie them.
 - `face_charge.json`: 14 sources, 46 points, 8 relations. Held back (ids
   reserved in SPEC.md): points in or within 1e-9 sides of a triangle's plane
@@ -177,6 +178,22 @@ in-plane points through), refuses near-collinear triangles and observers on the
   relations now checked in the browser build); Rust and Node name the relations
   they skip; the Rust thread pass runs only with `--features parallel` and says
   so.
+
+Foundation review (3 reviewers, 2026-11-21: design via SPEC alone, 65 Rust
+mutants, branch vs main), all fixed: NumPy floor 2.1 (`unstack`; the solver
+broke on 2.0.x, CI's lowest pins); the test runs without `array_api_strict` (CI
+jobs without the test group); lint; negative dimensions held back (magpylib
+flips B: undecided); kind renamed `triangle_linear_charge`; SPEC says J, M come
+from the inside rule; `fill.py` rejects unknown keys, sources, kinds and fields,
+and decides the `far_from` sphere exactly (rounding vs exact side) with a new
+binary-exact point `sheet-on-far-from`; `b-h-j-inside` is now B - mu0 H = J
+(law's value as target, B and H only), `m-j-inside` dropped; every checker runs
+batches (cuboid rows mixing sources, tiled past 2 x 64) and fails if nothing was
+checked (Rust and Node: 1,744 checks); `quiet()` restores main's warning flags
+per function; the Python cuboid matches magpylib's zero-size product and warns
+nowhere at 1e200; the Python binding checks shapes; FFI documents that `out`
+must not alias. The two port bugs that survived (chunk index, per-row cuboid
+parameters) are now caught by batches.
 
 Open:
 

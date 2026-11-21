@@ -71,12 +71,14 @@ A file holds only behaviour that is clear and agreed: values the mathematics
 defines, at points where no convention under discussion changes them. Points on
 a face, an edge or a corner (within today's 1e-15 h, or within the band proposed
 in #1081, 100 eps max(size, |p|)), on a zero-thickness cuboid, in a charged
-triangle's plane or within the same band of it, on a triangle without area (corners in a
-line to within 100 eps of the product of two sides), within 1e-12 of `far_from`
-from a sheet's center (where rounding picks the branch), or at a non-finite
-observer wait for the surface rules (magpylib #1073; proposal #1081)
-and are added once those are decided. Their ids are reserved: listed per kind
-below, to be used with the same meaning.
+triangle's plane or within the same band of it, on a triangle without area
+(corners in a line to within 100 eps of the product of two sides), where a
+sheet's double and exact distance to its center fall on different sides of
+`far_from` (rounding picks the branch), of a cuboid with a negative dimension
+(magpylib's formula then flips B), or at a non-finite observer wait for the
+surface rules (magpylib #1073; proposal #1081) and are added once those are
+decided. Their ids are reserved: listed per kind below, to be used with the same
+meaning.
 
 ## Where the values come from
 
@@ -89,7 +91,9 @@ point:
   `mp_namespace.py`, rounded to the nearest double. A point without a finite
   value there is refused: it is out of scope.
 - `atol_<field>` = 16 times numpy's own error, rounded up to a power of ten,
-  where that exceeds `rtol |expected|`.
+  where that exceeds `rtol |expected|`. The tolerances are thus set by NumPy's
+  rounding: a port must be about as accurate as the NumPy implementation, and a
+  more accurate one is not held to more.
 
 NumPy never sets a value. Where it is off by more than 1e-6 relative, `fill.py`
 prints the point and writes no `atol`, and the checkers fail on it.
@@ -97,23 +101,24 @@ prints the point and writes no `atol`, and the checkers fail on it.
 A relation that holds at 50 digits (to 1e-30 of its terms' sizes) is an exact
 law: its `atol` is 16 times numpy's residual, at least `rtol` times the sum of
 its terms' sizes. Any other is an approximate law, and its `atol`, written in
-the file by hand so that it is declared, must be the law's own 50-digit
-residual plus 16 times numpy's difference from the 50-digit value. Both are
-rounded up to a power of ten; `fill.py` writes the first, checks both, and
-refuses a non-finite residual or numpy off by more than 1e-6 of the terms'
-size.
+the file by hand so that it is declared, must be the law's own 50-digit residual
+plus 16 times numpy's difference from the 50-digit value. Both are rounded up to
+a power of ten; `fill.py` writes the first, checks both, and refuses a
+non-finite residual or numpy off by more than 1e-6 of the terms' size.
 
 **Adding a case**: append a point with only `id`, `why`, `source` and `observer`
 (or a relation with its terms and target; `atol` too if the law is approximate),
-then run `python kernels/reference/fill.py kernels/reference/<family>.json`, which
-refuses an entry without `why`. `--redo` recomputes the points' values when the
-implementation changes.
+then run `python kernels/reference/fill.py kernels/reference/<family>.json`,
+which refuses an entry without `why`. `--redo` recomputes the points' values
+when the implementation changes.
 
 ## cuboid
 
 `magpylib.func.cuboid_field`, in the cuboid's frame (centered, sides along the
-axes). Parameters: `dimension` (3, m), `polarization` (J, 3, T). Fields `B`,
-`H`, `J`, `M`; mu_0 = 1.25663706127e-6 (CODATA 2022, as magpylib).
+axes). Parameters: `dimension` (3, m, none negative), `polarization` (J, 3, T).
+Fields `B` and `H` (as `magpylib.func.cuboid_field`), `J` and `M` (by the inside
+rule below; magpylib has them only internally); mu_0 = 1.25663706127e-6 (CODATA
+2022, as magpylib).
 
 - **inside**: `J = polarization` inside, 0 outside; `M = J / mu_0`;
   `H = (B - J) / mu_0`.
@@ -130,7 +135,8 @@ and `beside-edge-1e-12` (magpylib's #1066 tests), and the relations
 `edge-z`, `corner-ppp`, `corner-mmm`, `zero-dimension` (on the zero-thickness
 plate: B tends to J inside, not 0), `face-z+`, `issue-1058` (magpylib's #1058
 test: on a face today, on an edge under #1081's band), `observer-nan`,
-`observer-inf`.
+`observer-inf`, `negative-inside`, `negative-outside`, `table-negative` (a
+negative dimension).
 
 A magpylib checker skips `beside-edge-1e-12` and `near-edge-*` for magpylib <=
 6.3.0, which gives NaN or is off there (fixed by #1066); that list is in the
@@ -141,34 +147,33 @@ values are exact), `test_Cuboid_basics` (the pose). Waiting for other kinds: the
 cuboid against charged triangles, tetrahedra, polylines, triangle strips,
 dipoles and triangle meshes.
 
-## triangle_charge
+## triangle_linear_charge
 
-Charge on triangles, summed: MR's face-charge kernel
+A linear charge density on triangles, summed: MR's face-charge kernel. Not
+magpylib's `triangle_charge`, a uniform charge with fields B and H
 (`face_charge/_triangle.py`, `charge_field`). Parameters: `vertices` (N, 3, 3,
 m), `charge` (N, 3, A/m): per triangle the coefficients `c0, c1, c2` of the
 density `c0 + (c1 (u - u_c) + c2 (v - v_c)) / s`. For corners `a, b, c` (in that
 order): `n = (b - a) x (c - a) / |(b - a) x (c - a)|`, `e1 = (b - a) / |b - a|`,
 `e2 = n x e1`; `u`, `v` are the coordinates along `e1`, `e2`, `u_c`, `v_c` the
 centroid's, and `s = sqrt(area)`. The corners' order thus fixes the sign of
-`e2`, and with it of `c2`'s term. Positive charge fields away from itself.
-Field `H` in A/m. The parameters are shared by all observers, unlike the
-cuboid's per-observer rows. In the `why`s a side is `s`, the triangle's
-`sqrt(area)`.
+`e2`, and with it of `c2`'s term. Positive charge fields away from itself. Field
+`H` in A/m. In the `why`s a side is `s`, the triangle's `sqrt(area)`.
 
 ## charge_sheet
 
-`triangle_charge`, with the far rule: at or beyond `far_from` (m) from `center`
-(m), `H` is that of six point charges per triangle, at the barycentric points
-and weights of Dunavant's degree-4 rule, each carrying the density there times
-its weight times the area; closer, the closed form. The points are the three
-permutations of `(A, B, B)` and of `(C, D, D)`, with `A = 0.816847572980459`,
-`B = 0.091576213509771`, `C = 0.108103018168070`, `D = 0.445948490915965`;
-their weights `0.109951743655322` and `0.223381589678011`, each divided by the
-sum of all six in double precision (`_triangle.py`: `_FAR_POINTS`,
-`_FAR_WEIGHTS`). `far_from` 0 is the far rule everywhere. Parameters: those of
-`triangle_charge`, `center`, `far_from`. The solver's `center` (the mean of the
-centroids) and `far_from` (the reach plus a number of sides) are parameters
-here, not derived.
+`triangle_linear_charge`, with the far rule: at or beyond `far_from` (m) from
+`center` (m), `H` is that of six point charges per triangle, at the barycentric
+points and weights of Dunavant's degree-4 rule, each carrying the density there
+times its weight times the area; closer, the closed form. The points are the
+three permutations of `(A, B, B)` and of `(C, D, D)`, with
+`A = 0.816847572980459`, `B = 0.091576213509771`, `C = 0.108103018168070`,
+`D = 0.445948490915965`; their weights `0.109951743655322` and
+`0.223381589678011`, each divided by the sum of all six in double precision.
+`far_from` 0 is the far rule everywhere. Parameters: those of
+`triangle_linear_charge`, `center`, `far_from`. The solver's `center` (the mean
+of the centroids) and `far_from` (the reach plus a number of sides) are
+parameters here, not derived.
 
 Sources: `tilted` three triangles, 1 mm across, acute, obtuse and right-angled,
 at generic orientations off the origin, each with a charge of every coefficient
@@ -177,26 +182,29 @@ nonzero; `plain` one in the plane z = 0; `sliver` 1e6 times longer than wide;
 tilted triangle at 1 nm and 1 km (the field of a charge density does not depend
 on the length unit); `uncharged` no charge; `box_surface` a cuboid's 12 surface
 triangles; `tri0`, `tri0_split` one triangle and its four midpoint parts;
-`tilted_cycled`, `tilted_far`, `tilted_sheet` tilted turned, as a sheet by the
-far rule everywhere, and as a sheet switching at 20 mm.
+`tilted_cycled`, `tilted_far`, `tilted_sheet`, `tilted_sheet_exact` tilted
+turned, as a sheet by the far rule everywhere, as a sheet switching at 20 mm,
+and as a sheet centered on the origin switching at 2^-6 m, where a point at
+exactly `far_from` (an exact binary distance) tells "at or beyond" from
+"beyond".
 
 **Reserved, waiting for #1073**: points in a triangle's plane (the production
 code lifts them 1e-12 sides off it, a convention: `plane-*`, `near-edge-*`,
 `near-corner-*`, `plain-200-sides-x`); `zero-area-*`; `observer-nan`,
 `observer-inf`, `observer-1e200`, `observer-1e-300`.
 
-**Band-sensitive** (in the file, regular today and under #1081's band of
-100 eps max(size, |p|), about 2e-17 m for `plain`; a wider band would make them
-sheet points): `off-plane-*`, 1e-3 to 1e-12 sides off the plane.
+**Band-sensitive** (in the file, regular today and under #1081's band of 100 eps
+max(size, |p|), about 2e-17 m for `plain`; a wider band would make them sheet
+points): `off-plane-*`, 1e-3 to 1e-12 sides off the plane.
 
 **Relations**: `box-vs-charge-*` a cuboid's H is the field of its surface charge
 `J.n / mu_0` (approximate: `c0` is rounded to a double; two points outside and
 one inside); `far-rule-vs-closed-*` the far rule against the closed form 70 and
-200 sides away (approximate: the rule's own error); `split-triangle-*` (approximate: the parts'
-coefficients are rounded doubles) a
-triangle's H is the sum of its four midpoint parts' with the same linear density
-in each part's frame (the linear terms); `cycle-axes` a cyclic permutation of
-the axes turns H the same way (the frames follow the triangle).
+200 sides away (approximate: the rule's own error); `split-triangle-*`
+(approximate: the parts' coefficients are rounded doubles) a triangle's H is the
+sum of its four midpoint parts' with the same linear density in each part's
+frame (the linear terms); `cycle-axes` a cyclic permutation of the axes turns H
+the same way (the frames follow the triangle).
 
 Not in these files: the solved plate of studio (664 triangles) is in
 `kernels/rust/www/plate.json`, a timing input without expected values; the far

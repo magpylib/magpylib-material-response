@@ -15,6 +15,7 @@ numpy's residual; an approximate law carries its ``atol`` in the file, and
 """
 
 import argparse
+import inspect
 import json
 import math
 import re
@@ -39,9 +40,12 @@ EPS = np.finfo(float).eps
 def cuboid_scope(x, p):
     """Why an observer is out of scope for a cuboid, or None: on a face, edge
     or corner (within today's 1e-15 h, or magpylib #1081's 100 eps max(size,
-    |p|), of it), on a zero-thickness cuboid, or not finite."""
+    |p|), of it), on a zero-thickness cuboid, of a cuboid with a negative
+    dimension (magpylib's formula then flips B), or not finite."""
     if not np.isfinite(x).all():
         return "a non-finite observer"
+    if (p["dimension"] < 0).any():
+        return "a negative dimension"
     h = np.abs(p["dimension"]) / 2
     band = np.maximum(1e-15 * h, 100 * EPS * max(2 * h.max(), np.linalg.norm(x)))
     dist = np.abs(x) - h  # to each axis's pair of faces
@@ -66,25 +70,38 @@ def triangles_scope(x, p):
     X = [mp.mpf(float(v)) for v in x]
     for tri in p["vertices"]:
         a, b, c = ([mp.mpf(float(v)) for v in corner] for corner in tri)
-        ab, ac = [q - o for q, o in zip(b, a, strict=True)], [q - o for q, o in zip(c, a, strict=True)]
-        n = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]]
+        ab, ac = (
+            [q - o for q, o in zip(b, a, strict=True)],
+            [q - o for q, o in zip(c, a, strict=True)],
+        )
+        n = [
+            ab[1] * ac[2] - ab[2] * ac[1],
+            ab[2] * ac[0] - ab[0] * ac[2],
+            ab[0] * ac[1] - ab[1] * ac[0],
+        ]
         sides = [norm(ab), norm(ac), norm([q - o for q, o in zip(c, b, strict=True)])]
         if norm(n) <= 100 * EPS * sides[0] * sides[1]:
             return "a triangle without area"
-        w = abs(mp.fsum((xi - ai) * ni for xi, ai, ni in zip(X, a, n, strict=True))) / norm(n)
-        if w <= 100 * EPS * max(max(sides), norm(X)):
+        w = abs(
+            mp.fsum((xi - ai) * ni for xi, ai, ni in zip(X, a, n, strict=True))
+        ) / norm(n)
+        if w <= 100 * EPS * max(*sides, norm(X)):
             return "in or by a triangle's plane"
     return None
 
 
 def sheet_scope(x, p):
-    """:func:`triangles_scope`, and an observer within 1e-12 of ``far_from``
-    from the center, where rounding could choose the other branch."""
+    """:func:`triangles_scope`, and an observer whose side of ``far_from``
+    differs between the double and the exact distance from the center: there
+    rounding picks the branch."""
     if reason := triangles_scope(x, p):
         return reason
-    r = norm([mp.mpf(float(a)) - float(b) for a, b in zip(x, p["center"], strict=True)])
-    if abs(r - float(p["far_from"])) <= 1e-12 * float(p["far_from"]):
-        return "on the far_from sphere"
+    exact = norm(
+        [mp.mpf(float(a)) - float(b) for a, b in zip(x, p["center"], strict=True)]
+    )
+    rounded = T.beyond_far_from(x[None], p["center"], p["far_from"])[0]
+    if bool(rounded) != bool(exact >= float(p["far_from"])):
+        return "rounding picks the branch at far_from"
     return None
 
 
@@ -101,7 +118,9 @@ class Kind(NamedTuple):
 
 KINDS = {
     "cuboid": Kind(cuboid_field, "BHJM", True, cuboid_scope),
-    "triangle_charge": Kind(T.triangle_charge_field, "H", False, triangles_scope),
+    "triangle_linear_charge": Kind(
+        T.triangle_linear_charge_field, "H", False, triangles_scope
+    ),
     "charge_sheet": Kind(T.charge_sheet_field, "H", False, sheet_scope),
 }
 
@@ -258,6 +277,50 @@ def dump(obj, depth=0):
     return json.dumps(obj)
 
 
+def check_keys(doc):
+    """Every key known: a source's kind and its function's parameters, a
+    point's fields of its kind and their atols, a relation's and a term's keys;
+    every source and field named exists."""
+    bad = []
+    for name, src in doc["sources"].items():
+        kind = KINDS.get(src.get("kind"))
+        if kind is None:
+            bad.append(f"source {name}: kind {src.get('kind')!r}")
+            continue
+        allowed = {"kind", "why", *inspect.signature(kind.func).parameters} - {
+            "field",
+            "observers",
+        }
+        bad += [f"source {name}: {k}" for k in sorted(set(src) - allowed)]
+    for p in doc["points"]:
+        if p.get("source") not in doc["sources"]:
+            bad.append(f"{p.get('id')}: source {p.get('source')!r}")
+            continue
+        fields = KINDS[doc["sources"][p["source"]]["kind"]].fields
+        allowed = {
+            "id",
+            "why",
+            "source",
+            "observer",
+            *fields,
+            *(f"atol_{f}" for f in fields),
+        }
+        bad += [f"{p['id']}: {k}" for k in sorted(set(p) - allowed)]
+    for r in doc.get("relations", []):
+        bad += [
+            f"{r.get('id')}: {k}"
+            for k in sorted(set(r) - {"id", "why", "terms", "target", "atol"})
+        ]
+        for t in r["terms"]:
+            if set(t) != {"source", "field", "observer", "weight"}:
+                bad.append(f"{r['id']}: term keys {sorted(t)}")
+            elif t["source"] not in doc["sources"]:
+                bad.append(f"{r['id']}: source {t['source']!r}")
+            elif t["field"] not in KINDS[doc["sources"][t["source"]]["kind"]].fields:
+                bad.append(f"{r['id']}: field {t['field']!r}")
+    assert not bad, f"unknown keys, kinds, sources or fields: {bad}"
+
+
 def check_names(doc):
     """Unique slug ids, never renamed once committed; a one-line ``why`` on
     every source, point and relation."""
@@ -282,14 +345,18 @@ def main():
     cli.add_argument("--redo", action="store_true", help="recompute existing values")
     args = cli.parse_args()
     doc = json.loads(args.file.read_text())
+    check_keys(doc)
     check_names(doc)
-    disagree = []
-    for p in doc["points"]:
-        if off := fill_point(doc, p, args.redo):
-            disagree.append(f"{p['id']} {''.join(off)}")
-    for r in doc.get("relations", []):
-        if fill_relation(doc, r):
-            disagree.append(f"{r['id']} (no atol written)")
+    disagree = [
+        f"{p['id']} {''.join(off)}"
+        for p in doc["points"]
+        if (off := fill_point(doc, p, args.redo))
+    ]
+    disagree += [
+        f"{r['id']} (no atol written)"
+        for r in doc.get("relations", [])
+        if fill_relation(doc, r)
+    ]
     args.file.write_text(dump(doc) + "\n")
     print(f"{args.file.name}: {len(doc['points'])} points, "
           f"{len(doc.get('relations', []))} relations")  # fmt: skip

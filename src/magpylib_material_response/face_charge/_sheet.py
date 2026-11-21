@@ -18,8 +18,8 @@ from scipy.spatial.transform import Rotation
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
-    charge_field,
     beyond_far_from,
+    charge_field,
     charge_field_far,
     far_points,
     frames,

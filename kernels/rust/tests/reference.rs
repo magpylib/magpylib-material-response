@@ -60,18 +60,24 @@ fn within(got: &[f64], expected: &[f64], rtol: f64, atol: f64) -> Result<f64, St
     }
 }
 
-/// One field at one observer of one source, or None for a field this crate
-/// lacks.
-fn field(name: &str, src: &Value, x: [f64; 3], threads: bool) -> Option<Vec<f64>> {
-    let mut out = vec![0.0; 3];
+/// One field at observers `x` (M, 3), the sources one per row for a cuboid
+/// and one for all rows otherwise, or None for a field this crate lacks.
+fn field(name: &str, srcs: &[&Value], x: &[f64], threads: bool) -> Option<Vec<f64>> {
+    let mut out = vec![0.0; x.len()];
+    let src = srcs[0];
     match (src["kind"].as_str().unwrap(), name) {
         ("cuboid", "B" | "H") => {
-            let (d, p) = (floats(&src["dimension"]), floats(&src["polarization"]));
-            k::cuboid_field(name.as_bytes()[0], &x, &d, &p, &mut out, threads);
+            let rows = |key: &str| -> Vec<f64> {
+                (0..x.len() / 3)
+                    .flat_map(|i| floats(&srcs[i % srcs.len()][key]))
+                    .collect()
+            };
+            let (d, p) = (rows("dimension"), rows("polarization"));
+            k::cuboid_field(name.as_bytes()[0], x, &d, &p, &mut out, threads);
         }
-        ("triangle_charge", "H") => {
+        ("triangle_linear_charge", "H") => {
             k::charge_field(
-                &x,
+                x,
                 &floats(&src["vertices"]),
                 &floats(&src["charge"]),
                 &mut out,
@@ -81,14 +87,13 @@ fn field(name: &str, src: &Value, x: [f64; 3], threads: bool) -> Option<Vec<f64>
                 .for_each(|v| *v /= 4.0 * std::f64::consts::PI);
         }
         ("charge_sheet", "H") => {
-            let far_from = floats(&src["far_from"])[0];
             let sheet = k::triangle::Sheet::new(
                 &floats(&src["vertices"]),
                 &floats(&src["charge"]),
                 v3(&src["center"]),
-                far_from,
+                floats(&src["far_from"])[0],
             );
-            k::sheet_h(&sheet, &x, &mut out, threads);
+            k::sheet_h(&sheet, x, &mut out, threads);
         }
         _ => return None,
     }
@@ -101,6 +106,8 @@ const PASSES: &[bool] = if cfg!(feature = "parallel") {
 } else {
     &[false]
 };
+/// Rows in a batch check: past two of the crate's chunks of 64 observers.
+const BATCH: usize = 130;
 
 #[test]
 fn reference_points() {
@@ -114,32 +121,76 @@ fn reference_points() {
     assert!(!files.is_empty(), "no reference files in {dir}");
     let (mut failures, mut skipped) = (Vec::new(), std::collections::BTreeSet::new());
     let mut skipped_relations = std::collections::BTreeSet::new();
+    let mut checked = 0usize;
     for path in files {
         let doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         let file = path.file_name().unwrap().to_string_lossy().into_owned();
+        let family = file.trim_end_matches(".json").to_string();
         let rtol = doc["rtol"].as_f64().unwrap();
         let mut worst = (0.0f64, String::new());
-        for p in doc["points"].as_array().unwrap() {
+        let points = doc["points"].as_array().unwrap();
+        let source = |p: &Value| &doc["sources"][p["source"].as_str().unwrap()];
+        let atol = |p: &Value, name: &str| {
+            p.get(format!("atol_{name}"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0)
+        };
+        for p in points {
             let id = p["id"].as_str().unwrap();
-            let src = &doc["sources"][p["source"].as_str().unwrap()];
-            let x = v3(&p["observer"]);
+            let src = source(p);
             for name in ["B", "H", "J", "M"]
                 .into_iter()
                 .filter(|n| p.get(*n).is_some())
             {
-                let atol = p
-                    .get(format!("atol_{name}"))
-                    .and_then(Value::as_f64)
-                    .unwrap_or(0.0);
                 for &threads in PASSES {
-                    let Some(got) = field(name, src, x, threads) else {
+                    let Some(got) = field(name, &[src], &v3(&p["observer"]), threads) else {
                         skipped.insert(format!("{} {name}", src["kind"].as_str().unwrap()));
                         break;
                     };
-                    match within(&got, &floats(&p[name]), rtol, atol) {
+                    checked += 1;
+                    match within(&got, &floats(&p[name]), rtol, atol(p, name)) {
                         Ok(r) if r > worst.0 => worst = (r, format!("{id} {name}")),
                         Ok(_) => {}
                         Err(msg) => failures.push(format!("{id} {name} ({}): {msg}", p["why"])),
+                    }
+                }
+            }
+        }
+        // batches: a cuboid's points in one call, their sources mixed row by
+        // row; another kind's points per source; tiled past two chunks
+        let mut groups: Vec<Vec<&Value>> = Vec::new();
+        for p in points {
+            let kind = source(p)["kind"].as_str().unwrap();
+            let same = |q: &Value| {
+                let qk = source(q)["kind"].as_str().unwrap();
+                qk == kind && (kind == "cuboid" || q["source"] == p["source"])
+            };
+            if !groups.iter().any(|g| same(g[0])) {
+                groups.push(points.iter().filter(|q| same(q)).collect());
+            }
+        }
+        for group in &groups {
+            let rows: Vec<&Value> = group
+                .iter()
+                .cycle()
+                .take(BATCH.max(group.len()))
+                .copied()
+                .collect();
+            let x: Vec<f64> = rows.iter().flat_map(|p| v3(&p["observer"])).collect();
+            let srcs: Vec<&Value> = rows.iter().map(|p| source(p)).collect();
+            for name in ["B", "H", "J", "M"] {
+                if rows.iter().any(|p| p.get(name).is_none()) {
+                    continue;
+                }
+                for &threads in PASSES {
+                    let Some(got) = field(name, &srcs, &x, threads) else {
+                        break;
+                    };
+                    for (p, g) in rows.iter().zip(got.chunks(3)) {
+                        checked += 1;
+                        if let Err(msg) = within(g, &floats(&p[name]), rtol, atol(p, name)) {
+                            failures.push(format!("{} {name} in a batch: {msg}", p["id"]));
+                        }
                     }
                 }
             }
@@ -152,10 +203,9 @@ fn reference_points() {
                 for t in r["terms"].as_array().unwrap() {
                     let name = t["field"].as_str().unwrap();
                     let src = &doc["sources"][t["source"].as_str().unwrap()];
-                    let Some(f) = field(name, src, v3(&t["observer"]), threads) else {
+                    let Some(f) = field(name, &[src], &v3(&t["observer"]), threads) else {
                         skipped.insert(format!("{} {name}", src["kind"].as_str().unwrap()));
-                        skipped_relations
-                            .insert(format!("{}/{id}", file.trim_end_matches(".json")));
+                        skipped_relations.insert(format!("{family}/{id}"));
                         total.clear();
                         break;
                     };
@@ -176,8 +226,13 @@ fn reference_points() {
                 if total.is_empty() {
                     break;
                 }
-                let atol = r["atol"].as_f64().unwrap();
-                match within(&total, &floats(&r["target"]), rtol, atol) {
+                checked += 1;
+                match within(
+                    &total,
+                    &floats(&r["target"]),
+                    rtol,
+                    r["atol"].as_f64().unwrap(),
+                ) {
                     Ok(x) if x > worst.0 => worst = (x, id.to_string()),
                     Ok(_) => {}
                     Err(msg) => failures.push(format!("{id} ({}): {msg}", r["why"])),
@@ -204,6 +259,8 @@ fn reference_points() {
             skipped.into_iter().collect::<Vec<_>>().join(", ")
         );
     }
+    println!("{checked} checks");
+    assert!(checked > 0, "nothing was checked");
     assert!(
         failures.is_empty(),
         "{} off:\n{}",

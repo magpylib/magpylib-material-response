@@ -28,20 +28,38 @@ const num = (v) =>
   v === "nan" ? NaN : v === "inf" ? Infinity : v === "-inf" ? -Infinity : v;
 const flat = (a) => Float64Array.from([a].flat(Infinity), num);
 
-// the fields this build has, by source kind; any other is skipped and reported
+// one cuboid's parameter per observer row, the sources cycled over the rows
+const perRow = (srcs, x, key) =>
+  flat(
+    Array.from({ length: x.length / 3 }, (_, i) => srcs[i % srcs.length][key]),
+  );
+
+// the fields this build has, by source kind, at observers x (M, 3): a cuboid
+// takes one source per row, another kind one source for all; any other field
+// is skipped and reported
 const fields = {
   cuboid: {
-    B: (s, x) => cuboid_b(x, flat(s.dimension), flat(s.polarization)),
-    H: (s, x) => cuboid_h(x, flat(s.dimension), flat(s.polarization)),
+    B: (srcs, x) =>
+      cuboid_b(
+        x,
+        perRow(srcs, x, "dimension"),
+        perRow(srcs, x, "polarization"),
+      ),
+    H: (srcs, x) =>
+      cuboid_h(
+        x,
+        perRow(srcs, x, "dimension"),
+        perRow(srcs, x, "polarization"),
+      ),
   },
-  triangle_charge: {
-    H: (s, x) =>
+  triangle_linear_charge: {
+    H: ([s], x) =>
       charge_field(x, flat(s.vertices), flat(s.charge)).map(
         (v) => v / (4 * Math.PI),
       ),
   },
   charge_sheet: {
-    H: (s, x) => {
+    H: ([s], x) => {
       const sheet = new Sheet(
         flat(s.vertices),
         flat(s.charge),
@@ -64,7 +82,9 @@ function within(g, e, rtol, atol) {
   return err <= bound ? (err > 0 ? err / bound : 0) : -1;
 }
 
+const BATCH = 130; // rows in a batch check: past two of the crate's chunks of 64
 let failed = 0;
+let checked = 0;
 const skipped = new Set();
 const skippedRelations = [];
 for (const doc of docs) {
@@ -77,7 +97,8 @@ for (const doc of docs) {
         skipped.add(`${src.kind} ${name}`);
         continue;
       }
-      const got = kernel(src, flat(p.observer));
+      const got = kernel([src], flat(p.observer));
+      checked++;
       const r = within(got, flat(p[name]), doc.rtol, p[`atol_${name}`] ?? 0);
       if (r < 0) {
         failed++;
@@ -85,6 +106,35 @@ for (const doc of docs) {
           `${p.id} ${name} off (${p.why}): got ${got}, expected ${p[name]}`,
         );
       } else if (r > worst[0]) worst = [r, `${p.id} ${name}`];
+    }
+  }
+  // batches: a cuboid's points in one call, their sources mixed row by row;
+  // another kind's points per source; tiled past two chunks
+  const kindOf = (p) => doc.sources[p.source].kind;
+  const groups = new Map();
+  for (const p of doc.points) {
+    const key = kindOf(p) === "cuboid" ? "cuboid" : `${kindOf(p)} ${p.source}`;
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  for (const group of groups.values()) {
+    const rows = Array.from(
+      { length: Math.max(BATCH, group.length) },
+      (_, i) => group[i % group.length],
+    );
+    const x = flat(rows.map((p) => p.observer));
+    const srcs = rows.map((p) => doc.sources[p.source]);
+    for (const name of ["B", "H", "J", "M"]) {
+      const kernel = fields[kindOf(rows[0])]?.[name];
+      if (!kernel || rows.some((p) => !(name in p))) continue;
+      const got = kernel(srcs, x);
+      rows.forEach((p, i) => {
+        checked++;
+        const g = got.slice(3 * i, 3 * i + 3);
+        if (within(g, flat(p[name]), doc.rtol, p[`atol_${name}`] ?? 0) < 0) {
+          failed++;
+          console.log(`${p.id} ${name} off in a batch: got ${g}`);
+        }
+      });
     }
   }
   // relations: the sum of weight @ field over the terms, against the target
@@ -100,7 +150,7 @@ for (const doc of docs) {
         ok = false;
         break;
       }
-      const f = kernel(src, flat(t.observer));
+      const f = kernel([src], flat(t.observer));
       const w = flat(t.weight);
       const part =
         w.length === 1
@@ -112,6 +162,7 @@ for (const doc of docs) {
       total = total.map((a, i) => a + part[i]);
     }
     if (!ok) continue;
+    checked++;
     const x = within(total, flat(r.target), doc.rtol, r.atol);
     if (x < 0) {
       failed++;
@@ -122,7 +173,13 @@ for (const doc of docs) {
     `${doc.file}: worst ${worst[1]} at ${worst[0].toFixed(3)} of its tolerance`,
   );
 }
-console.log(failed ? `${failed} off` : "every point within tolerance");
+console.log(
+  failed ? `${failed} off` : `every point within tolerance, ${checked} checks`,
+);
+if (!checked) {
+  console.log("nothing was checked");
+  failed++;
+}
 if (skipped.size) console.log(`not in this build: ${[...skipped].join(", ")}`);
 if (skippedRelations.length)
   console.log(`relations skipped whole: ${skippedRelations.join(", ")}`);

@@ -35,8 +35,9 @@ dependencies = [
   # NumPy's error state is per thread from 2.0; in 1.x it races between
   # threads, and face charge, which runs on threads, warned of divisions it
   # had told NumPy to ignore. 2.0.0 gave np.unique(..., axis=0) a 2-D inverse
-  # (85 tests fail); 2.0.1 took it back
-  "numpy>=2.0.1",
+  # (85 tests fail); 2.0.1 took it back. 2.1 is the first with the array API
+  # 2023.12 functions the kernels use (unstack)
+  "numpy>=2.1",
   "scipy>=1.17.1",  # as magpylib 6.1
 ]
 

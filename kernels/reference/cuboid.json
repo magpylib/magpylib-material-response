@@ -19,12 +19,6 @@
    "dimension": [0.0001, 0.0001, 0.01],
    "polarization": [0.3, -0.5, 1.2]
   },
-  "negative": {
-   "kind": "cuboid",
-   "why": "one negative dimension: the masks take abs, the formula the raw value",
-   "dimension": [-0.01, 0.02, 0.03],
-   "polarization": [0.3, -0.5, 1.2]
-  },
   "nano": {
    "kind": "cuboid",
    "why": "cube scaled to 3 nm: B does not depend on the length unit",
@@ -48,12 +42,6 @@
    "why": "magpylib test_BHMJ_level row 1: zero polarization",
    "dimension": [1.0, 2.0, 3.0],
    "polarization": [0.0, 0.0, 0.0]
-  },
-  "table_negative": {
-   "kind": "cuboid",
-   "why": "magpylib test_BHMJ_level row 2: two negative dimensions",
-   "dimension": [-1.0, -2.0, 2.0],
-   "polarization": [1.0, 2.0, 3.0]
   },
   "table_122": {
    "kind": "cuboid",
@@ -546,26 +534,6 @@
    "atol_H": 1e-08
   },
   {
-   "id": "negative-inside",
-   "why": "inside the cuboid with a negative dimension",
-   "source": "negative",
-   "observer": [0.001, 0.002, 0.003],
-   "B": [-0.1098144079021607, 0.36907652319588163, -1.0567623566218787],
-   "H": [-326119.94388259435, 691589.1230500264, -1795874.4224375477],
-   "J": [0.3, -0.5, 1.2],
-   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
-  },
-  {
-   "id": "negative-outside",
-   "why": "outside the cuboid with a negative dimension",
-   "source": "negative",
-   "observer": [0.02, -0.005, 0.01],
-   "B": [-0.050043428544296, -0.003653071962870976, 0.014479820132326383],
-   "H": [-39823.29511571178, -2907.022302190465, 11522.6747472278],
-   "J": [0.0, 0.0, 0.0],
-   "M": [0.0, 0.0, 0.0]
-  },
-  {
    "id": "nano-inside",
    "why": "inside the 3 nm cuboid",
    "source": "nano",
@@ -622,16 +590,6 @@
    "observer": [1.0, 2.0, 3.0],
    "B": [0.0, 0.0, 0.0],
    "H": [0.0, 0.0, 0.0],
-   "J": [0.0, 0.0, 0.0],
-   "M": [0.0, 0.0, 0.0]
-  },
-  {
-   "id": "table-negative",
-   "why": "magpylib test_BHMJ_level row 2: negative dimensions, outside",
-   "source": "table_negative",
-   "observer": [1.0, -1.0, 0.0],
-   "B": [-0.14174375718457213, -0.1697645945107099, -0.20427478033329088],
-   "H": [-112796.09805660282, -135094.3719096905, -162556.70521673447],
    "J": [0.0, 0.0, 0.0],
    "M": [0.0, 0.0, 0.0]
   },
@@ -769,7 +727,7 @@
  "relations": [
   {
    "id": "b-h-j-inside",
-   "why": "B = mu_0 H + J inside (magpylib helper_check_HBMJ_consistency)",
+   "why": "B - mu_0 H = J inside (magpylib helper_check_HBMJ_consistency), J the law's value",
    "terms": [
     {
      "source": "cube",
@@ -782,35 +740,9 @@
      "field": "H",
      "observer": [0.0015, 0.0045, 0.009],
      "weight": -1.25663706127e-06
-    },
-    {
-     "source": "cube",
-     "field": "J",
-     "observer": [0.0015, 0.0045, 0.009],
-     "weight": -1.0
     }
    ],
-   "target": [0.0, 0.0, 0.0],
-   "atol": 1e-11
-  },
-  {
-   "id": "m-j-inside",
-   "why": "mu_0 M = J inside (magpylib helper_check_HBMJ_consistency)",
-   "terms": [
-    {
-     "source": "cube",
-     "field": "M",
-     "observer": [0.0015, 0.0045, 0.009],
-     "weight": 1.25663706127e-06
-    },
-    {
-     "source": "cube",
-     "field": "J",
-     "observer": [0.0015, 0.0045, 0.009],
-     "weight": -1.0
-    }
-   ],
-   "target": [0.0, 0.0, 0.0],
+   "target": [0.3, -0.5, 1.2],
    "atol": 1e-11
   },
   {

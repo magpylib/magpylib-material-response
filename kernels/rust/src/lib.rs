@@ -26,6 +26,7 @@ where
     F: Fn(usize, [f64; 3]) -> [f64; 3] + Sync,
 {
     assert_eq!(x.len(), out.len(), "observers and output differ in length");
+    assert_eq!(x.len() % 3, 0, "observers come in rows of 3");
     let run = |(ci, block): (usize, &mut [f64])| {
         for (k, o) in block.chunks_exact_mut(3).enumerate() {
             let i = ci * CHUNK + k;
