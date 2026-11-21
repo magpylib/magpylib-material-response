@@ -66,7 +66,7 @@ const fields = {
         flat(s.center),
         num(s.far_from),
       );
-      const out = sheet.h(x);
+      const out = sheet.h(x, num(s.tolerance));
       sheet.free();
       return out;
     },
@@ -193,31 +193,33 @@ const sheet = new Sheet(
   flat(plate.center),
   plate.far_from,
 );
-for (const n of [2500, 8000]) {
-  const side = Math.round(Math.cbrt(n));
-  const X = new Float64Array(3 * side ** 3);
-  let k = 0;
-  for (let i = 0; i < side; i++)
-    for (let j = 0; j < side; j++)
-      for (let l = 0; l < side; l++) {
-        X[k++] = -0.04 + (0.08 * i) / (side - 1);
-        X[k++] = -0.025 + (0.05 * j) / (side - 1);
-        X[k++] = -0.02 + (0.04 * l) / (side - 1);
-      }
-  sheet.h(X); // warm up
-  const times = [];
-  for (let r = 0; r < 10; r++) {
-    const t0 = performance.now();
-    sheet.h(X);
-    times.push(performance.now() - t0);
+for (const tolerance of [0, 1e-6, 1e-3]) {
+  for (const n of [2500, 8000]) {
+    const side = Math.round(Math.cbrt(n));
+    const X = new Float64Array(3 * side ** 3);
+    let k = 0;
+    for (let i = 0; i < side; i++)
+      for (let j = 0; j < side; j++)
+        for (let l = 0; l < side; l++) {
+          X[k++] = -0.04 + (0.08 * i) / (side - 1);
+          X[k++] = -0.025 + (0.05 * j) / (side - 1);
+          X[k++] = -0.02 + (0.04 * l) / (side - 1);
+        }
+    sheet.h(X, tolerance); // warm up
+    const times = [];
+    for (let r = 0; r < 10; r++) {
+      const t0 = performance.now();
+      sheet.h(X, tolerance);
+      times.push(performance.now() - t0);
+    }
+    times.sort((a, b) => a - b);
+    const m = X.length / 3;
+    const ns = (times[0] * 1e6) / (m * plate.vertices.length);
+    console.log(
+      `plate, tolerance ${tolerance}, ${m} points: ${times[0].toFixed(1)} ms ` +
+        `best, ${times[5].toFixed(1)} ms median (${ns.toFixed(1)} ns per pair, one thread)`,
+    );
   }
-  times.sort((a, b) => a - b);
-  const m = X.length / 3;
-  const ns = (times[0] * 1e6) / (m * plate.vertices.length);
-  console.log(
-    `plate, ${plate.vertices.length} triangles, ${m} points: ${times[0].toFixed(1)} ms ` +
-      `best, ${times[5].toFixed(1)} ms median (${ns.toFixed(0)} ns per pair, one thread)`,
-  );
 }
 sheet.free();
 if (failed) process.exit(1);

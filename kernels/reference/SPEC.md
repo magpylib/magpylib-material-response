@@ -74,11 +74,11 @@ in #1081, 100 eps max(size, |p|)), on a zero-thickness cuboid, in a charged
 triangle's plane or within the same band of it, on a triangle without area
 (corners in a line to within 100 eps of the product of two sides), where a
 sheet's double and exact distance to its center fall on different sides of
-`far_from` (rounding picks the branch), of a cuboid with a negative dimension
-(magpylib's formula then flips B), or at a non-finite observer wait for the
-surface rules (magpylib #1073; proposal #1081) and are added once those are
-decided. Their ids are reserved: listed per kind below, to be used with the same
-meaning.
+`far_from` or a pair's side of `k L` (rounding picks the branch), of a cuboid
+with a negative dimension (magpylib's formula then flips B), or at a non-finite
+observer wait for the surface rules (magpylib #1073; proposal #1081) and are
+added once those are decided. Their ids are reserved: listed per kind below, to
+be used with the same meaning.
 
 ## Where the values come from
 
@@ -170,10 +170,37 @@ three permutations of `(A, B, B)` and of `(C, D, D)`, with
 `A = 0.816847572980459`, `B = 0.091576213509771`, `C = 0.108103018168070`,
 `D = 0.445948490915965`; their weights `0.109951743655322` and
 `0.223381589678011`, each divided by the sum of all six in double precision.
-`far_from` 0 is the far rule everywhere. Parameters: those of
-`triangle_linear_charge`, `center`, `far_from`. The solver's `center` (the mean
-of the centroids) and `far_from` (the reach plus a number of sides) are
-parameters here, not derived.
+`far_from` 0 is the far rule everywhere.
+
+`tolerance` sets the per-pair rule. At 0 (exact) every pair closer than
+`far_from` takes the closed form, as MR's solver does. Above 0, a pair of
+observer `x` and triangle takes the far rule where
+`|x - centroid|^2 >= k^2 L^2`, `L` the triangle's longest edge: the centroid is
+the mean of the corners, `((a + b) + c) / 3`; each square is summed x, y, z in
+that order; `L^2` is the largest of `|b - a|^2`, `|c - b|^2`, `|a - c|^2`; and
+`k^2` is from the first row of this table whose bound the tolerance reaches
+(none below the last: exact):
+
+| bound  | k^2  | bound  | k^2 | bound   | k^2  |
+| ------ | ---- | ------ | --- | ------- | ---- |
+| 1.3e-3 | 2.25 | 5.1e-6 | 36  | 2.0e-8  | 576  |
+| 4.1e-4 | 4    | 1.6e-6 | 64  | 6.2e-9  | 1024 |
+| 8.1e-5 | 9    | 3.2e-7 | 144 | 1.3e-9  | 2304 |
+| 2.6e-5 | 16   | 1.0e-7 | 256 | 3.9e-10 | 4096 |
+
+A pair taken by the far rule is then off by at most `bound` times the field its
+charge would make all of one sign (area times the largest corner density, over
+the distance squared). The bounds are `6.5e-3 / k^4`, rounded up: twice the
+worst case an adversarial search found, a needle whose charge falls linearly
+along it, seen along its axis at `k L` (`3.3e-3 / k^4` at k = 1.5,
+`2.5e-3 / k^4` far out); measured at 50 digits, not proven. On the solved
+plate's grid the error of H relative to |H| is about 1e-5 at a tolerance of 1e-3
+and 2e-8 at 1e-6. A negative or NaN tolerance, or one below the last bound, is
+exact.
+
+Parameters: those of `triangle_linear_charge`, `center`, `far_from`,
+`tolerance`. The solver's `center` (the mean of the centroids) and `far_from`
+(the reach plus a number of sides) are parameters here, not derived.
 
 Sources: `tilted` three triangles, 1 mm across, acute, obtuse and right-angled,
 at generic orientations off the origin, each with a charge of every coefficient
@@ -186,7 +213,15 @@ triangles; `tri0`, `tri0_split` one triangle and its four midpoint parts;
 turned, as a sheet by the far rule everywhere, as a sheet switching at 20 mm,
 and as a sheet centered on the origin switching at 2^-6 m, where a point at
 exactly `far_from` (an exact binary distance) tells "at or beyond" from
-"beyond".
+"beyond". `box_sheet_1e-3`, `box_sheet_1e-6` the cuboid's surface charge as
+sheets at those tolerances, with points where some of the 12 pairs take the far
+rule and some the closed form; `box_sheet_switch` the same sheet switching whole
+at 5 cm, closer than its pairs would; `pair_row_<k^2>` one triangle in exact
+binary coordinates per row of the table, at that row's bound, with a point
+exactly at `k L` from its centroid (the far rule) and, up to k^2 = 1024, one
+just inside (the closed form). Farther out the closed form is only as accurate
+as NumPy there, which cannot tell the far rule's own error apart: a k^2 slightly
+too small in those two rows changes H by less than that.
 
 **Reserved, waiting for #1073**: points in a triangle's plane (the production
 code lifts them 1e-12 sides off it, a convention: `plane-*`, `near-edge-*`,

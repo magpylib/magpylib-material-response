@@ -195,6 +195,39 @@ nowhere at 1e200; the Python binding checks shapes; FFI documents that `out`
 must not alias. The two port bugs that survived (chunk index, per-row cuboid
 parameters) are now caught by batches.
 
+When #1073 is decided (the format needs no change): multi-source cases are
+relations (each term its own source, observer, weight; mixed kinds allowed), as
+`split-bar-*`. #1081's touching cells map to whole - sum of cells = 0 for B and
+H on a shared face (exact under the average rule), J relations for the 1/2, 1/4,
+1/8 shares, per-cell points with "nan" for B at edges and corners. Three things
+change then: (1) the scope checks in `fill.py` (now refusing every face, edge,
+corner and band observer, terms included); (2) the 50-digit truth on a face:
+mp_namespace has no signed zero, so `fill.py` averages the two one-sided limits
+at 50 digits (steps 1e-30 and 1e-40 of the size, inward and outward, which must
+agree; the inward half was built and verified, then removed when faces were held
+back); (3) the implementations follow the rule (for the cuboid, forcing the sign
+of the zero in `x - a` each way gives both limits exactly, verified on x faces).
+Not expressible, by design: a point rounded onto a face through a turned parent
+(#1081), which is the pose layer's.
+
+Speed, step 1 (2026-11-21, uncommitted): a `tolerance` per call (0 = exact, the
+default, bit-identical to before; studio e.g. 1e-3 while dragging). A pair takes
+the far rule from k longest edges of a triangle's centroid, k from `PAIR_RULE`:
+bounds 6.5e-3 / k^4 of the one-sign field, twice the worst case an adversarial
+review found (a needle with a linearly falling charge, seen along its axis:
+3.3e-3 / k^4; my first random sampling had claimed 3x margin over 1.3e-3,
+wrong). In `_triangle.charge_sheet_field`, the Rust `Sheet` (per-triangle
+contiguous far charges) and the wasm `Sheet.h(x, tolerance)`. Plate, 2,744
+points, wasm one thread, perf lock: 87.5 ms exact, 82.5 ms at 1e-6, 16.1 ms at
+1e-3 (5.4x); far rule alone 15.2 ms, the floor of this step. Reference: every
+sheet has `tolerance`; box sheets with mixed pairs at 1e-3 and 1e-6, one where
+`far_from` decides first, one exact-binary triangle per table row with points at
+and just inside k L (inside points dropped for k^2 2304, 4096: NumPy's own error
+there hides the far rule's). `fill.py` refuses observers where rounding picks a
+pair's rule. Planted Rust bugs: all caught (rows, row choice, >=, the
+whole-sheet switch, centroid). Not wired in `ChargeSheet._field` (studio's
+Python side). Next: treecode (decision pending), SIMD, workers in studio.
+
 Open:
 
 ## Decided earlier

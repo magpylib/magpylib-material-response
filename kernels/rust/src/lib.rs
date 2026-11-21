@@ -71,9 +71,12 @@ pub fn charge_field_far(x: &[f64], y: &[f64], charge: &[f64], out: &mut [f64], t
     each_observer(x, out, threads, |_, p| triangle::far_at(p, y, charge));
 }
 
-/// A solved sheet's H in A/m, as `ChargeSheet._field("H", x)` in its frame.
-pub fn sheet_h(sheet: &Sheet, x: &[f64], out: &mut [f64], threads: bool) {
-    each_observer(x, out, threads, |_, p| sheet.h_at(p));
+/// A solved sheet's H in A/m in its frame, as `_triangle.charge_sheet_field`:
+/// `tolerance` 0 the closed form below `far_from`, as `ChargeSheet._field`;
+/// above, the per-pair far rule (`triangle::PAIR_RULE`).
+pub fn sheet_h(sheet: &Sheet, x: &[f64], tolerance: f64, out: &mut [f64], threads: bool) {
+    let k2 = triangle::pair_k2(tolerance);
+    each_observer(x, out, threads, |_, p| sheet.h_at(p, k2));
 }
 
 /// B in T (`field` b'B') or H in A/m (b'H') of cuboids, one per observer

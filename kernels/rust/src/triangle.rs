@@ -235,12 +235,62 @@ pub struct Sheet {
     pub far_from: f64,
     pub y: Vec<f64>,
     pub charge: Vec<f64>,
+    /// per triangle: its longest edge squared, and its six far-rule points
+    /// and charges side by side (x, y, z, q), for the per-pair rule
+    pub longest2: Vec<f64>,
+    pub pair_rule: Vec<[[f64; 4]; 6]>,
+}
+
+/// `_triangle.PAIR_RULE`: (bound, k^2) rows; a tolerance takes the first row
+/// whose bound it reaches. From `k` longest edges of a triangle's centroid a
+/// pair takes the far rule, off by at most `bound` times the field its charge
+/// would make all of one sign.
+pub const PAIR_RULE: [(f64, f64); 12] = [
+    (1.3e-3, 2.25),
+    (4.1e-4, 4.0),
+    (8.1e-5, 9.0),
+    (2.6e-5, 16.0),
+    (5.1e-6, 36.0),
+    (1.6e-6, 64.0),
+    (3.2e-7, 144.0),
+    (1.0e-7, 256.0),
+    (2.0e-8, 576.0),
+    (6.2e-9, 1024.0),
+    (1.3e-9, 2304.0),
+    (3.9e-10, 4096.0),
+];
+
+/// `_triangle.pair_k2`: the squared distance in squared longest edges from
+/// which a pair takes the far rule; infinity for the closed form throughout.
+pub fn pair_k2(tolerance: f64) -> f64 {
+    PAIR_RULE
+        .iter()
+        .find(|(bound, _)| *bound <= tolerance)
+        .map_or(f64::INFINITY, |row| row.1)
 }
 
 impl Sheet {
     pub fn new(v: &[f64], c: &[f64], center: V3, far_from: f64) -> Self {
         let frames = frames(v);
         let (y, charge) = far_points(v, &frames, c);
+        let n = frames.len();
+        let longest2 = v
+            .chunks_exact(9)
+            .map(|t| {
+                let (a, b, c) = (row(t, 0), row(t, 1), row(t, 2));
+                let [e0, e1, e2] = [sub(b, a), sub(c, b), sub(a, c)]
+                    .map(|e| e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
+                e0.max(e1).max(e2)
+            })
+            .collect();
+        let pair_rule = (0..n)
+            .map(|t| {
+                std::array::from_fn(|g| {
+                    let p = &y[3 * (g * n + t)..3 * (g * n + t) + 3];
+                    [p[0], p[1], p[2], charge[g * n + t]]
+                })
+            })
+            .collect();
         Sheet {
             frames,
             c: c.to_vec(),
@@ -248,19 +298,52 @@ impl Sheet {
             far_from,
             y,
             charge,
+            longest2,
+            pair_rule,
         }
     }
 
-    /// H in A/m at one observer: the closed form below `far_from` from the
-    /// center, the far rule at or beyond.
+    /// H in A/m at one observer: the far rule at or beyond `far_from` from
+    /// the center; closer, the closed form, or with `k2` finite
+    /// (`pair_k2`) the far rule for each triangle whose centroid is at
+    /// least `k2` squared longest edges away.
     #[inline]
-    pub fn h_at(&self, x: V3) -> V3 {
+    pub fn h_at(&self, x: V3, k2: f64) -> V3 {
         let d = sub(x, self.center);
         let g = if norm(d) >= self.far_from {
             far_at(x, &self.y, &self.charge)
-        } else {
+        } else if k2.is_infinite() {
             charge_at(x, &self.frames, &self.c)
+        } else {
+            self.mixed_at(x, k2)
         };
         g.map(|k| k / (4.0 * std::f64::consts::PI))
+    }
+
+    /// The per-pair rule at one observer, the squares summed x, y, z as
+    /// `_triangle.far_pairs`.
+    #[inline]
+    fn mixed_at(&self, x: V3, k2: f64) -> V3 {
+        let mut acc = [0.0; 3];
+        for (t, f) in self.frames.iter().enumerate() {
+            let d = sub(x, f.centroid);
+            let d2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+            if d2 >= k2 * self.longest2[t] {
+                for p in &self.pair_rule[t] {
+                    let r = [x[0] - p[0], x[1] - p[1], x[2] - p[2]];
+                    let r2 = dot(r, r);
+                    let scale = p[3] / (r2 * r2.sqrt());
+                    acc[0] += scale * r[0];
+                    acc[1] += scale * r[1];
+                    acc[2] += scale * r[2];
+                }
+            } else {
+                let g = charge_pair(x, f, row(&self.c, t));
+                acc[0] += g[0];
+                acc[1] += g[1];
+                acc[2] += g[2];
+            }
+        }
+        acc
     }
 }

@@ -24,10 +24,12 @@ impl Sheet {
         )))
     }
 
-    /// H in A/m at observers `x` (M, 3), in the sheet's own frame.
-    pub fn h(&self, x: &[f64]) -> Vec<f64> {
+    /// H in A/m at observers `x` (M, 3), in the sheet's own frame;
+    /// `tolerance` 0 exact, above it the per-pair far rule (coarser and
+    /// faster as it grows: 1e-3 while dragging, 1e-6 at rest, say).
+    pub fn h(&self, x: &[f64], tolerance: f64) -> Vec<f64> {
         let mut out = vec![0.0; x.len()];
-        crate::sheet_h(&self.0, x, &mut out, false);
+        crate::sheet_h(&self.0, x, tolerance, &mut out, false);
         out
     }
 }

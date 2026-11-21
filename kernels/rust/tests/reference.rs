@@ -93,7 +93,8 @@ fn field(name: &str, srcs: &[&Value], x: &[f64], threads: bool) -> Option<Vec<f6
                 v3(&src["center"]),
                 floats(&src["far_from"])[0],
             );
-            k::sheet_h(&sheet, x, &mut out, threads);
+            let tolerance = floats(&src["tolerance"])[0];
+            k::sheet_h(&sheet, x, tolerance, &mut out, threads);
         }
         _ => return None,
     }

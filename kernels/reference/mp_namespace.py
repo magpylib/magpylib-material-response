@@ -59,6 +59,9 @@ class MPArray:
     def __getitem__(self, key):
         return MPArray(self._a[key], self.dtype)
 
+    def __float__(self):
+        return float(self._a.item())
+
     def tolist(self):
         return self._a.tolist()
 
@@ -150,6 +153,13 @@ def atan2(y, x):
         return mp.nan if mp.isnan(a) or mp.isnan(b) else mp.atan2(a, b)
 
     return MPArray(np.frompyfunc(f, 2, 1)(_raw(y), _raw(x)), FLOAT)
+
+
+def maximum(a, b):
+    def f(x, y):
+        return mp.nan if mp.isnan(x) or mp.isnan(y) else max(x, y)
+
+    return MPArray(np.frompyfunc(f, 2, 1)(_raw(a), _raw(b)), FLOAT)
 
 
 def where(cond, a, b):

@@ -102,6 +102,14 @@ def sheet_scope(x, p):
     rounded = T.beyond_far_from(x[None], p["center"], p["far_from"])[0]
     if bool(rounded) != bool(exact >= float(p["far_from"])):
         return "rounding picks the branch at far_from"
+    k2 = T.pair_k2(float(p["tolerance"]))
+    if k2 is not None and not rounded:  # the per-pair rule, pair by pair
+        V = p["vertices"]
+        doubles = T.far_pairs(x[None], V, T.frames(V), k2)[0]
+        Vm = M.from_doubles(V)
+        exact = T.far_pairs(M.from_doubles(x[None]), Vm, T.frames(Vm), k2)
+        if [bool(v) for v in doubles] != [bool(v) for v in exact.tolist()[0]]:
+            return "rounding picks a pair's rule"
     return None
 
 

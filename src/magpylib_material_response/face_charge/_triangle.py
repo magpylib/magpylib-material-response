@@ -130,7 +130,7 @@ def _edge_terms(corners, du, dv, R, w2):
         yield tu, tv, P0 * f, f, R[j] - R[i]
 
 
-def charge_field(X, V, fr, c):
+def charge_field(X, V, fr, c, keep=None):
     """``sum_n sum_k c[n, k] int phi_k (x - y) / R^3 dS`` over the triangles:
     the field, times ``4 pi``, of charge ``c0 + c1 u + c2 v`` on each, (M, 3).
 
@@ -150,6 +150,8 @@ def charge_field(X, V, fr, c):
         Their :func:`frames`.
     c : ndarray, shape (N, 3)
         Each triangle's coefficients of ``1, u, v``.
+    keep : ndarray of bool, shape (M, N), optional
+        The pairs to sum; all where None.
     """
     xp = namespace(X, V, c)
     _, n, e1, e2, s, _ = fr
@@ -173,6 +175,8 @@ def charge_field(X, V, fr, c):
     Fu = psi * E0u - (SLu + c1 * Phi) / s
     Fv = psi * E0v - (SLv + c2 * Phi) / s
     Fw = psi * xp.sign(w) * omega - w * SLw / s
+    if keep is not None:
+        Fu, Fv, Fw = (xp.where(keep, F, 0.0) for F in (Fu, Fv, Fw))
     return Fu @ e1 + Fv @ e2 + Fw @ n
 
 
@@ -239,17 +243,20 @@ def far_points(V, fr, c):
     return y, weights[:, None] * density * area
 
 
-def charge_field_far(X, y, charge):
+def charge_field_far(X, y, charge, keep=None):
     """:func:`charge_field` for observers far from the triangles, at the
     :func:`far_points` on them. Far away the closed form's terms cancel, and summed
     over triangles whose net charge is zero its error grows with distance: 14 % at
     100 times a model's size, against 1e-10 here. From 64 sides, a triangle whose
-    own charge sums to zero is 6e-8 off; beyond about 1e102 the field is 0."""
+    own charge sums to zero is 6e-8 off; beyond about 1e102 the field is 0.
+    ``keep`` (M, N), where given: the pairs of observer and triangle to sum."""
     xp = namespace(X, y, charge)
     d = [X[:, k, None, None] - y[..., k] for k in range(3)]
     with quiet(xp, "over", "invalid"):
         r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
         scale = charge / (r2 * xp.sqrt(r2))
+        if keep is not None:
+            scale = xp.where(keep[:, None, :], scale, 0.0)
         return xp.stack([xp.sum(scale * dk, axis=(1, 2)) for dk in d], axis=1)
 
 
@@ -431,15 +438,73 @@ def triangle_linear_charge_field(field, observers, vertices, charge):
     return charge_field(observers, vertices, frames(vertices), charge) / (4 * xp.pi)
 
 
-def charge_sheet_field(field, observers, vertices, charge, center, far_from):
+# The far rule for one pair of observer and triangle, by a tolerance: from k
+# longest edges of the triangle from its centroid, every pair taken by it is
+# off by at most ``bound`` times the field its charge would make all of one
+# sign (area times the largest corner density, over distance squared). The
+# bounds are 6.5e-3 / k^4, rounded up: twice the worst case an adversarial
+# search found (a needle with a linearly falling charge, seen along its axis).
+# Rows: (bound, k^2); a tolerance takes the first row it reaches, below the
+# last none (the closed form for every near pair).
+PAIR_RULE = (
+    (1.3e-3, 2.25),
+    (4.1e-4, 4.0),
+    (8.1e-5, 9.0),
+    (2.6e-5, 16.0),
+    (5.1e-6, 36.0),
+    (1.6e-6, 64.0),
+    (3.2e-7, 144.0),
+    (1.0e-7, 256.0),
+    (2.0e-8, 576.0),
+    (6.2e-9, 1024.0),
+    (1.3e-9, 2304.0),
+    (3.9e-10, 4096.0),
+)
+
+
+def pair_k2(tolerance):
+    """The squared distance, in squared longest edges, from which a pair takes
+    the far rule at ``tolerance``; None for the closed form throughout."""
+    return next((k2 for bound, k2 in PAIR_RULE if bound <= tolerance), None)
+
+
+def far_pairs(X, V, fr, k2):
+    """Which pairs of observers ``X`` (M, 3) and triangles take the far rule:
+    ``|X - centroid|^2 >= k2 L^2``, ``L`` the longest edge, every square summed
+    x, y, z in that order (M, N)."""
+    xp = namespace(X, V)
+    cen = fr[0]
+    dx, dy, dz = (X[:, k, None] - cen[None, :, k] for k in range(3))
+    d2 = dx * dx + dy * dy + dz * dz
+    a, b, c = V[:, 0, ...], V[:, 1, ...], V[:, 2, ...]
+    edges = []
+    for p, q in ((a, b), (b, c), (c, a)):
+        e = q - p
+        edges.append(e[:, 0] * e[:, 0] + e[:, 1] * e[:, 1] + e[:, 2] * e[:, 2])
+    longest2 = xp.maximum(xp.maximum(edges[0], edges[1]), edges[2])
+    return d2 >= k2 * longest2[None, :]
+
+
+def charge_sheet_field(
+    field, observers, vertices, charge, center, far_from, tolerance=0.0
+):
     """:func:`triangle_linear_charge_field`, with the far rule's six point charges
     per triangle for the observers at or beyond ``far_from`` from ``center``
-    (``far_from`` 0: everywhere). ``center`` (3,) and ``far_from`` (a 0-d
-    array) are arrays of the observers' namespace."""
+    (``far_from`` 0: everywhere), and, at a ``tolerance`` above 0, for every
+    pair of observer and triangle :func:`far_pairs` takes (``PAIR_RULE``).
+    ``center`` (3,) and ``far_from`` (a 0-d array) are arrays of the
+    observers' namespace; ``tolerance`` a number or a 0-d array."""
     _check_H(field)
     xp = namespace(observers, vertices, charge, center, far_from)
     fr = frames(vertices)
-    near = charge_field(observers, vertices, fr, charge)
-    far = charge_field_far(observers, *far_points(vertices, fr, charge))
     is_far = beyond_far_from(observers, center, far_from)
-    return xp.where(is_far[:, None], far, near) / (4 * xp.pi)
+    rule = far_points(vertices, fr, charge)
+    k2 = pair_k2(float(tolerance))
+    if k2 is None:
+        near = charge_field(observers, vertices, fr, charge)
+        far = charge_field_far(observers, *rule)
+        return xp.where(is_far[:, None], far, near) / (4 * xp.pi)
+    pairs = far_pairs(observers, vertices, fr, k2) | is_far[:, None]
+    near = charge_field(observers, vertices, fr, charge, keep=~pairs)
+    far = charge_field_far(observers, *rule, keep=pairs)
+    return (near + far) / (4 * xp.pi)
