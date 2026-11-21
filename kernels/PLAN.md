@@ -8,16 +8,19 @@ after agreement with Michael.
 Revised after an independent review (2026-11-19); the review's points are marked
 [R n].
 
-## What exists (branch `feat/wasm-kernels-208`, uncommitted)
+## What exists (branch `feat/wasm-kernels-208`)
 
-- `kernels/reference/make_reference.py` writes `kernels.json`: 18 value cases.
-- Checkers: `tests/test_kernel_reference.py` (numpy, cuboid skipped),
+- `kernels/reference/make_cuboid.py` writes `cuboid.json` (named sources, points
+  with ids and reasons) from the cuboid's one implementation,
+  `_array_api/cuboid.py`, run on NumPy and on `mp_namespace` (50 digits);
+  `show.py` plots it. Face charge is in progress, uncommitted.
+- Checkers: `tests/test_kernel_reference.py` (the implementation on NumPy and
+  `array_api_strict`, installed magpylib as a port),
   `kernels/rust/tests/reference.rs` (Rust, 1 and all threads),
   `kernels/rust/www/check.mjs` (WebAssembly in Node). All pass.
-- Known flaws, fixed in step 1: a case-wide `atol` lets small rows pass with any
-  answer (the far cuboid row accepts 0) [R1]; expected values are numpy's
-  output, so a port 15x worse than numpy passes and a new numpy rewrites every
-  row [R2]; `far_points` rows mix metres and charges in one norm [R7].
+- Flaws of the first format, fixed in step 1: a case-wide `atol` let small rows
+  pass with any answer [R1]; expected values were numpy's output [R2];
+  `far_points` rows mixed metres and charges in one norm [R7].
 
 ## Format
 
@@ -56,6 +59,24 @@ Revised after an independent review (2026-11-19); the review's points are marked
    fixed seed) and writes the files; nobody edits values by hand. A new edge
    case = a few lines in the generator, reviewed by diff. Regeneration is a
    deliberate run, never part of a test.
+
+## Status
+
+- 2026-11-20: step 1 done for face charge (`face_charge.json`, 17 cases, rows
+  per case); the cuboid moved to a file of points (`cuboid.json`): 8 named
+  sources, 61 points, each with its own id, group, reason, B and H, one field
+  per line; `show.py` plots it in 3D.
+- 2026-11-20: the cuboid has one implementation, `_array_api/cuboid.py` in the
+  package (no new dependency: numpy 2 arrays name their own namespace) (Jack
+  Smith's array API rewrite of magpylib's cuboid, with #1066's stable logarithms
+  carried in), kept here until magpylib's rewrite takes over. The generator runs
+  it on NumPy and, for the exact values, on `mp_namespace` (mpmath, the accuracy
+  guardrail): the mirrored 50-digit cuboid is gone, and no expected value moved.
+  Tests run it on NumPy and `array_api_strict`, and installed magpylib as a
+  port; 6.3.0 skips only the two `needs` points. Found on the way: `where` with
+  two Python scalars is not in the standard (in Jack's branch too); the branch
+  predates #1066 and gives inf at the two points by an edge. Face charge follows
+  the same way.
 
 ## Steps
 

@@ -1,7 +1,7 @@
 //! Field kernels for magpylib-material-response's solved face charge and
 //! magpylib's cuboid, one source for Python (maturin), C and the browser
-//! (WebAssembly). Checked against `kernels/reference/kernels.json`, the file
-//! the numpy reference writes (issue #208).
+//! (WebAssembly). Checked against `kernels/reference/*.json`, the files the
+//! generators next to them write (issue #208).
 //!
 //! All arrays are flat f64 slices in numpy's C order. Every batch function
 //! fills `out` (M, 3), one row per observer; with `threads`, and the
