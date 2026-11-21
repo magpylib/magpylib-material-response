@@ -136,14 +136,49 @@ a keyword). 13 points held back, ids reserved in SPEC.md (uncommitted). If the
 band becomes a keyword of `magpylib.func`, it is a source parameter here and
 band-dependent points can state it.
 
-Open:
+## Face charge in the new design (2026-11-21, uncommitted)
 
-1. `make_cuboid.py` deleted (Alex, 2026-11-21). `reference_format.py` and
-   `make_face_charge.py` go once face charge is redone.
-2. `face_charge.json` stays in the old layout until face charge is redone
-   (Alex): until then the Rust and Node checkers fail on it; the Python test
-   reads it in its old layout.
-3. Then face charge in the same design.
+- Kinds `triangle_charge` (closed form) and `charge_sheet` (far rule from
+  `far_from` out; 0 = everywhere), field `H` in A/m, array API entry points
+  `triangle_charge_field` and `charge_sheet_field` at the end of
+  `face_charge/_triangle.py`. A file may mix kinds: its relations tie them.
+- `face_charge.json`: 14 sources, 46 points, 8 relations. Held back (ids
+  reserved in SPEC.md): points in or within 1e-9 sides of a triangle's plane
+  (the code lifts them 1e-12 sides, a convention), zero-area triangles,
+  non-finite and overflow observers. The off-plane points from 1e-3 to 1e-12
+  sides stay, flagged as band-sensitive; the cutoff is the cuboid's (#1081's
+  band).
+- `fill.py` has a per-kind scope check and refuses the held-back cases, the
+  cuboid's too (all 14 earlier held-back cuboid points are refused).
+- Relations: cuboid vs its 12 surface triangles (3), far rule vs closed form
+  (2), triangle vs its four midpoint parts (the linear charge terms) (2), cycle
+  of the axes. 8 planted formula bugs, regenerated: each fails relations
+  (far-rule ones catch all eight; the box ones need the c0 path).
+- Checkers: Python 305 passed; Rust and Node pass (Node skips cuboid H, J, M);
+  `kernels/rust/www/plate.json` is the timing plate (84 ms for 2,744 points, as
+  before). Old generators `make_face_charge.py`, `reference_format.py` deleted:
+  `plate.json` is now the only record of the solved plate (magnet J (0, 0, 1.2)
+  T, 10 x 10 x 5 mm at z = 8.5 mm over iron 60 x 30 x 4 mm, level 1); it cannot
+  be regenerated. `ChargeSheet._field` and the reference share
+  `beyond_far_from`, `charge_field` and `far_points`; its chunking and threads
+  are not covered by the file.
+
+Review (3 independent reviewers, 2026-11-21), all fixed: `far_points` back to
+`einsum` on NumPy (bit-identical to before; `tensordot` only for other
+namespaces); `fill.py` scope-checks every point, refuses non-finite residuals,
+checks numpy against relations too and exits 1 on any disagreement, computes the
+triangle plane distance at 50 digits per triangle (a sliver's double normal let
+in-plane points through), refuses near-collinear triangles and observers on the
+`far_from` sphere, enforces the `atol` rule for approximate laws (law error
+
+- 16 x numpy's rounding; `jump-x`, `jump-y` tightened 1e-8 -> 1e-9); misleading
+  sliver ids and whys fixed; SPEC states the frame (n, e1 from corner 0 to 1),
+  "sides" (sqrt(area)) and the far rule's digits; wasm exposes `cuboid_h` (box
+  relations now checked in the browser build); Rust and Node name the relations
+  they skip; the Rust thread pass runs only with `--features parallel` and says
+  so.
+
+Open:
 
 ## Decided earlier
 

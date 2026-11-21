@@ -20,7 +20,7 @@ import plotly.graph_objects as go
 
 # groups shown only on demand: far points would shrink the source to a dot
 HIDDEN = {"far"}
-FIELDS = ("B", "H", "J", "M", "F", "F_far")
+FIELDS = ("B", "H", "J", "M")
 
 
 def _group(p):
@@ -59,8 +59,8 @@ def _shape(src, name):
     """A source's outline and its size."""
     if src["kind"] == "cuboid":
         return _box(src["dimension"], name), float(np.max(np.abs(src["dimension"])))
-    V = np.array(src["V"], float).reshape(-1, 3)
-    return _triangles(src["V"], name), float(np.max(np.ptp(V, axis=0)))
+    V = np.array(src["vertices"], float).reshape(-1, 3)
+    return _triangles(src["vertices"], name), float(np.max(np.ptp(V, axis=0)))
 
 
 def _hover(p):

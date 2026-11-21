@@ -7,7 +7,12 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import init, { Sheet, charge_field, cuboid_b } from "../pkg/mmr_kernels.js";
+import init, {
+  Sheet,
+  charge_field,
+  cuboid_b,
+  cuboid_h,
+} from "../pkg/mmr_kernels.js";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 await init({
@@ -27,13 +32,22 @@ const flat = (a) => Float64Array.from([a].flat(Infinity), num);
 const fields = {
   cuboid: {
     B: (s, x) => cuboid_b(x, flat(s.dimension), flat(s.polarization)),
+    H: (s, x) => cuboid_h(x, flat(s.dimension), flat(s.polarization)),
   },
-  triangles: {
-    F: (s, x) => charge_field(x, flat(s.V), flat(s.c)),
+  triangle_charge: {
+    H: (s, x) =>
+      charge_field(x, flat(s.vertices), flat(s.charge)).map(
+        (v) => v / (4 * Math.PI),
+      ),
   },
-  sheet: {
+  charge_sheet: {
     H: (s, x) => {
-      const sheet = new Sheet(flat(s.V), flat(s.c), flat(s.center), s.far_from);
+      const sheet = new Sheet(
+        flat(s.vertices),
+        flat(s.charge),
+        flat(s.center),
+        num(s.far_from),
+      );
       const out = sheet.h(x);
       sheet.free();
       return out;
@@ -44,9 +58,7 @@ const fields = {
 // the files' rule for one field; the share of the tolerance used, or -1
 function within(g, e, rtol, atol) {
   if (!e.every(Number.isFinite))
-    return e.every((v, k) => Object.is(v, g[k]) || (isNaN(v) && isNaN(g[k])))
-      ? 0
-      : -1;
+    return e.every((v, k) => v === g[k] || (isNaN(v) && isNaN(g[k]))) ? 0 : -1;
   const err = Math.hypot(...e.map((v, k) => g[k] - v));
   const bound = rtol * Math.hypot(...e) + atol;
   return err <= bound ? (err > 0 ? err / bound : 0) : -1;
@@ -54,13 +66,12 @@ function within(g, e, rtol, atol) {
 
 let failed = 0;
 const skipped = new Set();
+const skippedRelations = [];
 for (const doc of docs) {
   let worst = [0, ""];
   for (const p of doc.points) {
     const src = doc.sources[p.source];
-    for (const name of ["B", "H", "J", "M", "F", "F_far"].filter(
-      (n) => n in p,
-    )) {
+    for (const name of ["B", "H", "J", "M"].filter((n) => n in p)) {
       const kernel = fields[src.kind]?.[name];
       if (!kernel) {
         skipped.add(`${src.kind} ${name}`);
@@ -85,6 +96,7 @@ for (const doc of docs) {
       const kernel = fields[src.kind]?.[t.field];
       if (!kernel) {
         skipped.add(`${src.kind} ${t.field}`);
+        skippedRelations.push(`${doc.file.replace(".json", "")}/${r.id}`);
         ok = false;
         break;
       }
@@ -112,44 +124,43 @@ for (const doc of docs) {
 }
 console.log(failed ? `${failed} off` : "every point within tolerance");
 if (skipped.size) console.log(`not in this build: ${[...skipped].join(", ")}`);
+if (skippedRelations.length)
+  console.log(`relations skipped whole: ${skippedRelations.join(", ")}`);
 
-// timing: the solved plate's sheet at a grid round it, as studio's field
-// lines ask
-const plate = docs.find((d) => d.file === "face_charge.json")?.sources
-  .solved_plate;
-if (plate) {
-  const sheet = new Sheet(
-    flat(plate.V),
-    flat(plate.c),
-    flat(plate.center),
-    plate.far_from,
-  );
-  for (const n of [2500, 8000]) {
-    const side = Math.round(Math.cbrt(n));
-    const X = new Float64Array(3 * side ** 3);
-    let k = 0;
-    for (let i = 0; i < side; i++)
-      for (let j = 0; j < side; j++)
-        for (let l = 0; l < side; l++) {
-          X[k++] = -0.04 + (0.08 * i) / (side - 1);
-          X[k++] = -0.025 + (0.05 * j) / (side - 1);
-          X[k++] = -0.02 + (0.04 * l) / (side - 1);
-        }
-    sheet.h(X); // warm up
-    const times = [];
-    for (let r = 0; r < 10; r++) {
-      const t0 = performance.now();
-      sheet.h(X);
-      times.push(performance.now() - t0);
-    }
-    times.sort((a, b) => a - b);
-    const m = X.length / 3;
-    const ns = (times[0] * 1e6) / (m * plate.V.length);
-    console.log(
-      `plate, ${plate.V.length} triangles, ${m} points: ${times[0].toFixed(1)} ms ` +
-        `best, ${times[5].toFixed(1)} ms median (${ns.toFixed(0)} ns per pair, one thread)`,
-    );
+// timing: the solved plate's sheet (plate.json, a timing input without
+// expected values) at a grid round it, as studio's field lines ask
+const plate = JSON.parse(readFileSync(here("./plate.json"), "utf8"));
+const sheet = new Sheet(
+  flat(plate.vertices),
+  flat(plate.charge),
+  flat(plate.center),
+  plate.far_from,
+);
+for (const n of [2500, 8000]) {
+  const side = Math.round(Math.cbrt(n));
+  const X = new Float64Array(3 * side ** 3);
+  let k = 0;
+  for (let i = 0; i < side; i++)
+    for (let j = 0; j < side; j++)
+      for (let l = 0; l < side; l++) {
+        X[k++] = -0.04 + (0.08 * i) / (side - 1);
+        X[k++] = -0.025 + (0.05 * j) / (side - 1);
+        X[k++] = -0.02 + (0.04 * l) / (side - 1);
+      }
+  sheet.h(X); // warm up
+  const times = [];
+  for (let r = 0; r < 10; r++) {
+    const t0 = performance.now();
+    sheet.h(X);
+    times.push(performance.now() - t0);
   }
-  sheet.free();
-} else console.log("plate timing skipped: no face_charge.json");
+  times.sort((a, b) => a - b);
+  const m = X.length / 3;
+  const ns = (times[0] * 1e6) / (m * plate.vertices.length);
+  console.log(
+    `plate, ${plate.vertices.length} triangles, ${m} points: ${times[0].toFixed(1)} ms ` +
+      `best, ${times[5].toFixed(1)} ms median (${ns.toFixed(0)} ns per pair, one thread)`,
+  );
+}
+sheet.free();
 if (failed) process.exit(1);

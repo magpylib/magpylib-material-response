@@ -19,6 +19,7 @@ from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
     charge_field,
+    beyond_far_from,
     charge_field_far,
     far_points,
     frames,
@@ -509,7 +510,7 @@ class ChargeSheet(magpy.misc.CustomSource):
             out[rows] = charge_field_far(X[rows], *self._far_rule) / FOUR_PI
 
         with np.errstate(over="ignore"):  # past 1e154 m: inf, and so far
-            far = np.linalg.norm(X - self._center, axis=1) >= self._far_from
+            far = beyond_far_from(X, self._center, self._far_from)
         if far.any():
             if self._far_rule is None:
                 self._far_rule = far_points(self._V, self._frames, self._c)

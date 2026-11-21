@@ -1,7 +1,8 @@
 //! Every point and relation of `kernels/reference/*.json` to its tolerance, by
 //! the rules of `kernels/reference/SPEC.md`: per field,
 //! `|got - expected| <= rtol |expected| + atol`, non-finite components matched
-//! exactly. On one thread and on all.
+//! exactly. On one thread, and on all with `--features parallel` (without it
+//! the crate has no threads).
 
 use mmr_kernels as k;
 use serde_json::Value;
@@ -68,22 +69,22 @@ fn field(name: &str, src: &Value, x: [f64; 3], threads: bool) -> Option<Vec<f64>
             let (d, p) = (floats(&src["dimension"]), floats(&src["polarization"]));
             k::cuboid_field(name.as_bytes()[0], &x, &d, &p, &mut out, threads);
         }
-        ("triangles", "F") => k::charge_field(
-            &x,
-            &floats(&src["V"]),
-            &floats(&src["c"]),
-            &mut out,
-            threads,
-        ),
-        ("triangles", "F_far") => {
-            let (y, q) = k::far_points(&floats(&src["V"]), &floats(&src["c"]));
-            k::charge_field_far(&x, &y, &q, &mut out, threads);
+        ("triangle_charge", "H") => {
+            k::charge_field(
+                &x,
+                &floats(&src["vertices"]),
+                &floats(&src["charge"]),
+                &mut out,
+                threads,
+            );
+            out.iter_mut()
+                .for_each(|v| *v /= 4.0 * std::f64::consts::PI);
         }
-        ("sheet", "H") => {
-            let far_from = src["far_from"].as_f64().unwrap();
+        ("charge_sheet", "H") => {
+            let far_from = floats(&src["far_from"])[0];
             let sheet = k::triangle::Sheet::new(
-                &floats(&src["V"]),
-                &floats(&src["c"]),
+                &floats(&src["vertices"]),
+                &floats(&src["charge"]),
                 v3(&src["center"]),
                 far_from,
             );
@@ -93,6 +94,13 @@ fn field(name: &str, src: &Value, x: [f64; 3], threads: bool) -> Option<Vec<f64>
     }
     Some(out)
 }
+
+/// The passes: one thread, and all where the crate is built with threads.
+const PASSES: &[bool] = if cfg!(feature = "parallel") {
+    &[false, true]
+} else {
+    &[false]
+};
 
 #[test]
 fn reference_points() {
@@ -105,6 +113,7 @@ fn reference_points() {
     files.sort();
     assert!(!files.is_empty(), "no reference files in {dir}");
     let (mut failures, mut skipped) = (Vec::new(), std::collections::BTreeSet::new());
+    let mut skipped_relations = std::collections::BTreeSet::new();
     for path in files {
         let doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         let file = path.file_name().unwrap().to_string_lossy().into_owned();
@@ -114,7 +123,7 @@ fn reference_points() {
             let id = p["id"].as_str().unwrap();
             let src = &doc["sources"][p["source"].as_str().unwrap()];
             let x = v3(&p["observer"]);
-            for name in ["B", "H", "J", "M", "F", "F_far"]
+            for name in ["B", "H", "J", "M"]
                 .into_iter()
                 .filter(|n| p.get(*n).is_some())
             {
@@ -122,7 +131,7 @@ fn reference_points() {
                     .get(format!("atol_{name}"))
                     .and_then(Value::as_f64)
                     .unwrap_or(0.0);
-                for threads in [false, true] {
+                for &threads in PASSES {
                     let Some(got) = field(name, src, x, threads) else {
                         skipped.insert(format!("{} {name}", src["kind"].as_str().unwrap()));
                         break;
@@ -135,34 +144,18 @@ fn reference_points() {
                 }
             }
         }
-        // the far rule's points and charges, on the sources that carry them
-        for (name, src) in doc["sources"].as_object().unwrap() {
-            let Some(rows) = src.get("far_points") else {
-                continue;
-            };
-            let (y, q) = k::far_points(&floats(&src["V"]), &floats(&src["c"]));
-            for (key, got, width) in [("far_points", &y, 3), ("far_charges", &q, 1)] {
-                let expected = floats(&src[key]);
-                let atol = src.get(format!("atol_{key}")).map(floats);
-                for (r, (g, e)) in got.chunks(width).zip(expected.chunks(width)).enumerate() {
-                    let a = atol.as_ref().map_or(0.0, |a| a[r]);
-                    if let Err(msg) = within(g, e, rtol, a) {
-                        failures.push(format!("{name} {key} row {r}: {msg}"));
-                    }
-                }
-            }
-            let _ = rows;
-        }
         // relations: the sum of weight @ field over the terms, against the target
         for r in doc["relations"].as_array().into_iter().flatten() {
             let id = r["id"].as_str().unwrap();
-            for threads in [false, true] {
+            for &threads in PASSES {
                 let mut total = Vec::new();
                 for t in r["terms"].as_array().unwrap() {
                     let name = t["field"].as_str().unwrap();
                     let src = &doc["sources"][t["source"].as_str().unwrap()];
                     let Some(f) = field(name, src, v3(&t["observer"]), threads) else {
                         skipped.insert(format!("{} {name}", src["kind"].as_str().unwrap()));
+                        skipped_relations
+                            .insert(format!("{}/{id}", file.trim_end_matches(".json")));
                         total.clear();
                         break;
                     };
@@ -195,6 +188,15 @@ fn reference_points() {
             "{file}: worst {} at {:.3} of its tolerance",
             worst.1, worst.0
         );
+    }
+    if !skipped_relations.is_empty() {
+        println!(
+            "relations skipped whole: {}",
+            skipped_relations.into_iter().collect::<Vec<_>>().join(", ")
+        );
+    }
+    if !PASSES.contains(&true) {
+        println!("threads not built: run with --features parallel for that pass");
     }
     if !skipped.is_empty() {
         println!(

@@ -47,3 +47,11 @@ pub fn cuboid_b(x: &[f64], dimension: &[f64], polarization: &[f64]) -> Vec<f64> 
     crate::cuboid_field(b'B', x, dimension, polarization, &mut out, false);
     out
 }
+
+/// H in A/m of cuboids in their own frames, as `cuboid_b`.
+#[wasm_bindgen]
+pub fn cuboid_h(x: &[f64], dimension: &[f64], polarization: &[f64]) -> Vec<f64> {
+    let mut out = vec![0.0; x.len()];
+    crate::cuboid_field(b'H', x, dimension, polarization, &mut out, false);
+    out
+}

@@ -16,15 +16,20 @@ import pytest
 from packaging.version import Version
 
 from magpylib_material_response._array_api import cuboid
+from magpylib_material_response.face_charge import _triangle as T
 
 REFERENCE = Path(__file__).parents[1] / "kernels" / "reference"
-CUBOID = json.loads((REFERENCE / "cuboid.json").read_text())
+FILES = {p.stem: json.loads(p.read_text()) for p in sorted(REFERENCE.glob("*.json"))}
+FIELDS = "BHJM"
 # the points magpylib gets wrong (NaN, or off) before its stable edge
 # logarithms (#1066, after 6.3.0)
 BEFORE_1066 = {"beside-edge-1e-12"} | {
     f"near-edge-{e}-{d}" for e in "xyz" for d in ("1e-6", "1e-9", "1e-12")
 }
 OLD_MAGPYLIB = Version(magpy.__version__) <= Version("6.3.0")
+# the kinds whose parameters are shared by all observers; the others take one
+# row per observer
+SHARED = {"triangle_charge", "charge_sheet"}
 
 
 def _decode(a):
@@ -48,51 +53,76 @@ def _magpylib_cuboid(field, X, dimension, polarization):
     return magpy.func.cuboid_field(field, X, dimension, polarization, squeeze=False)
 
 
-# per implementation: the function, its array constructor, its fields
-CUBOID_KERNELS = {
-    "array-api-numpy": (cuboid.cuboid_field, np.asarray, "BHJM"),
-    "array-api-strict": (cuboid.cuboid_field, array_api_strict.asarray, "BHJM"),
-    "magpylib": (_magpylib_cuboid, np.asarray, "BH"),
+# per kind: the implementations, each a function, its array constructor and the
+# fields it has
+IMPLS = {
+    "cuboid": {
+        "array-api-numpy": (cuboid.cuboid_field, np.asarray, "BHJM"),
+        "array-api-strict": (cuboid.cuboid_field, array_api_strict.asarray, "BHJM"),
+        "magpylib": (_magpylib_cuboid, np.asarray, "BH"),
+    },
+    "triangle_charge": {
+        "array-api-numpy": (T.triangle_charge_field, np.asarray, "H"),
+        "array-api-strict": (T.triangle_charge_field, array_api_strict.asarray, "H"),
+    },
+    "charge_sheet": {
+        "array-api-numpy": (T.charge_sheet_field, np.asarray, "H"),
+        "array-api-strict": (T.charge_sheet_field, array_api_strict.asarray, "H"),
+    },
 }
+PORTS = {"magpylib"}  # not in the relations: they cross kinds
 
 
-def _cuboid(impl, field, source, observer):
-    kernel, asarray, _ = CUBOID_KERNELS[impl]
-    source = CUBOID["sources"][source]
-    args = (
-        _decode([v]) for v in (observer, source["dimension"], source["polarization"])
-    )
+def _evaluate(doc, impl, field, source, observer):
+    """One field of one source at one observer, by one implementation."""
+    src = doc["sources"][source]
+    func, asarray, _ = IMPLS[src["kind"]][impl]
+    params = {k: _decode(v) for k, v in src.items() if k not in ("kind", "why")}
+    if src["kind"] not in SHARED:
+        params = {k: v[None] for k, v in params.items()}
+    X = asarray(_decode([observer]))
     with np.errstate(all="ignore"):
-        return np.asarray(kernel(field, *map(asarray, args)))[0]
+        return np.asarray(func(field, X, **{k: asarray(v) for k, v in params.items()}))[
+            0
+        ]
 
 
-@pytest.mark.parametrize("impl", CUBOID_KERNELS)
-@pytest.mark.parametrize(
-    "point", CUBOID["points"], ids=[p["id"] for p in CUBOID["points"]]
-)
-def test_cuboid_point(point, impl):
-    if impl == "magpylib" and OLD_MAGPYLIB and point["id"] in BEFORE_1066:
+def _cases():
+    """Every (file, point, implementation) the files and IMPLS give."""
+    for name, doc in FILES.items():
+        for point in doc["points"]:
+            for impl in IMPLS[doc["sources"][point["source"]]["kind"]]:
+                yield pytest.param(name, point, impl, id=f"{name}-{point['id']}-{impl}")
+
+
+@pytest.mark.parametrize(("name", "point", "impl"), list(_cases()))
+def test_point(name, point, impl):
+    doc = FILES[name]
+    kind = doc["sources"][point["source"]]["kind"]
+    if impl in PORTS and OLD_MAGPYLIB and point["id"] in BEFORE_1066:
         pytest.skip("magpylib <= 6.3.0 lacks the stable edge logarithms (#1066)")
-    for field in CUBOID_KERNELS[impl][2]:
-        got = _cuboid(impl, field, point["source"], point["observer"])
+    for field in (f for f in FIELDS if f in point and f in IMPLS[kind][impl][2]):
+        got = _evaluate(doc, impl, field, point["source"], point["observer"])
         atol = [point.get(f"atol_{field}", 0.0)]
-        _within(got, _decode([point[field]]), CUBOID["rtol"], atol, point["why"])
+        _within(got, _decode([point[field]]), doc["rtol"], atol, point["why"])
 
 
-@pytest.mark.parametrize("impl", ["array-api-numpy", "array-api-strict"])
-@pytest.mark.parametrize(
-    "relation", CUBOID["relations"], ids=[r["id"] for r in CUBOID["relations"]]
-)
-def test_cuboid_relation(relation, impl):
+def _relations():
+    for name, doc in FILES.items():
+        for relation in doc.get("relations", []):
+            for impl in ("array-api-numpy", "array-api-strict"):
+                yield pytest.param(
+                    name, relation, impl, id=f"{name}-{relation['id']}-{impl}"
+                )
+
+
+@pytest.mark.parametrize(("name", "relation", "impl"), list(_relations()))
+def test_relation(name, relation, impl):
+    doc = FILES[name]
     total = 0
     for t in relation["terms"]:
         w = np.asarray(t["weight"], float)
-        f = _cuboid(impl, t["field"], t["source"], t["observer"])
+        f = _evaluate(doc, impl, t["field"], t["source"], t["observer"])
         total = total + (w @ f if w.ndim else w * f)
-    _within(
-        total,
-        _decode(relation["target"]),
-        CUBOID["rtol"],
-        [relation["atol"]],
-        relation["why"],
-    )
+    atol = [relation["atol"]]
+    _within(total, _decode(relation["target"]), doc["rtol"], atol, relation["why"])

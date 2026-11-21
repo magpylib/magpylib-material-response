@@ -6,36 +6,104 @@ dependency group::
 
 A point's values already in the file stay, unless ``--redo``. It takes the one
 implementation at 50 digits (on ``mp_namespace``), rounded to double, with an
-``atol_<field>`` where numpy's own error needs one; a point without a finite
-50-digit value is refused (it is not in the file's scope, SPEC). NumPy never
-sets a value: where it is off by more than ``LOOSE`` the point is printed,
-without an ``atol``, for the checkers to show. A
-relation without ``atol`` must hold at 50 digits; it then gets one from numpy's
-residual. A relation with ``atol`` is an approximate law, or one filled
-before: that ``atol`` is checked, never changed (delete it to have it set
-again).
+``atol_<field>`` where numpy's own error needs one. A point outside the files'
+scope (SPEC) is refused. NumPy never sets a value: where it is off by more
+than ``LOOSE`` the point is printed, without an ``atol``, for the checkers to
+show, and the run exits with status 1. A relation that holds at 50 digits (an exact law) gets its ``atol`` from
+numpy's residual; an approximate law carries its ``atol`` in the file, and
+``fill.py`` checks it against the rule (SPEC).
 """
 
 import argparse
 import json
 import math
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 import mp_namespace as M
 import mpmath as mp
 import numpy as np
 
 from magpylib_material_response._array_api.cuboid import cuboid_field
+from magpylib_material_response.face_charge import _triangle as T
 
 mp.mp.dps = 50
 MARGIN = 16  # atol over numpy's own error
 LOOSE = 1e-6  # numpy off by more than this, relative: printed, no atol
 EXACT = 1e-30  # an exact law's 50-digit residual, relative to its terms
+EPS = np.finfo(float).eps
 
-# per kind: the implementation, called as f(field, observers, **parameters)
-# with (1, ...) arrays, and its fields
-KINDS = {"cuboid": (cuboid_field, "BHJM")}
+
+def cuboid_scope(x, p):
+    """Why an observer is out of scope for a cuboid, or None: on a face, edge
+    or corner (within today's 1e-15 h, or magpylib #1081's 100 eps max(size,
+    |p|), of it), on a zero-thickness cuboid, or not finite."""
+    if not np.isfinite(x).all():
+        return "a non-finite observer"
+    h = np.abs(p["dimension"]) / 2
+    band = np.maximum(1e-15 * h, 100 * EPS * max(2 * h.max(), np.linalg.norm(x)))
+    dist = np.abs(x) - h  # to each axis's pair of faces
+    if (h == 0).any():
+        flat = h == 0
+        if (np.abs(x[flat]) <= band[flat]).all() and (dist[~flat] <= band[~flat]).all():
+            return "on a zero-thickness cuboid"
+        return None
+    if (dist <= band).all() and (np.abs(dist) <= band).any():
+        return "on a face, edge or corner"
+    return None
+
+
+def triangles_scope(x, p):
+    """Why an observer is out of scope for charged triangles, or None: not
+    finite, a triangle without area (its corners in a line to within rounding),
+    or in a triangle's plane or within magpylib #1081's band of it (100 eps
+    max(its size, |p|)). Distances are exact, at 50 digits: in doubles a
+    sliver's normal is too rough."""
+    if not np.isfinite(x).all():
+        return "a non-finite observer"
+    X = [mp.mpf(float(v)) for v in x]
+    for tri in p["vertices"]:
+        a, b, c = ([mp.mpf(float(v)) for v in corner] for corner in tri)
+        ab, ac = [q - o for q, o in zip(b, a, strict=True)], [q - o for q, o in zip(c, a, strict=True)]
+        n = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]]
+        sides = [norm(ab), norm(ac), norm([q - o for q, o in zip(c, b, strict=True)])]
+        if norm(n) <= 100 * EPS * sides[0] * sides[1]:
+            return "a triangle without area"
+        w = abs(mp.fsum((xi - ai) * ni for xi, ai, ni in zip(X, a, n, strict=True))) / norm(n)
+        if w <= 100 * EPS * max(max(sides), norm(X)):
+            return "in or by a triangle's plane"
+    return None
+
+
+def sheet_scope(x, p):
+    """:func:`triangles_scope`, and an observer within 1e-12 of ``far_from``
+    from the center, where rounding could choose the other branch."""
+    if reason := triangles_scope(x, p):
+        return reason
+    r = norm([mp.mpf(float(a)) - float(b) for a, b in zip(x, p["center"], strict=True)])
+    if abs(r - float(p["far_from"])) <= 1e-12 * float(p["far_from"]):
+        return "on the far_from sphere"
+    return None
+
+
+class Kind(NamedTuple):
+    """A source kind: its implementation, called as ``f(field, observers,
+    **parameters)``; its fields; whether its parameters are per observer
+    (arrays with a leading axis of observers) or shared; its scope check."""
+
+    func: Callable
+    fields: str
+    per_observer: bool
+    scope: Callable
+
+
+KINDS = {
+    "cuboid": Kind(cuboid_field, "BHJM", True, cuboid_scope),
+    "triangle_charge": Kind(T.triangle_charge_field, "H", False, triangles_scope),
+    "charge_sheet": Kind(T.charge_sheet_field, "H", False, sheet_scope),
+}
 
 
 def decode(v):
@@ -52,43 +120,59 @@ def encode(a):
 def decade(x):
     """``x`` rounded up to a power of ten: last-bit differences between
     platforms' libm leave the file unchanged."""
-    return 0.0 if x == 0 else float(f"1e{math.ceil(math.log10(x))}")
+    if x == 0:
+        return 0.0
+    k = math.ceil(math.log10(x))
+    return float(f"1e{k}") if float(f"1e{k}") >= x else float(f"1e{k + 1}")
 
 
 def norm(v):
     return mp.sqrt(sum(mp.mpf(x) ** 2 for x in v))
 
 
-def field(doc, source, name, observer, exact):
-    """One field of one source at one observer: doubles, or mpf at 50 digits
-    (None where the 50-digit run fails)."""
+def parameters(doc, source):
+    """A source's kind and its parameters as floats."""
     src = doc["sources"][source]
-    func, _ = KINDS[src["kind"]]
-    params = {k: decode(v)[None] for k, v in src.items() if k not in ("kind", "why")}
+    return KINDS[src["kind"]], {
+        k: decode(v) for k, v in src.items() if k not in ("kind", "why")
+    }
+
+
+def check_scope(doc, source, observer, what):
+    kind, params = parameters(doc, source)
+    if reason := kind.scope(decode(observer), params):
+        msg = f"{what}: {reason}: not in the files' scope (SPEC)"
+        raise AssertionError(msg)
+
+
+def field(doc, source, name, observer, exact):
+    """One field of one source at one observer: doubles, or mpf at 50
+    digits."""
+    kind, params = parameters(doc, source)
+    if kind.per_observer:
+        params = {k: v[None] for k, v in params.items()}
     x = decode(observer)[None]
     if not exact:
         with np.errstate(all="ignore"):
-            return func(name, x, **params)[0]
-    try:
-        out = func(
-            name, M.from_doubles(x), **{k: M.from_doubles(v) for k, v in params.items()}
-        )
-    except (ValueError, ZeroDivisionError, OverflowError):
-        return None
+            return kind.func(name, x, **params)[0]
+    out = kind.func(
+        name, M.from_doubles(x), **{k: M.from_doubles(v) for k, v in params.items()}
+    )
     return out.tolist()[0]
 
 
 def fill_point(doc, p, redo):
     """Fill one point's missing fields; the fields numpy disagrees with."""
-    _, names = KINDS[doc["sources"][p["source"]]["kind"]]
+    names = KINDS[doc["sources"][p["source"]]["kind"]].fields
+    check_scope(doc, p["source"], p["observer"], p["id"])
     off = []
     for name in names:
         if name in p and not redo:
             continue
         n = field(doc, p["source"], name, p["observer"], exact=False)
         e = field(doc, p["source"], name, p["observer"], exact=True)
-        if e is None or not all(mp.isfinite(v) for v in e):
-            msg = f"{p['id']} {name}: no finite value, not in the file's scope (SPEC)"
+        if not all(mp.isfinite(v) for v in e):
+            msg = f"{p['id']} {name}: no finite value, not in the files' scope (SPEC)"
             raise AssertionError(msg)
         p.pop(f"atol_{name}", None)
         p[name] = encode([float(v) for v in e])  # mpmath rounds to nearest
@@ -110,6 +194,7 @@ def residual(doc, r, exact):
     the terms' sizes."""
     total, scale = None, mp.mpf(0)
     for t in r["terms"]:
+        check_scope(doc, t["source"], t["observer"], r["id"])
         f = field(doc, t["source"], t["field"], t["observer"], exact)
         f = [mp.mpf(float(v)) if not exact else v for v in f]
         w = decode(t["weight"])
@@ -132,19 +217,29 @@ def residual(doc, r, exact):
 
 
 def fill_relation(doc, r):
+    """Check one relation and its ``atol`` (SPEC: where the values come from),
+    and write it for an exact law that has none; True where numpy is off by
+    more than ``LOOSE`` of the terms' size."""
     exact, scale = residual(doc, r, exact=True)
     rounded, _ = residual(doc, r, exact=False)
-    if "atol" in r:
-        for what, res in (("50 digits", exact), ("numpy", rounded)):
-            if norm(res) > r["atol"]:
-                msg = f"{r['id']}: off by {float(norm(res)):.3g} at {what}, atol {r['atol']}"
-                raise AssertionError(msg)
-        return
-    if norm(exact) > EXACT * scale:
-        msg = (f"{r['id']}: does not hold at 50 digits (off by {float(norm(exact)):.3g}); "
-               "an approximate law carries its own atol in the file")  # fmt: skip
+    if not all(mp.isfinite(v) for v in exact + rounded):
+        msg = f"{r['id']}: a residual is not finite"
         raise AssertionError(msg)
-    r["atol"] = decade(float(max(MARGIN * norm(rounded), doc["rtol"] * scale)))
+    diff = norm([a - b for a, b in zip(rounded, exact, strict=True)])
+    if diff > LOOSE * scale:
+        return True
+    if norm(exact) <= EXACT * scale:  # an exact law
+        atol = decade(float(max(MARGIN * norm(rounded), doc["rtol"] * scale)))
+        r.setdefault("atol", atol)
+    else:  # approximate: the law's own error, and numpy's rounding
+        atol = decade(float(norm(exact) + MARGIN * diff))
+        if "atol" not in r:
+            msg = f"{r['id']}: an approximate law (off by {float(norm(exact)):.3g} at 50 digits): write its atol, {atol:g} by the rule"
+            raise AssertionError(msg)
+    if r["atol"] != atol:
+        msg = f"{r['id']}: atol {r['atol']:g}, {atol:g} by the rule"
+        raise AssertionError(msg)
+    return False
 
 
 def dump(obj, depth=0):
@@ -173,7 +268,11 @@ def check_names(doc):
     bad = [i for i in ids if not re.fullmatch(r"[a-z0-9][a-z0-9.+-]*", i)]
     assert not bad, f"ids must be lowercase slugs: {bad}"
     named = [*doc["sources"].items(), *((x["id"], x) for x in entries)]
-    bad = [k for k, x in named if not isinstance(x.get("why"), str) or "\n" in x["why"]]
+    bad = [
+        k
+        for k, x in named
+        if not isinstance(x.get("why"), str) or not x["why"].strip() or "\n" in x["why"]
+    ]
     assert not bad, f"a one-line why is missing: {bad}"
 
 
@@ -184,14 +283,19 @@ def main():
     args = cli.parse_args()
     doc = json.loads(args.file.read_text())
     check_names(doc)
+    disagree = []
     for p in doc["points"]:
         if off := fill_point(doc, p, args.redo):
-            print(f"NUMPY DISAGREES: {p['id']} {''.join(off)}")
+            disagree.append(f"{p['id']} {''.join(off)}")
     for r in doc.get("relations", []):
-        fill_relation(doc, r)
+        if fill_relation(doc, r):
+            disagree.append(f"{r['id']} (no atol written)")
     args.file.write_text(dump(doc) + "\n")
     print(f"{args.file.name}: {len(doc['points'])} points, "
           f"{len(doc.get('relations', []))} relations")  # fmt: skip
+    if disagree:
+        print("NUMPY DISAGREES:", ", ".join(disagree))
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

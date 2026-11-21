@@ -36,17 +36,25 @@ from __future__ import annotations
 
 import numpy as np
 
+from magpylib_material_response._array_api import namespace, quiet
+
+# Written against the Python array API standard, as far as the reference values
+# need (#208): frames, charge_field, far_points and charge_field_far run on any
+# array library and, at 50 digits, on kernels/reference/mp_namespace.py. The
+# solver's own kernels (charge_terms, far_terms, normal_field) are NumPy's.
+
 
 def frames(V):
     """Per triangle of ``V`` (N, 3, 3): centroid, normal, ``e1``, ``e2``, scale
     ``sqrt(area)`` and area."""
-    a, b, c = V[:, 0], V[:, 1], V[:, 2]
-    cross = np.cross(b - a, c - a)
-    area = 0.5 * np.linalg.norm(cross, axis=1)
+    xp = namespace(V)
+    a, b, c = V[:, 0, ...], V[:, 1, ...], V[:, 2, ...]
+    cross = xp.linalg.cross(b - a, c - a)
+    area = 0.5 * xp.linalg.vector_norm(cross, axis=1)
     n = cross / (2 * area)[:, None]
-    e1 = (b - a) / np.linalg.norm(b - a, axis=1)[:, None]
-    e2 = np.cross(n, e1)
-    return V.mean(axis=1), n, e1, e2, np.sqrt(area), area
+    e1 = (b - a) / xp.linalg.vector_norm(b - a, axis=1)[:, None]
+    e2 = xp.linalg.cross(n, e1)
+    return xp.mean(V, axis=1), n, e1, e2, xp.sqrt(area), area
 
 
 _EDGES = ((0, 1), (1, 2), (2, 0))
@@ -71,7 +79,7 @@ _FAR_WEIGHTS /= _FAR_WEIGHTS.sum()
 
 def _r_plus_l(R, l, R02):
     """``R + l``, stable where ``l < 0``: there it is ``R0^2 / (R - l)``."""
-    return np.where(l >= 0, R + l, R02 / (R - l))
+    return namespace(R).where(l >= 0, R + l, R02 / (R - l))
 
 
 def _dot(a, b):
@@ -84,40 +92,41 @@ def _in_plane(X, V, fr):
     :func:`charge_field` and :func:`charge_terms` start from: the corners
     ``(0, 0), (ub, 0), (uc, vc)``, the observers' ``u, v, w`` from the first
     corner, their offsets to the corners and distances, and ``sum beta``."""
+    xp = namespace(X, V)
     _, n, e1, e2, s, area = fr
-    a = V[:, 0]
-    ub = _dot(V[:, 1] - a, e1)
-    uc, vc = _dot(V[:, 2] - a, e1), _dot(V[:, 2] - a, e2)
+    a = V[:, 0, ...]
+    ub = _dot(V[:, 1, ...] - a, e1)
+    uc, vc = _dot(V[:, 2, ...] - a, e1), _dot(V[:, 2, ...] - a, e2)
     corners = ((0.0, 0.0), (ub, 0.0), (uc, vc))
-    u, v, w = (
-        np.matmul(X, np.stack([e1, e2, n]).transpose(0, 2, 1))
-        - np.stack([_dot(a, e1), _dot(a, e2), _dot(a, n)])[:, None]
-    )
+    axes = xp.permute_dims(xp.stack([e1, e2, n]), (0, 2, 1))
+    origin = xp.stack([_dot(a, e1), _dot(a, e2), _dot(a, n)])[:, None, :]
+    u, v, w = xp.unstack(xp.matmul(X, axes) - origin, axis=0)
     # lifted off the plane as in `normal_field`
-    w = np.where(w == 0, 1e-12 * s, w)
+    w = xp.where(w == 0, 1e-12 * s, w)
     w2 = w * w
     du = [pu - u for pu, _ in corners]
     dv = [pv - v for _, pv in corners]
-    R = [np.sqrt(du[k] * du[k] + dv[k] * dv[k] + w2) for k in range(3)]
+    R = [xp.sqrt(du[k] * du[k] + dv[k] * dv[k] + w2) for k in range(3)]
     den = R[0] * R[1] * R[2]
     for (i, j), k in zip(_EDGES, (2, 0, 1), strict=True):
         den = den + (du[i] * du[j] + dv[i] * dv[j] + w2) * R[k]
-    omega = 2 * np.arctan2(2 * area * np.abs(w), den)  # sum beta
+    omega = 2 * xp.atan2(2 * area * xp.abs(w), den)  # sum beta
     return (ub, uc, vc), corners, u, v, w, w2, du, dv, R, omega
 
 
 def _edge_terms(corners, du, dv, R, w2):
     """Per edge: its direction ``tu, tv``, and ``P0 f``, ``f`` and ``R+ - R-``
-    at each observer. Called within ``np.errstate(divide, invalid)``."""
+    at each observer. Called within :func:`quiet`."""
+    xp = namespace(R[0])
     for i, j in _EDGES:
         (pu, pv), (qu, qv) = corners[i], corners[j]
-        L = np.sqrt((qu - pu) ** 2 + (qv - pv) ** 2)
+        L = xp.sqrt((qu - pu) ** 2 + (qv - pv) ** 2)
         tu, tv = (qu - pu) / L, (qv - pv) / L
         l_minus = du[i] * tu + dv[i] * tv
         l_plus = du[j] * tu + dv[j] * tv
         P0 = du[i] * tv - dv[i] * tu
         R02 = P0 * P0 + w2
-        f = np.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+        f = xp.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
         yield tu, tv, P0 * f, f, R[j] - R[i]
 
 
@@ -142,13 +151,14 @@ def charge_field(X, V, fr, c):
     c : ndarray, shape (N, 3)
         Each triangle's coefficients of ``1, u, v``.
     """
+    xp = namespace(X, V, c)
     _, n, e1, e2, s, _ = fr
     (ub, uc, vc), corners, u, v, w, w2, du, dv, R, omega = _in_plane(X, V, fr)
     c0, c1, c2 = c[:, 0], c[:, 1], c[:, 2]
     # E0 = sum m f + n sign(w) sum beta, Phi = sum P0 f - |w| sum beta, and
     # sum (g.m) L_e with g = c1 e1 + c2 e2, L_e = d_e f - t (R+ - R-)
     E0u = E0v = Phi = SLu = SLv = SLw = 0.0
-    with np.errstate(divide="ignore", invalid="ignore"):
+    with quiet(xp):
         for tu, tv, P0f, f, dR in _edge_terms(corners, du, dv, R, w2):
             gm = c1 * tv - c2 * tu
             E0u = E0u + tv * f
@@ -157,12 +167,12 @@ def charge_field(X, V, fr, c):
             SLu = SLu - gm * (P0f * tv + dR * tu)
             SLv = SLv + gm * (P0f * tu - dR * tv)
             SLw = SLw + gm * f
-    Phi = Phi - np.abs(w) * omega
+    Phi = Phi - xp.abs(w) * omega
     # the density at the projection, from the centroid (ub + uc, vc) / 3
     psi = c0 + (c1 * (u - (ub + uc) / 3) + c2 * (v - vc / 3)) / s
     Fu = psi * E0u - (SLu + c1 * Phi) / s
     Fv = psi * E0v - (SLv + c2 * Phi) / s
-    Fw = psi * np.sign(w) * omega - w * SLw / s
+    Fw = psi * xp.sign(w) * omega - w * SLw / s
     return Fu @ e1 + Fv @ e2 + Fw @ n
 
 
@@ -216,11 +226,17 @@ def charge_terms(X, V, fr):
 def far_points(V, fr, c):
     """The points of :func:`charge_field_far` on each triangle (6, N, 3) and the
     charge each stands for (6, N)."""
+    xp = namespace(V, c)
     centroid, _, e1, e2, s, area = fr
-    y = np.einsum("gk,nkd->gnd", _FAR_POINTS, V)
+    if xp is np:  # the solver's path, unchanged to the last bit
+        y, weights = np.einsum("gk,nkd->gnd", _FAR_POINTS, V), _FAR_WEIGHTS
+    else:
+        points = xp.asarray(_FAR_POINTS.tolist(), dtype=V.dtype)
+        y = xp.tensordot(points, V, axes=([1], [1]))
+        weights = xp.asarray(_FAR_WEIGHTS.tolist(), dtype=V.dtype)
     u, v = _dot(y - centroid, e1), _dot(y - centroid, e2)
     density = c[:, 0] + (c[:, 1] * u + c[:, 2] * v) / s
-    return y, _FAR_WEIGHTS[:, None] * density * area
+    return y, weights[:, None] * density * area
 
 
 def charge_field_far(X, y, charge):
@@ -229,11 +245,12 @@ def charge_field_far(X, y, charge):
     over triangles whose net charge is zero its error grows with distance: 14 % at
     100 times a model's size, against 1e-10 here. From 64 sides, a triangle whose
     own charge sums to zero is 6e-8 off; beyond about 1e102 the field is 0."""
+    xp = namespace(X, y, charge)
     d = [X[:, k, None, None] - y[..., k] for k in range(3)]
-    with np.errstate(over="ignore", invalid="ignore"):
+    with quiet(xp):
         r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
-        scale = charge / (r2 * np.sqrt(r2))
-        return np.stack([(scale * dk).sum((1, 2)) for dk in d], axis=1)
+        scale = charge / (r2 * xp.sqrt(r2))
+        return xp.stack([xp.sum(scale * dk, axis=(1, 2)) for dk in d], axis=1)
 
 
 def far_terms(X, V, fr):
@@ -383,3 +400,45 @@ def normal_field_far(X, V, fr):
         psi_rho = XD[4 + k] - np.sum(cen * e, axis=1) / s  # density at the projection
         out[1 + k] = psi_rho * out[0] - w * sum_mf[k]
     return out
+
+
+# The reference kinds of kernels/reference/face_charge.json (#208): H in A/m of
+# charge in A/m, as the array API functions of a source's own parameters.
+
+
+def _check_H(field):
+    if field != "H":
+        msg = f"field must be 'H'; instead received {field!r}."
+        raise ValueError(msg)
+
+
+def beyond_far_from(observers, center, far_from):
+    """Which observers (M, 3) are at or beyond ``far_from`` from ``center``,
+    where a sheet takes the far rule: the one predicate of the sheet and of the
+    reference."""
+    return namespace(observers, center).linalg.vector_norm(
+        observers - center, axis=1
+    ) >= far_from
+
+
+def triangle_charge_field(field, observers, vertices, charge):
+    """H in A/m (``field`` 'H') at ``observers`` (M, 3) of the charge ``charge``
+    (N, 3), coefficients of ``1, u, v`` in A/m, on the triangles ``vertices``
+    (N, 3, 3), summed, by the closed form."""
+    _check_H(field)
+    xp = namespace(observers, vertices, charge)
+    return charge_field(observers, vertices, frames(vertices), charge) / (4 * xp.pi)
+
+
+def charge_sheet_field(field, observers, vertices, charge, center, far_from):
+    """:func:`triangle_charge_field`, with the far rule's six point charges
+    per triangle for the observers at or beyond ``far_from`` from ``center``
+    (``far_from`` 0: everywhere). ``center`` (3,) and ``far_from`` (a 0-d
+    array) are arrays of the observers' namespace."""
+    _check_H(field)
+    xp = namespace(observers, vertices, charge, center, far_from)
+    fr = frames(vertices)
+    near = charge_field(observers, vertices, fr, charge)
+    far = charge_field_far(observers, *far_points(vertices, fr, charge))
+    is_far = beyond_far_from(observers, center, far_from)
+    return xp.where(is_far[:, None], far, near) / (4 * xp.pi)
