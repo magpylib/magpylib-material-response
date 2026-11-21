@@ -227,18 +227,110 @@ pub fn far_at(x: V3, y: &[f64], charge: &[f64]) -> V3 {
     acc
 }
 
+/// The far rule's point charges at one observer, summed: `add` takes the
+/// entries `range` (an even count) of `rule` (x, y, z, q arrays), each adding
+/// `q (x - p) / |x - p|^3`; `sum` gives the total.
+#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+struct FarSum {
+    x: V3,
+    acc: V3,
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+impl FarSum {
+    #[inline]
+    fn new(x: V3) -> Self {
+        FarSum { x, acc: [0.0; 3] }
+    }
+
+    #[inline]
+    fn add(&mut self, rule: &[Vec<f64>; 4], range: std::ops::Range<usize>) {
+        let x = self.x;
+        for i in range {
+            let r = [x[0] - rule[0][i], x[1] - rule[1][i], x[2] - rule[2][i]];
+            let r2 = dot(r, r);
+            let scale = rule[3][i] / (r2 * r2.sqrt());
+            self.acc[0] += scale * r[0];
+            self.acc[1] += scale * r[1];
+            self.acc[2] += scale * r[2];
+        }
+    }
+
+    #[inline]
+    fn sum(self) -> V3 {
+        self.acc
+    }
+}
+
+/// [`FarSum`] two charges at a time, in WebAssembly's 128-bit lanes; the
+/// lanes meet once, in `sum`.
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+struct FarSum {
+    x: [core::arch::wasm32::v128; 3],
+    acc: [core::arch::wasm32::v128; 3],
+}
+
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+impl FarSum {
+    #[inline]
+    fn new(x: V3) -> Self {
+        use core::arch::wasm32::f64x2_splat;
+        FarSum {
+            x: x.map(|v| f64x2_splat(v)),
+            acc: [f64x2_splat(0.0); 3],
+        }
+    }
+
+    #[inline]
+    fn add(&mut self, rule: &[Vec<f64>; 4], range: std::ops::Range<usize>) {
+        use core::arch::wasm32::*;
+        let [xs, ys, zs, qs] = rule;
+        assert!(range.end <= xs.len().min(ys.len()).min(zs.len()).min(qs.len()));
+        assert_eq!(range.len() % 2, 0, "far-rule charges come in pairs");
+        let [x0, x1, x2] = self.x;
+        let [mut a0, mut a1, mut a2] = self.acc;
+        for i in range.step_by(2) {
+            // SAFETY: i + 1 < range.end <= every array's length, checked
+            // above; v128_load needs no alignment
+            let (px, py, pz, q) = unsafe {
+                (
+                    v128_load(xs.as_ptr().add(i).cast()),
+                    v128_load(ys.as_ptr().add(i).cast()),
+                    v128_load(zs.as_ptr().add(i).cast()),
+                    v128_load(qs.as_ptr().add(i).cast()),
+                )
+            };
+            let (rx, ry, rz) = (f64x2_sub(x0, px), f64x2_sub(x1, py), f64x2_sub(x2, pz));
+            let r2 = f64x2_add(
+                f64x2_add(f64x2_mul(rx, rx), f64x2_mul(ry, ry)),
+                f64x2_mul(rz, rz),
+            );
+            let scale = f64x2_div(q, f64x2_mul(r2, f64x2_sqrt(r2)));
+            a0 = f64x2_add(a0, f64x2_mul(scale, rx));
+            a1 = f64x2_add(a1, f64x2_mul(scale, ry));
+            a2 = f64x2_add(a2, f64x2_mul(scale, rz));
+        }
+        self.acc = [a0, a1, a2];
+    }
+
+    #[inline]
+    fn sum(self) -> V3 {
+        use core::arch::wasm32::f64x2_extract_lane;
+        self.acc
+            .map(|a| f64x2_extract_lane::<0>(a) + f64x2_extract_lane::<1>(a))
+    }
+}
+
 /// A solved `ChargeSheet`: what `ChargeSheet._field` needs, set up once.
 pub struct Sheet {
     pub frames: Vec<Frame>,
     pub c: Vec<f64>,
     pub center: V3,
     pub far_from: f64,
-    pub y: Vec<f64>,
-    pub charge: Vec<f64>,
     /// per triangle: its longest edge squared, and its six far-rule points
-    /// and charges side by side (x, y, z, q), for the per-pair rule
+    /// and charges, triangle by triangle, as x, y, z and q arrays
     pub longest2: Vec<f64>,
-    pub pair_rule: Vec<[[f64; 4]; 6]>,
+    pub rule: [Vec<f64>; 4],
 }
 
 /// `_triangle.PAIR_RULE`: (bound, k^2) rows; a tolerance takes the first row
@@ -283,23 +375,19 @@ impl Sheet {
                 e0.max(e1).max(e2)
             })
             .collect();
-        let pair_rule = (0..n)
-            .map(|t| {
-                std::array::from_fn(|g| {
-                    let p = &y[3 * (g * n + t)..3 * (g * n + t) + 3];
-                    [p[0], p[1], p[2], charge[g * n + t]]
-                })
-            })
-            .collect();
+        let rule = std::array::from_fn(|k| {
+            (0..n)
+                .flat_map(|t| (0..6).map(move |g| g * n + t))
+                .map(|i| if k < 3 { y[3 * i + k] } else { charge[i] })
+                .collect()
+        });
         Sheet {
             frames,
             c: c.to_vec(),
             center,
             far_from,
-            y,
-            charge,
             longest2,
-            pair_rule,
+            rule,
         }
     }
 
@@ -311,7 +399,9 @@ impl Sheet {
     pub fn h_at(&self, x: V3, k2: f64) -> V3 {
         let d = sub(x, self.center);
         let g = if norm(d) >= self.far_from {
-            far_at(x, &self.y, &self.charge)
+            let mut far = FarSum::new(x);
+            far.add(&self.rule, 0..6 * self.frames.len());
+            far.sum()
         } else if k2.is_infinite() {
             charge_at(x, &self.frames, &self.c)
         } else {
@@ -324,26 +414,20 @@ impl Sheet {
     /// `_triangle.far_pairs`.
     #[inline]
     fn mixed_at(&self, x: V3, k2: f64) -> V3 {
-        let mut acc = [0.0; 3];
+        let (mut near, mut far) = ([0.0; 3], FarSum::new(x));
         for (t, f) in self.frames.iter().enumerate() {
             let d = sub(x, f.centroid);
             let d2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
             if d2 >= k2 * self.longest2[t] {
-                for p in &self.pair_rule[t] {
-                    let r = [x[0] - p[0], x[1] - p[1], x[2] - p[2]];
-                    let r2 = dot(r, r);
-                    let scale = p[3] / (r2 * r2.sqrt());
-                    acc[0] += scale * r[0];
-                    acc[1] += scale * r[1];
-                    acc[2] += scale * r[2];
-                }
+                far.add(&self.rule, 6 * t..6 * t + 6);
             } else {
                 let g = charge_pair(x, f, row(&self.c, t));
-                acc[0] += g[0];
-                acc[1] += g[1];
-                acc[2] += g[2];
+                near[0] += g[0];
+                near[1] += g[1];
+                near[2] += g[2];
             }
         }
-        acc
+        let far = far.sum();
+        [near[0] + far[0], near[1] + far[1], near[2] + far[2]]
     }
 }

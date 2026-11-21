@@ -228,6 +228,22 @@ pair's rule. Planted Rust bugs: all caught (rows, row choice, >=, the
 whole-sheet switch, centroid). Not wired in `ChargeSheet._field` (studio's
 Python side). Next: treecode (decision pending), SIMD, workers in studio.
 
+Speed, step 2 (2026-11-21, uncommitted): WebAssembly SIMD (simd128, every
+current browser; Safari from 16.4), set for the wasm target in
+`kernels/rust/.cargo/config.toml`. The far rule's charges stored as x, y, z, q
+arrays, triangle by triangle; one accumulator (`FarSum`, scalar for native, two
+f64 lanes in wasm, the lanes meeting once at the end) for the whole-sheet and
+the per-pair far rule; the old duplicate layout dropped. Plate, 2,744 points,
+one thread, perf lock: far rule only 15.3 -> 7.9 ms (1.9x), tolerance 1e-3 16.3
+-> 10.5 ms (1.55x), exact and 1e-6 unchanged (the closed form, 84-88 ms:
+logarithms and atan2 have no SIMD instructions; the same with or without SIMD,
+measured twice under the lock). A wasm build without SIMD fails to compile
+(`wasm.rs`), so it cannot be lost silently; browsers without SIMD cannot load
+the module. Three planted SIMD bugs each fail 1,653 wasm checks.
+Auto-vectorisation alone gave 3%. Next levers: the treecode (decision pending);
+a higher-order rule for pairs between near and far, so fine tolerances switch
+closer.
+
 Open:
 
 ## Decided earlier

@@ -1,6 +1,7 @@
 // The WebAssembly build against every point and relation of
 // kernels/reference/*.json, by the rules of kernels/reference/SPEC.md, then H
-// of studio's solved plate timed at a field-line grid. Node runs the same engine as Chrome (V8):
+// of studio's solved plate timed at a field-line grid (the build uses SIMD:
+// kernels/rust/.cargo/config.toml). Node runs the same engine as Chrome (V8):
 //
 //     wasm-pack build --release --target web --out-dir pkg -- --features wasm
 //     node www/check.mjs

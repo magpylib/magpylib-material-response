@@ -4,6 +4,13 @@
 
 use wasm_bindgen::prelude::*;
 
+// The far rule runs two charges at a time in WebAssembly's 128-bit SIMD;
+// without it the build would be silently slower.
+#[cfg(all(target_arch = "wasm32", not(target_feature = "simd128")))]
+compile_error!(
+    "the browser build needs SIMD: run wasm-pack in kernels/rust, whose .cargo/config.toml sets it"
+);
+
 /// A solved `ChargeSheet`: triangles, coefficients, its center and the
 /// distance from which the far rule takes over.
 #[wasm_bindgen]
