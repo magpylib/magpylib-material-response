@@ -6,12 +6,14 @@ dependency group::
 
 A point's values already in the file stay, unless ``--redo``. It takes the one
 implementation at 50 digits (on ``mp_namespace``), rounded to double, with an
-``atol_<field>`` where numpy's own error needs one; numpy's value where the
-50-digit one is not finite or numpy is off by more than ``LOOSE``, and those
-points are printed for review. A relation without ``atol`` must hold at 50
-digits; it then gets one from numpy's residual. A relation with ``atol`` is an
-approximate law, or one filled before: that ``atol`` is checked, never
-changed (delete it to have it set again).
+``atol_<field>`` where numpy's own error needs one; a point without a finite
+50-digit value is refused (it is not in the file's scope, SPEC). NumPy never
+sets a value: where it is off by more than ``LOOSE`` the point is printed,
+without an ``atol``, for the checkers to show. A
+relation without ``atol`` must hold at 50 digits; it then gets one from numpy's
+residual. A relation with ``atol`` is an approximate law, or one filled
+before: that ``atol`` is checked, never changed (delete it to have it set
+again).
 """
 
 import argparse
@@ -28,7 +30,7 @@ from magpylib_material_response._array_api.cuboid import cuboid_field
 
 mp.mp.dps = 50
 MARGIN = 16  # atol over numpy's own error
-LOOSE = 1e-6  # numpy off by more than this, relative: numpy's value, printed
+LOOSE = 1e-6  # numpy off by more than this, relative: printed, no atol
 EXACT = 1e-30  # an exact law's 50-digit residual, relative to its terms
 
 # per kind: the implementation, called as f(field, observers, **parameters)
@@ -77,33 +79,30 @@ def field(doc, source, name, observer, exact):
 
 
 def fill_point(doc, p, redo):
+    """Fill one point's missing fields; the fields numpy disagrees with."""
     _, names = KINDS[doc["sources"][p["source"]]["kind"]]
-    took_numpy = []
+    off = []
     for name in names:
         if name in p and not redo:
             continue
         n = field(doc, p["source"], name, p["observer"], exact=False)
         e = field(doc, p["source"], name, p["observer"], exact=True)
+        if e is None or not all(mp.isfinite(v) for v in e):
+            msg = f"{p['id']} {name}: no finite value, not in the file's scope (SPEC)"
+            raise AssertionError(msg)
         p.pop(f"atol_{name}", None)
-        finite = e is not None and all(mp.isfinite(v) for v in e)
-        err = (
-            norm(mp.mpf(float(a)) - b for a, b in zip(n, e, strict=True))
-            if finite
-            else None
-        )
-        size = norm(e) if finite else None
-        if not finite or not np.all(np.isfinite(n)) or err > LOOSE * size:
-            p[name] = encode(n)
-            took_numpy.append(name)
-            continue
         p[name] = encode([float(v) for v in e])  # mpmath rounds to nearest
-        if MARGIN * err > doc["rtol"] * size:
+        err = norm(mp.mpf(float(a)) - b for a, b in zip(n, e, strict=True))
+        size = norm(e)
+        if not np.all(np.isfinite(n)) or err > LOOSE * size or (size == 0 and err > 0):
+            off.append(name)
+        elif MARGIN * err > doc["rtol"] * size:
             p[f"atol_{name}"] = decade(float(MARGIN * err))
     # key order: id, why, inputs, fields, then their atols
     order = ["id", "why", "source", "observer", *names, *(f"atol_{f}" for f in names)]
     rest = {k: p.pop(k) for k in list(p) if k not in order}
     p.update({k: p.pop(k) for k in order if k in p} | rest)
-    return took_numpy
+    return off
 
 
 def residual(doc, r, exact):
@@ -186,8 +185,8 @@ def main():
     doc = json.loads(args.file.read_text())
     check_names(doc)
     for p in doc["points"]:
-        if took := fill_point(doc, p, args.redo):
-            print(f"numpy's value: {p['id']} {''.join(took)}")
+        if off := fill_point(doc, p, args.redo):
+            print(f"NUMPY DISAGREES: {p['id']} {''.join(off)}")
     for r in doc.get("relations", []):
         fill_relation(doc, r)
     args.file.write_text(dump(doc) + "\n")

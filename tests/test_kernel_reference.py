@@ -21,7 +21,7 @@ REFERENCE = Path(__file__).parents[1] / "kernels" / "reference"
 CUBOID = json.loads((REFERENCE / "cuboid.json").read_text())
 # the points magpylib gets wrong (NaN, or off) before its stable edge
 # logarithms (#1066, after 6.3.0)
-BEFORE_1066 = {"face-y+-by-edge", "beside-edge-1e-12", "issue-1058"} | {
+BEFORE_1066 = {"beside-edge-1e-12"} | {
     f"near-edge-{e}-{d}" for e in "xyz" for d in ("1e-6", "1e-9", "1e-12")
 }
 OLD_MAGPYLIB = Version(magpy.__version__) <= Version("6.3.0")

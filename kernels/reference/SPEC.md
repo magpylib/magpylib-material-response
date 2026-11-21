@@ -62,6 +62,16 @@ component by component (NaN by NaN, an infinity by the same infinity).
 A checker reads every file, checks every point and relation whose kinds and
 fields it has, and reports the ones it skips.
 
+## Scope
+
+A file holds only behaviour that is clear and agreed: values the mathematics
+defines, at points where no convention under discussion changes them. Points on
+a face, an edge or a corner (within today's 1e-15 h, or within the band proposed
+in #1081, 100 eps max(size, |p|)), on a zero-thickness cuboid, or at a
+non-finite observer wait for the surface rules (magpylib #1073; proposal #1081)
+and are added once those are decided. Their ids are reserved: listed per kind
+below, to be used with the same meaning.
+
 ## Where the values come from
 
 `fill.py <file>` fills what is missing; it holds no points. For each missing
@@ -69,12 +79,13 @@ field of a point:
 
 - expected = the one implementation
   (`src/magpylib_material_response/_array_api/`) run at 50 digits on
-  `mp_namespace.py`, rounded to the nearest double;
+  `mp_namespace.py`, rounded to the nearest double. A point without a finite
+  value there is refused: it is out of scope.
 - `atol_<field>` = 16 times numpy's own error, rounded up to a power of ten,
-  where that exceeds `rtol |expected|`;
-- numpy's value instead, with no `atol`, where the 50-digit value is not finite,
-  numpy's is not, or numpy is off by more than 1e-6 relative. `fill.py` prints
-  these points; each must be one listed below.
+  where that exceeds `rtol |expected|`.
+
+NumPy never sets a value. Where it is off by more than 1e-6 relative, `fill.py`
+prints the point and writes no `atol`, and the checkers fail on it.
 
 A relation without `atol` must hold at 50 digits (to 1e-30 of its terms' sizes):
 an exact law. It gets `atol` = 16 times numpy's residual, at least `rtol` times
@@ -94,21 +105,26 @@ implementation changes.
 axes). Parameters: `dimension` (3, m), `polarization` (J, 3, T). Fields `B`,
 `H`, `J`, `M`; mu_0 = 1.25663706127e-6 (CODATA 2022, as magpylib).
 
-Conventions, by the names the `why`s cite, with half-dimensions
-`h = |dimension| / 2`:
+- **inside**: `J = polarization` inside, 0 outside; `M = J / mu_0`;
+  `H = (B - J) / mu_0`.
+- **degenerate**: for a zero polarization, or a zero dimension with the observer
+  off the cuboid's plane, `B = H = 0`.
 
-- **inside**: `|x_k| - h_k < 1e-15 h_k` on every axis, faces included. There
-  `J = polarization`, else 0; `M = J / mu_0`; `H = (B - J) / mu_0`.
-- **edges**: on an edge or a corner (within 1e-15 h of two faces' planes and
-  inside along the third axis), `B = H = 0`; J and M as above.
-- **degenerate**: for a zero dimension or polarization, `B = H = 0`.
-- **faces**: on a face, B jumps by J. The side taken is the one IEEE signed
-  zeros pick in magpylib's formulas (`atan2`), so these points take numpy's
-  value. Outside, in a face's plane, the field is continuous and exact.
+**Band-sensitive** (in the file, regular today and under #1081's band of 100 eps
+max(size, |p|); a wider band would make them face or edge points): `near-edge-*`
+and `beside-edge-1e-12` (magpylib's #1066 tests), and the relations
+`split-bar-*` and `jump-*`.
 
-A magpylib checker skips `face-y+-by-edge`, `beside-edge-1e-12`, `issue-1058`
-and `near-edge-*` for magpylib <= 6.3.0, which gives NaN or is off there (fixed
-by #1066); that list is in the test, not in the file.
+**Reserved, waiting for #1073**: `face-x+`, `face-x-`, `face-y+`,
+`face-y+-by-edge`, `face-x+-tolerance`, `beyond-tolerance-x+`, `edge-x`,
+`edge-z`, `corner-ppp`, `corner-mmm`, `zero-dimension` (on the zero-thickness
+plate: B tends to J inside, not 0), `face-z+`, `issue-1058` (magpylib's #1058
+test: on a face today, on an edge under #1081's band), `observer-nan`,
+`observer-inf`.
+
+A magpylib checker skips `beside-edge-1e-12` and `near-edge-*` for magpylib <=
+6.3.0, which gives NaN or is off there (fixed by #1066); that list is in the
+test, not in the file.
 
 Not taken from magpylib's tests: `test_vs_mag2` (magpylib 2's outputs; these
 values are exact), `test_Cuboid_basics` (the pose). Waiting for other kinds: the

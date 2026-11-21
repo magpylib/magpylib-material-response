@@ -88,25 +88,53 @@ is for humans and agents.
 6. **Later kinds** with elliptic integrals (cylinder, circle, cylinder segment)
    need `cel` in `mp_namespace` and in the array API implementation.
 
-## Cuboid in the new design (2026-11-21, uncommitted)
+## Cuboid in the new design (2026-11-21)
 
-Done, waiting for Alex's review:
+Committed as 03e7fa6; the working tree then narrowed it (uncommitted, below).
 
 - `cuboid_field` has `J` and `M`: bit-identical with magpylib's
   `_BHJM_magnet_cuboid` for B, H, J, M on NumPy and `array_api_strict`.
 - `kernels/reference/fill.py`: the one generic tool (kind table: `cuboid`).
-  Idempotent; `--redo` reproduces the file byte for byte.
-- `cuboid.json` slim: 23 sources, 77 points (the 61 earlier ones, magpylib's
-  BHJM table, #1058, 9 near-edge points), 10 relations (B-H-J, M-J, split bar
-  x2, jump x3, mirror, cycle of axes, long prism). The near-edge points equal
-  magpylib's independent 90-digit literals bit for bit. NumPy's value at 6
-  points (4 faces, NaN and inf observers).
-- `SPEC.md` (format, rules, every id). Checkers: Python test (523 passed), Rust
-  (all pass; J, M reported as not in the crate), Node/wasm (B only). Full MR
-  suite 1203 passed.
-- Planted sign bugs in the formula (3 mutants), regenerated: each fails
-  relations at 50 digits; `cycle-axes` catches all three.
-- magpylib 6.3.0 fails 13 points (all fixed by #1066): skip list in the test.
+  Idempotent; `--redo` reproduces the file byte for byte; never takes numpy's
+  value; refuses a point without a finite 50-digit value.
+- `cuboid.json`: points and relations as in SPEC.md; the near-edge points equal
+  magpylib's independent 90-digit literals bit for bit. Planted sign bugs (3
+  mutants), regenerated: each fails relations at 50 digits; `cycle-axes` catches
+  all three.
+- Checkers: Python test, Rust (J, M reported as not in the crate), Node/wasm (B
+  only), each printing the `why` beside a failure.
+- magpylib 6.3.0 is off or NaN at `beside-edge-1e-12` and the nine `near-edge-*`
+  points (#1066): the skip list in the test.
+
+Held back from the committed file (13 points, uncommitted): faces `face-x+`,
+`face-x-`, `face-y+`, `face-y+-by-edge`, `face-x+-tolerance`,
+`beyond-tolerance-x+`; edges and corners `edge-x`, `edge-z`, `corner-ppp`,
+`corner-mmm`; `zero-dimension` (on the zero-thickness plate B tends to J inside,
+probed at 1e-6..1e-12, not 0); `issue-1058`, `observer-nan`, `observer-inf`.
+Their observers and the `cell_1058` source are in 03e7fa6; `face-z+` (observer
+[-0.0015, 0.002, 0.015] on `cube`) was never committed. They come back, with the
+agreed rule computed by `fill.py`, once #1073 is decided. Which class each band
+gives them: SPEC.md and the 2026-11-21 table (today's 1e-15 h, #1081's 100 eps,
+1e-12 and 1e-8 of the size).
+
+Verified finding for #1073 (not applied): on an x face magpylib's B is the
+outside limit while H subtracts J, so H matches neither side. Cause: after the
+octant mapping the zero `x - a` is `+0.0`, times a negative factor an `atan2`
+numerator `-0.0` over a negative denominator gives `-pi` instead of `+pi`.
+Forcing that zero to `-0.0` gave the inside limit on all four faces tried. This
+answers Michael's question on how to compute a face average: the same formula
+evaluated twice with the zero signed each way gives both limits exactly, no
+nudging and no separate expression. Tested for the x face only (flipping y and z
+faces to the outside was not).
+
+Scope (Alex, 2026-11-21): MR lays the testing foundation and the wasm for field
+lines in the browser, not every edge case. The files hold only clear, agreed
+behaviour. Faces, edges, corners, the tolerance band and non-finite observers
+wait for magpylib #1073 (proposal #1081; Michael agreed on NaN at edges and
+corners, asked how a face average is computed, proposed a band per object, maybe
+a keyword). 13 points held back, ids reserved in SPEC.md (uncommitted). If the
+band becomes a keyword of `magpylib.func`, it is a source parameter here and
+band-dependent points can state it.
 
 Open:
 
