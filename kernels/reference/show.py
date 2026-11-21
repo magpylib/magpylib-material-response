@@ -1,12 +1,13 @@
-"""Plot a reference file of points for inspection: each source, its points
-colored by group, every point's id, reason and expected values on hover.
+"""Plot a reference file for inspection: each source, its points colored by
+group (the id up to its first '-'), the observers of the relations' terms,
+every id and expected value on hover; what the ids mean is in ``SPEC.md``.
 
     python kernels/reference/show.py [kernels/reference/cuboid.json] [--out page.html]
 
 One view per source (a dropdown switches): the sources span 3 nm to 3000 km.
-Far points start hidden, as do the B arrows (direction only); click their
-legend entries to show them. Reads the file alone, not the generator: what
-the plot shows is what every implementation is checked against.
+Far points start hidden, as do the field arrows (direction only); click their
+legend entries to show them. Reads the file alone: what the plot shows is
+what every implementation is checked against.
 """
 
 import argparse
@@ -17,7 +18,13 @@ import numpy as np
 import plotly.colors
 import plotly.graph_objects as go
 
-HIDDEN = {"far"}  # groups shown only on demand
+# groups shown only on demand: far points would shrink the source to a dot
+HIDDEN = {"far"}
+FIELDS = ("B", "H", "J", "M", "F", "F_far")
+
+
+def _group(p):
+    return p["id"].split("-")[0]
 
 
 def _num(v):
@@ -39,27 +46,57 @@ def _box(dimension, name):
                      name=name, hoverinfo="name", showlegend=False)  # fmt: skip
 
 
+def _triangles(V, name):
+    """Triangles (N, 3, 3) as a translucent mesh."""
+    V = np.array(V, float).reshape(-1, 3)
+    x, y, z = V.T
+    i = np.arange(0, len(V), 3)
+    return go.Mesh3d(x=x, y=y, z=z, i=i, j=i + 1, k=i + 2, opacity=0.3, color="grey",
+                     name=name, hoverinfo="name", showlegend=False)  # fmt: skip
+
+
+def _shape(src, name):
+    """A source's outline and its size."""
+    if src["kind"] == "cuboid":
+        return _box(src["dimension"], name), float(np.max(np.abs(src["dimension"])))
+    V = np.array(src["V"], float).reshape(-1, 3)
+    return _triangles(src["V"], name), float(np.max(np.ptp(V, axis=0)))
+
+
 def _hover(p):
-    fields = "<br>".join(f"{f} = {p[f]}" for f in ("B", "H") if f in p)
-    flags = " (convention)" if p.get("convention") else ""
-    needs = f"<br>needs: {p['needs']}" if "needs" in p else ""
-    return f"<b>{p['id']}</b>{flags}<br>{p['why']}<br>{fields}{needs}"
+    if "term" in p:
+        return f"<b>{p['relation']}</b><br>{p['why']}<br>{p['term']}<br>target {p['target']}"
+    fields = "<br>".join(f"{f} = {p[f]}" for f in FIELDS if f in p)
+    return f"<b>{p['id']}</b><br>{p.get('why', '')}<br>{fields}"
+
+
+def _relation_points(doc):
+    """Each relation's terms as points, grouped as 'relations'."""
+    return [
+        {"id": "relations", "relation": r["id"], "why": r.get("why", ""), "source": t["source"],
+         "observer": t["observer"], "term": f"{t['field']} x {t['weight']}",
+         "target": r["target"]}
+        for r in doc.get("relations", []) for t in r["terms"]
+    ]  # fmt: skip
 
 
 def figure(doc, title):
     fig = go.Figure()
-    groups = sorted({p["group"] for p in doc["points"]})
+    relation_points = _relation_points(doc)
+    groups = sorted({_group(p) for p in doc["points"] + relation_points})
     colors = plotly.colors.qualitative.Dark24
     palette = {g: colors[n % len(colors)] for n, g in enumerate(groups)}
     owner = []  # the source of each trace, for the dropdown
     for name, src in doc["sources"].items():
         pts = [p for p in doc["points"] if p["source"] == name]
-        if not pts:
+        rel = [p for p in relation_points if p["source"] == name]
+        if not pts + rel:
             continue
-        fig.add_trace(_box(src["dimension"], name))
+        outline, size = _shape(src, name)
+        fig.add_trace(outline)
         owner.append(name)
         for g in groups:
-            sel = [p for p in pts if p["group"] == g]
+            sel = [p for p in pts + rel if _group(p) == g]
             if not sel:
                 continue
             X = np.array([[_num(v) for v in p["observer"]] for p in sel])
@@ -67,28 +104,32 @@ def figure(doc, title):
             fig.add_trace(go.Scatter3d(
                 x=X[ok, 0], y=X[ok, 1], z=X[ok, 2], mode="markers",
                 marker={"size": 5, "color": palette[g],
-                        "symbol": ["diamond" if p.get("convention") else "circle"
-                                   for p, k in zip(sel, ok, strict=True) if k]},
+                        "symbol": "diamond" if g == "relations" else "circle"},
                 name=g, legendgroup=g, hovertext=[_hover(p) for p, k in zip(sel, ok, strict=True) if k],
                 hoverinfo="text", visible="legendonly" if g in HIDDEN else True,
             ))  # fmt: skip
             owner.append(name)
+        if not pts:
+            continue
         X = np.array([[_num(v) for v in p["observer"]] for p in pts])
-        B = np.array([[_num(v) for v in p["B"]] for p in pts])
+        # each point's field, whichever it carries
+        B = np.array(
+            [[_num(v) for v in next(p[f] for f in FIELDS if f in p)] for p in pts]
+        )
         keep = np.isfinite(X).all(axis=1) & np.isfinite(B).all(axis=1)
         keep &= np.linalg.norm(B, axis=1) > 0
-        keep &= np.array([p["group"] not in HIDDEN for p in pts])
+        keep &= np.array([_group(p) not in HIDDEN for p in pts])
         U = B[keep] / np.linalg.norm(B[keep], axis=1)[:, None]
         fig.add_trace(go.Cone(
             x=X[keep, 0], y=X[keep, 1], z=X[keep, 2], u=U[:, 0], v=U[:, 1], w=U[:, 2],
-            sizemode="absolute", sizeref=0.25 * float(np.max(np.abs(src["dimension"]))),
+            sizemode="absolute", sizeref=0.25 * size,
             anchor="tail", showscale=False, colorscale=[[0, "black"], [1, "black"]],
-            name="B direction", visible="legendonly", showlegend=True, hoverinfo="skip",
+            name="field direction", visible="legendonly", showlegend=True, hoverinfo="skip",
         ))  # fmt: skip
         owner.append(name)
     names = list(dict.fromkeys(owner))
     buttons = [
-        {"label": f"{n}: {doc['sources'][n].get('why', '')[:60]}", "method": "update",
+        {"label": n, "method": "update",
          "args": [{"visible": [_initial(fig.data[i]) if o == n else False
                                for i, o in enumerate(owner)]}]}
         for n in names
@@ -103,14 +144,14 @@ def figure(doc, title):
         updatemenus=[
             {"buttons": buttons, "x": 0, "y": 1.0, "xanchor": "left", "yanchor": "bottom"}
         ],
-        legend={"title": "group (diamond: by convention)"},
+        legend={"title": "group (diamond: a relation's term)"},
     )  # fmt: skip
     return fig
 
 
 def _initial(trace):
     """A trace's visibility when its source is shown."""
-    if trace.name == "B direction" or trace.name in HIDDEN:
+    if trace.name == "field direction" or trace.name in HIDDEN:
         return "legendonly"
     return True
 

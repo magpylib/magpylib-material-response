@@ -1,6 +1,6 @@
-// The WebAssembly build against kernels/reference/*.json, then H of studio's
-// solved plate timed at a field-line grid. Node runs the same engine as
-// Chrome (V8):
+// The WebAssembly build against every point and relation of
+// kernels/reference/*.json, by the rules of kernels/reference/SPEC.md, then H
+// of studio's solved plate timed at a field-line grid. Node runs the same engine as Chrome (V8):
 //
 //     wasm-pack build --release --target web --out-dir pkg -- --features wasm
 //     node www/check.mjs
@@ -17,27 +17,31 @@ const dir = here("../../reference/");
 const docs = readdirSync(dir)
   .filter((f) => f.endsWith(".json"))
   .sort()
-  .map((f) => JSON.parse(readFileSync(dir + f, "utf8")));
+  .map((f) => ({ file: f, ...JSON.parse(readFileSync(dir + f, "utf8")) }));
 
 const num = (v) =>
   v === "nan" ? NaN : v === "inf" ? Infinity : v === "-inf" ? -Infinity : v;
-const flat = (a) => Float64Array.from(a.flat(Infinity), num);
+const flat = (a) => Float64Array.from([a].flat(Infinity), num);
 
-// the kernels this build has; a case needing another one is skipped
-const run = {
-  charge_field: (i) => charge_field(i.X, i.V, i.c),
-  cuboid_B: (i) => cuboid_b(i.X, i.dimension, i.polarization),
-  sheet_H: (i) => {
-    const s = new Sheet(i.V, i.c, i.center, i.far_from[0]);
-    const out = s.h(i.X);
-    s.free();
-    return out;
+// the fields this build has, by source kind; any other is skipped and reported
+const fields = {
+  cuboid: {
+    B: (s, x) => cuboid_b(x, flat(s.dimension), flat(s.polarization)),
+  },
+  triangles: {
+    F: (s, x) => charge_field(x, flat(s.V), flat(s.c)),
+  },
+  sheet: {
+    H: (s, x) => {
+      const sheet = new Sheet(flat(s.V), flat(s.c), flat(s.center), s.far_from);
+      const out = sheet.h(x);
+      sheet.free();
+      return out;
+    },
   },
 };
 
-let failed = 0;
-const skipped = [];
-// the files' rule for one row; returns the share of the tolerance used, or -1
+// the files' rule for one field; the share of the tolerance used, or -1
 function within(g, e, rtol, atol) {
   if (!e.every(Number.isFinite))
     return e.every((v, k) => Object.is(v, g[k]) || (isNaN(v) && isNaN(g[k])))
@@ -48,75 +52,77 @@ function within(g, e, rtol, atol) {
   return err <= bound ? (err > 0 ? err / bound : 0) : -1;
 }
 
-// a file of points: the cuboid, B only (the build has no H)
-for (const doc of docs.filter((d) => d.points)) {
+let failed = 0;
+const skipped = new Set();
+for (const doc of docs) {
   let worst = [0, ""];
   for (const p of doc.points) {
     const src = doc.sources[p.source];
-    const got = cuboid_b(
-      flat(p.observer),
-      flat(src.dimension),
-      flat(src.polarization),
-    );
-    const r = within(got, Float64Array.from(p.B, num), doc.rtol, p.atol_B ?? 0);
-    if (r < 0) {
+    for (const name of ["B", "H", "J", "M", "F", "F_far"].filter(
+      (n) => n in p,
+    )) {
+      const kernel = fields[src.kind]?.[name];
+      if (!kernel) {
+        skipped.add(`${src.kind} ${name}`);
+        continue;
+      }
+      const got = kernel(src, flat(p.observer));
+      const r = within(got, flat(p[name]), doc.rtol, p[`atol_${name}`] ?? 0);
+      if (r < 0) {
+        failed++;
+        console.log(
+          `${p.id} ${name} off (${p.why}): got ${got}, expected ${p[name]}`,
+        );
+      } else if (r > worst[0]) worst = [r, `${p.id} ${name}`];
+    }
+  }
+  // relations: the sum of weight @ field over the terms, against the target
+  for (const r of doc.relations ?? []) {
+    let total = [0, 0, 0];
+    let ok = true;
+    for (const t of r.terms) {
+      const src = doc.sources[t.source];
+      const kernel = fields[src.kind]?.[t.field];
+      if (!kernel) {
+        skipped.add(`${src.kind} ${t.field}`);
+        ok = false;
+        break;
+      }
+      const f = kernel(src, flat(t.observer));
+      const w = flat(t.weight);
+      const part =
+        w.length === 1
+          ? [...f].map((x) => w[0] * x)
+          : [0, 1, 2].map(
+              (i) =>
+                w[3 * i] * f[0] + w[3 * i + 1] * f[1] + w[3 * i + 2] * f[2],
+            );
+      total = total.map((a, i) => a + part[i]);
+    }
+    if (!ok) continue;
+    const x = within(total, flat(r.target), doc.rtol, r.atol);
+    if (x < 0) {
       failed++;
-      console.log(`${p.id} B off: got ${got}, expected ${p.B}`);
-    } else if (r > worst[0]) worst = [r, p.id];
+      console.log(`${r.id} off (${r.why}): got ${total}, expected ${r.target}`);
+    } else if (x > worst[0]) worst = [x, r.id];
   }
   console.log(
-    `${doc.family}: ${doc.points.length} points, B; worst ${worst[1]} at ` +
-      `${worst[0].toFixed(3)} of its tolerance (H not in this build)`,
+    `${doc.file}: worst ${worst[1]} at ${worst[0].toFixed(3)} of its tolerance`,
   );
 }
-
-for (const doc of docs.filter((d) => d.cases)) {
-  for (const c of doc.cases) {
-    if (!run[c.kernel]) {
-      skipped.push(c.name);
-      continue;
-    }
-    const inputs = Object.fromEntries(
-      Object.entries(c.inputs).map(([k, v]) => [
-        k,
-        flat(v.array ? doc.arrays[v.array] : v),
-      ]),
-    );
-    const got = run[c.kernel](inputs);
-    const width = c.expected[0].length;
-    let worst = 0;
-    c.expected.forEach((row, r) => {
-      const e = Float64Array.from(row, num);
-      const g = got.subarray(width * r, width * (r + 1));
-      if (!e.every(Number.isFinite)) {
-        if (!e.every((v, k) => Object.is(v, g[k]) || (isNaN(v) && isNaN(g[k]))))
-          failed++;
-        return;
-      }
-      const err = Math.hypot(...e.map((v, k) => g[k] - v));
-      const bound = c.rtol * Math.hypot(...e) + c.atol[r];
-      if (!(err <= bound)) failed++;
-      else if (err > 0) worst = Math.max(worst, err / bound);
-    });
-    console.log(
-      `${c.name.padEnd(26)} worst row at ${worst.toFixed(3)} of its tolerance`,
-    );
-  }
-}
-console.log(failed ? `${failed} rows off` : "all rows within tolerance");
-if (skipped.length)
-  console.log(`skipped, not in this build: ${skipped.join(", ")}`);
+console.log(failed ? `${failed} off` : "every point within tolerance");
+if (skipped.size) console.log(`not in this build: ${[...skipped].join(", ")}`);
 
 // timing: the solved plate's sheet at a grid round it, as studio's field
-// lines ask; only with face_charge.json, which holds the plate
-function timePlate(face) {
-  const plate = face.cases.find((c) => c.name === "sheet_solved_plate").inputs;
-  const pV = face.arrays[plate.V.array];
+// lines ask
+const plate = docs.find((d) => d.file === "face_charge.json")?.sources
+  .solved_plate;
+if (plate) {
   const sheet = new Sheet(
-    flat(pV),
-    flat(face.arrays[plate.c.array]),
+    flat(plate.V),
+    flat(plate.c),
     flat(plate.center),
-    plate.far_from[0],
+    plate.far_from,
   );
   for (const n of [2500, 8000]) {
     const side = Math.round(Math.cbrt(n));
@@ -138,15 +144,12 @@ function timePlate(face) {
     }
     times.sort((a, b) => a - b);
     const m = X.length / 3;
-    const ns = (times[0] * 1e6) / (m * (pV.length || 1));
+    const ns = (times[0] * 1e6) / (m * plate.V.length);
     console.log(
-      `plate, ${pV.length} triangles, ${m} points: ${times[0].toFixed(1)} ms best, ` +
-        `${times[5].toFixed(1)} ms median (${ns.toFixed(0)} ns per pair, one thread)`,
+      `plate, ${plate.V.length} triangles, ${m} points: ${times[0].toFixed(1)} ms ` +
+        `best, ${times[5].toFixed(1)} ms median (${ns.toFixed(0)} ns per pair, one thread)`,
     );
   }
   sheet.free();
-}
-const face = docs.find((d) => d.family === "face_charge");
-if (face) timePlate(face);
-else console.log("plate timing skipped: no face_charge.json");
+} else console.log("plate timing skipped: no face_charge.json");
 if (failed) process.exit(1);

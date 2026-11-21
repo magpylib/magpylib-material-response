@@ -13,6 +13,7 @@ by the caller, not from here.
 
 import math
 import sys
+from types import SimpleNamespace
 
 import mpmath as mp
 import numpy as np
@@ -74,6 +75,9 @@ class MPArray:
     __truediv__ = lambda s, o: s._bin(o, _div)
     __rtruediv__ = lambda s, o: s._bin(o, lambda a, b: _div(b, a))
     __pow__ = lambda s, o: s._bin(o, np.power)
+
+    def __matmul__(self, other):
+        return MPArray(np.matmul(self._a, _raw(other)), FLOAT)
 
     def __neg__(self):
         return MPArray(-self._a, FLOAT)
@@ -187,6 +191,44 @@ def result_type(*_dtypes):
 
 def astype(x, dtype, copy=True):
     return MPArray(x._a.copy() if copy else x._a, dtype)
+
+
+def sign(x):
+    return _unary(lambda v: v if mp.isnan(v) else mp.sign(v))(x)
+
+
+def sum(x, axis=None):
+    return MPArray(np.sum(x._a, axis=axis), FLOAT)
+
+
+def mean(x, axis=None):
+    n = x._a.size if axis is None else x._a.shape[axis]
+    return sum(x, axis=axis) / n
+
+
+def matmul(a, b):
+    return MPArray(np.matmul(_raw(a), _raw(b)), FLOAT)
+
+
+def tensordot(a, b, axes=2):
+    return MPArray(np.tensordot(_raw(a), _raw(b), axes=axes), FLOAT)
+
+
+def permute_dims(x, axes):
+    return MPArray(np.transpose(x._a, axes), x.dtype)
+
+
+def _cross(a, b):
+    a0, a1, a2 = unstack(a, axis=-1)
+    b0, b1, b2 = unstack(b, axis=-1)
+    return stack((a1 * b2 - a2 * b1, a2 * b0 - a0 * b2, a0 * b1 - a1 * b0), axis=-1)
+
+
+def _vector_norm(x, axis=None):
+    return sqrt(sum(x * x, axis=axis))
+
+
+linalg = SimpleNamespace(cross=_cross, vector_norm=_vector_norm)
 
 
 def from_doubles(a):

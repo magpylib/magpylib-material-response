@@ -1,7 +1,7 @@
-//! Every case of `kernels/reference/*.json`, the files the generator writes,
-//! to its stated tolerance: per row `r`, `|got_r - expected_r| <= rtol
-//! |expected_r| + atol[r]`, non-finite components matched exactly. A case
-//! whose kernel this crate lacks is skipped and reported.
+//! Every point and relation of `kernels/reference/*.json` to its tolerance, by
+//! the rules of `kernels/reference/SPEC.md`: per field,
+//! `|got - expected| <= rtol |expected| + atol`, non-finite components matched
+//! exactly. On one thread and on all.
 
 use mmr_kernels as k;
 use serde_json::Value;
@@ -25,78 +25,19 @@ fn floats(v: &Value) -> Vec<f64> {
     out
 }
 
-/// A case's input, or the shared array it names.
-fn input(doc: &Value, case: &Value, name: &str) -> Vec<f64> {
-    let v = &case["inputs"][name];
-    match v.get("array") {
-        Some(id) => floats(&doc["arrays"][id.as_str().unwrap()]),
-        None => floats(v),
-    }
+fn v3(v: &Value) -> [f64; 3] {
+    let f = floats(v);
+    [f[0], f[1], f[2]]
 }
 
-/// The kernel's output, flat, or None for a kernel this crate lacks.
-fn run(doc: &Value, case: &Value, threads: bool) -> Option<Vec<f64>> {
-    let get = |name: &str| input(doc, case, name);
-    let kernel = case["kernel"].as_str().unwrap();
-    let field = |x: &[f64]| vec![0.0; x.len()];
-    Some(match kernel {
-        "charge_field" => {
-            let x = get("X");
-            let mut out = field(&x);
-            k::charge_field(&x, &get("V"), &get("c"), &mut out, threads);
-            out
-        }
-        "far_points" => k::far_points(&get("V"), &get("c")).0,
-        "far_charges" => k::far_points(&get("V"), &get("c")).1,
-        "charge_field_far" => {
-            let x = get("X");
-            let mut out = field(&x);
-            k::charge_field_far(&x, &get("y"), &get("charge"), &mut out, threads);
-            out
-        }
-        "sheet_H" => {
-            let (x, c) = (get("X"), get("center"));
-            let sheet = k::triangle::Sheet::new(
-                &get("V"),
-                &get("c"),
-                [c[0], c[1], c[2]],
-                get("far_from")[0],
-            );
-            let mut out = field(&x);
-            k::sheet_h(&sheet, &x, &mut out, threads);
-            out
-        }
-        "cuboid_B" | "cuboid_H" => {
-            let x = get("X");
-            let mut out = field(&x);
-            let f = kernel.as_bytes()[7];
-            k::cuboid_field(
-                f,
-                &x,
-                &get("dimension"),
-                &get("polarization"),
-                &mut out,
-                threads,
-            );
-            out
-        }
-        _ => return None,
-    })
-}
-
-fn same_non_finite(a: f64, b: f64) -> bool {
-    (a.is_nan() && b.is_nan()) || a == b
-}
-
-/// The files' rule for one row: non-finite components exactly, the rest within
-/// `rtol |expected| + atol`. Ok holds the share of the tolerance used.
+/// The files' rule for one row; Ok holds the share of the tolerance used.
 fn within(got: &[f64], expected: &[f64], rtol: f64, atol: f64) -> Result<f64, String> {
     if expected.iter().any(|v| !v.is_finite()) {
-        return if got
+        let same = got
             .iter()
             .zip(expected)
-            .all(|(a, b)| same_non_finite(*a, *b))
-        {
+            .all(|(a, b)| (a.is_nan() && b.is_nan()) || a == b);
+        return if same {
             Ok(0.0)
         } else {
             Err(format!("got {got:?}, expected {expected:?}"))
@@ -118,59 +59,43 @@ fn within(got: &[f64], expected: &[f64], rtol: f64, atol: f64) -> Result<f64, St
     }
 }
 
-/// `cuboid.json`: every point, B and H, one thread.
-#[test]
-fn cuboid_points() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../reference/cuboid.json");
-    let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    assert_eq!(
-        k::cuboid::MU0,
-        doc["constants"]["mu_0"].as_f64().unwrap(),
-        "mu_0"
-    );
-    let rtol = doc["rtol"].as_f64().unwrap();
-    let (mut failures, mut worst) = (Vec::new(), (0.0f64, String::new()));
-    for p in doc["points"].as_array().unwrap() {
-        let id = p["id"].as_str().unwrap();
-        let src = &doc["sources"][p["source"].as_str().unwrap()];
-        let v3 = |v: &Value| {
-            let f = floats(v);
-            [f[0], f[1], f[2]]
-        };
-        let (x, d, j) = (
-            v3(&p["observer"]),
-            v3(&src["dimension"]),
-            v3(&src["polarization"]),
-        );
-        for (field, got) in [
-            ("B", k::cuboid::cuboid_b(x, d, j)),
-            ("H", k::cuboid::cuboid_h(x, d, j)),
-        ] {
-            let atol = p
-                .get(format!("atol_{field}"))
-                .and_then(Value::as_f64)
-                .unwrap_or(0.0);
-            match within(&got, &floats(&p[field]), rtol, atol) {
-                Ok(r) if r > worst.0 => worst = (r, format!("{id} {field}")),
-                Ok(_) => {}
-                Err(msg) => failures.push(format!("{id} {field}: {msg}")),
-            }
+/// One field at one observer of one source, or None for a field this crate
+/// lacks.
+fn field(name: &str, src: &Value, x: [f64; 3], threads: bool) -> Option<Vec<f64>> {
+    let mut out = vec![0.0; 3];
+    match (src["kind"].as_str().unwrap(), name) {
+        ("cuboid", "B" | "H") => {
+            let (d, p) = (floats(&src["dimension"]), floats(&src["polarization"]));
+            k::cuboid_field(name.as_bytes()[0], &x, &d, &p, &mut out, threads);
         }
+        ("triangles", "F") => k::charge_field(
+            &x,
+            &floats(&src["V"]),
+            &floats(&src["c"]),
+            &mut out,
+            threads,
+        ),
+        ("triangles", "F_far") => {
+            let (y, q) = k::far_points(&floats(&src["V"]), &floats(&src["c"]));
+            k::charge_field_far(&x, &y, &q, &mut out, threads);
+        }
+        ("sheet", "H") => {
+            let far_from = src["far_from"].as_f64().unwrap();
+            let sheet = k::triangle::Sheet::new(
+                &floats(&src["V"]),
+                &floats(&src["c"]),
+                v3(&src["center"]),
+                far_from,
+            );
+            k::sheet_h(&sheet, &x, &mut out, threads);
+        }
+        _ => return None,
     }
-    println!(
-        "cuboid points: worst {} at {:.3} of its tolerance",
-        worst.1, worst.0
-    );
-    assert!(
-        failures.is_empty(),
-        "{} off:\n{}",
-        failures.len(),
-        failures.join("\n")
-    );
+    Some(out)
 }
 
 #[test]
-fn reference_cases() {
+fn reference_points() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../reference");
     let mut files: Vec<_> = std::fs::read_dir(dir)
         .unwrap()
@@ -179,49 +104,107 @@ fn reference_cases() {
         .collect();
     files.sort();
     assert!(!files.is_empty(), "no reference files in {dir}");
-    let (mut failures, mut skipped) = (Vec::new(), Vec::new());
+    let (mut failures, mut skipped) = (Vec::new(), std::collections::BTreeSet::new());
     for path in files {
         let doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        if let Some(mu0) = doc["constants"]["mu_0"].as_f64() {
-            assert_eq!(k::cuboid::MU0, mu0, "mu_0 differs from the reference's");
-        }
-        let Some(cases) = doc["cases"].as_array() else {
-            continue; // a file of points: see cuboid_points
-        };
-        for case in cases {
-            let name = case["name"].as_str().unwrap();
-            let rows: Vec<Vec<f64>> = case["expected"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(floats)
-                .collect();
-            let atol = floats(&case["atol"]);
-            let rtol = case["rtol"].as_f64().unwrap();
-            let width = rows[0].len();
-            let mut worst = 0.0f64;
-            for threads in [false, true] {
-                let Some(got) = run(&doc, case, threads) else {
-                    skipped.push(name.to_string());
-                    break;
-                };
-                assert_eq!(got.len(), rows.len() * width, "{name}: output length");
-                for (r, (g, e)) in got.chunks(width).zip(&rows).enumerate() {
-                    match within(g, e, rtol, atol[r]) {
-                        Ok(ratio) => worst = worst.max(ratio),
-                        Err(msg) => failures.push(format!("{name} row {r}: {msg}")),
+        let file = path.file_name().unwrap().to_string_lossy().into_owned();
+        let rtol = doc["rtol"].as_f64().unwrap();
+        let mut worst = (0.0f64, String::new());
+        for p in doc["points"].as_array().unwrap() {
+            let id = p["id"].as_str().unwrap();
+            let src = &doc["sources"][p["source"].as_str().unwrap()];
+            let x = v3(&p["observer"]);
+            for name in ["B", "H", "J", "M", "F", "F_far"]
+                .into_iter()
+                .filter(|n| p.get(*n).is_some())
+            {
+                let atol = p
+                    .get(format!("atol_{name}"))
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0);
+                for threads in [false, true] {
+                    let Some(got) = field(name, src, x, threads) else {
+                        skipped.insert(format!("{} {name}", src["kind"].as_str().unwrap()));
+                        break;
+                    };
+                    match within(&got, &floats(&p[name]), rtol, atol) {
+                        Ok(r) if r > worst.0 => worst = (r, format!("{id} {name}")),
+                        Ok(_) => {}
+                        Err(msg) => failures.push(format!("{id} {name} ({}): {msg}", p["why"])),
                     }
                 }
             }
-            println!("{name:26} worst row at {worst:.3} of its tolerance");
         }
+        // the far rule's points and charges, on the sources that carry them
+        for (name, src) in doc["sources"].as_object().unwrap() {
+            let Some(rows) = src.get("far_points") else {
+                continue;
+            };
+            let (y, q) = k::far_points(&floats(&src["V"]), &floats(&src["c"]));
+            for (key, got, width) in [("far_points", &y, 3), ("far_charges", &q, 1)] {
+                let expected = floats(&src[key]);
+                let atol = src.get(format!("atol_{key}")).map(floats);
+                for (r, (g, e)) in got.chunks(width).zip(expected.chunks(width)).enumerate() {
+                    let a = atol.as_ref().map_or(0.0, |a| a[r]);
+                    if let Err(msg) = within(g, e, rtol, a) {
+                        failures.push(format!("{name} {key} row {r}: {msg}"));
+                    }
+                }
+            }
+            let _ = rows;
+        }
+        // relations: the sum of weight @ field over the terms, against the target
+        for r in doc["relations"].as_array().into_iter().flatten() {
+            let id = r["id"].as_str().unwrap();
+            for threads in [false, true] {
+                let mut total = Vec::new();
+                for t in r["terms"].as_array().unwrap() {
+                    let name = t["field"].as_str().unwrap();
+                    let src = &doc["sources"][t["source"].as_str().unwrap()];
+                    let Some(f) = field(name, src, v3(&t["observer"]), threads) else {
+                        skipped.insert(format!("{} {name}", src["kind"].as_str().unwrap()));
+                        total.clear();
+                        break;
+                    };
+                    let w = floats(&t["weight"]);
+                    let part: Vec<f64> = if w.len() == 1 {
+                        f.iter().map(|x| w[0] * x).collect()
+                    } else {
+                        w.chunks(3)
+                            .map(|row| row.iter().zip(&f).map(|(a, b)| a * b).sum())
+                            .collect()
+                    };
+                    if total.is_empty() {
+                        total = part;
+                    } else {
+                        total.iter_mut().zip(part).for_each(|(a, b)| *a += b);
+                    }
+                }
+                if total.is_empty() {
+                    break;
+                }
+                let atol = r["atol"].as_f64().unwrap();
+                match within(&total, &floats(&r["target"]), rtol, atol) {
+                    Ok(x) if x > worst.0 => worst = (x, id.to_string()),
+                    Ok(_) => {}
+                    Err(msg) => failures.push(format!("{id} ({}): {msg}", r["why"])),
+                }
+            }
+        }
+        println!(
+            "{file}: worst {} at {:.3} of its tolerance",
+            worst.1, worst.0
+        );
     }
     if !skipped.is_empty() {
-        println!("skipped, kernel not in this crate: {}", skipped.join(", "));
+        println!(
+            "not in this crate: {}",
+            skipped.into_iter().collect::<Vec<_>>().join(", ")
+        );
     }
     assert!(
         failures.is_empty(),
-        "{} rows off:\n{}",
+        "{} off:\n{}",
         failures.len(),
         failures.join("\n")
     );

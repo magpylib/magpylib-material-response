@@ -1,645 +1,1167 @@
 {
- "format": "magpylib-material-response field kernel reference",
- "format_version": 3,
- "family": "cuboid",
- "issue": "https://github.com/magpylib/magpylib-material-response/issues/208",
- "generated_by": {
-  "script": "kernels/reference/make_cuboid.py",
-  "implementation": "src/magpylib_material_response/_array_api/cuboid.py",
-  "numpy": "2.5.5",
-  "mpmath": "1.4.1",
-  "platform": "Darwin arm64"
- },
- "encoding": "floats as shortest round-trip decimals, to be parsed correctly rounded; 'nan', 'inf', '-inf' as strings",
- "constants": {
-  "mu_0": 1.25663706127e-06
- },
- "kernel": "the field of a homogeneously polarized cuboid in its own frame (centered, sides along the axes): source {dimension (3,) in m, polarization J (3,) in T}, observer (3,) in m -> B (3,) in T and H (3,) in A/m (src/magpylib_material_response/_array_api/cuboid.py, magpylib's _BHJM_magnet_cuboid written against the array API)",
- "comparison": "Per point and field F (B, H): |got - expected| <= rtol |expected| + atol_F (Euclidean norms), atol_F 0 where absent. A non-finite expected component must be matched exactly: NaN by NaN, inf by inf of the same sign. Expected values are exact (the implementation run at 50 digits on mpmath, rounded to double), except at points marked convention, where no exact value is defined and the conventions below say what decides it; there they are numpy's. atol_F appears where 16 times numpy's own error passes the rtol floor, rounded up to a power of ten. A point with needs depends on that fix: a checker against a library without it skips the point and reports it.",
  "rtol": 1e-12,
- "conventions": [
-  "On a face (| |x_k| - d_k/2 | < 1e-15 d_k/2 on one axis k, and |x_j| - d_j/2 < 1e-15 d_j/2 on the other two) B jumps by J: the side taken is the one IEEE signed zeros give in magpylib's formulas, which use atan2. Outside the cuboid, in a face's plane, the field is continuous and exact.",
-  "On edges and corners, and for a zero dimension or polarization, the field is (0, 0, 0), signed as polarization * 0 (NaN stays NaN).",
-  "Inside (|x| - d/2 < 1e-15 d/2 on every axis, faces included) H = (B - J) / mu_0."
- ],
  "sources": {
   "cube": {
    "kind": "cuboid",
+   "why": "1 x 2 x 3 cm, every component of J nonzero so that every term counts",
    "dimension": [0.01, 0.02, 0.03],
-   "polarization": [0.3, -0.5, 1.2],
-   "why": "1 x 2 x 3 cm, J with every component nonzero"
+   "polarization": [0.3, -0.5, 1.2]
   },
   "flat": {
    "kind": "cuboid",
+   "why": "a plate 100 times wider than thick",
    "dimension": [0.01, 0.01, 0.0001],
-   "polarization": [0.3, -0.5, 1.2],
-   "why": "a plate 100 times wider than thick"
+   "polarization": [0.3, -0.5, 1.2]
   },
   "long": {
    "kind": "cuboid",
+   "why": "a rod 100 times longer than wide",
    "dimension": [0.0001, 0.0001, 0.01],
-   "polarization": [0.3, -0.5, 1.2],
-   "why": "a rod 100 times longer than wide"
+   "polarization": [0.3, -0.5, 1.2]
   },
   "negative": {
    "kind": "cuboid",
+   "why": "one negative dimension: the masks take abs, the formula the raw value",
    "dimension": [-0.01, 0.02, 0.03],
-   "polarization": [0.3, -0.5, 1.2],
-   "why": "a negative dimension: magpylib's masks take abs(), its formula the raw value"
+   "polarization": [0.3, -0.5, 1.2]
   },
   "nano": {
    "kind": "cuboid",
+   "why": "cube scaled to 3 nm: B does not depend on the length unit",
    "dimension": [1e-09, 2e-09, 3e-09],
-   "polarization": [0.3, -0.5, 1.2],
-   "why": "cube scaled to 3 nm: B does not depend on the length unit"
+   "polarization": [0.3, -0.5, 1.2]
   },
   "huge": {
    "kind": "cuboid",
+   "why": "cube scaled to 3000 km",
    "dimension": [1000000.0, 2000000.0, 3000000.0],
-   "polarization": [0.3, -0.5, 1.2],
-   "why": "cube scaled to 3000 km"
+   "polarization": [0.3, -0.5, 1.2]
   },
   "zero_dim": {
    "kind": "cuboid",
+   "why": "a zero dimension: B, H 0 (SPEC: degenerate)",
    "dimension": [0.01, 0.0, 0.01],
-   "polarization": [0.0, 0.0, 1.0],
-   "why": "a zero dimension: field 0 by convention"
+   "polarization": [0.0, 0.0, 1.0]
   },
   "zero_J": {
    "kind": "cuboid",
+   "why": "zero polarization: every field 0",
    "dimension": [0.01, 0.01, 0.01],
-   "polarization": [0.0, 0.0, 0.0],
-   "why": "zero polarization: field 0"
+   "polarization": [0.0, 0.0, 0.0]
+  },
+  "table_zero_J": {
+   "kind": "cuboid",
+   "why": "magpylib test_BHMJ_level row 1: zero polarization",
+   "dimension": [1.0, 2.0, 3.0],
+   "polarization": [0.0, 0.0, 0.0]
+  },
+  "table_negative": {
+   "kind": "cuboid",
+   "why": "magpylib test_BHMJ_level row 2: two negative dimensions",
+   "dimension": [-1.0, -2.0, 2.0],
+   "polarization": [1.0, 2.0, 3.0]
+  },
+  "table_122": {
+   "kind": "cuboid",
+   "why": "magpylib test_BHMJ_level row 3",
+   "dimension": [1.0, 2.0, 2.0],
+   "polarization": [1.0, 2.0, 3.0]
+  },
+  "table_zero_dim": {
+   "kind": "cuboid",
+   "why": "magpylib test_BHMJ_level row 4: a zero dimension",
+   "dimension": [0.0, 2.0, 2.0],
+   "polarization": [1.0, 2.0, 3.0]
+  },
+  "table_123": {
+   "kind": "cuboid",
+   "why": "magpylib test_BHMJ_level row 5",
+   "dimension": [1.0, 2.0, 3.0],
+   "polarization": [1.0, 2.0, 3.0]
+  },
+  "table_333": {
+   "kind": "cuboid",
+   "why": "magpylib test_BHMJ_level row 6",
+   "dimension": [3.0, 3.0, 3.0],
+   "polarization": [1.0, 2.0, 3.0]
+  },
+  "cell_1058": {
+   "kind": "cuboid",
+   "why": "the thin mesh cell of magpylib #1058 (test_cuboid_reported_mesh_cell)",
+   "dimension": [0.004545454545454546, 0.005, 0.005],
+   "polarization": [0.25, 0.0, 0.0]
+  },
+  "near_edge_z": {
+   "kind": "cuboid",
+   "why": "magpylib test_cuboid_near_edges, axis 0: edges parallel to z",
+   "dimension": [2.0, 4.0, 6.0],
+   "polarization": [0.25, -0.17, 0.36]
+  },
+  "near_edge_x": {
+   "kind": "cuboid",
+   "why": "magpylib test_cuboid_near_edges, axis 1: edges parallel to x",
+   "dimension": [6.0, 2.0, 4.0],
+   "polarization": [0.36, 0.25, -0.17]
+  },
+  "near_edge_y": {
+   "kind": "cuboid",
+   "why": "magpylib test_cuboid_near_edges, axis 2: edges parallel to y",
+   "dimension": [4.0, 6.0, 2.0],
+   "polarization": [-0.17, 0.36, 0.25]
+  },
+  "bar": {
+   "kind": "cuboid",
+   "why": "the whole bar of magpylib test_cuboid_subdivision_near_shared_edge",
+   "dimension": [2.0, 2.0, 2.0],
+   "polarization": [0.25, -0.17, 0.36]
+  },
+  "bar_cell": {
+   "kind": "cuboid",
+   "why": "one of the bar's four cells, centered; its terms shift the observer",
+   "dimension": [1.0, 1.0, 2.0],
+   "polarization": [0.25, -0.17, 0.36]
+  },
+  "cube_mirror_x": {
+   "kind": "cuboid",
+   "why": "cube with J mirrored in x",
+   "dimension": [0.01, 0.02, 0.03],
+   "polarization": [-0.3, -0.5, 1.2]
+  },
+  "cube_cycled": {
+   "kind": "cuboid",
+   "why": "cube with its axes cycled: dimension and J as (z, x, y)",
+   "dimension": [0.03, 0.01, 0.02],
+   "polarization": [1.2, 0.3, -0.5]
+  },
+  "long_prism": {
+   "kind": "cuboid",
+   "why": "a square prism 400 times longer than wide (magpylib test_core_physics_long_solenoid)",
+   "dimension": [3.086, 3.086, 1234.0],
+   "polarization": [0.0, 0.0, 0.0006822907869132092]
   }
  },
  "points": [
   {
    "id": "inside-ppp",
+   "why": "inside, octant ppp (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [0.0015, 0.0045, 0.009],
    "B": [0.15174180967109877, -0.3188610052017791, 0.9599463094993422],
    "H": [-117980.11923909554, 144145.83206320181, -191028.65727838027],
-   "group": "inside",
-   "why": "inside, octant ppp (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "inside-ppm",
+   "why": "inside, octant ppm (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [0.0015, 0.0045, -0.009],
    "B": [0.08808756287197918, -0.40986072090361025, 0.9819492960086585],
    "H": [-168634.55938014027, 71730.5591841227, -173519.23694735847],
-   "group": "inside",
-   "why": "inside, octant ppm (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "inside-pmp",
+   "why": "inside, octant pmp (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [0.0015, -0.0045, 0.009],
    "B": [0.17928864085984011, -0.42638881961685504, 0.9978628577084385],
    "H": [-96059.04748517036, 58577.916131767604, -160855.6269120973],
-   "group": "inside",
-   "why": "inside, octant pmp (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "inside-pmm",
+   "why": "inside, octant pmm (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [0.0015, -0.0045, -0.009],
    "B": [0.11563439406072051, -0.3353891039150239, 0.9440327477995623],
    "H": [-146713.48762621512, 130993.18901084672, -203692.26731364144],
-   "group": "inside",
-   "why": "inside, octant pmm (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "inside-mpp",
+   "why": "inside, octant mpp (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [-0.0015, 0.0045, 0.009],
    "B": [0.11563439406072051, -0.3353891039150239, 0.9440327477995623],
    "H": [-146713.48762621512, 130993.18901084672, -203692.26731364144],
-   "group": "inside",
-   "why": "inside, octant mpp (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "inside-mpm",
+   "why": "inside, octant mpm (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [-0.0015, 0.0045, -0.009],
    "B": [0.17928864085984011, -0.42638881961685504, 0.9978628577084385],
    "H": [-96059.04748517036, 58577.916131767604, -160855.6269120973],
-   "group": "inside",
-   "why": "inside, octant mpm (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "inside-mmp",
+   "why": "inside, octant mmp (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [-0.0015, -0.0045, 0.009],
    "B": [0.08808756287197918, -0.40986072090361025, 0.9819492960086585],
    "H": [-168634.55938014027, 71730.5591841227, -173519.23694735847],
-   "group": "inside",
-   "why": "inside, octant mmp (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "inside-mmm",
+   "why": "inside, octant mmm (p +, m -): the octant mapping flips signs per axis",
    "source": "cube",
    "observer": [-0.0015, -0.0045, -0.009],
    "B": [0.15174180967109877, -0.3188610052017791, 0.9599463094993422],
    "H": [-117980.11923909554, 144145.83206320181, -191028.65727838027],
-   "group": "inside",
-   "why": "inside, octant mmm (p: +, m: -): the octant mapping flips signs per axis"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "outside-ppp",
+   "why": "outside on all three axes, octant ppp",
    "source": "cube",
    "observer": [0.0085, 0.013, 0.0285],
    "B": [0.009930486624367458, 0.028206336155398345, 0.019079958818050902],
    "H": [7902.430168923532, 22445.88913118006, 15183.34880141769],
-   "group": "outside",
-   "why": "outside on all three axes, octant ppp"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "outside-ppm",
+   "why": "outside on all three axes, octant ppm",
    "source": "cube",
    "observer": [0.0085, 0.013, -0.0285],
    "B": [-0.02484144267574372, -0.016362640300481474, 0.0289573833496397],
    "H": [-19768.19197950291, -13020.975431000606, 23043.553498553025],
-   "group": "outside",
-   "why": "outside on all three axes, octant ppm"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "outside-pmp",
+   "why": "outside on all three axes, octant pmp",
    "source": "cube",
    "observer": [0.0085, -0.013, 0.0285],
    "B": [0.0172891910526055, -0.020777862957424297, 0.037650365674667494],
    "H": [13758.301092228216, -16534.497984983416, 29961.209035659635],
-   "group": "outside",
-   "why": "outside on all three axes, octant pmp"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "outside-pmm",
+   "why": "outside on all three axes, octant pmm",
    "source": "cube",
    "observer": [0.0085, -0.013, -0.0285],
    "B": [-0.01748273824750568, 0.023791113498455523, 0.010386976493023108],
    "H": [-13912.321056198225, 18932.36657719725, 8265.69326431108],
-   "group": "outside",
-   "why": "outside on all three axes, octant pmm"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "outside-mpp",
+   "why": "outside on all three axes, octant mpp",
    "source": "cube",
    "observer": [-0.0085, 0.013, 0.0285],
    "B": [-0.01748273824750568, 0.023791113498455523, 0.010386976493023108],
    "H": [-13912.321056198225, 18932.36657719725, 8265.69326431108],
-   "group": "outside",
-   "why": "outside on all three axes, octant mpp"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "outside-mpm",
+   "why": "outside on all three axes, octant mpm",
    "source": "cube",
    "observer": [-0.0085, 0.013, -0.0285],
    "B": [0.0172891910526055, -0.020777862957424297, 0.037650365674667494],
    "H": [13758.301092228216, -16534.497984983416, 29961.209035659635],
-   "group": "outside",
-   "why": "outside on all three axes, octant mpm"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "outside-mmp",
+   "why": "outside on all three axes, octant mmp",
    "source": "cube",
    "observer": [-0.0085, -0.013, 0.0285],
    "B": [-0.02484144267574372, -0.016362640300481474, 0.0289573833496397],
    "H": [-19768.19197950291, -13020.975431000606, 23043.553498553025],
-   "group": "outside",
-   "why": "outside on all three axes, octant mmp"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "outside-mmm",
+   "why": "outside on all three axes, octant mmm",
    "source": "cube",
    "observer": [-0.0085, -0.013, -0.0285],
    "B": [0.009930486624367458, 0.028206336155398345, 0.019079958818050902],
    "H": [7902.430168923532, 22445.88913118006, 15183.34880141769],
-   "group": "outside",
-   "why": "outside on all three axes, octant mmm"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-face-x+",
+   "why": "outside along x only, facing the +x face",
    "source": "cube",
    "observer": [0.007, 0.002, -0.0045],
    "B": [0.028578800878724744, 0.08588373082613049, -0.12109090685463068],
    "H": [22742.28714044295, 68344.10146978594, -96361.08195969654],
-   "group": "beside face",
-   "why": "outside only along x, facing the +x face"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-face-x-",
+   "why": "outside along x only, facing the -x face",
    "source": "cube",
    "observer": [-0.007, 0.002, -0.0045],
    "B": [0.12755476016102274, 0.06637398311493331, -0.10447597858038833],
    "H": [101504.85298604163, 52818.737534171974, -83139.34213813602],
-   "group": "beside face",
-   "why": "outside only along x, facing the -x face"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-face-y+",
+   "why": "outside along y only, facing the +y face",
    "source": "cube",
    "observer": [0.00125, 0.016, 0.0015],
    "B": [-0.04808002882191847, -0.06790769336881422, -0.06396379773283768],
    "H": [-38260.871260097294, -54039.225375212474, -50900.772947277],
-   "group": "beside face",
-   "why": "outside only along y, facing the +y face"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-face-y-",
+   "why": "outside along y only, facing the -y face",
    "source": "cube",
    "observer": [0.00125, -0.016, 0.0015],
    "B": [-0.020983447529463732, -0.10046631400167556, -0.05717185112559248],
    "H": [-16698.096989322556, -79948.55244850164, -45495.91356776686],
-   "group": "beside face",
-   "why": "outside only along y, facing the -y face"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-face-z+",
+   "why": "outside along z only, facing the +z face",
    "source": "cube",
    "observer": [-0.00175, 0.0015, 0.018],
    "B": [-0.13603202950150495, 0.06975578769944162, 0.30504526552035305],
    "H": [-108250.8495842279, 55509.892115503935, 242747.30940377005],
-   "group": "beside face",
-   "why": "outside only along z, facing the +z face"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-face-z-",
+   "why": "outside along z only, facing the -z face",
    "source": "cube",
    "observer": [-0.00175, 0.0015, -0.018],
    "B": [0.030693646794358938, 0.026423645946686627, 0.36478174365796695],
    "H": [24425.22804741959, 21027.269337402795, 290284.0883025574],
-   "group": "beside face",
-   "why": "outside only along z, facing the -z face"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-edge-z",
+   "why": "outside along two axes, facing an edge parallel to z",
    "source": "cube",
    "observer": [0.0065, -0.012, 0.006],
    "B": [0.12501725567534144, -0.1351048981732883, -0.055615066731534345],
    "H": [99485.57107570484, -107513.06191522532, -44257.06390938994],
-   "group": "beside edge",
-   "why": "outside along two axes, facing an edge parallel to z"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-edge-y",
+   "why": "outside along two axes, facing an edge parallel to y",
    "source": "cube",
    "observer": [-0.0075, 0.003, 0.021],
    "B": [-0.10023809778485122, 0.042694761453088835, 0.05482426558945131],
    "H": [-79766.94375347103, 33975.411651427865, 43627.764355480685],
-   "group": "beside edge",
-   "why": "outside along two axes, facing an edge parallel to y"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-edge-x",
+   "why": "outside along two axes, facing an edge parallel to x",
    "source": "cube",
    "observer": [0.001, 0.0125, -0.024],
    "B": [-0.018393093668057525, -0.050817391731352565, 0.07493119351687497],
    "H": [-14636.75888205051, -40439.195450749154, 59628.349207803054],
-   "group": "beside edge",
-   "why": "outside along two axes, facing an edge parallel to x"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "symmetry-xy",
+   "why": "inside on the planes x = 0 and y = -0.0: a signed zero must not flip the octant",
    "source": "cube",
    "observer": [0.0, -0.0, 0.0075],
    "B": [0.1184743752121864, -0.3897609603819723, 0.9906761942345208],
    "H": [-144453.50243319868, 87725.4403961446, -166574.5919939122],
-   "group": "symmetry plane",
-   "why": "inside on the planes x = 0 and y = -0.0: the octant mapping tests x < 0, y > 0, so signed zeros must not flip it"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "symmetry-xz",
+   "why": "inside on the planes x = -0.0 and z = 0: a signed zero must not flip the octant",
    "source": "cube",
    "observer": [-0.0, 0.003, 0.0],
    "B": [0.1119358655183031, -0.3679901176505993, 1.0690802555653494],
    "H": [-149656.68312506468, 105050.12657830342, -104182.62238926705],
-   "group": "symmetry plane",
-   "why": "inside on the planes x = -0.0 and z = 0"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "center",
+   "why": "the center: every logarithm pairs with its mirror image",
    "source": "cube",
    "observer": [0.0, 0.0, 0.0],
    "B": [0.10649353143776683, -0.3786364020019863, 1.0652985094441656],
    "H": [-153987.55498001067, 96578.08267675916, -107192.04033318935],
-   "group": "inside",
-   "why": "the center: every logarithm pairs with its mirror image"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "face-x+",
+   "why": "on the +x face (SPEC: faces)",
    "source": "cube",
    "observer": [0.005, 0.001, 0.003],
    "B": [0.10132833109276453, 0.10595167478290665, -0.12221248937094124],
    "H": [-158097.89081538876, 482201.0216462272, -1052183.2676450498],
-   "convention": true,
-   "group": "on face",
-   "why": "on the +x face. B jumps by J across a face: the side taken is the one IEEE signed zeros pick in magpylib's formulas"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "face-x-",
+   "why": "on the -x face (SPEC: faces)",
    "source": "cube",
    "observer": [-0.005, 0.003, -0.006],
    "B": [0.16032641867303124, 0.07077286605077317, -0.12631270534585354],
    "H": [-111148.7044523499, 454206.61513351416, -1055446.1158462388],
-   "convention": true,
-   "group": "on face",
-   "why": "on the -x face. B jumps by J across a face: the side taken is the one IEEE signed zeros pick in magpylib's formulas"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "face-y+",
+   "why": "on the +y face (SPEC: faces)",
    "source": "cube",
    "observer": [0.001, 0.01, 0.0015],
    "B": [0.1602558394727056, -0.1997688730871407, 1.0979829219393133],
    "H": [-111204.86959541381, 238916.3396227034, -81182.61127646887],
-   "convention": true,
-   "group": "on face",
-   "why": "on the +y face. B jumps by J across a face: the side taken is the one IEEE signed zeros pick in magpylib's formulas"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "face-y+-by-edge",
+   "why": "on the +y face, 1e-12 a from its edge: a radius rounds to |q| (#1066; SPEC: faces)",
    "source": "cube",
    "observer": [0.004999999999995001, 0.01, 0.0],
    "B": [-2.056261928498032, 1.1163293680694335, 1.1121865292652657],
    "H": [-1875053.6659460876, 1286234.0431340742, -69879.73969666862],
-   "convention": true,
-   "needs": "stable edge logarithms (magpylib #1066, after 6.3.0)",
-   "group": "on face",
-   "why": "on the +y face, 1e-12 a from its edge, where a radius rounds to |q|: magpylib before #1066 lost the field here by cancellation. B jumps by J across a face: the side taken is the one IEEE signed zeros pick in magpylib's formulas"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "face-x+-tolerance",
+   "why": "5e-16 a outside the +x face: inside by the 1e-15 rule, B exact",
    "source": "cube",
    "observer": [0.005000000000000003, 0.002, 0.0015],
-   "B": [0.08394408177802928, 0.11324125000731969, -0.11844483981882188],
-   "H": [-171931.83686912534, 488001.8812970208, -1049185.067394365],
-   "convention": true,
-   "group": "on face",
-   "why": "5e-16 a outside the +x face: within magpylib's 1e-15 surface tolerance, so on it. B jumps by J across a face: the side taken is the one IEEE signed zeros pick in magpylib's formulas"
+   "B": [0.08394408177802921, 0.11324125000731973, -0.11844483981882191],
+   "H": [-171931.8368691254, 488001.8812970209, -1049185.067394365],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "beyond-tolerance-x+",
+   "why": "4e-15 a outside the +x face, beyond the 1e-15 rule: outside, exact",
    "source": "cube",
    "observer": [0.00500000000000002, 0.002, 0.0015],
    "B": [0.08394408177802909, 0.1132412500073196, -0.1184448398188218],
    "H": [66800.57780023801, 90114.52351474829, -94255.40871691101],
-   "group": "beside face",
-   "why": "4e-15 a outside the +x face, beyond the surface tolerance: outside, exact"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "edge-z",
+   "why": "on the +x+y edge, parallel to z: B, H 0 (SPEC: edges)",
    "source": "cube",
    "observer": [0.005, 0.01, 0.0045],
    "B": [0.0, 0.0, 0.0],
    "H": [-238732.4146693635, 397887.3577822725, -954929.658677454],
-   "convention": true,
-   "group": "on edge",
-   "why": "on the +x+y edge, parallel to z: the field is 0 there by convention"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "edge-x",
+   "why": "on the -y+z edge, parallel to x: B, H 0 (SPEC: edges)",
    "source": "cube",
    "observer": [0.002, -0.01, 0.015],
    "B": [0.0, 0.0, 0.0],
    "H": [-238732.4146693635, 397887.3577822725, -954929.658677454],
-   "convention": true,
-   "group": "on edge",
-   "why": "on the -y+z edge, parallel to x: the field is 0 there by convention"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "corner-ppp",
+   "why": "on the +x+y+z corner: B, H 0 (SPEC: edges)",
    "source": "cube",
    "observer": [0.005, 0.01, 0.015],
    "B": [0.0, 0.0, 0.0],
    "H": [-238732.4146693635, 397887.3577822725, -954929.658677454],
-   "convention": true,
-   "group": "on edge",
-   "why": "on the +x+y+z corner: the field is 0 there by convention"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "corner-mmm",
+   "why": "on the -x-y-z corner: B, H 0 (SPEC: edges)",
    "source": "cube",
    "observer": [-0.005, -0.01, -0.015],
    "B": [0.0, 0.0, 0.0],
    "H": [-238732.4146693635, 397887.3577822725, -954929.658677454],
-   "convention": true,
-   "group": "on edge",
-   "why": "on the -x-y-z corner: the field is 0 there by convention"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "edge-line-x",
+   "why": "on the line of the +y+z edge, beyond its corner: exact, no ln(0) (Cichon 2019)",
    "source": "cube",
    "observer": [0.01, 0.01, 0.015],
    "B": [0.06600326907533191, 0.09176943910231296, -0.016721331705233412],
    "H": [52523.73267475238, 73027.79929916094, -13306.412981592526],
-   "group": "edge line",
-   "why": "on the line of the +y+z edge, beyond its corner along x: outside, exact; ln(0) is avoided by mapping to one octant (Cichon 2019)"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "edge-line-y",
+   "why": "on the line of the +x+z edge, beyond its corner: exact, no ln(0) (Cichon 2019)",
    "source": "cube",
    "observer": [0.005, 0.03, 0.015],
    "B": [-0.0038591856280225574, 0.00752486444349912, -0.01320034270778183],
    "H": [-3071.0423454504307, 5988.096862187271, -10504.4989636396],
-   "group": "edge line",
-   "why": "on the line of the +x+z edge, beyond its corner along y: outside, exact; ln(0) is avoided by mapping to one octant (Cichon 2019)"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "edge-line-z",
+   "why": "on the line of the +x+y edge, beyond its corner: exact, no ln(0) (Cichon 2019)",
    "source": "cube",
    "observer": [0.005, 0.01, -0.0225],
    "B": [-0.06202001707724424, -0.043897043308440804, 0.08317306363102742],
    "H": [-49353.96144895226, -34932.157152898995, 66187.02105361264],
-   "group": "edge line",
-   "why": "on the line of the +x+y edge, beyond its corner along z: outside, exact; ln(0) is avoided by mapping to one octant (Cichon 2019)"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "face-plane-y-",
+   "why": "in the plane of the -y face, beyond the cuboid along x: outside, exact",
    "source": "cube",
    "observer": [-0.01, -0.01, 0.0075],
    "B": [-0.0756643090045461, 0.023692245456868977, -0.06288881713377223],
    "H": [-60211.74397648051, 18853.689889525293, -50045.33056681828],
-   "group": "edge line",
-   "why": "in the plane of the -y face, beyond the cuboid along x: outside, exact"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "beside-edge-1e-12",
+   "why": "1e-12 a and 1e-9 b off the +x+y edge, outside: a radius rounds to |q| (#1066)",
    "source": "cube",
    "observer": [0.0050000000000050004, 0.010000000010000001, 0.0],
    "B": [-1.676369050888321, 0.8784477579597847, -0.08781347068109463],
    "H": [-1334012.10465186, 699046.51472876, -69879.73965398359],
-   "needs": "stable edge logarithms (magpylib #1066, after 6.3.0)",
-   "group": "beside edge",
-   "why": "1e-12 a and 1e-9 b off the +x+y edge, outside: a radius rounds to |q|, and magpylib before #1066 lost the field here by cancellation"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "far-10",
+   "why": "10 sizes away along x",
    "source": "cube",
    "observer": [0.1, 0.0, 0.0],
    "B": [0.0002787632207490455, 0.0002337417208736979, -0.0005540727528993072],
    "H": [221.8327227014282, 186.0057514438342, -440.91708734051065],
-   "group": "far",
-   "why": "10 sizes away along x"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "far-50",
+   "why": "50 sizes away: the closed form cancels, numpy's error needs an atol",
    "source": "cube",
    "observer": [0.3, -0.2, 0.4],
    "B": [5.444210118412154e-06, -2.7103164059093502e-06, 4.804472192324701e-06],
    "H": [4.33236475845305, -2.1568012670024332, 3.823277492284955],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0],
    "atol_B": 1e-15,
-   "atol_H": 1e-09,
-   "group": "far",
-   "why": "50 sizes away: the closed form cancels, numpy's error rises above the floor"
+   "atol_H": 1e-09
   },
   {
    "id": "flat-inside",
+   "why": "inside the plate",
    "source": "flat",
    "observer": [0.002, -0.0015, 1e-05],
    "B": [0.2985197985064049, -0.49767716789258154, 0.012760105876852685],
    "H": [-1177.9069225438382, 1848.4510595851236, -944775.489052728],
-   "group": "shape",
-   "why": "inside the flat cuboid"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "flat-beside",
+   "why": "beside the plate's large face, 3 half-thicknesses out",
    "source": "flat",
    "observer": [0.001, 0.0015, 0.00015],
    "B": [-0.0014106023896360497, 0.0027792043779402546, 0.011693930430907502],
    "H": [-1122.521715387295, 2211.6205733511442, 9305.734162486995],
-   "group": "shape",
-   "why": "beside the flat cuboid's large face, 3 half-thicknesses out"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "flat-outside",
+   "why": "outside the plate on all axes",
    "source": "flat",
    "observer": [0.02, 0.01, 0.01],
    "B": [5.8518542126302486e-05, 6.438121072912823e-05, -2.7841456583772225e-05],
    "H": [46.567576215810206, 51.23293965567305, -22.15552719385397],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0],
    "atol_B": 1e-14,
-   "atol_H": 1e-08,
-   "group": "shape",
-   "why": "outside the flat cuboid on all axes"
+   "atol_H": 1e-08
   },
   {
    "id": "long-inside",
+   "why": "inside the rod",
    "source": "long",
    "observer": [2e-05, -1.5e-05, 0.001],
    "B": [0.16578839703616063, -0.26716765486419247, 1.1999139244926087],
    "H": [-106802.20017401091, 185282.09322467318, -68.4967124114172],
-   "group": "shape",
-   "why": "inside the long cuboid"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "long-beside",
+   "why": "beside the rod's long face, 3 half-widths out",
    "source": "long",
    "observer": [0.00015, 1.5e-05, 0.0005],
    "B": [0.013700830682718912, 0.03782723656214036, -7.8454029804003e-05],
    "H": [10902.774639538633, 30101.958415830002, -62.431733252172826],
-   "group": "shape",
-   "why": "beside the long cuboid's large face, 3 half-thicknesses out"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "long-outside",
+   "why": "outside the rod on all axes",
    "source": "long",
    "observer": [0.000125, -9e-05, 0.008],
    "B": [-8.104699346161675e-06, 1.7694148682437896e-05, 0.00010239758597543789],
    "H": [-6.449514816927961, 14.080556134923784, 81.48540985410013],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0],
    "atol_B": 1e-14,
-   "atol_H": 1e-08,
-   "group": "shape",
-   "why": "outside the long cuboid on all axes"
+   "atol_H": 1e-08
   },
   {
    "id": "negative-inside",
+   "why": "inside the cuboid with a negative dimension",
    "source": "negative",
    "observer": [0.001, 0.002, 0.003],
    "B": [-0.1098144079021607, 0.36907652319588163, -1.0567623566218787],
    "H": [-326119.94388259435, 691589.1230500264, -1795874.4224375477],
-   "group": "shape",
-   "why": "inside the cuboid with a negative dimension"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "negative-outside",
+   "why": "outside the cuboid with a negative dimension",
    "source": "negative",
    "observer": [0.02, -0.005, 0.01],
    "B": [-0.050043428544296, -0.003653071962870976, 0.014479820132326383],
    "H": [-39823.29511571178, -2907.022302190465, 11522.6747472278],
-   "group": "shape",
-   "why": "outside the cuboid with a negative dimension"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "nano-inside",
+   "why": "inside the 3 nm cuboid",
    "source": "nano",
    "observer": [1.5e-10, 6e-10, -6e-10],
    "B": [0.09743205959885537, -0.36014489706169267, 1.0564880595251107],
    "H": [-161198.44515521656, 111293.15476098169, -114203.17361152098],
-   "group": "shape",
-   "why": "inside the nano cuboid, where cube's inside points sit, scaled"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "nano-outside",
+   "why": "outside the 3 nm cuboid",
    "source": "nano",
    "observer": [1.2e-09, -1.4e-09, 2.7e-09],
    "B": [0.02304681956181879, -0.019995107782444784, 0.029160139561329616],
    "H": [18340.07628147374, -15911.601208257418, 23204.901765239512],
-   "group": "shape",
-   "why": "outside the nano cuboid"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "huge-inside",
+   "why": "inside the 3000 km cuboid",
    "source": "huge",
    "observer": [150000.0, 600000.0, -600000.0],
    "B": [0.09743205959885537, -0.3601448970616926, 1.0564880595251107],
    "H": [-161198.44515521656, 111293.1547609817, -114203.17361152096],
-   "group": "shape",
-   "why": "inside the huge cuboid, where cube's inside points sit, scaled"
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
   },
   {
    "id": "huge-outside",
+   "why": "outside the 3000 km cuboid",
    "source": "huge",
    "observer": [1200000.0, -1400000.0, 2700000.0],
    "B": [0.023046819561818793, -0.019995107782444784, 0.029160139561329613],
    "H": [18340.07628147374, -15911.60120825742, 23204.90176523951],
-   "group": "shape",
-   "why": "outside the huge cuboid"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "zero-dimension",
+   "why": "a cuboid with a zero dimension: 0",
    "source": "zero_dim",
    "observer": [0.001, 0.0, 0.0],
    "B": [0.0, 0.0, 0.0],
    "H": [0.0, 0.0, 0.0],
-   "group": "degenerate",
-   "why": "a cuboid with a zero dimension: 0 by convention"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "zero-polarization",
+   "why": "a cuboid without polarization: 0",
    "source": "zero_J",
    "observer": [0.001, 0.0, 0.0],
    "B": [0.0, 0.0, 0.0],
    "H": [0.0, 0.0, 0.0],
-   "group": "degenerate",
-   "why": "a cuboid without polarization: 0"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "observer-nan",
+   "why": "a NaN observer: NaN",
    "source": "cube",
    "observer": ["nan", 0.0, 0.0],
    "B": ["nan", "nan", "nan"],
    "H": ["nan", "nan", "nan"],
-   "convention": true,
-   "group": "degenerate",
-   "why": "a NaN observer: NaN"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
   },
   {
    "id": "observer-inf",
+   "why": "an infinite observer: what IEEE arithmetic gives in the formulas",
    "source": "cube",
    "observer": ["inf", 0.0, 0.0],
    "B": ["nan", "nan", "nan"],
    "H": ["nan", "nan", "nan"],
-   "convention": true,
-   "group": "degenerate",
-   "why": "an infinite observer: as IEEE arithmetic in magpylib's formulas gives it"
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "table-zero-polarization",
+   "why": "magpylib test_BHMJ_level row 1: zero polarization, 0",
+   "source": "table_zero_J",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "table-negative",
+   "why": "magpylib test_BHMJ_level row 2: negative dimensions, outside",
+   "source": "table_negative",
+   "observer": [1.0, -1.0, 0.0],
+   "B": [-0.14174375718457213, -0.1697645945107099, -0.20427478033329088],
+   "H": [-112796.09805660282, -135094.3719096905, -162556.70521673447],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "table-face-plane",
+   "why": "magpylib test_BHMJ_level row 3: in a face's plane, outside",
+   "source": "table_122",
+   "observer": [1.0, -1.0, 0.0],
+   "B": [-0.14174375718457213, -0.1697645945107099, -0.20427478033329088],
+   "H": [-112796.09805660282, -135094.3719096905, -162556.70521673447],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "table-zero-dimension",
+   "why": "magpylib test_BHMJ_level row 4: a zero dimension, 0",
+   "source": "table_zero_dim",
+   "observer": [1.0, -1.0, 0.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "table-outside",
+   "why": "magpylib test_BHMJ_level row 5: outside",
+   "source": "table_123",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [0.025963363891516968, 0.045303339402711085, 0.05840059171458916],
+   "H": [20660.988515870693, 36051.25202731646, 46473.714260478315],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "table-center",
+   "why": "magpylib test_BHMJ_level row 6: the center, inside",
+   "source": "table_333",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.6666666666666666, 1.3333333333333333, 2.0],
+   "H": [-265258.238521515, -530516.47704303, -795774.715564545],
+   "J": [1.0, 2.0, 3.0],
+   "M": [795774.715564545, 1591549.43112909, 2387324.146693635]
+  },
+  {
+   "id": "issue-1058",
+   "why": "magpylib #1058: on the +y face, 3.4e-15 a inside the -x face (SPEC: faces); equals its 90-digit literal",
+   "source": "cell_1058",
+   "observer": [-0.0022727272727272652, 0.0024999999999999996, -0.0009532609010158913],
+   "B": [0.17127053255816985, -1.3281449790135587, 0.012027218266562938],
+   "H": [-62650.9195600705, -1056904.1929029932, 9570.956195106823],
+   "J": [0.25, 0.0, 0.0],
+   "M": [198943.67889113625, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-z-1e-6",
+   "why": "1e-6 off an edge parallel to z, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_z",
+   "observer": [1.000001, 1.999999, 0.7],
+   "B": [-0.31342848854100824, 0.5910594099306999, -0.02750340127638744],
+   "H": [-249418.4663185461, 470350.1338193505, -21886.51132777476],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-z-1e-9",
+   "why": "1e-9 off an edge parallel to z, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_z",
+   "observer": [1.000000001, 1.999999999, 0.7],
+   "B": [-0.5003270398543082, 0.865910261406929, -0.027503403088643803],
+   "H": [-398147.6078293128, 689069.4919755197, -21886.51276992255],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-z-1e-12",
+   "why": "1e-12 off an edge parallel to z, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_z",
+   "observer": [1.000000000001, 1.999999999999, 0.7],
+   "B": [-0.6872232145655537, 1.140757577199482, -0.02750340309045605],
+   "H": [-546874.8581002558, 907786.0365240173, -21886.512771364694],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-x-1e-6",
+   "why": "1e-6 off an edge parallel to x, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_x",
+   "observer": [0.7, 1.000001, 1.999999],
+   "B": [-0.02750340127638744, -0.31342848854100824, 0.5910594099306999],
+   "H": [-21886.51132777476, -249418.4663185461, 470350.1338193505],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-x-1e-9",
+   "why": "1e-9 off an edge parallel to x, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_x",
+   "observer": [0.7, 1.000000001, 1.999999999],
+   "B": [-0.027503403088643803, -0.5003270398543082, 0.865910261406929],
+   "H": [-21886.51276992255, -398147.6078293128, 689069.4919755197],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-x-1e-12",
+   "why": "1e-12 off an edge parallel to x, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_x",
+   "observer": [0.7, 1.000000000001, 1.999999999999],
+   "B": [-0.02750340309045605, -0.6872232145655537, 1.140757577199482],
+   "H": [-21886.512771364694, -546874.8581002558, 907786.0365240173],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-y-1e-6",
+   "why": "1e-6 off an edge parallel to y, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_y",
+   "observer": [1.999999, 0.7, 1.000001],
+   "B": [0.5910594099306999, -0.02750340127638744, -0.31342848854100824],
+   "H": [470350.1338193505, -21886.51132777476, -249418.4663185461],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-y-1e-9",
+   "why": "1e-9 off an edge parallel to y, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_y",
+   "observer": [1.999999999, 0.7, 1.000000001],
+   "B": [0.865910261406929, -0.027503403088643803, -0.5003270398543082],
+   "H": [689069.4919755197, -21886.51276992255, -398147.6078293128],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "near-edge-y-1e-12",
+   "why": "1e-12 off an edge parallel to y, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "source": "near_edge_y",
+   "observer": [1.999999999999, 0.7, 1.000000000001],
+   "B": [1.140757577199482, -0.02750340309045605, -0.6872232145655537],
+   "H": [907786.0365240173, -21886.512771364694, -546874.8581002558],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  }
+ ],
+ "relations": [
+  {
+   "id": "b-h-j-inside",
+   "why": "B = mu_0 H + J inside (magpylib helper_check_HBMJ_consistency)",
+   "terms": [
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [0.0015, 0.0045, 0.009],
+     "weight": 1.0
+    },
+    {
+     "source": "cube",
+     "field": "H",
+     "observer": [0.0015, 0.0045, 0.009],
+     "weight": -1.25663706127e-06
+    },
+    {
+     "source": "cube",
+     "field": "J",
+     "observer": [0.0015, 0.0045, 0.009],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-11
+  },
+  {
+   "id": "m-j-inside",
+   "why": "mu_0 M = J inside (magpylib helper_check_HBMJ_consistency)",
+   "terms": [
+    {
+     "source": "cube",
+     "field": "M",
+     "observer": [0.0015, 0.0045, 0.009],
+     "weight": 1.25663706127e-06
+    },
+    {
+     "source": "cube",
+     "field": "J",
+     "observer": [0.0015, 0.0045, 0.009],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-11
+  },
+  {
+   "id": "split-bar-middle",
+   "why": "the bar = its four cells, by their shared edge, mid-length (magpylib test_cuboid_subdivision_near_shared_edge)",
+   "terms": [
+    {
+     "source": "bar",
+     "field": "B",
+     "observer": [9.094947017729282e-13, 1.8189894035458565e-12, 0.0],
+     "weight": 1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [0.5000000000009095, 0.500000000001819, 0.0],
+     "weight": -1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [0.5000000000009095, -0.499999999998181, 0.0],
+     "weight": -1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [-0.4999999999990905, 0.500000000001819, 0.0],
+     "weight": -1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [-0.4999999999990905, -0.499999999998181, 0.0],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-11
+  },
+  {
+   "id": "split-bar-end",
+   "why": "the bar = its four cells, by their shared edge, near the end",
+   "terms": [
+    {
+     "source": "bar",
+     "field": "B",
+     "observer": [9.094947017729282e-13, 1.8189894035458565e-12, 0.9],
+     "weight": 1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [0.5000000000009095, 0.500000000001819, 0.9],
+     "weight": -1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [0.5000000000009095, -0.499999999998181, 0.9],
+     "weight": -1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [-0.4999999999990905, 0.500000000001819, 0.9],
+     "weight": -1.0
+    },
+    {
+     "source": "bar_cell",
+     "field": "B",
+     "observer": [-0.4999999999990905, -0.499999999998181, 0.9],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-11
+  },
+  {
+   "id": "jump-x",
+   "why": "across the +x face B_t jumps by -J_t, B_n is continuous; 1e-9 h either side, atol covers B's change over the gap",
+   "terms": [
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [0.0050000000050000005, 0.001, 0.003],
+     "weight": 1.0
+    },
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [0.0049999999950000006, 0.001, 0.003],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.5, -1.2],
+   "atol": 1e-08
+  },
+  {
+   "id": "jump-y",
+   "why": "across the +y face B_t jumps by -J_t, B_n is continuous; 1e-9 h either side, atol covers B's change over the gap",
+   "terms": [
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [0.001, 0.010000000010000001, -0.0045],
+     "weight": 1.0
+    },
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [0.001, 0.009999999990000001, -0.0045],
+     "weight": -1.0
+    }
+   ],
+   "target": [-0.3, 0.0, -1.2],
+   "atol": 1e-08
+  },
+  {
+   "id": "jump-z",
+   "why": "across the +z face B_t jumps by -J_t, B_n is continuous; 1e-9 h either side, atol covers B's change over the gap",
+   "terms": [
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [-0.0017499999999999998, 0.0015, 0.015000000015],
+     "weight": 1.0
+    },
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [-0.0017499999999999998, 0.0015, 0.014999999985],
+     "weight": -1.0
+    }
+   ],
+   "target": [-0.3, 0.5, 0.0],
+   "atol": 1e-08
+  },
+  {
+   "id": "mirror-x",
+   "why": "B_J(Mx) = M B_MJ(x), M the mirror in x: the octant mapping's signs",
+   "terms": [
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [-0.0085, -0.013, 0.0285],
+     "weight": 1.0
+    },
+    {
+     "source": "cube_mirror_x",
+     "field": "B",
+     "observer": [0.0085, -0.013, 0.0285],
+     "weight": [
+      [1.0, 0.0, 0.0],
+      [0.0, -1.0, 0.0],
+      [0.0, 0.0, -1.0]
+     ]
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-13
+  },
+  {
+   "id": "cycle-axes",
+   "why": "B_PJ,PD(Px) = P B_J,D(x), P cycling the axes: the three components' formulas agree",
+   "terms": [
+    {
+     "source": "cube_cycled",
+     "field": "B",
+     "observer": [0.0285, 0.0085, -0.013],
+     "weight": 1.0
+    },
+    {
+     "source": "cube",
+     "field": "B",
+     "observer": [0.0085, -0.013, 0.0285],
+     "weight": [
+      [0.0, 0.0, -1.0],
+      [-1.0, 0.0, 0.0],
+      [0.0, -1.0, 0.0]
+     ]
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-13
+  },
+  {
+   "id": "long-prism-center",
+   "why": "B -> J at a long prism's center; atol covers the finite length's deficit, 2.7e-9 T (magpylib test_core_physics_long_solenoid)",
+   "terms": [
+    {
+     "source": "long_prism",
+     "field": "B",
+     "observer": [0.0, 0.0, 0.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0006822907869132092],
+   "atol": 1e-08
   }
  ]
 }

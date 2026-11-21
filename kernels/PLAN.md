@@ -1,121 +1,137 @@
-# Shared reference files for the field kernels (#208)
+# Reference files for the field kernels (#208)
 
-Goal: one set of language-neutral files that every implementation of MR's field
-kernels must pass (numpy, Rust native, WebAssembly, the C ABI, any later port).
-Cuboid and face charge first. If it works, magpylib may adopt the format later,
-after agreement with Michael.
+Goal: language-neutral files that every implementation of the field kernels must
+pass (NumPy, `array_api_strict`, the Rust crate natively, WebAssembly, later
+ports, and in time magpylib itself). Cuboid first; face charge after; then any
+magpylib source kind. Branch `feat/wasm-kernels-208`, worktree
+`magpylib-material-response.worktrees/wasm-kernels-208`, own `.venv` with
+magpylib main (never test against a stale magpylib).
 
-Revised after an independent review (2026-11-19); the review's points are marked
-[R n].
+## Committed
 
-## What exists (branch `feat/wasm-kernels-208`)
+- 602bf11: the Rust crate `kernels/rust` (core, C ABI, pyo3 `python` feature,
+  `wasm` feature), the first reference file and checkers.
+- 9f38bba: the cuboid's one implementation,
+  `src/magpylib_material_response/_array_api/cuboid.py` (Jack Smith's array API
+  rewrite of magpylib's cuboid, with #1066's stable logarithms), run on NumPy
+  and, for exact values, at 50 digits on `kernels/reference/mp_namespace.py`
+  (the accuracy guardrail, generator only). `cuboid.json` (61 named points),
+  `make_cuboid.py`, `reference_format.py`, `show.py`; tests in
+  `tests/test_kernel_reference.py` (implementation on NumPy and
+  `array_api_strict`, installed magpylib as a port).
 
-- `kernels/reference/make_cuboid.py` writes `cuboid.json` (named sources, points
-  with ids and reasons) from the cuboid's one implementation,
-  `_array_api/cuboid.py`, run on NumPy and on `mp_namespace` (50 digits);
-  `show.py` plots it. Face charge is in progress, uncommitted.
-- Checkers: `tests/test_kernel_reference.py` (the implementation on NumPy and
-  `array_api_strict`, installed magpylib as a port),
-  `kernels/rust/tests/reference.rs` (Rust, 1 and all threads),
-  `kernels/rust/www/check.mjs` (WebAssembly in Node). All pass.
-- Flaws of the first format, fixed in step 1: a case-wide `atol` let small rows
-  pass with any answer [R1]; expected values were numpy's output [R2];
-  `far_points` rows mixed metres and charges in one norm [R7].
+## Uncommitted in the worktree (2026-11-21)
 
-## Format
+Face charge, to be redone in the new design below, not committed as is:
 
-1. **One family per file**: `face_charge.json`, `cuboid.json`, later
-   `inside.json`. One output row per line, so a diff shows which value moved.
-2. **Header**: format version, generator versions and commits, constants
-   (`mu_0`), the kernel registry (inputs with shapes and units, outputs and
-   units), the comparison rules, and the conventions that are part of the
-   contract:
-   - the lift off a triangle's plane: `w == 0` exactly gives `w = 1e-12 s`; no
-     case puts an observer in a tilted plane, where the lift would hinge on
-     rounding [R9];
-   - the cuboid's boundary rule (`|x| - d/2 < 1e-15 d/2` is inside; on edges and
-     corners the field is 0) and the inside test's own rule (step 3) [R10];
-   - floats are shortest round-trip decimals: a reader must parse correctly
-     rounded (serde_json `float_roundtrip`, a correct `strtod` in C).
-3. **Shared arrays**: a table of named arrays (a triangulated cuboid, the solved
-   plate) that cases reference by id, so relations do not repeat them [R11].
-4. **Case kinds**:
-   - `value`: inputs, expected rows, per-row `rtol` and `atol`. Expected = the
-     50-digit value rounded to double (numpy's value only where no exact one is
-     defined: on a cuboid face, non-finite rows) [R2]. Non-finite components
-     must match exactly.
-   - `relation`: evaluations `[{kernel, inputs, weight}]`, `weight` a scalar,
-     1x3 or 3x3 matrix; per row `sum_k W_k out_k = target`. For approximate laws
-     (stencils, `+-h` jumps) `target` is the 50-digit residual, so the tolerance
-     is rounding only [R4].
-   - Every case: `name`, `why`, `requires` (kernels it needs; a checker skips
-     and reports a case whose kernels it lacks). No version strings [R8].
-5. **Tolerances**: per row, `atol` and `rtol` from that row's own size, not the
-   case's [R1]: 16 x numpy's error against 50 digits, floor 1e-12. The generator
-   asserts (a) numpy passes every case, (b) every row has teeth: an effective
-   relative tolerance under 1e-6 unless flagged with a reason, and scaled,
-   perturbed or sign-flipped expected values fail [R1].
-6. **Source of truth**: the generator defines the cases (random ones from a
-   fixed seed) and writes the files; nobody edits values by hand. A new edge
-   case = a few lines in the generator, reviewed by diff. Regeneration is a
-   deliberate run, never part of a test.
+- `face_charge/_triangle.py` written against the array API for `frames`,
+  `charge_field`, `far_points`, `charge_field_far` (the solver's own kernels
+  stay NumPy). NumPy results bit-identical to before on contiguous input (36 of
+  36 saved outputs; only a transposed-layout V differs by 1 ulp, tensordot vs
+  einsum). Passes on `array_api_strict` (needed `V[:, 0, ...]` and
+  `[:, None, :]` indexing). Full MR suite: 1135 passed. Keep this part.
+- `_array_api/__init__.py`: shared `namespace()` and `quiet()`; `cuboid.py` uses
+  them. Keep.
+- `mp_namespace.py`: `matmul`, `tensordot`, `linalg.cross/vector_norm`, `sum`,
+  `mean`, `sign`, `permute_dims`. Keep.
+- `make_face_charge.py`, `face_charge.json` (135 points, prose-heavy),
+  `reference_format.py` changes, checker rewrites (`reference.rs`, `check.mjs`,
+  the test file) and `show.py` for triangles: superseded by the design below;
+  reuse what fits, drop the rest.
 
-## Status
+## The agreed design (Alex, 2026-11-21)
 
-- 2026-11-20: step 1 done for face charge (`face_charge.json`, 17 cases, rows
-  per case); the cuboid moved to a file of points (`cuboid.json`): 8 named
-  sources, 61 points, each with its own id, group, reason, B and H, one field
-  per line; `show.py` plots it in 3D.
-- 2026-11-20: the cuboid has one implementation, `_array_api/cuboid.py` in the
-  package (no new dependency: numpy 2 arrays name their own namespace) (Jack
-  Smith's array API rewrite of magpylib's cuboid, with #1066's stable logarithms
-  carried in), kept here until magpylib's rewrite takes over. The generator runs
-  it on NumPy and, for the exact values, on `mp_namespace` (mpmath, the accuracy
-  guardrail): the mirrored 50-digit cuboid is gone, and no expected value moved.
-  Tests run it on NumPy and `array_api_strict`, and installed magpylib as a
-  port; 6.3.0 skips only the two `needs` points. Found on the way: `where` with
-  two Python scalars is not in the standard (in Jack's branch too); the branch
-  predates #1066 and gives inf at the two points by an edge. Face charge follows
-  the same way.
+Keep it simple. The JSON is the single source of truth, for machines; `SPEC.md`
+is for humans and agents.
 
-## Steps
+1. **`kernels/reference/<kind>.json`**, one file per source kind, data only, no
+   prose, deterministic, one meaning per key:
+   - top level: `rtol`, `sources`, `points`, `relations`;
+   - a source: `kind` (the `magpylib.func` name without `_field`, e.g. `cuboid`;
+     MR's own kinds get magpylib-style names) and that function's keyword
+     parameters, singular (`dimension`, `polarization`, ...). Core functions
+     only: no position or orientation (the pose is magpylib's layer on top);
+   - a point: `id`, `source`, `observer`, one key per field (`B`, `H`, `J`,
+     `M`), `atol_<field>` only where needed. No `why`, `group`, `convention` or
+     `needs` in the file;
+   - one field per line (vectors on one line), so a diff names the field; floats
+     as shortest round-trip decimals; `"nan"`, `"inf"`, `"-inf"` as strings.
+2. **Extending** = appending a point with only `id`, `source`, `observer`, then
+   running **`fill.py <file>`**, the one generic tool kept in the repo. It holds
+   no points; it fills missing values only (existing ones untouched unless
+   asked). Rule, in its code and the SPEC: expected = the implementation at 50
+   digits rounded to double, `atol_<field>` = 16 x numpy's own error where that
+   passes `rtol`, rounded up to a power of ten; where the 50-digit value is
+   undefined (numpy NaN or infinite) or numpy differs beyond the tolerance (a
+   cuboid face: the side IEEE signed zeros pick), numpy's value, and `fill.py`
+   prints those points for review. Generators that define points are used once
+   to write a file, never committed (`make_cuboid.py`, `make_face_charge.py`,
+   `reference_format.py` go).
+3. **`SPEC.md`**: the format and every key; the encoding; the comparison rule
+   (per field: `|got - expected| <= rtol |expected| + atol`, Euclidean;
+   non-finite components exactly); per kind its parameters, fields, units and
+   conventions (faces, edges, zero dimension or polarization, inside rule,
+   `mu_0`); what each point id and relation id means; which points take numpy's
+   value; how to add a point.
+4. **Relations** (physics and cross-comparison), same file while cuboid only:
+   `{id, terms: [{source, field, observer, weight}], target, atol}`; `weight` a
+   number, 1x3 row or 3x3 matrix; a term's own `observer`, so a shifted cell
+   needs no pose. The target is the law's own value (0, J_t, ...), never a
+   50-digit residual of the same formula (that would check nothing); `fill.py`
+   sets `atol` from numpy's error plus the discretization error of approximate
+   laws. Exact identities first; stencils and Gauss later, tens of observers at
+   most.
+5. **Checkers** read every file, skip and report kinds or fields they lack. The
+   magpylib port in the Python test skips the two near-edge points
+   (`face-y+-by-edge`, `beside-edge-1e-12`) when magpylib <= 6.3.0 (#1066): that
+   list lives in the test, not in the file.
+6. **Later kinds** with elliptic integrals (cylinder, circle, cylinder segment)
+   need `cel` in `mp_namespace` and in the array API implementation.
 
-1. **Split, reformat, fix the flaws** (no new cases): family files, shared
-   arrays, header and conventions, per-row tolerances, exact expected values,
-   teeth assertions, `far_points` as two outputs; update the three checkers.
-   numpy's cuboid check: run when the installed magpylib reproduces one #1066
-   edge row, else skip with the reason [R8].
-2. **Relation cases**, in order of strength [R5] (generic checker in each
-   language, ~20 lines):
-   - cross-kernel: `Cuboid` H = `charge_field(c = (J.n / mu0, 0, 0)) / 4 pi` on
-     the cuboid's faces, two triangles each (exact; H inside included, the
-     -J/mu0 comes from the charges); B adds J inside; observers off the surface
-     and edges [R3];
-   - Gauss: the flux of `charge_field` over a closed surface round a sheet is 4
-     pi times its total charge [R5];
-   - jumps at +-h: cuboid face, tangential B by J_t, normal B continuous, normal
-     H by J.n / mu0; sheet, normal `charge_field` by 4 pi sigma at the foot,
-     tangential continuous [R4];
-   - exact identities: mirror symmetry, 90 degree rotation, power-of-two length
-     scaling, linearity in J, superposition of coefficients, the list order of
-     triangles (not their vertex order, which changes the frame and with it c1,
-     c2) [R6];
-   - curl H = 0, div B = 0 by stencils: optional, weakest [R5].
-3. **Inside test kernel** `inside_cuboid`, with MR's `_inside` convention:
-   inside iff inside, and a step of `max(1e-6 |high - low|, 1e-9)` (the box
-   diagonal) to all six sides stays inside; on the surface is outside. Value
-   cases: centre, on faces, edges, corners, within and beyond the step, NaN, and
-   observers on the surface of a solved part, as #208 asks [R10].
-4. **C ABI check**: the Python checker also calls the C functions through ctypes
-   on the same cases (the extension's `.so` exports them). Depends on the C ABI
-   decision.
-5. **Later, own decisions**: the face-charge assembly matrix for a fixed mesh as
-   value cases (a kernel output, named in #208's first comment) [R12]; norms and
-   inequalities (decay, bounds), rates (convergence order); the mesh inside
-   test; browser speed (per-pair switch to the 6-point rule, web workers, SIMD);
-   magpylib.
+## Cuboid in the new design (2026-11-21, uncommitted)
 
-Not in the files, by nature: iterative and nonlinear solves (tolerances,
-pivoting, B-H Newton) [R12]; the object API (paths, objects, error and warning
-wording); binding behaviour (threads, GIL, speed and memory budgets). Shapes and
-broadcasting at the kernel level can be value cases.
+Done, waiting for Alex's review:
+
+- `cuboid_field` has `J` and `M`: bit-identical with magpylib's
+  `_BHJM_magnet_cuboid` for B, H, J, M on NumPy and `array_api_strict`.
+- `kernels/reference/fill.py`: the one generic tool (kind table: `cuboid`).
+  Idempotent; `--redo` reproduces the file byte for byte.
+- `cuboid.json` slim: 23 sources, 77 points (the 61 earlier ones, magpylib's
+  BHJM table, #1058, 9 near-edge points), 10 relations (B-H-J, M-J, split bar
+  x2, jump x3, mirror, cycle of axes, long prism). The near-edge points equal
+  magpylib's independent 90-digit literals bit for bit. NumPy's value at 6
+  points (4 faces, NaN and inf observers).
+- `SPEC.md` (format, rules, every id). Checkers: Python test (523 passed), Rust
+  (all pass; J, M reported as not in the crate), Node/wasm (B only). Full MR
+  suite 1203 passed.
+- Planted sign bugs in the formula (3 mutants), regenerated: each fails
+  relations at 50 digits; `cycle-axes` catches all three.
+- magpylib 6.3.0 fails 13 points (all fixed by #1066): skip list in the test.
+
+Open:
+
+1. `make_cuboid.py` deleted (Alex, 2026-11-21). `reference_format.py` and
+   `make_face_charge.py` go once face charge is redone.
+2. `face_charge.json` stays in the old layout until face charge is redone
+   (Alex): until then the Rust and Node checkers fail on it; the Python test
+   reads it in its old layout.
+3. Then face charge in the same design.
+
+## Decided earlier
+
+- C ABI: keep pyo3 for Python; test the C functions through ctypes on the same
+  files (the extension's `.so` exports them). Not built yet.
+- Subagents: cheapest model that fits (memory `subagent-models`).
+- Commit only on Alex's word, cuboid and face charge separately.
+- For Jack (Alex tells him, when he chooses): his `array-api` branch predates
+  #1066 (+-inf at two points by an edge); `xp.where(mask, -1.0, 1.0)` with two
+  scalars is not in the standard (fails `array_api_strict`).
+
+## Open, later
+
+- Browser speed: the solved plate's H at 2,744 points takes 84 ms in wasm (one
+  thread, 47 ns per pair) against a 16 ms frame: per-pair switch to the 6-point
+  rule a few sides out, web workers, or SIMD.
+- Inside test kernel (MR's `_inside` convention) and points on a solved part's
+  surface (#208).
+- Native one thread is ~1.3x NumPy on `charge_field`, ~12x on all threads.

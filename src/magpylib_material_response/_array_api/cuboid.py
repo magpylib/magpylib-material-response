@@ -16,22 +16,10 @@ where no indeterminate form arises along the extensions of edges (Cichon,
 IEEE Sensors Journal 19(7):2509, 2019).
 """
 
-from contextlib import nullcontext
-
-import numpy as np
+from magpylib_material_response._array_api import namespace, quiet
 
 MU0 = 1.25663706127e-06  # scipy's mu_0 (CODATA 2022), as magpylib uses it
 RTOL_SURFACE = 1e-15  # relative distance to a face within which a point is on it
-
-
-def _namespace(*arrays):
-    """The arrays' namespace, from their own ``__array_namespace__``: NumPy 2
-    arrays, any array API library's, and the 50-digit reference arrays."""
-    spaces = {a.__array_namespace__() for a in arrays}
-    if len(spaces) > 1:
-        msg = f"arrays of one library expected; received {sorted(x.__name__ for x in spaces)}"
-        raise TypeError(msg)
-    return spaces.pop()
 
 
 def _promote(xp, *arrays):
@@ -40,14 +28,6 @@ def _promote(xp, *arrays):
     floats = [a.dtype for a in arrays if xp.isdtype(a.dtype, "real floating")]
     dtype = xp.result_type(*floats) if floats else xp.asarray(1.0).dtype
     return tuple(xp.astype(a, dtype, copy=False) for a in arrays)
-
-
-def _quiet(xp):
-    """NumPy's warnings off where infinities are expected; other namespaces
-    do not warn."""
-    if xp is np:
-        return np.errstate(divide="ignore", invalid="ignore")
-    return nullcontext()
 
 
 def _sqrt_plus_signed(xp, q, radius, transverse_squared):
@@ -60,7 +40,7 @@ def _sqrt_plus_signed(xp, q, radius, transverse_squared):
 def cuboid_B_core(observers, dimensions, polarizations):
     """B of cuboids in units of the polarization, one per observer, (i, 3)
     each: centered, sides along the axes, no special cases."""
-    xp = _namespace(observers, dimensions, polarizations)
+    xp = namespace(observers, dimensions, polarizations)
     observers, dimensions, polarizations = _promote(
         xp, observers, dimensions, polarizations
     )
@@ -101,7 +81,7 @@ def cuboid_B_core(observers, dimensions, polarizations):
     def sp(q, radius, t2):
         return _sqrt_plus_signed(xp, q, radius, t2)
 
-    with _quiet(xp):
+    with quiet(xp):
         ff2x = xp.log(
             sp(xma, mmm, ymb2 + zmc2)
             * (xpa + ppm)
@@ -155,14 +135,15 @@ def cuboid_B_core(observers, dimensions, polarizations):
 
 
 def cuboid_field(field, observers, dimension, polarization):
-    """B in T or H in A/m (``field`` 'B' or 'H') of cuboids in their own
-    frames, one per observer, (i, 3) each, with magpylib's special cases: 0
-    on edges and corners and for a zero dimension or polarization; inside,
-    faces included, H = (B - J) / mu_0."""
-    if field not in ("B", "H"):
-        msg = f"field must be 'B' or 'H'; instead received {field!r}."
+    """B in T, H in A/m, J in T or M in A/m (``field`` 'B', 'H', 'J' or
+    'M') of cuboids in their own frames, one per observer, (i, 3) each, with
+    magpylib's special cases: B and H 0 on edges and corners and for a zero
+    dimension or polarization; J the polarization inside, faces included, and
+    0 outside; H = (B - J) / mu_0, M = J / mu_0."""
+    if field not in ("B", "H", "J", "M"):
+        msg = f"field must be 'B', 'H', 'J' or 'M'; instead received {field!r}."
         raise ValueError(msg)
-    xp = _namespace(observers, dimension, polarization)
+    xp = namespace(observers, dimension, polarization)
     observers, dimension, polarization = _promote(
         xp, observers, dimension, polarization
     )
@@ -175,6 +156,9 @@ def cuboid_field(field, observers, dimension, polarization):
     inside_xyz = dist < RTOL_SURFACE * half
     in_x, in_y, in_z = xp.unstack(inside_xyz, axis=-1)
     inside = xp.all(inside_xyz, axis=-1, keepdims=True)
+    J = xp.where(inside, polarization, 0.0)
+    if field in ("J", "M"):
+        return J if field == "J" else J / MU0
     on_edge = (
         (surf_y & surf_z & in_x) | (surf_x & surf_z & in_y) | (surf_x & surf_y & in_z)
     )
@@ -193,4 +177,4 @@ def cuboid_field(field, observers, dimension, polarization):
     )
     if field == "B":
         return B
-    return (B - xp.where(inside, polarization, 0.0)) / MU0
+    return (B - J) / MU0
