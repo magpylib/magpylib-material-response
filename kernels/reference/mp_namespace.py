@@ -11,6 +11,7 @@ negative zero: decisions made on a zero's sign are taken from the double run
 by the caller, not from here.
 """
 
+import builtins
 import math
 import sys
 from types import SimpleNamespace
@@ -157,7 +158,7 @@ def atan2(y, x):
 
 def maximum(a, b):
     def f(x, y):
-        return mp.nan if mp.isnan(x) or mp.isnan(y) else max(x, y)
+        return mp.nan if mp.isnan(x) or mp.isnan(y) else builtins.max(x, y)
 
     return MPArray(np.frompyfunc(f, 2, 1)(_raw(a), _raw(b)), FLOAT)
 
@@ -209,6 +210,10 @@ def sign(x):
 
 def sum(x, axis=None):
     return MPArray(np.sum(x._a, axis=axis), FLOAT)
+
+
+def max(x, axis=None):
+    return MPArray(np.max(x._a, axis=axis), FLOAT)
 
 
 def mean(x, axis=None):

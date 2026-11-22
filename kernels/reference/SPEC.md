@@ -218,8 +218,8 @@ relative to |H| is about 3e-6 at a tolerance of 1e-3 and 3e-9 at 1e-6. A
 negative or NaN tolerance, or one below both tables' last bounds, is exact.
 
 Parameters: those of `triangle_linear_charge`, `center`, `far_from`,
-`tolerance`. The solver's `center` (the mean of the centroids) and `far_from`
-(the reach plus a number of sides) are parameters here, not derived.
+`tolerance`. `center` and `far_from` are parameters here, so that a case can
+switch where it chooses; `charge_sheet_corners` derives them as the solver does.
 
 Sources: `tilted` three triangles, 1 mm across, acute, obtuse and right-angled,
 at generic orientations off the origin, each with a charge of every coefficient
@@ -263,5 +263,31 @@ frame (the linear terms); `cycle-axes` a cyclic permutation of the axes turns H
 the same way (the frames follow the triangle).
 
 Not in these files: the solved plate of studio (664 triangles) is in
-`kernels/rust/js/plate.json`, a timing input without expected values; the far
-rule's points and charges are not separate fields.
+`kernels/rust/js/plate.json`, as `charge_sheet_corners` takes it, a timing input
+without expected values; the far rule's points and charges are not separate
+fields.
+
+## charge_sheet_corners
+
+`charge_sheet` of a sheet as `ChargeSheet` holds it, which is what a saved page
+sends the browser's kernel: no coefficients, center or far distance to carry, so
+none that can disagree with the kernel reading them. Parameters: `vertices` (N,
+3, 3, m), `charge_densities` (N, 3, A/m), the density at each triangle's corners
+in their order, and `tolerance`. Derived, as `_triangle.sheet_parameters`:
+
+- **coefficients**: the plane through the corners' densities. With each corner's
+  `u`, `v` (`triangle_linear_charge`'s frame, from the centroid, over `s`) and
+  differences from corner 0, `du_k = u_k - u_0` (likewise `dv_k`, `dq_k`):
+  `det = du_1 dv_2 - du_2 dv_1`, `c1 = (dq_1 dv_2 - dq_2 dv_1) / det`,
+  `c2 = (du_1 dq_2 - du_2 dq_1) / det`, `c0 = q_0 - c1 u_0 - c2 v_0`.
+- **center**: the mean of the centroids.
+- **far_from**: the largest distance of a corner from the center, plus 64
+  (`FAR_SIDES`) times the longest edge of any triangle. For no triangle the
+  center is 0 and `far_from` infinite.
+
+Sources: `tilted_corners` tilted with a different density at each corner;
+`box_corners_1e-6`, `box_corners_1e-3` the cuboid's surface charge varying
+linearly over it, at those tolerances. Points by the closed form, by per-pair
+rules, and at 1.5 times the derived `far_from` (the far rule for the whole
+sheet). A checker's derived `far_from` is a rounded double: a point within 1e-9
+of it is out of scope (`fill.py` refuses it).

@@ -1,6 +1,6 @@
 //! Field of flat triangles whose surface charge varies linearly across them:
-//! `face_charge/_triangle.py`'s `frames`, `charge_field`, `far_points` and
-//! `charge_field_far`, operation for operation. The formulas and their
+//! `face_charge/_triangle.py`'s `frames`, `charge_field`, `far_points`,
+//! `charge_field_far` and `sheet_parameters`, operation for operation. The formulas and their
 //! references are in that module's docstring.
 //!
 //! Arrays are flat and row-major, as numpy's C order: observers `x` (M, 3),
@@ -427,7 +427,62 @@ pub fn pair_k2(tolerance: f64, table: &[(f64, f64)]) -> f64 {
         .map_or(f64::INFINITY, |row| row.1)
 }
 
+/// `_triangle.FAR_SIDES`: past a sheet's reach by this many of its longest
+/// edges, an observer takes the far rule for the whole sheet.
+pub const FAR_SIDES: f64 = 64.0;
+
+/// `_triangle.sheet_parameters`: from triangles `v` (N, 3, 3) and the charge
+/// density at their corners `q` (N, 3), the coefficients (N, 3) of `1, u, v`,
+/// the center (the mean of the centroids) and `far_from` (the farthest corner
+/// from it plus `FAR_SIDES` longest edges; infinite for no triangle).
+pub fn sheet_parameters(v: &[f64], frames: &[Frame], q: &[f64]) -> (Vec<f64>, V3, f64) {
+    let mut c = Vec::with_capacity(q.len());
+    for (t, f) in frames.iter().enumerate() {
+        let tri = &v[9 * t..9 * t + 9];
+        let uv = [0, 1, 2].map(|k| {
+            let d = sub(row(tri, k), f.centroid);
+            (dot(d, f.e1) / f.s, dot(d, f.e2) / f.s)
+        });
+        let qt = row(q, t);
+        // the plane through the corners' densities, from corner 0
+        let (du1, du2) = (uv[1].0 - uv[0].0, uv[2].0 - uv[0].0);
+        let (dv1, dv2) = (uv[1].1 - uv[0].1, uv[2].1 - uv[0].1);
+        let (dq1, dq2) = (qt[1] - qt[0], qt[2] - qt[0]);
+        let det = du1 * dv2 - du2 * dv1;
+        let c1 = (dq1 * dv2 - dq2 * dv1) / det;
+        let c2 = (du1 * dq2 - du2 * dq1) / det;
+        c.extend([qt[0] - c1 * uv[0].0 - c2 * uv[0].1, c1, c2]);
+    }
+    if frames.is_empty() {
+        return (c, [0.0; 3], f64::INFINITY);
+    }
+    let mut sum = [0.0; 3];
+    for f in frames {
+        sum = [0, 1, 2].map(|d| sum[d] + f.centroid[d]);
+    }
+    let center = sum.map(|s| s / frames.len() as f64);
+    let (mut side, mut reach) = (0.0f64, 0.0f64);
+    for tri in v.chunks_exact(9) {
+        let (a, b, cc) = (row(tri, 0), row(tri, 1), row(tri, 2));
+        for e in [sub(b, a), sub(cc, b), sub(a, cc)] {
+            side = side.max(norm(e));
+        }
+        for k in 0..3 {
+            reach = reach.max(norm(sub(row(tri, k), center)));
+        }
+    }
+    (c, center, reach + FAR_SIDES * side)
+}
+
 impl Sheet {
+    /// A sheet as `ChargeSheet` holds it: triangles `v` (N, 3, 3) and the
+    /// charge density at their corners `q` (N, 3), its coefficients, center
+    /// and far distance derived by [`sheet_parameters`].
+    pub fn from_corners(v: &[f64], q: &[f64]) -> Self {
+        let (c, center, far_from) = sheet_parameters(v, &frames(v), q);
+        Sheet::new(v, &c, center, far_from)
+    }
+
     pub fn new(v: &[f64], c: &[f64], center: V3, far_from: f64) -> Self {
         let frames = frames(v);
         let (y, charge) = far_points(v, &frames, c);

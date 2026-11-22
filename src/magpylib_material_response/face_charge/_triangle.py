@@ -452,6 +452,42 @@ def beyond_far_from(observers, center, far_from):
     )
 
 
+# an observer this many of a sheet's longest triangle sides past all of it takes
+# `charge_field_far`. Each observer chooses for the whole sheet, so a near one costs
+# nothing: choosing per pair made fields 2 mm above six bars 1.3 times as slow
+FAR_SIDES = 64.0
+
+
+def sheet_parameters(vertices, charge_densities, fr=None):
+    """A sheet of triangles ``vertices`` (N, 3, 3) with the charge density
+    ``charge_densities`` (N, 3) at their corners, in A/m, as
+    :func:`charge_sheet_field` takes it: the coefficients (N, 3) of ``1, u, v``
+    in each triangle's frame (:func:`frames`, or ``fr``), the center, the mean
+    of the centroids (3,), and ``far_from``, the farthest corner from it plus
+    ``FAR_SIDES`` longest edges (0-d; infinite for no triangle)."""
+    xp = namespace(vertices, charge_densities)
+    cen, _, e1, e2, s, _ = frames(vertices) if fr is None else fr
+    d = vertices - cen[:, None, :]
+    u = xp.sum(d * e1[:, None, :], axis=2) / s[:, None]
+    v = xp.sum(d * e2[:, None, :], axis=2) / s[:, None]
+    q = charge_densities
+    # the plane through the corners' densities, from corner 0
+    du1, du2 = u[:, 1] - u[:, 0], u[:, 2] - u[:, 0]
+    dv1, dv2 = v[:, 1] - v[:, 0], v[:, 2] - v[:, 0]
+    dq1, dq2 = q[:, 1] - q[:, 0], q[:, 2] - q[:, 0]
+    det = du1 * dv2 - du2 * dv1
+    c1 = (dq1 * dv2 - dq2 * dv1) / det
+    c2 = (du1 * dq2 - du2 * dq1) / det
+    c = xp.stack([q[:, 0] - c1 * u[:, 0] - c2 * v[:, 0], c1, c2], axis=1)
+    if vertices.shape[0] == 0:
+        return c, xp.zeros(3, dtype=vertices.dtype), xp.asarray(float("inf"))
+    center = xp.mean(cen, axis=0)
+    a, b, cc = vertices[:, 0, ...], vertices[:, 1, ...], vertices[:, 2, ...]
+    side = xp.max(xp.linalg.vector_norm(xp.stack([b - a, cc - b, a - cc]), axis=2))
+    reach = xp.max(xp.linalg.vector_norm(vertices - center, axis=2))
+    return c, center, reach + FAR_SIDES * side
+
+
 def triangle_linear_charge_field(field, observers, vertices, charge):
     """H in A/m (``field`` 'H') at ``observers`` (M, 3) of the charge ``charge``
     (N, 3), coefficients of ``1, u, v`` in A/m, on the triangles ``vertices``
@@ -553,3 +589,16 @@ def charge_sheet_field(
         observers, *far_points(vertices, fr, charge, True), keep=middle
     )
     return H / (4 * xp.pi)
+
+
+def charge_sheet_corners_field(
+    field, observers, vertices, charge_densities, tolerance=0.0
+):
+    """:func:`charge_sheet_field` of a sheet as ``ChargeSheet`` holds it: the
+    triangles ``vertices`` (N, 3, 3) and the charge density at their corners
+    ``charge_densities`` (N, 3) in A/m, its coefficients, center and
+    ``far_from`` by :func:`sheet_parameters`."""
+    c, center, far_from = sheet_parameters(vertices, charge_densities)
+    return charge_sheet_field(
+        field, observers, vertices, c, center, far_from, tolerance
+    )

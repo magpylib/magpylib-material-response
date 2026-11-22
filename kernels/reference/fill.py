@@ -117,6 +117,19 @@ def sheet_scope(x, p):
     return None
 
 
+def corners_scope(x, p):
+    """:func:`sheet_scope` at the derived coefficients, center and
+    ``far_from``, and an observer so near ``far_from`` that the 50-digit
+    center and distance could fall on its other side."""
+    c, center, far_from = T.sheet_parameters(p["vertices"], p["charge_densities"])
+    derived = {**p, "charge": c, "center": center, "far_from": far_from}
+    if reason := sheet_scope(x, derived):
+        return reason
+    if abs(np.linalg.norm(x - center) - far_from) <= 1e-9 * far_from:
+        return "the derived far_from rounds either way"
+    return None
+
+
 class Kind(NamedTuple):
     """A source kind: its implementation, called as ``f(field, observers,
     **parameters)``; its fields; whether its parameters are per observer
@@ -134,6 +147,9 @@ KINDS = {
         T.triangle_linear_charge_field, "H", False, triangles_scope
     ),
     "charge_sheet": Kind(T.charge_sheet_field, "H", False, sheet_scope),
+    "charge_sheet_corners": Kind(
+        T.charge_sheet_corners_field, "H", False, corners_scope
+    ),
 }
 
 

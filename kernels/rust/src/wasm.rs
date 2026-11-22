@@ -11,15 +11,37 @@ compile_error!(
     "the browser build needs SIMD: run wasm-pack in kernels/rust, whose .cargo/config.toml sets it"
 );
 
-/// A solved `ChargeSheet`: triangles, coefficients, its center and the
-/// distance from which the far rule takes over.
+/// A solved `ChargeSheet`, from its public data: `triangles` (N, 3, 3), the
+/// corners of each face in its own frame, and `charge_densities` (N, 3), the
+/// charge density at those corners in A/m. The kernel derives the rest.
 #[wasm_bindgen]
 pub struct Sheet(crate::triangle::Sheet);
 
 #[wasm_bindgen]
 impl Sheet {
     #[wasm_bindgen(constructor)]
-    pub fn new(v: &[f64], c: &[f64], center: &[f64], far_from: f64) -> Result<Sheet, JsError> {
+    pub fn new(triangles: &[f64], charge_densities: &[f64]) -> Result<Sheet, JsError> {
+        if triangles.len() % 9 != 0 || charge_densities.len() * 3 != triangles.len() {
+            return Err(JsError::new(
+                "shapes: triangles (N, 3, 3), charge_densities (N, 3)",
+            ));
+        }
+        Ok(Sheet(crate::triangle::Sheet::from_corners(
+            triangles,
+            charge_densities,
+        )))
+    }
+
+    /// A sheet from what [`Sheet::new`] derives: coefficients `c` (N, 3) of
+    /// `1, u, v`, `center` (3,) and `far_from`. For the reference files'
+    /// `charge_sheet` kind, whose switch points need a chosen `far_from`; a
+    /// page takes `new`.
+    pub fn from_coefficients(
+        v: &[f64],
+        c: &[f64],
+        center: &[f64],
+        far_from: f64,
+    ) -> Result<Sheet, JsError> {
         if v.len() % 9 != 0 || c.len() * 3 != v.len() || center.len() != 3 {
             return Err(JsError::new("shapes: v (N, 3, 3), c (N, 3), center (3,)"));
         }

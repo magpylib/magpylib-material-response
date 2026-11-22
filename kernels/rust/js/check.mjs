@@ -61,12 +61,20 @@ const fields = {
   },
   charge_sheet: {
     H: ([s], x) => {
-      const sheet = new Sheet(
+      const sheet = Sheet.from_coefficients(
         flat(s.vertices),
         flat(s.charge),
         flat(s.center),
         num(s.far_from),
       );
+      const out = sheet.h(x, num(s.tolerance));
+      sheet.free();
+      return out;
+    },
+  },
+  charge_sheet_corners: {
+    H: ([s], x) => {
+      const sheet = new Sheet(flat(s.vertices), flat(s.charge_densities));
       const out = sheet.h(x, num(s.tolerance));
       sheet.free();
       return out;
@@ -188,12 +196,7 @@ if (skippedRelations.length)
 // timing: the solved plate's sheet (plate.json, a timing input without
 // expected values) at a grid round it, as studio's field lines ask
 const plate = JSON.parse(readFileSync(here("./plate.json"), "utf8"));
-const sheet = new Sheet(
-  flat(plate.vertices),
-  flat(plate.charge),
-  flat(plate.center),
-  plate.far_from,
-);
+const sheet = new Sheet(flat(plate.vertices), flat(plate.charge_densities));
 for (const tolerance of [0, 1e-6, 1e-3]) {
   for (const n of [2500, 8000]) {
     const side = Math.round(Math.cbrt(n));

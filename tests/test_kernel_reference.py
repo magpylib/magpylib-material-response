@@ -72,6 +72,7 @@ IMPLS = {
     | {"magpylib": (_magpylib_cuboid, np.asarray, "BH")},
     "triangle_linear_charge": _impls(T.triangle_linear_charge_field, "H"),
     "charge_sheet": _impls(T.charge_sheet_field, "H"),
+    "charge_sheet_corners": _impls(T.charge_sheet_corners_field, "H"),
 }
 PORTS = {"magpylib"}  # not in the relations: they cross kinds
 

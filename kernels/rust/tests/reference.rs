@@ -96,6 +96,14 @@ fn field(name: &str, srcs: &[&Value], x: &[f64], threads: bool) -> Option<Vec<f6
             let tolerance = floats(&src["tolerance"])[0];
             k::sheet_h(&sheet, x, tolerance, &mut out, threads);
         }
+        ("charge_sheet_corners", "H") => {
+            let sheet = k::triangle::Sheet::from_corners(
+                &floats(&src["vertices"]),
+                &floats(&src["charge_densities"]),
+            );
+            let tolerance = floats(&src["tolerance"])[0];
+            k::sheet_h(&sheet, x, tolerance, &mut out, threads);
+        }
         _ => return None,
     }
     Some(out)
