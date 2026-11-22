@@ -44,7 +44,7 @@ in C order; every source is in its own frame (a caller moves observers into it
 and turns the field back); a wrong argument throws.
 
 ```js
-api_version(); // 2: a caller refuses any other
+api_version(); // 1: a caller refuses any other
 cuboid_field(field, observers, dimensions, polarizations); // magpylib.func.cuboid_field: "B" or "H"; one cuboid (3,) or one per observer (M, 3)
 const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments
 sheet.h(observers, tolerance); // H in A/m; B = mu_0 H outside the body only

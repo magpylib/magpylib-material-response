@@ -22,7 +22,7 @@ await init({
 
 // the API's version, and a wrong argument throws, leaving the instance usable
 // (a Rust panic would trap it)
-if (api_version() !== 2) throw new Error(`api_version ${api_version()}, not 2`);
+if (api_version() !== 1) throw new Error(`api_version ${api_version()}, not 1`);
 const one = Float64Array.of(0.01, 0.02, 0.03);
 const unit = Float64Array.of(0.01, 0.01, 0.01);
 for (const [what, call] of [

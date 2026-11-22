@@ -17,7 +17,7 @@ compile_error!(
 /// page refuses a build whose version is not the one it was written for.
 #[wasm_bindgen]
 pub fn api_version() -> u32 {
-    2
+    1
 }
 
 fn check_observers(x: &[f64]) -> Result<(), JsError> {
