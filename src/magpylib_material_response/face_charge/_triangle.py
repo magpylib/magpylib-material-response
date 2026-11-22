@@ -34,6 +34,8 @@ from the centroid, divided by the triangle's scale ``sqrt(area)``.
 
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 
 from magpylib_material_response._array_api import namespace, quiet
@@ -58,7 +60,7 @@ def frames(V):
 
 
 # corners in a line to within this many eps of the product of two sides
-NO_AREA = 100 * float(np.finfo(float).eps)
+NO_AREA = 100 * sys.float_info.epsilon
 
 
 def has_area(V):
