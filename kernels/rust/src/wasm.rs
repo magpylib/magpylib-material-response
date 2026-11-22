@@ -1,6 +1,8 @@
-//! The browser build, by wasm-pack: Float64Arrays in and out. A saved page
-//! builds one `Sheet` per solved sheet once, then asks it for H at the
-//! field-line grid every frame.
+//! The browser build, by wasm-pack: Float64Arrays in and out, every array
+//! flat in numpy's C order, every source in its own frame. A saved page
+//! builds one `ChargeSheet` per solved sheet once, then asks it for H at the
+//! field-line grid every frame. Names follow magpylib's and
+//! magpylib-material-response's Python; a wrong argument throws.
 
 use wasm_bindgen::prelude::*;
 
@@ -11,78 +13,122 @@ compile_error!(
     "the browser build needs SIMD: run wasm-pack in kernels/rust, whose .cargo/config.toml sets it"
 );
 
-/// A solved `ChargeSheet`, from its public data: `triangles` (N, 3, 3), the
-/// corners of each face in its own frame, and `charge_densities` (N, 3), the
-/// charge density at those corners in A/m. The kernel derives the rest.
+/// The version of this API, raised by every change a caller must follow; a
+/// page refuses a build whose version is not the one it was written for.
 #[wasm_bindgen]
-pub struct Sheet(crate::triangle::Sheet);
+pub fn api_version() -> u32 {
+    2
+}
 
+fn check_observers(x: &[f64]) -> Result<(), JsError> {
+    if x.len().is_multiple_of(3) {
+        Ok(())
+    } else {
+        Err(JsError::new("observers: (M, 3)"))
+    }
+}
+
+/// B in T (`field` "B") or H in A/m ("H") of cuboids at `observers` (M, 3),
+/// as `magpylib.func.cuboid_field` at the origin, unturned: `dimensions` and
+/// `polarizations` one cuboid (3,) for every observer, or one per observer
+/// (M, 3).
 #[wasm_bindgen]
-impl Sheet {
-    #[wasm_bindgen(constructor)]
-    pub fn new(triangles: &[f64], charge_densities: &[f64]) -> Result<Sheet, JsError> {
-        if triangles.len() % 9 != 0 || charge_densities.len() * 3 != triangles.len() {
+pub fn cuboid_field(
+    field: &str,
+    observers: &[f64],
+    dimensions: &[f64],
+    polarizations: &[f64],
+) -> Result<Vec<f64>, JsError> {
+    let field = match field {
+        "B" => b'B',
+        "H" => b'H',
+        _ => return Err(JsError::new("field: \"B\" or \"H\"")),
+    };
+    check_observers(observers)?;
+    for a in [dimensions, polarizations] {
+        if a.len() != 3 && a.len() != observers.len() {
             return Err(JsError::new(
-                "shapes: triangles (N, 3, 3), charge_densities (N, 3)",
+                "dimensions, polarizations: (3,) for every observer, or (M, 3)",
             ));
         }
-        Ok(Sheet(crate::triangle::Sheet::from_corners(
+    }
+    let mut out = vec![0.0; observers.len()];
+    crate::cuboid_field(field, observers, dimensions, polarizations, &mut out, false);
+    Ok(out)
+}
+
+/// A solved `ChargeSheet`, from its public data, as `ChargeSheet.from_triangles`
+/// takes it: `triangles` (N, 3, 3), the corners of each face, and
+/// `charge_densities` (N, 3), the charge density at those corners in A/m.
+/// The kernel derives the rest (`_triangle.sheet_parameters`).
+#[wasm_bindgen]
+pub struct ChargeSheet(crate::triangle::Sheet);
+
+#[wasm_bindgen]
+impl ChargeSheet {
+    #[wasm_bindgen(constructor)]
+    pub fn new(triangles: &[f64], charge_densities: &[f64]) -> Result<ChargeSheet, JsError> {
+        if !triangles.len().is_multiple_of(9) || charge_densities.len() * 3 != triangles.len() {
+            return Err(JsError::new(
+                "triangles: (N, 3, 3), charge_densities: (N, 3)",
+            ));
+        }
+        Ok(ChargeSheet(crate::triangle::Sheet::from_corners(
             triangles,
             charge_densities,
         )))
     }
 
-    /// A sheet from what [`Sheet::new`] derives: coefficients `c` (N, 3) of
-    /// `1, u, v`, `center` (3,) and `far_from`. For the reference files'
-    /// `charge_sheet` kind, whose switch points need a chosen `far_from`; a
-    /// page takes `new`.
+    /// For the reference files' checker only, not a page: a sheet from what
+    /// the constructor derives, coefficients (N, 3) of `1, u, v`, `center`
+    /// (3,) and `far_from`, for the `charge_sheet` kind's chosen switch points.
     pub fn from_coefficients(
-        v: &[f64],
-        c: &[f64],
+        triangles: &[f64],
+        coefficients: &[f64],
         center: &[f64],
         far_from: f64,
-    ) -> Result<Sheet, JsError> {
-        if v.len() % 9 != 0 || c.len() * 3 != v.len() || center.len() != 3 {
-            return Err(JsError::new("shapes: v (N, 3, 3), c (N, 3), center (3,)"));
+    ) -> Result<ChargeSheet, JsError> {
+        if !triangles.len().is_multiple_of(9)
+            || coefficients.len() * 3 != triangles.len()
+            || center.len() != 3
+        {
+            return Err(JsError::new(
+                "triangles: (N, 3, 3), coefficients: (N, 3), center: (3,)",
+            ));
         }
-        Ok(Sheet(crate::triangle::Sheet::new(
-            v,
-            c,
+        Ok(ChargeSheet(crate::triangle::Sheet::new(
+            triangles,
+            coefficients,
             [center[0], center[1], center[2]],
             far_from,
         )))
     }
 
-    /// H in A/m at observers `x` (M, 3), in the sheet's own frame;
-    /// `tolerance` 0 exact, above it the per-pair far rule (coarser and
-    /// faster as it grows: 1e-3 while dragging, 1e-6 at rest, say).
-    pub fn h(&self, x: &[f64], tolerance: f64) -> Vec<f64> {
-        let mut out = vec![0.0; x.len()];
-        crate::sheet_h(&self.0, x, tolerance, &mut out, false);
-        out
+    /// H in A/m at `observers` (M, 3): `tolerance` 0 exact, above it the
+    /// per-pair rules (coarser and faster as it grows: 1e-3 while dragging,
+    /// 1e-6 at rest, say). H only: B is mu_0 H outside the body, and inside
+    /// it lacks the magnetization, which the caller knows and the sheet not.
+    pub fn h(&self, observers: &[f64], tolerance: f64) -> Result<Vec<f64>, JsError> {
+        check_observers(observers)?;
+        let mut out = vec![0.0; observers.len()];
+        crate::sheet_h(&self.0, observers, tolerance, &mut out, false);
+        Ok(out)
     }
 }
 
-/// 4 pi times the field of triangles `v` with coefficients `c`, at `x`.
+/// For the reference files' checker only: 4 pi times H in A/m of triangles
+/// (N, 3, 3) with charge coefficients (N, 3), summed, at `observers` (M, 3).
 #[wasm_bindgen]
-pub fn charge_field(x: &[f64], v: &[f64], c: &[f64]) -> Vec<f64> {
-    let mut out = vec![0.0; x.len()];
-    crate::charge_field(x, v, c, &mut out, false);
-    out
-}
-
-/// B in T of cuboids in their own frames, one per observer row.
-#[wasm_bindgen]
-pub fn cuboid_b(x: &[f64], dimension: &[f64], polarization: &[f64]) -> Vec<f64> {
-    let mut out = vec![0.0; x.len()];
-    crate::cuboid_field(b'B', x, dimension, polarization, &mut out, false);
-    out
-}
-
-/// H in A/m of cuboids in their own frames, as `cuboid_b`.
-#[wasm_bindgen]
-pub fn cuboid_h(x: &[f64], dimension: &[f64], polarization: &[f64]) -> Vec<f64> {
-    let mut out = vec![0.0; x.len()];
-    crate::cuboid_field(b'H', x, dimension, polarization, &mut out, false);
-    out
+pub fn charge_field(
+    observers: &[f64],
+    triangles: &[f64],
+    coefficients: &[f64],
+) -> Result<Vec<f64>, JsError> {
+    check_observers(observers)?;
+    if !triangles.len().is_multiple_of(9) || coefficients.len() * 3 != triangles.len() {
+        return Err(JsError::new("triangles: (N, 3, 3), coefficients: (N, 3)"));
+    }
+    let mut out = vec![0.0; observers.len()];
+    crate::charge_field(observers, triangles, coefficients, &mut out, false);
+    Ok(out)
 }

@@ -66,8 +66,9 @@ pub fn sheet_h(sheet: &Sheet, x: &[f64], tolerance: f64, out: &mut [f64], thread
     each_observer(x, out, threads, |_, p| sheet.h_at(p, k2_far, k2_middle));
 }
 
-/// B in T (`field` b'B') or H in A/m (b'H') of cuboids, one per observer
-/// row: `dimension` and `polarization` (M, 3), each in its own frame.
+/// B in T (`field` b'B') or H in A/m (b'H') of cuboids in their own frames,
+/// as `magpylib.func.cuboid_field`: `dimension` and `polarization` one row
+/// (3,) for every observer, or one per observer (M, 3).
 pub fn cuboid_field(
     field: u8,
     x: &[f64],
@@ -76,14 +77,19 @@ pub fn cuboid_field(
     out: &mut [f64],
     threads: bool,
 ) {
-    assert_eq!(x.len(), dimension.len(), "one cuboid per observer");
-    assert_eq!(x.len(), polarization.len(), "one cuboid per observer");
+    for a in [dimension, polarization] {
+        assert!(
+            a.len() == 3 || a.len() == x.len(),
+            "one cuboid for all observers, or one per observer"
+        );
+    }
     let kernel = match field {
         b'B' => cuboid::cuboid_b,
         b'H' => cuboid::cuboid_h,
         _ => panic!("field must be 'B' or 'H'"),
     };
+    let at = |a: &[f64], i: usize| if a.len() == 3 { row(a, 0) } else { row(a, i) };
     each_observer(x, out, threads, |i, p| {
-        kernel(p, row(dimension, i), row(polarization, i))
+        kernel(p, at(dimension, i), at(polarization, i))
     });
 }

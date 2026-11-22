@@ -9,16 +9,45 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import init, {
-  Sheet,
+  ChargeSheet,
+  api_version,
   charge_field,
-  cuboid_b,
-  cuboid_h,
+  cuboid_field,
 } from "../pkg/mmr_kernels.js";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 await init({
   module_or_path: readFileSync(here("../pkg/mmr_kernels_bg.wasm")),
 });
+
+// the API's version, and a wrong argument throws, leaving the instance usable
+// (a Rust panic would trap it)
+if (api_version() !== 2) throw new Error(`api_version ${api_version()}, not 2`);
+const one = Float64Array.of(0.01, 0.02, 0.03);
+const unit = Float64Array.of(0.01, 0.01, 0.01);
+for (const [what, call] of [
+  ["field J", () => cuboid_field("J", one, unit, unit)],
+  ["observers (4,)", () => cuboid_field("B", one.subarray(0, 2), unit, unit)],
+  ["dimensions (2,)", () => cuboid_field("B", one, unit.subarray(0, 2), unit)],
+  [
+    "corners (N, 2)",
+    () => new ChargeSheet(new Float64Array(9), one.subarray(0, 2)),
+  ],
+  [
+    "coefficients",
+    () => charge_field(one, new Float64Array(9), one.subarray(0, 1)),
+  ],
+]) {
+  let threw = false;
+  try {
+    call();
+  } catch {
+    threw = true;
+  }
+  if (!threw) throw new Error(`${what}: no error`);
+}
+cuboid_field("B", one, unit, unit); // still usable
+
 const dir = here("../../reference/");
 const docs = readdirSync(dir)
   .filter((f) => f.endsWith(".json"))
@@ -29,11 +58,17 @@ const num = (v) =>
   v === "nan" ? NaN : v === "inf" ? Infinity : v === "-inf" ? -Infinity : v;
 const flat = (a) => Float64Array.from([a].flat(Infinity), num);
 
-// one cuboid's parameter per observer row, the sources cycled over the rows
-const perRow = (srcs, x, key) =>
-  flat(
-    Array.from({ length: x.length / 3 }, (_, i) => srcs[i % srcs.length][key]),
-  );
+// a cuboid's parameter: one row for every observer where the batch has one
+// source (magpylib's broadcast), else one per observer row, the sources cycled
+const rows = (srcs, x, key) =>
+  srcs.length === 1
+    ? flat(srcs[0][key])
+    : flat(
+        Array.from(
+          { length: x.length / 3 },
+          (_, i) => srcs[i % srcs.length][key],
+        ),
+      );
 
 // the fields this build has, by source kind, at observers x (M, 3): a cuboid
 // takes one source per row, another kind one source for all; any other field
@@ -41,16 +76,18 @@ const perRow = (srcs, x, key) =>
 const fields = {
   cuboid: {
     B: (srcs, x) =>
-      cuboid_b(
+      cuboid_field(
+        "B",
         x,
-        perRow(srcs, x, "dimension"),
-        perRow(srcs, x, "polarization"),
+        rows(srcs, x, "dimension"),
+        rows(srcs, x, "polarization"),
       ),
     H: (srcs, x) =>
-      cuboid_h(
+      cuboid_field(
+        "H",
         x,
-        perRow(srcs, x, "dimension"),
-        perRow(srcs, x, "polarization"),
+        rows(srcs, x, "dimension"),
+        rows(srcs, x, "polarization"),
       ),
   },
   triangle_linear_charge: {
@@ -61,7 +98,7 @@ const fields = {
   },
   charge_sheet: {
     H: ([s], x) => {
-      const sheet = Sheet.from_coefficients(
+      const sheet = ChargeSheet.from_coefficients(
         flat(s.vertices),
         flat(s.charge),
         flat(s.center),
@@ -74,7 +111,7 @@ const fields = {
   },
   charge_sheet_corners: {
     H: ([s], x) => {
-      const sheet = new Sheet(flat(s.vertices), flat(s.charge_densities));
+      const sheet = new ChargeSheet(flat(s.vertices), flat(s.charge_densities));
       const out = sheet.h(x, num(s.tolerance));
       sheet.free();
       return out;
@@ -196,7 +233,10 @@ if (skippedRelations.length)
 // timing: the solved plate's sheet (plate.json, a timing input without
 // expected values) at a grid round it, as studio's field lines ask
 const plate = JSON.parse(readFileSync(here("./plate.json"), "utf8"));
-const sheet = new Sheet(flat(plate.vertices), flat(plate.charge_densities));
+const sheet = new ChargeSheet(
+  flat(plate.vertices),
+  flat(plate.charge_densities),
+);
 for (const tolerance of [0, 1e-6, 1e-3]) {
   for (const n of [2500, 8000]) {
     const side = Math.round(Math.cbrt(n));

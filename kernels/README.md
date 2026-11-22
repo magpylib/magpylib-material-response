@@ -37,11 +37,56 @@ node js/check.mjs                                 # WebAssembly, then the plate'
 CI runs all of them. The wasm build needs SIMD, which `rust/.cargo/config.toml`
 switches on.
 
+## The browser API
+
+`rust/src/wasm.rs`, built by the commands above. Arrays are flat `Float64Array`s
+in C order; every source is in its own frame (a caller moves observers into it
+and turns the field back); a wrong argument throws.
+
+```js
+api_version(); // 2: a caller refuses any other
+cuboid_field(field, observers, dimensions, polarizations); // magpylib.func.cuboid_field: "B" or "H"; one cuboid (3,) or one per observer (M, 3)
+const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments
+sheet.h(observers, tolerance); // H in A/m; B = mu_0 H outside the body only
+```
+
+`ChargeSheet.from_coefficients` and `charge_field` exist for `js/check.mjs`
+only. Raise `api_version` with every change a caller must follow.
+
 ## Add a case
 
-Append a point with only its `id`, `source`, `observer` and `why`, then run
-`fill.py` on the file (needs the `reference` dependency group). SPEC.md says how
-values and tolerances are set and what `fill.py` refuses.
+A case starts where a kernel is used or goes wrong: a use case met while
+developing (a solve, a studio page), or a bug found, in MR or in magpylib (many
+magpylib issues were found while developing MR: #1066's cases are in
+`cuboid.json`, #1058's id is reserved until #1073). Before it becomes an entry:
+
+1. **Is it in scope?** SPEC.md's Scope: a value the mathematics defines, off
+   every face, edge, corner and triangle plane. If its value waits for a rule
+   still under discussion (#1073), reserve its id in SPEC.md and stop there.
+2. **Is it covered?** Search the file for the same source and region: a point
+   that already checks it, or a source to reuse. A new source is listed in
+   SPEC.md's section of its kind.
+3. **Point or relation?** Where a law ties fields (B − μ₀H = J, a body against
+   its parts, a symmetry), write a relation: a wrong formula cannot regenerate
+   its way past it. Otherwise a point.
+4. **Write it**: `id` (a new one, its group first: `near-edge-*`; never reused),
+   `why` (one line, citing the SPEC rule it relies on), `source`, `observer`. No
+   values.
+5. **Fill it**:
+   `uv run --group reference python kernels/reference/fill.py <file>`. It
+   refuses a point out of scope, with the reason; it exits 1 where NumPy
+   disagrees with the 50-digit value: a bug in the implementation, to fix before
+   the entry goes in.
+6. **Check every implementation** (the commands above). A failure in one is a
+   bug in that port. In magpylib, it is filed there, and the Python test skips
+   the point for the releases before its fix, as for #1066.
+7. **Commit**: the file's diff shows only the new entry; `fill.py --redo`
+   changes nothing.
+
+A new kind needs more: its rules in a SPEC.md section, its Python implementation
+on the array API (it must run on `mp_namespace` for `fill.py`), and its line in
+`fill.py`'s `KINDS`, the Python test's `IMPLS`, the Rust checker and
+`js/check.mjs` (`charge_sheet_corners` is an example).
 
 ## The timing plate
 
