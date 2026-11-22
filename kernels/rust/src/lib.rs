@@ -1,5 +1,5 @@
 //! Field kernels for magpylib-material-response's solved face charge and
-//! magpylib's cuboid and straight current segment, for the browser
+//! magpylib's cuboid, straight current segment, sphere and dipole, for the browser
 //! (WebAssembly, `wasm` feature). Checked against `kernels/reference/*.json`
 //! (issue #208).
 //!
@@ -9,6 +9,7 @@
 
 pub mod cuboid;
 pub mod polyline;
+pub mod sphere;
 pub mod triangle;
 
 #[cfg(feature = "wasm")]
@@ -132,5 +133,69 @@ pub fn polyline_field(
             current[i]
         };
         polyline::polyline_h(p, at(start, i), at(end, i), c).map(|v| scale * v)
+    });
+}
+
+/// B in T (`field` b'B') or H in A/m (b'H') of spheres at the origin, as
+/// `magpylib.func.sphere_field`: `diameter` one value or one per observer
+/// (M,), `polarization` one row (3,) or one per observer (M, 3).
+pub fn sphere_field(
+    field: u8,
+    x: &[f64],
+    diameter: &[f64],
+    polarization: &[f64],
+    out: &mut [f64],
+    threads: bool,
+) {
+    assert!(
+        diameter.len() == 1 || 3 * diameter.len() == x.len(),
+        "one diameter for all observers, or one per observer"
+    );
+    assert!(
+        polarization.len() == 3 || polarization.len() == x.len(),
+        "one polarization for all observers, or one per observer"
+    );
+    let kernel = match field {
+        b'B' => sphere::sphere_b,
+        b'H' => sphere::sphere_h,
+        _ => panic!("field must be 'B' or 'H'"),
+    };
+    each_observer(x, out, threads, |i, p| {
+        let d = if diameter.len() == 1 {
+            diameter[0]
+        } else {
+            diameter[i]
+        };
+        let j = if polarization.len() == 3 {
+            row(polarization, 0)
+        } else {
+            row(polarization, i)
+        };
+        kernel(p, d, j)
+    });
+}
+
+/// B in T (`field` b'B') or H in A/m (b'H') of dipoles at the origin, as
+/// `magpylib.func.dipole_field`: `moment` one row (3,) or one per observer
+/// (M, 3), in A m^2.
+pub fn dipole_field(field: u8, x: &[f64], moment: &[f64], out: &mut [f64], threads: bool) {
+    assert!(
+        moment.len() == 3 || moment.len() == x.len(),
+        "one moment for all observers, or one per observer"
+    );
+    let kernel = match field {
+        b'B' => sphere::dipole_b,
+        b'H' => sphere::dipole_h,
+        _ => panic!("field must be 'B' or 'H'"),
+    };
+    each_observer(x, out, threads, |i, p| {
+        kernel(
+            p,
+            if moment.len() == 3 {
+                row(moment, 0)
+            } else {
+                row(moment, i)
+            },
+        )
     });
 }

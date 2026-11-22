@@ -7,8 +7,8 @@ what they mean.
 
 ## Format
 
-One file per family (`cuboid`, `face_charge`, `current`): its kinds and the
-relations that tie them. Top level:
+One file per family (`cuboid`, `face_charge`, `current`, `sphere`): its kinds
+and the relations that tie them. Top level:
 
 | key         | value                                                        |
 | ----------- | ------------------------------------------------------------ |
@@ -144,8 +144,35 @@ test, not in the file.
 
 Not taken from magpylib's tests: `test_vs_mag2` (magpylib 2's outputs; these
 values are exact), `test_Cuboid_basics` (the pose). Waiting for other kinds: the
-cuboid against charged triangles, tetrahedra, triangle strips, dipoles and
-triangle meshes.
+cuboid against charged triangles, tetrahedra, triangle strips and triangle
+meshes.
+
+## sphere, dipole
+
+`magpylib.func.sphere_field` and `magpylib.func.dipole_field`, at the origin. A
+dipole: `moment` (3, A m^2); fields `B` and `H`,
+`H = (3 (m.r) r / r^5 - m / r^3) / (4 pi)`, `B = mu_0 H`; at the dipole, as
+magpylib, infinite in each nonzero component of the moment, 0 in the others. A
+sphere: `diameter` (m), `polarization` (J, 3, T); fields `B`, `H`, `J`, `M`.
+Outside (`r > d/2`), the dipole of moment `J V / mu_0`, `V` its volume, and
+`J = 0`; inside, the surface counted inside as magpylib does today (its points
+are reserved), `B = 2 J / 3` and `J` the polarization; `H = (B - J) / mu_0`,
+`M = J / mu_0`.
+
+Sources: `ball` 12 mm across, every component of `J` nonzero; `ball2` 2 cm
+across with another `J`, so that a batch's rows differ; `ball_nm`, `ball_km` a
+million times smaller and larger (B depends on `x / R` only); `dip` a generic
+moment; `dip_ball` the moment `J`; `dip_a`, `dip_b`, `dip_ab` exact binary
+moments and their sum. Points inside, at the center, at 0.999 and 1.001 radii,
+along and across `J`, 100 radii out, at both scales; a dipole's along, across
+and generic, 1e-9 m and 1 km out, and of `dip_a` and `dip_b`. **Relations**:
+`sphere-outside-is-dipole` (approximate: the weight `V / mu_0` is a rounded
+double), `sphere-b-h-j-inside`, `dipole-linear` (exact binary moments),
+`dipole-b-mu0-h`.
+
+**Reserved, waiting for #1073**: on a sphere's surface (`surface-*`); a diameter
+not positive (`zero-diameter`, `negative-diameter`); at a dipole
+(`dipole-origin`); `observer-nan`, `observer-inf`.
 
 ## polyline
 

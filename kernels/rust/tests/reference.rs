@@ -84,6 +84,21 @@ fn field(name: &str, srcs: &[&Value], x: &[f64], threads: bool) -> Option<Vec<f6
             let (a, b, c) = (rows("segment_start"), rows("segment_end"), rows("current"));
             k::polyline_field(name.as_bytes()[0], x, &a, &b, &c, &mut out, threads);
         }
+        ("sphere", "B" | "H") => {
+            let rows = |key: &str| -> Vec<f64> {
+                (0..x.len() / 3)
+                    .flat_map(|i| floats(&srcs[i % srcs.len()][key]))
+                    .collect()
+            };
+            let (d, p) = (rows("diameter"), rows("polarization"));
+            k::sphere_field(name.as_bytes()[0], x, &d, &p, &mut out, threads);
+        }
+        ("dipole", "B" | "H") => {
+            let m: Vec<f64> = (0..x.len() / 3)
+                .flat_map(|i| floats(&srcs[i % srcs.len()]["moment"]))
+                .collect();
+            k::dipole_field(name.as_bytes()[0], x, &m, &mut out, threads);
+        }
         ("triangle_linear_charge", "H") => {
             k::charge_field(
                 x,
@@ -181,7 +196,9 @@ fn reference_points() {
             let kind = source(p)["kind"].as_str().unwrap();
             let same = |q: &Value| {
                 let qk = source(q)["kind"].as_str().unwrap();
-                qk == kind && (kind == "cuboid" || q["source"] == p["source"])
+                qk == kind
+                    && (matches!(kind, "cuboid" | "polyline" | "sphere" | "dipole")
+                        || q["source"] == p["source"])
             };
             if !groups.iter().any(|g| same(g[0])) {
                 groups.push(points.iter().filter(|q| same(q)).collect());

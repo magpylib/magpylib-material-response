@@ -99,6 +99,56 @@ pub fn polyline_field(
     Ok(out)
 }
 
+fn field_byte(field: &str) -> Result<u8, JsError> {
+    match field {
+        "B" => Ok(b'B'),
+        "H" => Ok(b'H'),
+        _ => Err(JsError::new("field: \"B\" or \"H\"")),
+    }
+}
+
+/// B in T (`field` "B") or H in A/m ("H") of homogeneously polarized
+/// spheres at `observers` (M, 3), as `magpylib.func.sphere_field` at the
+/// origin: `diameters` one (1,) or one per observer (M,), `polarizations`
+/// one (3,) or one per observer (M, 3). The surface counts inside.
+#[wasm_bindgen]
+pub fn sphere_field(
+    field: &str,
+    observers: &[f64],
+    diameters: &[f64],
+    polarizations: &[f64],
+) -> Result<Vec<f64>, JsError> {
+    let field = field_byte(field)?;
+    check_observers(observers)?;
+    if diameters.len() != 1 && 3 * diameters.len() != observers.len() {
+        return Err(JsError::new("diameters: (1,) for every observer, or (M,)"));
+    }
+    if polarizations.len() != 3 && polarizations.len() != observers.len() {
+        return Err(JsError::new(
+            "polarizations: (3,) for every observer, or (M, 3)",
+        ));
+    }
+    let mut out = vec![0.0; observers.len()];
+    crate::sphere_field(field, observers, diameters, polarizations, &mut out, false);
+    Ok(out)
+}
+
+/// B in T (`field` "B") or H in A/m ("H") of magnetic dipoles at
+/// `observers` (M, 3), as `magpylib.func.dipole_field` at the origin:
+/// `moments` in A m^2, one (3,) or one per observer (M, 3). At the dipole,
+/// infinite in each nonzero component of the moment, 0 in the others.
+#[wasm_bindgen]
+pub fn dipole_field(field: &str, observers: &[f64], moments: &[f64]) -> Result<Vec<f64>, JsError> {
+    let field = field_byte(field)?;
+    check_observers(observers)?;
+    if moments.len() != 3 && moments.len() != observers.len() {
+        return Err(JsError::new("moments: (3,) for every observer, or (M, 3)"));
+    }
+    let mut out = vec![0.0; observers.len()];
+    crate::dipole_field(field, observers, moments, &mut out, false);
+    Ok(out)
+}
+
 /// A solved `ChargeSheet`, from its public data, as `ChargeSheet.from_triangles`
 /// takes it: `triangles` (N, 3, 3), the corners of each face, and
 /// `charge_densities` (N, 3), the charge density at those corners in A/m.

@@ -13,7 +13,9 @@ import init, {
   api_version,
   charge_field,
   cuboid_field,
+  dipole_field,
   polyline_field,
+  sphere_field,
 } from "../pkg/mmr_kernels.js";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -46,6 +48,14 @@ for (const [what, call] of [
   [
     "currents (3,), one observer",
     () => polyline_field("B", one, unit, one, one),
+  ],
+  ["diameters (2,)", () => sphere_field("B", one, one.subarray(0, 2), unit)],
+  ["moments (2,)", () => dipole_field("H", one, one.subarray(0, 2))],
+  ["dipole field J", () => dipole_field("J", one, unit)],
+  ["sphere field J", () => sphere_field("J", one, one.subarray(0, 1), unit)],
+  [
+    "polarizations (2,)",
+    () => sphere_field("B", one, one.subarray(0, 1), unit.subarray(0, 2)),
   ],
   [
     "currents (2,)",
@@ -96,6 +106,12 @@ cuboid_field("B", one, unit, unit); // still usable
         polyline_field(f, x, a, b, c),
         polyline_field(f, x, tile(a), tile(b), tile(c)),
       ],
+      [
+        "sphere",
+        sphere_field(f, x, Float64Array.of(0.004), p),
+        sphere_field(f, x, tile(Float64Array.of(0.004)), tile(p)),
+      ],
+      ["dipole", dipole_field(f, x, p), dipole_field(f, x, tile(p))],
     ];
     for (const [what, once, rows] of pairs)
       if (!once.every((v, i) => v === rows[i]))
@@ -126,8 +142,10 @@ const rows = (srcs, x, key) =>
       );
 
 // the fields this build has, by source kind, at observers x (M, 3): a cuboid
-// takes one source per row, another kind one source for all; any other field
+// with one row of parameters per observer (PER_ROW) takes the sources mixed,
+// another kind one source for all; any other field
 // is skipped and reported
+const PER_ROW = new Set(["cuboid", "polyline", "sphere", "dipole"]);
 const fields = {
   cuboid: {
     B: (srcs, x) =>
@@ -162,6 +180,26 @@ const fields = {
         rows(srcs, x, "segment_end"),
         rows(srcs, x, "current"),
       ),
+  },
+  sphere: {
+    B: (srcs, x) =>
+      sphere_field(
+        "B",
+        x,
+        rows(srcs, x, "diameter"),
+        rows(srcs, x, "polarization"),
+      ),
+    H: (srcs, x) =>
+      sphere_field(
+        "H",
+        x,
+        rows(srcs, x, "diameter"),
+        rows(srcs, x, "polarization"),
+      ),
+  },
+  dipole: {
+    B: (srcs, x) => dipole_field("B", x, rows(srcs, x, "moment")),
+    H: (srcs, x) => dipole_field("H", x, rows(srcs, x, "moment")),
   },
   triangle_linear_charge: {
     H: ([s], x) =>
@@ -232,7 +270,7 @@ for (const doc of docs) {
   const kindOf = (p) => doc.sources[p.source].kind;
   const groups = new Map();
   for (const p of doc.points) {
-    const key = kindOf(p) === "cuboid" ? "cuboid" : `${kindOf(p)} ${p.source}`;
+    const key = PER_ROW.has(kindOf(p)) ? kindOf(p) : `${kindOf(p)} ${p.source}`;
     groups.set(key, [...(groups.get(key) ?? []), p]);
   }
   for (const group of groups.values()) {

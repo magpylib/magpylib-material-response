@@ -29,6 +29,7 @@ import numpy as np
 
 from magpylib_material_response._array_api.cuboid import cuboid_field
 from magpylib_material_response._array_api.polyline import polyline_field
+from magpylib_material_response._array_api.sphere import dipole_field, sphere_field
 from magpylib_material_response.face_charge import _triangle as T
 
 mp.mp.dps = 50
@@ -79,6 +80,32 @@ def polyline_scope(x, p):
     band = max(1e-15 * L, 100 * EPS * size)
     if d <= band:
         return "on the segment's line"
+    return None
+
+
+def dipole_scope(x, _p):
+    """Why an observer is out of scope for a dipole, or None: at the dipole
+    (infinite there), or not finite."""
+    if not np.isfinite(x).all():
+        return "a non-finite observer"
+    if not np.any(x):
+        return "at the dipole"
+    return None
+
+
+def sphere_scope(x, p):
+    """Why an observer is out of scope for a sphere, or None: on its surface
+    (within today's exact comparison, or #1081's band of 100 eps max(d,
+    |x|), of it: magpylib counts the surface inside), a diameter not
+    positive, or not finite."""
+    if not np.isfinite(x).all():
+        return "a non-finite observer"
+    d = float(p["diameter"])
+    if d <= 0:
+        return "a diameter not positive"
+    r = np.linalg.norm(x)
+    if abs(r - d / 2) <= 100 * EPS * max(d, r):
+        return "on the surface"
     return None
 
 
@@ -167,6 +194,8 @@ class Kind(NamedTuple):
 KINDS = {
     "cuboid": Kind(cuboid_field, "BHJM", True, cuboid_scope),
     "polyline": Kind(polyline_field, "BH", True, polyline_scope),
+    "dipole": Kind(dipole_field, "BH", True, dipole_scope),
+    "sphere": Kind(sphere_field, "BHJM", True, sphere_scope),
     "triangle_linear_charge": Kind(
         T.triangle_linear_charge_field, "H", False, triangles_scope
     ),

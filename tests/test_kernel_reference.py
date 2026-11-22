@@ -4,8 +4,9 @@ implementation of them is checked against (#208), by the rules of
 
 Each kernel runs on NumPy and, where it is installed, on ``array_api_strict``,
 which allows nothing beyond the array API standard; the installed magpylib's
-cuboid and straight current segment are checked as ports. Every point is checked alone and, per file and
-kind, all in one call, so that batches are covered too."""
+cuboid, straight current segment, sphere and dipole are checked as ports.
+Every point is checked alone and, per file and kind, all in one call, so that
+batches are covered too."""
 
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ import numpy as np
 import pytest
 from packaging.version import Version
 
-from magpylib_material_response._array_api import cuboid, polyline
+from magpylib_material_response._array_api import cuboid, polyline, sphere
 from magpylib_material_response.face_charge import _triangle as T
 
 try:
@@ -36,7 +37,7 @@ OLD_MAGPYLIB = Version(magpy.__version__) <= Version("6.3.0")
 # subtracts two sines that nearly cancel
 MAGPYLIB_OFF = {"current/axis-far-1e3", "current/axis-far-1e3-before"}
 # the kinds whose implementations take one row of parameters per observer
-PER_OBSERVER = {"cuboid", "polyline"}
+PER_OBSERVER = {"cuboid", "polyline", "sphere", "dipole"}
 
 
 def _decode(a):
@@ -66,6 +67,16 @@ def _magpylib_polyline(field, X, segment_start, segment_end, current):
     ).reshape(-1, 3)
 
 
+def _magpylib_sphere(field, X, diameter, polarization):
+    return magpy.func.sphere_field(
+        field, X, diameter, polarization, squeeze=False
+    ).reshape(-1, 3)
+
+
+def _magpylib_dipole(field, X, moment):
+    return magpy.func.dipole_field(field, X, moment, squeeze=False).reshape(-1, 3)
+
+
 def _impls(func, fields):
     """NumPy, and array_api_strict where installed."""
     out = {"array-api-numpy": (func, np.asarray, fields)}
@@ -84,6 +95,10 @@ IMPLS = {
     "charge_sheet_corners": _impls(T.charge_sheet_corners_field, "H"),
     "polyline": _impls(polyline.polyline_field, "BH")
     | {"magpylib": (_magpylib_polyline, np.asarray, "BH")},
+    "sphere": _impls(sphere.sphere_field, "BHJM")
+    | {"magpylib": (_magpylib_sphere, np.asarray, "BH")},
+    "dipole": _impls(sphere.dipole_field, "BH")
+    | {"magpylib": (_magpylib_dipole, np.asarray, "BH")},
 }
 PORTS = {"magpylib"}  # not in the relations: they cross kinds
 

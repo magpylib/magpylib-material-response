@@ -37,5 +37,11 @@ fn shared_parameters_equal_rows() {
             false,
         );
         assert_eq!(once, rows, "polyline {}", field as char);
+        k::sphere_field(field, &x, &[0.004], &p, &mut once, false);
+        k::sphere_field(field, &x, &[0.004; M], &tiled(&p), &mut rows, false);
+        assert_eq!(once, rows, "sphere {}", field as char);
+        k::dipole_field(field, &x, &p, &mut once, false);
+        k::dipole_field(field, &x, &tiled(&p), &mut rows, false);
+        assert_eq!(once, rows, "dipole {}", field as char);
     }
 }

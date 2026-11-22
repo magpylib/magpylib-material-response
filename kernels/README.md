@@ -13,14 +13,15 @@ reference/   the single source of truth
   mp_namespace.py  the 50-digit array namespace fill.py runs the kernels on
   show.py          plots a file's points
 rust/        one crate, built for the browser (wasm feature)
-  src/             the kernels (cuboid.rs, polyline.rs, triangle.rs), the browser binding (wasm.rs)
+  src/             the kernels (cuboid.rs, polyline.rs, sphere.rs, triangle.rs), the browser binding (wasm.rs)
   tests/           the Rust checker
   js/              the WebAssembly checker, and plate.json for its timing
 ```
 
 The Python kernels live in the package:
 `src/magpylib_material_response/_array_api/cuboid.py`,
-`src/magpylib_material_response/_array_api/polyline.py` and
+`src/magpylib_material_response/_array_api/polyline.py`,
+`src/magpylib_material_response/_array_api/sphere.py` and
 `src/magpylib_material_response/face_charge/_triangle.py`.
 
 ## Run the checkers
@@ -48,12 +49,15 @@ and turns the field back); a wrong argument throws.
 api_version(); // 1: a caller refuses any other
 cuboid_field(field, observers, dimensions, polarizations); // magpylib.func.cuboid_field: "B" or "H"; one cuboid (3,) or one per observer (M, 3)
 polyline_field(field, observers, segments_start, segments_end, currents); // magpylib.func.polyline_field: segments (3,) or (M, 3), currents (1,) or (M,); 0 on a segment's line
+sphere_field(field, observers, diameters, polarizations); // magpylib.func.sphere_field: diameters (1,) or (M,), polarizations (3,) or (M, 3)
+dipole_field(field, observers, moments); // magpylib.func.dipole_field: moments (3,) or (M, 3); at the dipole infinite where the moment is nonzero
 const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments
 sheet.h(observers, tolerance); // H in A/m; B = mu_0 H outside the body only
 ```
 
-`ChargeSheet.from_coefficients` and `charge_field` exist for `js/check.mjs`
-only. Raise `api_version` with every change a caller must follow.
+The browser computes B and H; J and M (cuboid, sphere) are checked in Python
+only. `ChargeSheet.from_coefficients` and `charge_field` exist for
+`js/check.mjs` only. Raise `api_version` with every change a caller must follow.
 
 ## Add a case
 
