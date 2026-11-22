@@ -1,12 +1,14 @@
 //! Field kernels for magpylib-material-response's solved face charge and
-//! magpylib's cuboid, for the browser (WebAssembly, `wasm` feature). Checked
-//! against `kernels/reference/*.json` (issue #208).
+//! magpylib's cuboid and straight current segment, for the browser
+//! (WebAssembly, `wasm` feature). Checked against `kernels/reference/*.json`
+//! (issue #208).
 //!
 //! All arrays are flat f64 slices in numpy's C order. Every batch function
 //! fills `out` (M, 3), one row per observer; with `threads`, and the
 //! `parallel` feature, observers are split over rayon's threads.
 
 pub mod cuboid;
+pub mod polyline;
 pub mod triangle;
 
 #[cfg(feature = "wasm")]
@@ -91,5 +93,44 @@ pub fn cuboid_field(
     let at = |a: &[f64], i: usize| if a.len() == 3 { row(a, 0) } else { row(a, i) };
     each_observer(x, out, threads, |i, p| {
         kernel(p, at(dimension, i), at(polarization, i))
+    });
+}
+
+/// B in T (`field` b'B') or H in A/m (b'H') of straight current segments in
+/// their own frames, as `magpylib.func.polyline_field`: `start`, `end` one
+/// row (3,) for every observer or one per observer (M, 3), `current` one
+/// value or one per observer (M,), flowing from start to end.
+pub fn polyline_field(
+    field: u8,
+    x: &[f64],
+    start: &[f64],
+    end: &[f64],
+    current: &[f64],
+    out: &mut [f64],
+    threads: bool,
+) {
+    for a in [start, end] {
+        assert!(
+            a.len() == 3 || a.len() == x.len(),
+            "one segment for all observers, or one per observer"
+        );
+    }
+    assert!(
+        current.len() == 1 || 3 * current.len() == x.len(),
+        "one current for all observers, or one per observer"
+    );
+    let scale = match field {
+        b'B' => cuboid::MU0,
+        b'H' => 1.0,
+        _ => panic!("field must be 'B' or 'H'"),
+    };
+    let at = |a: &[f64], i: usize| if a.len() == 3 { row(a, 0) } else { row(a, i) };
+    each_observer(x, out, threads, |i, p| {
+        let c = if current.len() == 1 {
+            current[0]
+        } else {
+            current[i]
+        };
+        polyline::polyline_h(p, at(start, i), at(end, i), c).map(|v| scale * v)
     });
 }

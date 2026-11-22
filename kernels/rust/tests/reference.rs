@@ -75,6 +75,15 @@ fn field(name: &str, srcs: &[&Value], x: &[f64], threads: bool) -> Option<Vec<f6
             let (d, p) = (rows("dimension"), rows("polarization"));
             k::cuboid_field(name.as_bytes()[0], x, &d, &p, &mut out, threads);
         }
+        ("polyline", "B" | "H") => {
+            let rows = |key: &str| -> Vec<f64> {
+                (0..x.len() / 3)
+                    .flat_map(|i| floats(&srcs[i % srcs.len()][key]))
+                    .collect()
+            };
+            let (a, b, c) = (rows("segment_start"), rows("segment_end"), rows("current"));
+            k::polyline_field(name.as_bytes()[0], x, &a, &b, &c, &mut out, threads);
+        }
         ("triangle_linear_charge", "H") => {
             k::charge_field(
                 x,

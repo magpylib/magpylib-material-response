@@ -28,6 +28,7 @@ import mpmath as mp
 import numpy as np
 
 from magpylib_material_response._array_api.cuboid import cuboid_field
+from magpylib_material_response._array_api.polyline import polyline_field
 from magpylib_material_response.face_charge import _triangle as T
 
 mp.mp.dps = 50
@@ -56,6 +57,28 @@ def cuboid_scope(x, p):
         return None
     if (dist <= band).all() and (np.abs(dist) <= band).any():
         return "on a face, edge or corner"
+    return None
+
+
+def polyline_scope(x, p):
+    """Why an observer is out of scope for a straight current segment, or
+    None: on the segment's line, its extensions included (within today's
+    1e-15 L, or #1081's 100 eps max(L, |x|, |start|, |end|), of it: there magpylib gives 0,
+    and the distance is rounding), a segment without length, or not
+    finite."""
+    if not np.isfinite(x).all():
+        return "a non-finite observer"
+    a, b = p["segment_start"], p["segment_end"]
+    L = np.linalg.norm(b - a)
+    if L == 0:
+        return "a segment without length"
+    e = (b - a) / L
+    t = e @ (x - a)
+    d = np.linalg.norm(x - a - t * e)
+    size = max(L, *(np.linalg.norm(v) for v in (x, a, b)))
+    band = max(1e-15 * L, 100 * EPS * size)
+    if d <= band:
+        return "on the segment's line"
     return None
 
 
@@ -143,6 +166,7 @@ class Kind(NamedTuple):
 
 KINDS = {
     "cuboid": Kind(cuboid_field, "BHJM", True, cuboid_scope),
+    "polyline": Kind(polyline_field, "BH", True, polyline_scope),
     "triangle_linear_charge": Kind(
         T.triangle_linear_charge_field, "H", False, triangles_scope
     ),

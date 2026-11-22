@@ -4,7 +4,7 @@ implementation of them is checked against (#208), by the rules of
 
 Each kernel runs on NumPy and, where it is installed, on ``array_api_strict``,
 which allows nothing beyond the array API standard; the installed magpylib's
-cuboid is checked as a port. Every point is checked alone and, per file and
+cuboid and straight current segment are checked as ports. Every point is checked alone and, per file and
 kind, all in one call, so that batches are covered too."""
 
 import json
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from packaging.version import Version
 
-from magpylib_material_response._array_api import cuboid
+from magpylib_material_response._array_api import cuboid, polyline
 from magpylib_material_response.face_charge import _triangle as T
 
 try:
@@ -28,12 +28,15 @@ FILES = {p.stem: json.loads(p.read_text()) for p in sorted(REFERENCE.glob("*.jso
 FIELDS = "BHJM"
 # the points magpylib gets wrong (NaN, or off) before its stable edge
 # logarithms (#1066, after 6.3.0)
-BEFORE_1066 = {"beside-edge-1e-12"} | {
-    f"near-edge-{e}-{d}" for e in "xyz" for d in ("1e-6", "1e-9", "1e-12")
+BEFORE_1066 = {"cuboid/beside-edge-1e-12"} | {
+    f"cuboid/near-edge-{e}-{d}" for e in "xyz" for d in ("1e-6", "1e-9", "1e-12")
 }
 OLD_MAGPYLIB = Version(magpy.__version__) <= Version("6.3.0")
+# the points magpylib gets wrong in every release: beyond a segment's end it
+# subtracts two sines that nearly cancel
+MAGPYLIB_OFF = {"current/axis-far-1e3", "current/axis-far-1e3-before"}
 # the kinds whose implementations take one row of parameters per observer
-PER_OBSERVER = {"cuboid"}
+PER_OBSERVER = {"cuboid", "polyline"}
 
 
 def _decode(a):
@@ -57,6 +60,12 @@ def _magpylib_cuboid(field, X, dimension, polarization):
     return magpy.func.cuboid_field(field, X, dimension, polarization, squeeze=False)
 
 
+def _magpylib_polyline(field, X, segment_start, segment_end, current):
+    return magpy.func.polyline_field(
+        field, X, segment_start, segment_end, current, squeeze=False
+    ).reshape(-1, 3)
+
+
 def _impls(func, fields):
     """NumPy, and array_api_strict where installed."""
     out = {"array-api-numpy": (func, np.asarray, fields)}
@@ -73,6 +82,8 @@ IMPLS = {
     "triangle_linear_charge": _impls(T.triangle_linear_charge_field, "H"),
     "charge_sheet": _impls(T.charge_sheet_field, "H"),
     "charge_sheet_corners": _impls(T.charge_sheet_corners_field, "H"),
+    "polyline": _impls(polyline.polyline_field, "BH")
+    | {"magpylib": (_magpylib_polyline, np.asarray, "BH")},
 }
 PORTS = {"magpylib"}  # not in the relations: they cross kinds
 
@@ -103,16 +114,24 @@ def _cases():
                 yield pytest.param(name, point, impl, id=f"{name}-{point['id']}-{impl}")
 
 
-def _skipped(impl, point):
-    return impl in PORTS and OLD_MAGPYLIB and point["id"] in BEFORE_1066
+def _skipped(name, impl, point):
+    """Why a port skips a point of file ``name``, or None."""
+    if impl not in PORTS:
+        return None
+    key = f"{name}/{point['id']}"
+    if OLD_MAGPYLIB and key in BEFORE_1066:
+        return "magpylib <= 6.3.0 lacks the stable edge logarithms (#1066)"
+    if key in MAGPYLIB_OFF:
+        return "magpylib subtracts two sines that cancel beyond a segment's end"
+    return None
 
 
 @pytest.mark.parametrize(("name", "point", "impl"), list(_cases()))
 def test_point(name, point, impl):
     doc = FILES[name]
     kind = doc["sources"][point["source"]]["kind"]
-    if _skipped(impl, point):
-        pytest.skip("magpylib <= 6.3.0 lacks the stable edge logarithms (#1066)")
+    if reason := _skipped(name, impl, point):
+        pytest.skip(reason)
     fields = [f for f in FIELDS if f in point and f in IMPLS[kind][impl][2]]
     assert fields, f"{point['id']}: no field to check"
     for field in fields:
@@ -138,7 +157,7 @@ def test_batch(name, kind, impl):
     points = [
         p
         for p in doc["points"]
-        if doc["sources"][p["source"]]["kind"] == kind and not _skipped(impl, p)
+        if doc["sources"][p["source"]]["kind"] == kind and not _skipped(name, impl, p)
     ]
     groups = (
         [points]

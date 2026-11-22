@@ -57,6 +57,48 @@ pub fn cuboid_field(
     Ok(out)
 }
 
+/// B in T (`field` "B") or H in A/m ("H") of straight current segments at
+/// `observers` (M, 3), as `magpylib.func.polyline_field` at the origin,
+/// unturned: `segments_start`, `segments_end` one segment (3,) for every
+/// observer or one per observer (M, 3), `currents` in A one value or one per
+/// observer (M,), flowing from start to end. 0 on a segment's line.
+#[wasm_bindgen]
+pub fn polyline_field(
+    field: &str,
+    observers: &[f64],
+    segments_start: &[f64],
+    segments_end: &[f64],
+    currents: &[f64],
+) -> Result<Vec<f64>, JsError> {
+    let field = match field {
+        "B" => b'B',
+        "H" => b'H',
+        _ => return Err(JsError::new("field: \"B\" or \"H\"")),
+    };
+    check_observers(observers)?;
+    for a in [segments_start, segments_end] {
+        if a.len() != 3 && a.len() != observers.len() {
+            return Err(JsError::new(
+                "segments_start, segments_end: (3,) for every observer, or (M, 3)",
+            ));
+        }
+    }
+    if currents.len() != 1 && 3 * currents.len() != observers.len() {
+        return Err(JsError::new("currents: (1,) for every observer, or (M,)"));
+    }
+    let mut out = vec![0.0; observers.len()];
+    crate::polyline_field(
+        field,
+        observers,
+        segments_start,
+        segments_end,
+        currents,
+        &mut out,
+        false,
+    );
+    Ok(out)
+}
+
 /// A solved `ChargeSheet`, from its public data, as `ChargeSheet.from_triangles`
 /// takes it: `triangles` (N, 3, 3), the corners of each face, and
 /// `charge_densities` (N, 3), the charge density at those corners in A/m.

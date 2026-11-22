@@ -7,8 +7,8 @@ what they mean.
 
 ## Format
 
-One file per family (`cuboid`, `face_charge`): its kinds and the relations that
-tie them. Top level:
+One file per family (`cuboid`, `face_charge`, `current`): its kinds and the
+relations that tie them. Top level:
 
 | key         | value                                                        |
 | ----------- | ------------------------------------------------------------ |
@@ -144,8 +144,38 @@ test, not in the file.
 
 Not taken from magpylib's tests: `test_vs_mag2` (magpylib 2's outputs; these
 values are exact), `test_Cuboid_basics` (the pose). Waiting for other kinds: the
-cuboid against charged triangles, tetrahedra, polylines, triangle strips,
-dipoles and triangle meshes.
+cuboid against charged triangles, tetrahedra, triangle strips, dipoles and
+triangle meshes.
+
+## polyline
+
+`magpylib.func.polyline_field` for one straight segment, in its own frame (no
+position or orientation). Parameters: `segment_start`, `segment_end` (3, m),
+`current` (A), flowing from start to end. Fields `B` in T and `H` in A/m,
+`B = mu_0 H`. With `e` the unit direction, `L` the length, `r1 = x - start`,
+`r2 = x - end`, their lengths `R1`, `R2` and `t1 = e.r1`, `t2 = e.r2`:
+`H = I / (4 pi) k (e x r1)`, `k = (t1/R1 - t2/R2) / |e x r1|^2`; where
+`t1 t2 > 0` (beyond an end) rationalized,
+`k = L (t1 + t2) / (R1 R2 (t1 R2 + t2 R1))`. Magpylib subtracts the sines there
+instead: they cancel beyond an end, more the farther along the axis and the
+nearer to it (`axis-far-1e3` off by 3e-6, `axis-far-1e3-before` by 9e-6:
+magpylib's check skips them).
+
+- **on the line**: within 1e-15 L of the segment's line, its extensions
+  included, `B = H = 0`, as magpylib; for a segment without length too.
+
+Sources: `seg` 6 mm at a generic orientation off the origin, 2.5 A; `seg_km` a
+million times larger, -1.5 A; `bin` in exact binary coordinates, its halves
+`bin_first`, `bin_second` and `bin_reversed`. Points beside the middle, the
+start and the end (square to it: the branches' boundary), beyond either end,
+1000 lengths along the axis on either side (the rationalized branch), 1e-6 and
+1e-9 lengths from the middle, 100 lengths away, and at the km scale.
+**Relations**: `split-halves` (superposition, exact midpoint),
+`reverse-current`, `b-mu0-h`.
+
+**Reserved, waiting for #1073**: on the segment's line, its extensions included
+(the distance there is rounding: `axis-beyond-end`); `zero-length`;
+`observer-nan`, `observer-inf`.
 
 ## triangle_linear_charge
 

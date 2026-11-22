@@ -13,6 +13,7 @@ import init, {
   api_version,
   charge_field,
   cuboid_field,
+  polyline_field,
 } from "../pkg/mmr_kernels.js";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -37,6 +38,19 @@ for (const [what, call] of [
     "coefficients",
     () => charge_field(one, new Float64Array(9), one.subarray(0, 1)),
   ],
+  [
+    "segments_start (2,)",
+    () =>
+      polyline_field("B", one, unit.subarray(0, 2), one, one.subarray(0, 1)),
+  ],
+  [
+    "currents (3,), one observer",
+    () => polyline_field("B", one, unit, one, one),
+  ],
+  [
+    "currents (2,)",
+    () => polyline_field("B", one, unit, one, one.subarray(0, 2)),
+  ],
 ]) {
   let threw = false;
   try {
@@ -47,6 +61,47 @@ for (const [what, call] of [
   if (!threw) throw new Error(`${what}: no error`);
 }
 cuboid_field("B", one, unit, unit); // still usable
+
+// one source given once, (3,) and (1,), equals the same given per row, past
+// two chunks of observers (the reference points pass per-row parameters)
+{
+  const m = 130;
+  const x = Float64Array.from(
+    { length: 3 * m },
+    (_, i) => 0.003 * Math.sin(i * 0.618) + 0.001 * (i % 3),
+  );
+  const tile = (row) =>
+    Float64Array.from(
+      { length: row.length * m },
+      (_, i) => row[i % row.length],
+    );
+  const [d, p] = [
+    Float64Array.of(0.004, 0.002, 0.003),
+    Float64Array.of(0.3, -0.5, 1.2),
+  ];
+  const [a, b, c] = [
+    Float64Array.of(0.001, -0.002, 0.0005),
+    Float64Array.of(0.004, 0.003, -0.001),
+    Float64Array.of(-2.5),
+  ];
+  for (const f of ["B", "H"]) {
+    const pairs = [
+      [
+        "cuboid",
+        cuboid_field(f, x, d, p),
+        cuboid_field(f, x, tile(d), tile(p)),
+      ],
+      [
+        "polyline",
+        polyline_field(f, x, a, b, c),
+        polyline_field(f, x, tile(a), tile(b), tile(c)),
+      ],
+    ];
+    for (const [what, once, rows] of pairs)
+      if (!once.every((v, i) => v === rows[i]))
+        throw new Error(`${what} ${f}: shared parameters differ from rows`);
+  }
+}
 
 const dir = here("../../reference/");
 const docs = readdirSync(dir)
@@ -88,6 +143,24 @@ const fields = {
         x,
         rows(srcs, x, "dimension"),
         rows(srcs, x, "polarization"),
+      ),
+  },
+  polyline: {
+    B: (srcs, x) =>
+      polyline_field(
+        "B",
+        x,
+        rows(srcs, x, "segment_start"),
+        rows(srcs, x, "segment_end"),
+        rows(srcs, x, "current"),
+      ),
+    H: (srcs, x) =>
+      polyline_field(
+        "H",
+        x,
+        rows(srcs, x, "segment_start"),
+        rows(srcs, x, "segment_end"),
+        rows(srcs, x, "current"),
       ),
   },
   triangle_linear_charge: {
