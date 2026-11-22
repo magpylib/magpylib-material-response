@@ -170,7 +170,14 @@ def sheet_scope(x, p):
 def corners_scope(x, p):
     """:func:`sheet_scope` at the derived coefficients, center and
     ``far_from``, and an observer so near ``far_from`` that the 50-digit
-    center and distance could fall on its other side."""
+    center and distance could fall on its other side; on the triangles with
+    an area, as the kernel drops the others."""
+    keep = T.has_area(p["vertices"])
+    p = {
+        **p,
+        "vertices": p["vertices"][keep],
+        "charge_densities": p["charge_densities"][keep],
+    }
     c, center, far_from = T.sheet_parameters(p["vertices"], p["charge_densities"])
     derived = {**p, "charge": c, "center": center, "far_from": far_from}
     if reason := sheet_scope(x, derived):
@@ -336,7 +343,9 @@ def fill_relation(doc, r):
         if "atol" not in r:
             msg = f"{r['id']}: an approximate law (off by {float(norm(exact)):.3g} at 50 digits): write its atol, {atol:g} by the rule"
             raise AssertionError(msg)
-    if r["atol"] != atol:
+    # the rule's decade, or the one above: another platform's libm can move
+    # numpy's error across a decade boundary
+    if not atol <= r["atol"] <= 10 * atol:
         msg = f"{r['id']}: atol {r['atol']:g}, {atol:g} by the rule"
         raise AssertionError(msg)
     return False
@@ -438,12 +447,12 @@ def main():
         for r in doc.get("relations", [])
         if fill_relation(doc, r)
     ]
+    if disagree:  # the file is left as it was: a later run reports it again
+        print("NUMPY DISAGREES:", ", ".join(disagree), f"({args.file.name} unchanged)")
+        raise SystemExit(1)
     args.file.write_text(dump(doc) + "\n")
     print(f"{args.file.name}: {len(doc['points'])} points, "
           f"{len(doc.get('relations', []))} relations")  # fmt: skip
-    if disagree:
-        print("NUMPY DISAGREES:", ", ".join(disagree))
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

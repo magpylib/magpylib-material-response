@@ -72,13 +72,13 @@ defines, at points where no convention under discussion changes them. Points on
 a face, an edge or a corner (within today's 1e-15 h, or within the band proposed
 in #1081, 100 eps max(size, |p|)), on a zero-thickness cuboid, in a charged
 triangle's plane or within the same band of it, on a triangle without area
-(corners in a line to within 100 eps of the product of two sides), where a
-sheet's double and exact distance to its center fall on different sides of
-`far_from` or a pair's side of `k L` (rounding picks the branch), of a cuboid
-with a negative dimension (magpylib's formula then flips B), or at a non-finite
-observer wait for the surface rules (magpylib #1073; proposal #1081) and are
-added once those are decided. Their ids are reserved: listed per kind below, to
-be used with the same meaning.
+(`charge_sheet_corners` drops it instead; corners in a line to within 100 eps of
+the product of two sides), where a sheet's double and exact distance to its
+center fall on different sides of `far_from` or a pair's side of `k L` (rounding
+picks the branch), of a cuboid with a negative dimension (magpylib's formula
+then flips B), or at a non-finite observer wait for the surface rules (magpylib
+#1073; proposal #1081) and are added once those are decided. Their ids are
+reserved: listed per kind below, to be used with the same meaning.
 
 ## Where the values come from
 
@@ -96,15 +96,18 @@ point:
   more accurate one is not held to more.
 
 NumPy never sets a value. Where it is off by more than 1e-6 relative, `fill.py`
-prints the point and writes no `atol`, and the checkers fail on it.
+prints the point, exits 1 and leaves the file unchanged: a bug in the NumPy
+implementation, to fix first.
 
 A relation that holds at 50 digits (to 1e-30 of its terms' sizes) is an exact
 law: its `atol` is 16 times numpy's residual, at least `rtol` times the sum of
 its terms' sizes. Any other is an approximate law, and its `atol`, written in
 the file by hand so that it is declared, must be the law's own 50-digit residual
 plus 16 times numpy's difference from the 50-digit value. Both are rounded up to
-a power of ten; `fill.py` writes the first, checks both, and refuses a
-non-finite residual or numpy off by more than 1e-6 of the terms' size.
+a power of ten; `fill.py` writes the first, checks both (the power of ten above
+is accepted too, as another platform's rounding can move numpy's error across
+one), and refuses a non-finite residual or numpy off by more than 1e-6 of the
+terms' size.
 
 **Adding a case**: append a point with only `id`, `why`, `source` and `observer`
 (or a relation with its terms and target; `atol` too if the law is approximate),
@@ -123,7 +126,7 @@ rule below; magpylib has them only internally); mu_0 = 1.25663706127e-6 (CODATA
 - **inside**: `J = polarization` inside, 0 outside; `M = J / mu_0`;
   `H = (B - J) / mu_0`.
 - **degenerate**: for a zero polarization, or a zero dimension with the observer
-  off the cuboid's plane, `B = H = 0`.
+  not on the zero-thickness plate, `B = H = 0`.
 
 **Band-sensitive** (in the file, regular today and under #1081's band of 100 eps
 max(size, |p|); a wider band would make them face or edge points): `near-edge-*`
@@ -145,7 +148,7 @@ test, not in the file.
 The relation `far-is-dipole` ties a cuboid to the dipole `J V / mu_0` 100 sides
 off, in the direction of magpylib's `test_dipole_approximation` (approximate;
 its dipole in this file). Its own 1300 sides are not taken: there the cuboid's
-formula in doubles is off by 2e-6 (1.5e-6 at 1000 sides, 3e-3 at 10000; magpylib
+formula in doubles is off by 3e-6 (1.5e-6 at 1000 sides, 4e-3 at 10000; magpylib
 #1098), more than this file's rule allows.
 
 Not taken from magpylib's tests: `test_vs_mag2` (magpylib 2's outputs; these
@@ -244,7 +247,9 @@ order): `n = (b - a) x (c - a) / |(b - a) x (c - a)|`, `e1 = (b - a) / |b - a|`,
 `e2 = n x e1`; `u`, `v` are the coordinates along `e1`, `e2`, `u_c`, `v_c` the
 centroid's, and `s = sqrt(area)`. The corners' order thus fixes the sign of
 `e2`, and with it of `c2`'s term. Positive charge fields away from itself. Field
-`H` in A/m. In the `why`s a side is `s`, the triangle's `sqrt(area)`.
+`H` in A/m. In the `why`s a side is `s`, the triangle's `sqrt(area)`, except in
+`off-plane-*`, `plain-*-sides-oblique` and `far-rule-vs-closed-*`, which count
+the nominal 1 mm.
 
 ## charge_sheet
 
@@ -359,7 +364,10 @@ fields.
 sends the browser's kernel: no coefficients, center or far distance to carry, so
 none that can disagree with the kernel reading them. Parameters: `vertices` (N,
 3, 3, m), `charge_densities` (N, 3, A/m), the density at each triangle's corners
-in their order, and `tolerance`. Derived, as `_triangle.sheet_parameters`:
+in their order, and `tolerance`. A triangle without area (corners in a line to
+within 100 eps of the product of two sides, `_triangle.has_area`) is dropped
+first: it carries no charge. Derived from the rest, as
+`_triangle.sheet_parameters`:
 
 - **coefficients**: the plane through the corners' densities. With each corner's
   `u`, `v` (`triangle_linear_charge`'s frame, from the centroid, over `s`) and
@@ -372,8 +380,16 @@ in their order, and `tolerance`. Derived, as `_triangle.sheet_parameters`:
   center is 0 and `far_from` infinite.
 
 Sources: `tilted_corners` tilted with a different density at each corner;
+`tilted_corners_no_area` the same with a fourth triangle, its corners in a line;
+`spread_corners` two triangles 1 m apart, whose `far_from` the reach sets;
 `box_corners_1e-6`, `box_corners_1e-3` the cuboid's surface charge varying
 linearly over it, at those tolerances. Points by the closed form, by per-pair
-rules, and at 1.5 times the derived `far_from` (the far rule for the whole
-sheet). A checker's derived `far_from` is a rounded double: a point within 1e-9
-of it is out of scope (`fill.py` refuses it).
+rules, and at 1.5 and 1.001 times the derived `far_from` (the far rule for the
+whole sheet). At 1.001 a port with a larger `far_from` takes the closed form,
+off by 1e-9; a center or reach computed wrong (the sum over N + 1, no reach)
+fails there, in the opposite direction, or at `spread_corners`. Just inside
+`far_from` the two rules differ by less than numpy's error, so a port's smaller
+`far_from` is not seen: it is as accurate. The relation `corners-drop-no-area`
+checks the dropped triangle. A checker's derived `far_from` is a rounded double:
+a point within 1e-9 times `far_from` of it is out of scope (`fill.py` refuses
+it).

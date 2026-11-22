@@ -39,11 +39,7 @@ pub fn cuboid_field(
     dimensions: &[f64],
     polarizations: &[f64],
 ) -> Result<Vec<f64>, JsError> {
-    let field = match field {
-        "B" => b'B',
-        "H" => b'H',
-        _ => return Err(JsError::new("field: \"B\" or \"H\"")),
-    };
+    let field = field_byte(field)?;
     check_observers(observers)?;
     for a in [dimensions, polarizations] {
         if a.len() != 3 && a.len() != observers.len() {
@@ -70,11 +66,7 @@ pub fn polyline_field(
     segments_end: &[f64],
     currents: &[f64],
 ) -> Result<Vec<f64>, JsError> {
-    let field = match field {
-        "B" => b'B',
-        "H" => b'H',
-        _ => return Err(JsError::new("field: \"B\" or \"H\"")),
-    };
+    let field = field_byte(field)?;
     check_observers(observers)?;
     for a in [segments_start, segments_end] {
         if a.len() != 3 && a.len() != observers.len() {

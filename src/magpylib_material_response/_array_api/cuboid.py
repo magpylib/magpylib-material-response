@@ -64,7 +64,7 @@ def cuboid_B_core(observers, dimensions, polarizations):
     sign_z = xp.where(maskz, -one, one)
     sign_xy, sign_xz, sign_yz = sign_x * sign_y, sign_x * sign_z, sign_y * sign_z
 
-    with quiet(xp, "divide", "invalid", "over"):
+    with quiet("divide", "invalid", "over"):
         xma, xpa = x - a, x + a
         ymb, ypb = y - b, y + b
         zmc, zpc = z - c, z + c

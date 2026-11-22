@@ -57,6 +57,22 @@ def frames(V):
     return xp.mean(V, axis=1), n, e1, e2, xp.sqrt(area), area
 
 
+# corners in a line to within this many eps of the product of two sides
+NO_AREA = 100 * float(np.finfo(float).eps)
+
+
+def has_area(V):
+    """Which triangles of ``V`` (N, 3, 3) have an area: corners not in a line
+    to within ``NO_AREA`` (``|AB x AC| > NO_AREA |AB| |AC|``). A sheet drops
+    the others: they carry no charge, and their frame would be NaN."""
+    xp = namespace(V)
+    ab, ac = V[:, 1, ...] - V[:, 0, ...], V[:, 2, ...] - V[:, 0, ...]
+    norm = xp.linalg.vector_norm
+    return norm(xp.linalg.cross(ab, ac), axis=1) > NO_AREA * norm(ab, axis=1) * norm(
+        ac, axis=1
+    )
+
+
 _EDGES = ((0, 1), (1, 2), (2, 0))
 # the six points of :func:`charge_field_far`, exact to degree 4 (Dunavant 1985):
 # barycentric coordinates and weights. Three points, to degree 2, are 9e-4 off at
@@ -179,7 +195,7 @@ def charge_field(X, V, fr, c, keep=None):
     # E0 = sum m f + n sign(w) sum beta, Phi = sum P0 f - |w| sum beta, and
     # sum (g.m) L_e with g = c1 e1 + c2 e2, L_e = d_e f - t (R+ - R-)
     E0u = E0v = Phi = SLu = SLv = SLw = 0.0
-    with quiet(xp, "divide", "invalid"):
+    with quiet("divide", "invalid"):
         for tu, tv, P0f, f, dR in _edge_terms(corners, du, dv, R, w2):
             gm = c1 * tv - c2 * tu
             E0u = E0u + tv * f
@@ -275,7 +291,7 @@ def charge_field_far(X, y, charge, keep=None):
     ``keep`` (M, N), where given: the pairs of observer and triangle to sum."""
     xp = namespace(X, y, charge)
     d = [X[:, k, None, None] - y[..., k] for k in range(3)]
-    with quiet(xp, "over", "invalid"):
+    with quiet("over", "invalid"):
         r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
         scale = charge / (r2 * xp.sqrt(r2))
         if keep is not None:
@@ -597,7 +613,10 @@ def charge_sheet_corners_field(
     """:func:`charge_sheet_field` of a sheet as ``ChargeSheet`` holds it: the
     triangles ``vertices`` (N, 3, 3) and the charge density at their corners
     ``charge_densities`` (N, 3) in A/m, its coefficients, center and
-    ``far_from`` by :func:`sheet_parameters`."""
+    ``far_from`` by :func:`sheet_parameters`; a triangle without area
+    (:func:`has_area`) dropped first."""
+    keep = has_area(vertices)
+    vertices, charge_densities = vertices[keep], charge_densities[keep]
     c, center, far_from = sheet_parameters(vertices, charge_densities)
     return charge_sheet_field(
         field, observers, vertices, c, center, far_from, tolerance

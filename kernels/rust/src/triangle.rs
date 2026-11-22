@@ -474,17 +474,42 @@ pub fn sheet_parameters(v: &[f64], frames: &[Frame], q: &[f64]) -> (Vec<f64>, V3
     (c, center, reach + FAR_SIDES * side)
 }
 
+/// Corners in a line to within this many eps of the product of two sides:
+/// `_triangle.NO_AREA`.
+const NO_AREA: f64 = 100.0 * f64::EPSILON;
+
+/// The triangles `v` (N, 3, 3) with an area and their corner densities `q`
+/// (N, 3), as `_triangle.has_area`: one without carries no charge, and its
+/// frame would make the whole field NaN.
+fn with_area(v: &[f64], q: &[f64]) -> (Vec<f64>, Vec<f64>) {
+    let (mut vk, mut qk) = (Vec::with_capacity(v.len()), Vec::with_capacity(q.len()));
+    for (tri, qt) in v.chunks_exact(9).zip(q.chunks_exact(3)) {
+        let (ab, ac) = (sub(row(tri, 1), row(tri, 0)), sub(row(tri, 2), row(tri, 0)));
+        if norm(cross(ab, ac)) > NO_AREA * norm(ab) * norm(ac) {
+            vk.extend_from_slice(tri);
+            qk.extend_from_slice(qt);
+        }
+    }
+    (vk, qk)
+}
+
 impl Sheet {
     /// A sheet as `ChargeSheet` holds it: triangles `v` (N, 3, 3) and the
     /// charge density at their corners `q` (N, 3), its coefficients, center
-    /// and far distance derived by [`sheet_parameters`].
+    /// and far distance derived by [`sheet_parameters`]; a triangle without area
+    /// dropped first ([`with_area`]).
     pub fn from_corners(v: &[f64], q: &[f64]) -> Self {
-        let (c, center, far_from) = sheet_parameters(v, &frames(v), q);
-        Sheet::new(v, &c, center, far_from)
+        let (v, q) = with_area(v, q);
+        let frames = frames(&v);
+        let (c, center, far_from) = sheet_parameters(&v, &frames, &q);
+        Sheet::with_frames(&v, frames, &c, center, far_from)
     }
 
     pub fn new(v: &[f64], c: &[f64], center: V3, far_from: f64) -> Self {
-        let frames = frames(v);
+        Sheet::with_frames(v, frames(v), c, center, far_from)
+    }
+
+    fn with_frames(v: &[f64], frames: Vec<Frame>, c: &[f64], center: V3, far_from: f64) -> Self {
         let (y, charge) = far_points(v, &frames, c);
         let longest2 = v
             .chunks_exact(9)

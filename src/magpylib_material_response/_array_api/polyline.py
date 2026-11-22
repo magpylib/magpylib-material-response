@@ -37,7 +37,7 @@ def polyline_field(field, observers, segment_start, segment_end, current):
     observers, segment_start, segment_end, current = _promote(
         xp, observers, segment_start, segment_end, current
     )
-    with quiet(xp, "divide", "invalid"):
+    with quiet("divide", "invalid"):
         Lv = segment_end - segment_start
         L = xp.linalg.vector_norm(Lv, axis=-1)
         e = Lv / L[:, None]

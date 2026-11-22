@@ -38,7 +38,7 @@ pub fn sphere_b(x: V3, diameter: f64, polarization: V3) -> V3 {
         let s = radius * radius * radius / 3.0;
         [0, 1, 2].map(|k| (3.0 * jr * x[k] - polarization[k] * r2) / r5 * s)
     } else {
-        polarization.map(|j| j * (2.0 / 3.0))
+        polarization.map(|j| 2.0 * j / 3.0)
     }
 }
 

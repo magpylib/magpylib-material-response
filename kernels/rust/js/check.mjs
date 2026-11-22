@@ -65,7 +65,9 @@ for (const [what, call] of [
   let threw = false;
   try {
     call();
-  } catch {
+  } catch (e) {
+    // a JsError; a trap (a Rust panic) is a RuntimeError, and fails
+    if (e instanceof WebAssembly.RuntimeError) throw e;
     threw = true;
   }
   if (!threw) throw new Error(`${what}: no error`);
@@ -338,6 +340,14 @@ if (!checked) {
   failed++;
 }
 if (skipped.size) console.log(`not in this build: ${[...skipped].join(", ")}`);
+// what the build leaves to Python (README: the browser computes B and H); any
+// other kind or field the files hold and the build lacks fails
+const PYTHON_ONLY = new Set(["cuboid J", "cuboid M", "sphere J", "sphere M"]);
+const missing = [...skipped].filter((s) => !PYTHON_ONLY.has(s));
+if (missing.length) {
+  console.log(`MISSING from this build: ${missing.join(", ")}`);
+  failed++;
+}
 if (skippedRelations.length)
   console.log(`relations skipped whole: ${skippedRelations.join(", ")}`);
 

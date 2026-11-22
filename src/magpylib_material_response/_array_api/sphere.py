@@ -24,7 +24,7 @@ def dipole_field(field, observers, moment):
         raise ValueError(msg)
     xp = namespace(observers, moment)
     observers, moment = _promote(xp, observers, moment)
-    with quiet(xp, "divide", "invalid"):
+    with quiet("divide", "invalid", "over"):
         r2 = xp.sum(observers * observers, axis=-1)
         r = xp.sqrt(r2)
         mr = xp.sum(moment * observers, axis=-1)
@@ -54,12 +54,12 @@ def sphere_field(field, observers, diameter, polarization):
     J = xp.where(out, 0.0, polarization)
     if field in ("J", "M"):
         return J if field == "J" else J / MU0
-    with quiet(xp, "divide", "invalid"):
+    with quiet("divide", "invalid", "over"):
         Jr = xp.sum(polarization * observers, axis=-1)
         outside = (
             ((3 * Jr)[:, None] * observers - polarization * r2[:, None])
             / (r**5)[:, None]
             * (radius**3 / 3)[:, None]
         )
-    B = xp.where(out, outside, polarization * (2 / 3))
+    B = xp.where(out, outside, 2 * polarization / 3)
     return B if field == "B" else (B - J) / MU0

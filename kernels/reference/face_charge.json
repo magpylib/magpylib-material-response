@@ -921,6 +921,60 @@
    ],
    "tolerance": 0.0
   },
+  "tilted_corners_no_area": {
+   "kind": "charge_sheet_corners",
+   "why": "tilted_corners and a fourth triangle whose corners are in a line: dropped, the sheet is tilted_corners' (SPEC: charge_sheet_corners)",
+   "vertices": [
+    [
+     [0.01, -0.004, 0.007],
+     [0.0107697511313201, -0.00419304057104269, 0.00639154413984003],
+     [0.0101222548094194, -0.00348342721015591, 0.00625119674522174]
+    ],
+    [
+     [-0.006, 0.009, -0.003],
+     [-0.00633682408883347, 0.00869942218378511, -0.00389230180408929],
+     [-0.00621502273969413, 0.0085432585690291, -0.00455809257961428]
+    ],
+    [
+     [0.002, 0.005, -0.011],
+     [0.00153015368960705, 0.00570309697340071, -0.0115337593939266],
+     [0.00188029294983602, 0.00453401096950955, -0.011508452992521]
+    ],
+    [
+     [0.003, 0.002, 0.004],
+     [0.004, 0.0025, 0.0045],
+     [0.006, 0.0035, 0.0055]
+    ]
+   ],
+   "charge_densities": [
+    [0.9, -0.2, 1.5],
+    [-1.0, 0.4, 0.3],
+    [0.5, 1.1, -0.6],
+    [2.0, -1.0, 0.5]
+   ],
+   "tolerance": 0.0
+  },
+  "spread_corners": {
+   "kind": "charge_sheet_corners",
+   "why": "tilted_corners' first triangle and a copy 1 m along x: reach, 0.5 m, sets far_from, not the 64 edges",
+   "vertices": [
+    [
+     [0.01, -0.004, 0.007],
+     [0.0107697511313201, -0.00419304057104269, 0.00639154413984003],
+     [0.0101222548094194, -0.00348342721015591, 0.00625119674522174]
+    ],
+    [
+     [1.01, -0.004, 0.007],
+     [1.01076975113132, -0.00419304057104269, 0.00639154413984003],
+     [1.0101222548094193, -0.00348342721015591, 0.00625119674522174]
+    ]
+   ],
+   "charge_densities": [
+    [0.9, -0.2, 1.5],
+    [0.9, -0.2, 1.5]
+   ],
+   "tolerance": 0.0
+  },
   "box_corners_1e-6": {
    "kind": "charge_sheet_corners",
    "why": "the cuboid's surface charge varying linearly over it, as ChargeSheet holds it, at tolerance 1e-6: each pair its rule",
@@ -1708,6 +1762,35 @@
    "H": [6.493036247153209e-07, -5.425538723733058e-07, 6.799257020474986e-07]
   },
   {
+   "id": "corners-tilted-1.001-far-from",
+   "why": "1.001 times the derived far_from from the derived center: the far rule, which a far_from 0.1 % larger misses",
+   "source": "tilted_corners",
+   "observer": [0.0740288234, -0.0567355568, 0.0715863933],
+   "H": [1.5529405737989648e-06, -1.2979100744832363e-06, 1.630283851168961e-06]
+  },
+  {
+   "id": "corners-tilted-1.001-far-from-opposite",
+   "why": "1.001 times the derived far_from the other way: with the first, a center off by 0.1 % of far_from moves one of them inside",
+   "source": "tilted_corners",
+   "observer": [-0.0700842443, 0.063358517, -0.0773308079],
+   "H": [-1.169232222999223e-06, 9.64431013119558e-07, -1.1565768179466543e-06]
+  },
+  {
+   "id": "corners-spread-above-first",
+   "why": "0.3 sides above the first triangle, 0.5 m from the center: the closed form, within far_from by the reach",
+   "source": "spread_corners",
+   "observer": [0.0102681232510697, -0.0038343623660476, 0.00687087178288817],
+   "H": [0.07622118339393762, 0.0582764573472454, 0.1458511949610104],
+   "atol_H": 1e-12
+  },
+  {
+   "id": "corners-spread-1.001-far-from",
+   "why": "1.001 times the derived far_from from the center, along -x, past the first triangle: the far rule",
+   "source": "spread_corners",
+   "observer": [-0.0547396678, -0.00389215593, 0.0065475803],
+   "H": [-5.551223479316741e-06, -5.601730294776434e-09, 2.3847505513452692e-11]
+  },
+  {
    "id": "corners-box-1e-6-0.03m-down",
    "why": "below the cuboid at 0.03 m, its pairs taking different rules",
    "source": "box_corners_1e-6",
@@ -1900,6 +1983,26 @@
    ],
    "target": [0.0, 0.0, 0.0],
    "atol": 1e-14
+  },
+  {
+   "id": "corners-drop-no-area",
+   "why": "a triangle without area adds nothing: the sheet with it minus the sheet without, 0.3 sides above triangle 0",
+   "terms": [
+    {
+     "source": "tilted_corners_no_area",
+     "field": "H",
+     "observer": [0.0102681232510697, -0.0038343623660476, 0.00687087178288817],
+     "weight": 1.0
+    },
+    {
+     "source": "tilted_corners",
+     "field": "H",
+     "observer": [0.0102681232510697, -0.0038343623660476, 0.00687087178288817],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-12
   }
  ]
 }

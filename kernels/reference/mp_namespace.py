@@ -1,6 +1,6 @@
 """A minimal array API namespace on mpmath, for the reference values (#208):
-the same kernel code that runs on NumPy runs here at ``mp.mp.dps`` digits,
-so that no formula is written twice.
+the same kernel code that runs on NumPy runs here at ``DIGITS`` digits (set on
+import), so that no formula is written twice.
 
 Arrays are NumPy object arrays of ``mpf``, wrapped in :class:`MPArray`, whose
 ``__array_namespace__`` returns this module: kernels that take their
@@ -19,15 +19,17 @@ from types import SimpleNamespace
 import mpmath as mp
 import numpy as np
 
+DIGITS = 50
+mp.mp.dps = DIGITS
 FLOAT = "mpf"  # the one floating dtype
 BOOL = "bool"
-pi = mp.pi
+pi = mp.pi  # a constant, evaluated at the working precision where it is used
 newaxis = None
 
 
 def _mpf(v):
-    if isinstance(v, mp.mpf):
-        return v
+    if isinstance(v, mp.ctx_mp_python._mpf):  # an mpf, or a constant such as pi
+        return +v
     v = float(v)
     if math.isnan(v):
         return mp.nan
@@ -38,6 +40,9 @@ class MPArray:
     """An object array of mpf (dtype ``FLOAT``) or a boolean array (``BOOL``)."""
 
     __slots__ = ("_a", "dtype")
+    # NumPy on the left of an operator defers to this class instead of taking
+    # it as one opaque object (``ndarray < MPArray`` all True)
+    __array_ufunc__ = None
 
     def __init__(self, a, dtype=None):
         a = np.asarray(a)
@@ -58,6 +63,8 @@ class MPArray:
     ndim = property(lambda self: self._a.ndim)
 
     def __getitem__(self, key):
+        if isinstance(key, MPArray):  # a boolean mask
+            key = key._a
         return MPArray(self._a[key], self.dtype)
 
     def __float__(self):
@@ -88,7 +95,8 @@ class MPArray:
 
     # comparisons give booleans; NaN compares false, as in IEEE
     def _cmp(self, other, f):
-        return MPArray(np.frompyfunc(f, 2, 1)(self._a, _raw(other)).astype(bool), BOOL)
+        out = np.frompyfunc(f, 2, 1)(self._a, _raw(other))
+        return MPArray(np.asarray(out, dtype=bool), BOOL)  # 0-d: a Python bool
 
     __lt__ = lambda s, o: s._cmp(o, lambda a, b: bool(a < b))
     __gt__ = lambda s, o: s._cmp(o, lambda a, b: bool(a > b))
@@ -113,6 +121,8 @@ def _raw(v):
         return v._a
     if isinstance(v, bool):
         return v
+    if isinstance(v, np.ndarray):  # doubles, exactly
+        return MPArray(v)._a
     return _mpf(v)
 
 
@@ -172,6 +182,10 @@ def asarray(v, dtype=None):  # noqa: ARG001  the standard signature; one dtype h
     return v if isinstance(v, MPArray) else MPArray(v)
 
 
+def zeros(shape, dtype=None):  # noqa: ARG001  the standard signature; one dtype here
+    return MPArray(np.full(shape, mp.mpf(0), object), FLOAT)
+
+
 def ones_like(x):
     return MPArray(np.full(x.shape, mp.mpf(1), object), FLOAT)
 
@@ -193,6 +207,8 @@ def all(x, axis=None, keepdims=False):
 
 
 def isdtype(dtype, kind):
+    if isinstance(kind, tuple):
+        return builtins.any(isdtype(dtype, k) for k in kind)
     return dtype == FLOAT and kind in ("real floating", "numeric")
 
 
@@ -213,7 +229,15 @@ def sum(x, axis=None):
 
 
 def max(x, axis=None):
-    return MPArray(np.max(x._a, axis=axis), FLOAT)
+    """NaN where a NaN is, as the standard says (``np.max`` on objects
+    compares pairwise, so its NaN depends on the order)."""
+
+    def row(r):
+        return mp.nan if builtins.any(mp.isnan(v) for v in r) else builtins.max(r)
+
+    if axis is None:
+        return MPArray(np.array(row(list(x._a.reshape(-1))), object), FLOAT)
+    return MPArray(np.apply_along_axis(lambda r: row(list(r)), axis, x._a), FLOAT)
 
 
 def mean(x, axis=None):

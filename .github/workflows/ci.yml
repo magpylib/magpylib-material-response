@@ -252,16 +252,17 @@ jobs:
         with:
           tool: wasm-pack
 
+      # --locked: the dependencies of Cargo.lock, as CD's release build
       - name: Check natively, on one thread and on all
         run: |
-          cargo test --release
-          cargo test --release --features parallel
+          cargo test --release --locked
+          cargo test --release --locked --features parallel
 
       # the build the browser loads (SIMD, from .cargo/config.toml), then its
       # check on Node, which runs the same engine as Chrome
       - name: Check the WebAssembly build
         run: |
-          wasm-pack build --release --target web --out-dir pkg -- --features wasm
+          wasm-pack build --release --target web --out-dir pkg -- --features wasm --locked
           node js/check.mjs
 
   pass:

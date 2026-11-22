@@ -2,8 +2,6 @@
 what they share: finding their arrays' namespace, and NumPy's warnings off
 where infinities are expected."""
 
-from contextlib import nullcontext
-
 import numpy as np
 
 
@@ -18,9 +16,8 @@ def namespace(*arrays):
     return spaces.pop()
 
 
-def quiet(xp, *warnings):
+def quiet(*warnings):
     """NumPy's ``warnings`` ('divide', 'invalid', 'over') off, for code where
-    infinities and NaN are expected; other namespaces do not warn."""
-    if xp is np:
-        return np.errstate(**dict.fromkeys(warnings, "ignore"))
-    return nullcontext()
+    infinities and NaN are expected: on NumPy and on the namespaces built on it
+    (``array_api_strict``); a namespace that does not warn ignores it."""
+    return np.errstate(**dict.fromkeys(warnings, "ignore"))

@@ -55,10 +55,35 @@ def _triangles(V, name):
                      name=name, hoverinfo="name", showlegend=False)  # fmt: skip
 
 
-def _shape(src, name):
-    """A source's outline and its size."""
-    if src["kind"] == "cuboid":
+def _ball(diameter, name):
+    """A sphere's outline as a translucent mesh, centered."""
+    u, v = np.meshgrid(np.linspace(0, 2 * np.pi, 24), np.linspace(0, np.pi, 12))
+    x, y, z = (np.array([np.cos(u) * np.sin(v), np.sin(u) * np.sin(v), np.cos(v)])
+               * abs(diameter) / 2).reshape(3, -1)  # fmt: skip
+    return go.Mesh3d(x=x, y=y, z=z, alphahull=0, opacity=0.15, color="grey",
+                     name=name, hoverinfo="name", showlegend=False)  # fmt: skip
+
+
+def _shape(src, name, X):
+    """A source's outline and its size; a dipole, a point, takes the size of
+    its observers' distances ``X``."""
+    kind = src["kind"]
+    if kind == "cuboid":
         return _box(src["dimension"], name), float(np.max(np.abs(src["dimension"])))
+    if kind == "sphere":
+        return _ball(src["diameter"], name), abs(float(src["diameter"]))
+    if kind == "polyline":
+        S = np.array([src["segment_start"], src["segment_end"]], float)
+        line = go.Scatter3d(x=S[:, 0], y=S[:, 1], z=S[:, 2], mode="lines",
+                            line={"color": "grey", "width": 6}, name=name,
+                            hoverinfo="name", showlegend=False)  # fmt: skip
+        return line, float(np.linalg.norm(S[1] - S[0])) or 1.0
+    if kind == "dipole":
+        dot = go.Scatter3d(x=[0], y=[0], z=[0], mode="markers",
+                           marker={"size": 6, "color": "grey", "symbol": "x"},
+                           name=name, hoverinfo="name", showlegend=False)  # fmt: skip
+        r = np.linalg.norm(X[np.isfinite(X).all(axis=1)], axis=1)
+        return dot, float(np.median(r[r > 0])) if (r > 0).any() else 1.0
     V = np.array(src["vertices"], float).reshape(-1, 3)
     return _triangles(src["vertices"], name), float(np.max(np.ptp(V, axis=0)))
 
@@ -92,7 +117,8 @@ def figure(doc, title):
         rel = [p for p in relation_points if p["source"] == name]
         if not pts + rel:
             continue
-        outline, size = _shape(src, name)
+        observers = [[_num(v) for v in p["observer"]] for p in pts + rel]
+        outline, size = _shape(src, name, np.array(observers))
         fig.add_trace(outline)
         owner.append(name)
         for g in groups:

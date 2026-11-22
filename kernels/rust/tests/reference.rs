@@ -141,6 +141,9 @@ const PASSES: &[bool] = if cfg!(feature = "parallel") {
 };
 /// Rows in a batch check: past two of the crate's chunks of 64 observers.
 const BATCH: usize = 130;
+/// What the crate leaves to Python (README: the browser computes B and H);
+/// any other kind or field the files hold and the crate lacks fails.
+const PYTHON_ONLY: &[&str] = &["cuboid J", "cuboid M", "sphere J", "sphere M"];
 
 #[test]
 fn reference_points() {
@@ -291,11 +294,16 @@ fn reference_points() {
     if !skipped.is_empty() {
         println!(
             "not in this crate: {}",
-            skipped.into_iter().collect::<Vec<_>>().join(", ")
+            skipped.iter().cloned().collect::<Vec<_>>().join(", ")
         );
     }
     println!("{checked} checks");
     assert!(checked > 0, "nothing was checked");
+    let missing: Vec<&String> = skipped
+        .iter()
+        .filter(|s| !PYTHON_ONLY.contains(&s.as_str()))
+        .collect();
+    assert!(missing.is_empty(), "not in this crate: {missing:?}");
     assert!(
         failures.is_empty(),
         "{} off:\n{}",

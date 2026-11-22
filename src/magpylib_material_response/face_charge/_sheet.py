@@ -23,6 +23,7 @@ from magpylib_material_response.face_charge._triangle import (
     charge_field_far,
     far_points,
     frames,
+    has_area,
     sheet_parameters,
 )
 from magpylib_material_response.meshing_utils import detached_copy
@@ -143,7 +144,8 @@ class ChargeSheet(magpy.misc.CustomSource):
     vertices : array-like, shape (n, 3)
         Mesh points in m, in the source's own frame.
     faces : array-like, shape (m, 3)
-        Triplets of vertex indices, one per triangle.
+        Triplets of vertex indices, one per triangle. A face without area (its
+        corners in a line) is dropped, with its charge: it carries none.
     charge_densities : array-like, shape (m, 3)
         Surface charge density in A/m at each face's three corners, in the
         order of its vertex indices.
@@ -271,6 +273,10 @@ class ChargeSheet(magpy.misc.CustomSource):
             if len(panels) != len(F):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
+        keep = has_area(P[F])
+        if not keep.all():  # its frame would make the whole field NaN
+            F, q = F[keep], q[keep]
+            panels = None if panels is None else panels[keep]
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._mean = None  # set by solve_face_charge on parts solved as one
         self._part = None  # set by solve_face_charge: new charges, no such part

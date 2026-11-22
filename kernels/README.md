@@ -7,7 +7,7 @@ studio's field lines in the browser.
 
 ```
 reference/   the single source of truth
-  SPEC.md          format, comparison rule, per-kind conventions, every id
+  SPEC.md          format, comparison rule, per-kind conventions, reserved ids
   *.json           points and relations, data only (one file per family)
   fill.py          fills in a new point's values (50 digits, rounded)
   mp_namespace.py  the 50-digit array namespace fill.py runs the kernels on
@@ -36,8 +36,11 @@ wasm-pack build --release --target web --out-dir pkg -- --features wasm
 node js/check.mjs                                 # WebAssembly, then the plate's timing
 ```
 
-CI runs all of them. The wasm build needs SIMD, which `rust/.cargo/config.toml`
-switches on.
+They need Rust with the WebAssembly target
+(`rustup target add wasm32-unknown-unknown`), wasm-pack and Node, and the Python
+test the `test` group. CI runs all of them, on the dependencies of
+`rust/Cargo.lock` (`--locked`). The wasm build needs SIMD, which
+`rust/.cargo/config.toml` switches on.
 
 ## The browser API
 
@@ -51,7 +54,7 @@ cuboid_field(field, observers, dimensions, polarizations); // magpylib.func.cubo
 polyline_field(field, observers, segments_start, segments_end, currents); // magpylib.func.polyline_field: segments (3,) or (M, 3), currents (1,) or (M,); 0 on a segment's line
 sphere_field(field, observers, diameters, polarizations); // magpylib.func.sphere_field: diameters (1,) or (M,), polarizations (3,) or (M, 3)
 dipole_field(field, observers, moments); // magpylib.func.dipole_field: moments (3,) or (M, 3); NaN at the dipole
-const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments
+const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments; a triangle without area is dropped
 sheet.h(observers, tolerance); // H in A/m; B = mu_0 H outside the body only
 ```
 
@@ -65,11 +68,12 @@ MR's wheel and sdist carry the browser build as package data,
 `magpylib_material_response/kernels/` (`mmr_kernels.js`, `mmr_kernels_bg.wasm`;
 `importlib.resources.files("magpylib_material_response") / "kernels"`), so that
 a page's data and its kernels come from one install. CD builds them into that
-ignored folder before packaging (`.github/workflows/cd.yml`) and fails a release
-whose distributions lack them; pyproject.toml's `artifacts` takes them in. A
-build without Rust has none, and a page then keeps its saved lines. To have them
-in a local install, run the build above and copy the two files from `rust/pkg/`
-there.
+ignored folder before packaging (`.github/workflows/cd.yml`), checks that build
+with `js/check.mjs`, and fails a release whose distributions lack them;
+pyproject.toml's `artifacts` takes them in. A build without Rust has none, and a
+page then keeps its saved lines. To have them in a local install, run the build
+above and copy the two files from `rust/pkg/` to
+`src/magpylib_material_response/kernels/`.
 
 ## Add a case
 
@@ -82,8 +86,8 @@ magpylib issues were found while developing MR: #1066's cases are in
    every face, edge, corner and triangle plane. If its value waits for a rule
    still under discussion (#1073), reserve its id in SPEC.md and stop there.
 2. **Is it covered?** Search the file for the same source and region: a point
-   that already checks it, or a source to reuse. A new source is listed in
-   SPEC.md's section of its kind.
+   that already checks it, or a source to reuse. A new source carries its own
+   `why`.
 3. **Point or relation?** Where a law ties fields (B − μ₀H = J, a body against
    its parts, a symmetry), write a relation: a wrong formula cannot regenerate
    its way past it. Otherwise a point.
