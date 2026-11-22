@@ -75,6 +75,25 @@ _FAR_POINTS = np.array(
 )
 _FAR_WEIGHTS = np.array([0.109951743655322] * 3 + [0.223381589678011] * 3)
 _FAR_WEIGHTS /= _FAR_WEIGHTS.sum()
+# the sixteen points of the middle rule, exact to degree 8 (Dunavant 1985):
+# the centroid, three orbits (a, b, b) and one (a, b, c), each in this order,
+# the weights divided by their sum in double precision
+_A1, _B1 = 0.081414823414554, 0.459292588292723
+_A2, _B2 = 0.658861384496480, 0.170569307751760
+_A3, _B3 = 0.898905543365938, 0.050547228317031
+_A4, _B4, _C4 = 0.008394777409958, 0.263112829634638, 0.728492392955404
+_MID_POINTS = np.array(
+    [[1 / 3, 1 / 3, 1 / 3]]
+    + [p for a, b in ((_A1, _B1), (_A2, _B2), (_A3, _B3))
+       for p in ([a, b, b], [b, a, b], [b, b, a])]
+    + [[_A4, _B4, _C4], [_A4, _C4, _B4], [_B4, _A4, _C4],
+       [_B4, _C4, _A4], [_C4, _A4, _B4], [_C4, _B4, _A4]]
+)  # fmt: skip
+_MID_WEIGHTS = np.array(
+    [0.144315607677787] + [0.095091634267285] * 3 + [0.103217370534718] * 3
+    + [0.032458497623198] * 3 + [0.027230314174435] * 6
+)  # fmt: skip
+_MID_WEIGHTS /= _MID_WEIGHTS.sum()
 
 
 def _r_plus_l(R, l, R02):
@@ -227,17 +246,21 @@ def charge_terms(X, V, fr):
     return out
 
 
-def far_points(V, fr, c):
+def far_points(V, fr, c, middle=False):
     """The points of :func:`charge_field_far` on each triangle (6, N, 3) and the
-    charge each stands for (6, N)."""
+    charge each stands for (6, N); with ``middle``, the sixteen points of the
+    degree-8 rule (16, N, 3) and (16, N)."""
     xp = namespace(V, c)
     centroid, _, e1, e2, s, area = fr
+    rule, rule_weights = (
+        (_MID_POINTS, _MID_WEIGHTS) if middle else (_FAR_POINTS, _FAR_WEIGHTS)
+    )
     if xp is np:  # the solver's path, unchanged to the last bit
-        y, weights = np.einsum("gk,nkd->gnd", _FAR_POINTS, V), _FAR_WEIGHTS
+        y, weights = np.einsum("gk,nkd->gnd", rule, V), rule_weights
     else:
-        points = xp.asarray(_FAR_POINTS.tolist(), dtype=V.dtype)
+        points = xp.asarray(rule.tolist(), dtype=V.dtype)
         y = xp.tensordot(points, V, axes=([1], [1]))
-        weights = xp.asarray(_FAR_WEIGHTS.tolist(), dtype=V.dtype)
+        weights = xp.asarray(rule_weights.tolist(), dtype=V.dtype)
     u, v = _dot(y - centroid, e1), _dot(y - centroid, e2)
     density = c[:, 0] + (c[:, 1] * u + c[:, 2] * v) / s
     return y, weights[:, None] * density * area
@@ -462,10 +485,19 @@ PAIR_RULE = (
 )
 
 
-def pair_k2(tolerance):
+# The middle rule's rows, as PAIR_RULE's: from k longest edges its pairs are
+# off by at most ``bound`` times the one-sign field; the bounds are
+# 1.7e-4 / k^8, rounded up: twice the worst case an adversarial search found.
+PAIR_RULE_MIDDLE = (
+    (6.7e-6, 2.25), (6.7e-7, 4.0), (2.6e-8, 9.0),
+    (2.6e-9, 16.0), (1.1e-10, 36.0), (1.1e-11, 64.0),
+)  # fmt: skip
+
+
+def pair_k2(tolerance, table=PAIR_RULE):
     """The squared distance, in squared longest edges, from which a pair takes
-    the far rule at ``tolerance``; None for the closed form throughout."""
-    return next((k2 for bound, k2 in PAIR_RULE if bound <= tolerance), None)
+    the rule of ``table`` at ``tolerance``; None for never."""
+    return next((k2 for bound, k2 in table if bound <= tolerance), None)
 
 
 def far_pairs(X, V, fr, k2):
@@ -491,20 +523,33 @@ def charge_sheet_field(
     """:func:`triangle_linear_charge_field`, with the far rule's six point charges
     per triangle for the observers at or beyond ``far_from`` from ``center``
     (``far_from`` 0: everywhere), and, at a ``tolerance`` above 0, for every
-    pair of observer and triangle :func:`far_pairs` takes (``PAIR_RULE``).
-    ``center`` (3,) and ``far_from`` (a 0-d array) are arrays of the
-    observers' namespace; ``tolerance`` a number or a 0-d array."""
+    pair of observer and triangle :func:`far_pairs` takes: the six-point rule
+    from its ``PAIR_RULE`` distance, else the sixteen-point rule from its
+    ``PAIR_RULE_MIDDLE`` distance, else the closed form. ``center`` (3,) and
+    ``far_from`` (a 0-d array) are arrays of the observers' namespace;
+    ``tolerance`` a number or a 0-d array."""
     _check_H(field)
     xp = namespace(observers, vertices, charge, center, far_from)
     fr = frames(vertices)
     is_far = beyond_far_from(observers, center, far_from)
     rule = far_points(vertices, fr, charge)
-    k2 = pair_k2(float(tolerance))
-    if k2 is None:
+    k2_far, k2_middle = (
+        pair_k2(float(tolerance), t) for t in (PAIR_RULE, PAIR_RULE_MIDDLE)
+    )
+    if k2_far is None and k2_middle is None:
         near = charge_field(observers, vertices, fr, charge)
         far = charge_field_far(observers, *rule)
         return xp.where(is_far[:, None], far, near) / (4 * xp.pi)
-    pairs = far_pairs(observers, vertices, fr, k2) | is_far[:, None]
-    near = charge_field(observers, vertices, fr, charge, keep=~pairs)
-    far = charge_field_far(observers, *rule, keep=pairs)
-    return (near + far) / (4 * xp.pi)
+    never = float("inf")  # a distance no pair reaches
+    far = far_pairs(observers, vertices, fr, never if k2_far is None else k2_far)
+    far = far | is_far[:, None]
+    middle = far_pairs(
+        observers, vertices, fr, never if k2_middle is None else k2_middle
+    )
+    middle = middle & ~far
+    H = charge_field(observers, vertices, fr, charge, keep=~(far | middle))
+    H = H + charge_field_far(observers, *rule, keep=far)
+    H = H + charge_field_far(
+        observers, *far_points(vertices, fr, charge, True), keep=middle
+    )
+    return H / (4 * xp.pi)

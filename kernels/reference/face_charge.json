@@ -358,7 +358,7 @@
   },
   "box_sheet_1e-3": {
    "kind": "charge_sheet",
-   "why": "the cuboid's surface charge as a sheet at tolerance 1e-3: the per-pair far rule, never the whole-sheet switch",
+   "why": "the cuboid's surface charge as a sheet at tolerance 1e-3: each pair its rule, never the whole-sheet switch",
    "vertices": [
     [
      [-0.005, -0.01, -0.015],
@@ -441,7 +441,7 @@
   },
   "box_sheet_1e-6": {
    "kind": "charge_sheet",
-   "why": "the cuboid's surface charge as a sheet at tolerance 1e-6: the per-pair far rule, never the whole-sheet switch",
+   "why": "the cuboid's surface charge as a sheet at tolerance 1e-6: each pair its rule, never the whole-sheet switch",
    "vertices": [
     [
      [-0.005, -0.01, -0.015],
@@ -524,7 +524,7 @@
   },
   "box_sheet_switch": {
    "kind": "charge_sheet",
-   "why": "the cuboid's surface charge as a sheet at tolerance 1e-6 switching whole at 5 cm, closer than the per-pair rule would",
+   "why": "the cuboid's surface charge as a sheet at tolerance 1e-6 switching whole at 5 cm, before its pairs would",
    "vertices": [
     [
      [-0.005, -0.01, -0.015],
@@ -607,7 +607,7 @@
   },
   "pair_row_2.25": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 0.0013, the bound of the row k^2 = 2.25",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 0.0013, the bound of the far rule's row k^2 = 2.25",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -624,7 +624,7 @@
   },
   "pair_row_4": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 0.00041, the bound of the row k^2 = 4",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 0.00041, the bound of the far rule's row k^2 = 4",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -641,7 +641,7 @@
   },
   "pair_row_9": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 8.1e-05, the bound of the row k^2 = 9",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 8.1e-05, the bound of the far rule's row k^2 = 9",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -658,7 +658,7 @@
   },
   "pair_row_16": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 2.6e-05, the bound of the row k^2 = 16",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 2.6e-05, the bound of the far rule's row k^2 = 16",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -675,7 +675,7 @@
   },
   "pair_row_36": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 5.1e-06, the bound of the row k^2 = 36",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 5.1e-06, the bound of the far rule's row k^2 = 36",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -692,7 +692,7 @@
   },
   "pair_row_64": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 1.6e-06, the bound of the row k^2 = 64",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 1.6e-06, the bound of the far rule's row k^2 = 64",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -709,7 +709,7 @@
   },
   "pair_row_144": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 3.2e-07, the bound of the row k^2 = 144",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 3.2e-07, the bound of the far rule's row k^2 = 144",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -726,7 +726,7 @@
   },
   "pair_row_256": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 1e-07, the bound of the row k^2 = 256",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 1e-07, the bound of the far rule's row k^2 = 256",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -743,7 +743,7 @@
   },
   "pair_row_576": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 2e-08, the bound of the row k^2 = 576",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 2e-08, the bound of the far rule's row k^2 = 576",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -760,7 +760,7 @@
   },
   "pair_row_1024": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 6.2e-09, the bound of the row k^2 = 1024",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 6.2e-09, the bound of the far rule's row k^2 = 1024",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -777,7 +777,7 @@
   },
   "pair_row_2304": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 1.3e-09, the bound of the row k^2 = 2304",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 1.3e-09, the bound of the far rule's row k^2 = 2304",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -794,7 +794,7 @@
   },
   "pair_row_4096": {
    "kind": "charge_sheet",
-   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 3.9e-10, the bound of the row k^2 = 4096",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 3.9e-10, the bound of the far rule's row k^2 = 4096",
    "vertices": [
     [
      [-0.00390625, 0.0, 0.0],
@@ -808,6 +808,91 @@
    "center": [0.0, 0.0, 0.0],
    "far_from": 1.0,
    "tolerance": 3.9e-10
+  },
+  "pair_middle_2.25": {
+   "kind": "charge_sheet",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 6.7e-06, the bound of the middle rule's row k^2 = 2.25",
+   "vertices": [
+    [
+     [-0.00390625, 0.0, 0.0],
+     [0.00390625, 0.0, 0.0],
+     [0.0, 0.01171875, 0.0]
+    ]
+   ],
+   "charge": [
+    [0.7, -0.4, 1.3]
+   ],
+   "center": [0.0, 0.0, 0.0],
+   "far_from": 1.0,
+   "tolerance": 6.7e-06
+  },
+  "pair_middle_4": {
+   "kind": "charge_sheet",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 6.7e-07, the bound of the middle rule's row k^2 = 4",
+   "vertices": [
+    [
+     [-0.00390625, 0.0, 0.0],
+     [0.00390625, 0.0, 0.0],
+     [0.0, 0.01171875, 0.0]
+    ]
+   ],
+   "charge": [
+    [0.7, -0.4, 1.3]
+   ],
+   "center": [0.0, 0.0, 0.0],
+   "far_from": 1.0,
+   "tolerance": 6.7e-07
+  },
+  "pair_middle_9": {
+   "kind": "charge_sheet",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 2.6e-08, the bound of the middle rule's row k^2 = 9",
+   "vertices": [
+    [
+     [-0.00390625, 0.0, 0.0],
+     [0.00390625, 0.0, 0.0],
+     [0.0, 0.01171875, 0.0]
+    ]
+   ],
+   "charge": [
+    [0.7, -0.4, 1.3]
+   ],
+   "center": [0.0, 0.0, 0.0],
+   "far_from": 1.0,
+   "tolerance": 2.6e-08
+  },
+  "pair_middle_16": {
+   "kind": "charge_sheet",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 2.6e-09, the bound of the middle rule's row k^2 = 16",
+   "vertices": [
+    [
+     [-0.00390625, 0.0, 0.0],
+     [0.00390625, 0.0, 0.0],
+     [0.0, 0.01171875, 0.0]
+    ]
+   ],
+   "charge": [
+    [0.7, -0.4, 1.3]
+   ],
+   "center": [0.0, 0.0, 0.0],
+   "far_from": 1.0,
+   "tolerance": 2.6e-09
+  },
+  "pair_middle_36": {
+   "kind": "charge_sheet",
+   "why": "one triangle in exact binary coordinates (2^-8 m) at tolerance 1.1e-10, the bound of the middle rule's row k^2 = 36",
+   "vertices": [
+    [
+     [-0.00390625, 0.0, 0.0],
+     [0.00390625, 0.0, 0.0],
+     [0.0, 0.01171875, 0.0]
+    ]
+   ],
+   "charge": [
+    [0.7, -0.4, 1.3]
+   ],
+   "center": [0.0, 0.0, 0.0],
+   "far_from": 1.0,
+   "tolerance": 1.1e-10
   }
  },
  "points": [
@@ -1152,217 +1237,272 @@
    "H": [0.00014363449693739403, 0.00010958477641712527, -0.00017211530571280262]
   },
   {
+   "id": "sheet-1e-3-0.02m-oblique",
+   "why": "tolerance 1e-3, 0.02 m from the cuboid's center (oblique), the 12 pairs: 1 the sixteen-point rule, 11 the closed form",
+   "source": "box_sheet_1e-3",
+   "observer": [0.00534522483824849, 0.010690449676497, 0.0160356745147455],
+   "H": [65125.096702238, 179068.8528194592, 10046.716745487325]
+  },
+  {
    "id": "sheet-1e-3-0.03m-down",
-   "why": "tolerance 1e-3, 0.03 m from the cuboid's center (down): 1 of the 12 pairs on the far rule, the rest the closed form",
+   "why": "tolerance 1e-3, 0.03 m from the cuboid's center (down), the 12 pairs: 1 the six-point rule, 1 the sixteen-point rule, 10 the closed form",
    "source": "box_sheet_1e-3",
    "observer": [0.00846648781545238, -0.00564432521030158, -0.0282216260515079],
-   "H": [-23801.43286888476, 17884.420052209745, 22466.585807871023]
+   "H": [-23801.4328651104, 17884.4200592329, 22466.585799210345]
   },
   {
    "id": "sheet-1e-3-0.035m-oblique",
-   "why": "tolerance 1e-3, 0.035 m from the cuboid's center (oblique): 2 of the 12 pairs on the far rule, the rest the closed form",
+   "why": "tolerance 1e-3, 0.035 m from the cuboid's center (oblique), the 12 pairs: 2 the six-point rule, 10 the closed form",
    "source": "box_sheet_1e-3",
    "observer": [0.00935414346693485, 0.0187082869338697, 0.0280624304008046],
    "H": [3923.6672276863032, 17770.933971767976, 4921.0190473128705]
   },
   {
-   "id": "sheet-1e-3-0.045m-x",
-   "why": "tolerance 1e-3, 0.045 m from the cuboid's center (x): 4 of the 12 pairs on the far rule, the rest the closed form",
-   "source": "box_sheet_1e-3",
-   "observer": [0.045, 0.0, 0.0],
-   "H": [2194.6006609145097, 1882.7308836330249, -4259.859365959367]
+   "id": "sheet-1e-6-0.03m-down",
+   "why": "tolerance 1e-6, 0.03 m from the cuboid's center (down), the 12 pairs: 1 the sixteen-point rule, 11 the closed form",
+   "source": "box_sheet_1e-6",
+   "observer": [0.00846648781545238, -0.00564432521030158, -0.0282216260515079],
+   "H": [-23801.442826148337, 17884.405537286915, 22466.617791740395]
   },
   {
    "id": "sheet-1e-6-0.255m-oblique",
-   "why": "tolerance 1e-6, 0.255 m from the cuboid's center (oblique): 1 of the 12 pairs on the far rule, the rest the closed form",
+   "why": "tolerance 1e-6, 0.255 m from the cuboid's center (oblique), the 12 pairs: 1 the six-point rule, 11 the sixteen-point rule",
    "source": "box_sheet_1e-6",
    "observer": [0.0681516166876682, 0.136303233375336, 0.204454850063005],
-   "H": [7.400793890568318, 40.03137581778148, 15.167891157922309],
-   "atol_H": 1e-09
-  },
-  {
-   "id": "sheet-1e-6-0.26m-oblique",
-   "why": "tolerance 1e-6, 0.26 m from the cuboid's center (oblique): 2 of the 12 pairs on the far rule, the rest the closed form",
-   "source": "box_sheet_1e-6",
-   "observer": [0.0694879228972303, 0.138975845794461, 0.208463768691691],
-   "H": [6.9807017151833435, 37.762593959109935, 14.311471711850535],
-   "atol_H": 1e-09
-  },
-  {
-   "id": "sheet-1e-6-0.27m-x",
-   "why": "tolerance 1e-6, 0.27 m from the cuboid's center (x): 4 of the 12 pairs on the far rule, the rest the closed form",
-   "source": "box_sheet_1e-6",
-   "observer": [0.27, 0.0, 0.0],
-   "H": [11.53864496889519, 9.623771335789293, -23.057528671037154]
+   "H": [7.400793890567968, 40.03137581778194, 15.167891157921725]
   },
   {
    "id": "sheet-switch-before-pairs",
-   "why": "beyond far_from: every pair on the far rule, where the per-pair rule alone would take 0 of 12",
+   "why": "beyond far_from: every pair on the six-point rule, where the pairs alone would take 12 the sixteen-point rule",
    "source": "box_sheet_switch",
    "observer": [0.021380899352994, 0.0427617987059879, 0.0641426980589819],
    "H": [251.0095874603963, 1325.2674497323808, 475.74748071788184]
   },
   {
    "id": "pair-row-2.25-on",
-   "why": "row k^2 = 2.25: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 2.25, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_2.25",
    "observer": [0.015625, 0.013671875, 0.001953125],
    "H": [0.00734477729521926, 0.0033716719874305715, 0.0009187821216562583]
   },
   {
    "id": "pair-row-2.25-inside",
-   "why": "row k^2 = 2.25: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 2.25, just inside k L from the centroid: the closed form",
    "source": "pair_row_2.25",
    "observer": [0.017578125, 0.0078125, 0.00390625],
    "H": [0.007295028533252254, 0.0006827519845671831, 0.0016223732713869829]
   },
   {
    "id": "pair-row-4-on",
-   "why": "row k^2 = 4: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 4, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_4",
    "observer": [0.0234375, 0.00390625, 0.0078125],
    "H": [0.0038229134802366285, -0.0003415542559439731, 0.0012711967690969665]
   },
   {
    "id": "pair-row-4-inside",
-   "why": "row k^2 = 4: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 4, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_4",
    "observer": [0.021484375, 0.015625, 0.001953125],
-   "H": [0.004114711171449889, 0.0017684399597524246, 0.0003734197103978278]
+   "H": [0.0041147110815206575, 0.0017684396506329185, 0.00037341968122855485]
   },
   {
    "id": "pair-row-9-on",
-   "why": "row k^2 = 9: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 9, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_9",
    "observer": [0.03125, 0.0234375, 0.00390625],
    "H": [0.0017011503595306405, 0.0009302518592433447, 0.00021200237576961747]
   },
   {
    "id": "pair-row-9-inside",
-   "why": "row k^2 = 9: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 9, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_9",
    "observer": [0.03515625, 0.013671875, 0.005859375],
-   "H": [0.0018265447550332003, 0.0003893788216759546, 0.00030359999328728157],
-   "atol_H": 1e-14
+   "H": [0.0018265447510884532, 0.0003893788242807001, 0.00030359999234886816]
   },
   {
    "id": "pair-row-16-on",
-   "why": "row k^2 = 16: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 16, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_16",
    "observer": [0.046875, 0.00390625, 0.015625],
    "H": [0.0009779454822831531, -4.404749679262955e-05, 0.00032504397826408737]
   },
   {
    "id": "pair-row-16-inside",
-   "why": "row k^2 = 16: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 16, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_16",
    "observer": [0.041015625, 0.03125, 0.001953125],
-   "H": [0.0009311915749825543, 0.0005660709400684199, 4.421017705562878e-05],
-   "atol_H": 1e-14
+   "H": [0.0009311915751900771, 0.0005660709398519624, 4.421017706316828e-05]
   },
   {
    "id": "pair-row-36-on",
-   "why": "row k^2 = 36: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 36, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_36",
    "observer": [0.0625, 0.04296875, 0.0078125],
    "H": [0.00040798767724436276, 0.00023970793497132424, 5.087434503376869e-05]
   },
   {
    "id": "pair-row-36-inside",
-   "why": "row k^2 = 36: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 36, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_36",
    "observer": [0.05859375, 0.048828125, 0.005859375],
-   "H": [0.00038649322666598005, 0.00028058655398159713, 3.854864206054885e-05],
-   "atol_H": 1e-14
+   "H": [0.00038649322667127524, 0.0002805865539808116, 3.8548642061240855e-05]
   },
   {
    "id": "pair-row-64-on",
-   "why": "row k^2 = 64: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 64, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_64",
    "observer": [0.09375, 0.00390625, 0.03125],
    "H": [0.00024641979126872383, -5.53906439338737e-06, 8.198715571234104e-05]
   },
   {
-   "id": "pair-row-64-inside",
-   "why": "row k^2 = 64: just inside k L: the closed form",
-   "source": "pair_row_64",
-   "observer": [0.08984375, 0.044921875, 0.001953125],
-   "H": [0.00024312178642985955, 0.00010486169371668869, 5.275434280379277e-06],
-   "atol_H": 1e-14
-  },
-  {
    "id": "pair-row-144-on",
-   "why": "row k^2 = 144: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 144, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_144",
    "observer": [0.125, 0.08203125, 0.015625],
    "H": [9.989634645383109e-05, 6.060817777905299e-05, 1.2468785337777451e-05]
   },
   {
    "id": "pair-row-144-inside",
-   "why": "row k^2 = 144: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 144, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_144",
    "observer": [0.111328125, 0.1015625, 0.005859375],
-   "H": [8.960394921127131e-05, 7.670939018520359e-05, 4.708231820305042e-06],
-   "atol_H": 1e-14
+   "H": [8.960394921127637e-05, 7.670939018520606e-05, 4.708231820305507e-06]
   },
   {
    "id": "pair-row-256-on",
-   "why": "row k^2 = 256: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 256, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_256",
    "observer": [0.1875, 0.00390625, 0.0625],
    "H": [6.178723335328956e-05, -6.926504961421732e-07, 2.057438613792934e-05]
   },
   {
    "id": "pair-row-256-inside",
-   "why": "row k^2 = 256: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 256, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_256",
    "observer": [0.197265625, 0.015625, 0.001953125],
-   "H": [6.513541631539992e-05, 3.169472623136427e-06, 6.442750329778986e-07],
-   "atol_H": 1e-14
+   "H": [6.513541631540014e-05, 3.1694726231366063e-06, 6.442750329779024e-07]
   },
   {
    "id": "pair-row-576-on",
-   "why": "row k^2 = 576: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 576, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_576",
    "observer": [0.25, 0.16015625, 0.03125],
    "H": [2.4717505775539286e-05, 1.5225234064320466e-05, 3.087233776869294e-06]
   },
   {
    "id": "pair-row-576-inside",
-   "why": "row k^2 = 576: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 576, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_576",
    "observer": [0.29296875, 0.048828125, 0.005859375],
-   "H": [2.8722613971707612e-05, 4.194279110945642e-06, 5.740611579540423e-07],
-   "atol_H": 1e-13
+   "H": [2.8722613971707612e-05, 4.194279110945646e-06, 5.740611579540423e-07]
   },
   {
    "id": "pair-row-1024-on",
-   "why": "row k^2 = 1024: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 1024, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_1024",
    "observer": [0.375, 0.00390625, 0.125],
    "H": [1.5465760544878396e-05, -8.654003514779955e-08, 5.152441105551371e-06]
   },
   {
    "id": "pair-row-1024-inside",
-   "why": "row k^2 = 1024: just inside k L: the closed form",
+   "why": "far rule's row k^2 = 1024, just inside k L from the centroid: the sixteen-point rule",
    "source": "pair_row_1024",
    "observer": [0.337890625, 0.208984375, 0.00390625],
-   "H": [1.4056297348063019e-05, 8.437831767605811e-06, 1.624031406739365e-07],
-   "atol_H": 1e-14
+   "H": [1.4056297348063019e-05, 8.437831767605811e-06, 1.624031406739365e-07]
   },
   {
    "id": "pair-row-2304-on",
-   "why": "row k^2 = 2304: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 2304, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_2304",
    "observer": [0.5, 0.31640625, 0.0625],
    "H": [6.147733939956771e-06, 3.8147541054778225e-06, 7.681491383076643e-07]
   },
   {
+   "id": "pair-row-2304-inside",
+   "why": "far rule's row k^2 = 2304, just inside k L from the centroid: the sixteen-point rule",
+   "source": "pair_row_2304",
+   "observer": [0.591796875, 0.0390625, 0.009765625],
+   "H": [7.238650758438903e-06, 4.0419142882141757e-07, 1.194078214514429e-07]
+  },
+  {
    "id": "pair-row-4096-on",
-   "why": "row k^2 = 4096: exactly at k L from the centroid: the far rule",
+   "why": "far rule's row k^2 = 4096, exactly at k L from the centroid: the six-point rule",
    "source": "pair_row_4096",
    "observer": [0.75, 0.00390625, 0.25],
    "H": [3.868567297573541e-06, -1.0813098965873622e-08, 1.2891619272833278e-06]
+  },
+  {
+   "id": "pair-row-4096-inside",
+   "why": "far rule's row k^2 = 4096, just inside k L from the centroid: the sixteen-point rule",
+   "source": "pair_row_4096",
+   "observer": [0.580078125, 0.541015625, 0.00390625],
+   "H": [3.0092580881649048e-06, 2.7743888585800995e-06, 2.025707013813891e-08]
+  },
+  {
+   "id": "pair-middle-2.25-on",
+   "why": "middle rule's row k^2 = 2.25, exactly at k L from the centroid: the sixteen-point rule",
+   "source": "pair_middle_2.25",
+   "observer": [0.015625, 0.013671875, 0.001953125],
+   "H": [0.007347973921683645, 0.0033699584937251026, 0.0009192018637448116]
+  },
+  {
+   "id": "pair-middle-2.25-inside",
+   "why": "middle rule's row k^2 = 2.25, just inside k L from the centroid: the closed form",
+   "source": "pair_middle_2.25",
+   "observer": [0.017578125, 0.0078125, 0.00390625],
+   "H": [0.007295028533252254, 0.0006827519845671831, 0.0016223732713869829]
+  },
+  {
+   "id": "pair-middle-4-on",
+   "why": "middle rule's row k^2 = 4, exactly at k L from the centroid: the sixteen-point rule",
+   "source": "pair_middle_4",
+   "observer": [0.0234375, 0.00390625, 0.0078125],
+   "H": [0.0038224948915434945, -0.0003413919071303536, 0.0012710618244843558]
+  },
+  {
+   "id": "pair-middle-4-inside",
+   "why": "middle rule's row k^2 = 4, just inside k L from the centroid: the closed form",
+   "source": "pair_middle_4",
+   "observer": [0.021484375, 0.015625, 0.001953125],
+   "H": [0.004114711171449889, 0.0017684399597524246, 0.0003734197103978278]
+  },
+  {
+   "id": "pair-middle-9-on",
+   "why": "middle rule's row k^2 = 9, exactly at k L from the centroid: the sixteen-point rule",
+   "source": "pair_middle_9",
+   "observer": [0.03125, 0.0234375, 0.00390625],
+   "H": [0.0017011968540033946, 0.0009302378348459183, 0.0002120088245079394]
+  },
+  {
+   "id": "pair-middle-9-inside",
+   "why": "middle rule's row k^2 = 9, just inside k L from the centroid: the closed form",
+   "source": "pair_middle_9",
+   "observer": [0.03515625, 0.013671875, 0.005859375],
+   "H": [0.0018265447550332003, 0.0003893788216759546, 0.00030359999328728157],
+   "atol_H": 1e-14
+  },
+  {
+   "id": "pair-middle-16-on",
+   "why": "middle rule's row k^2 = 16, exactly at k L from the centroid: the sixteen-point rule",
+   "source": "pair_middle_16",
+   "observer": [0.046875, 0.00390625, 0.015625],
+   "H": [0.0009779388636634672, -4.4046218238626496e-05, 0.00032504180647442666]
+  },
+  {
+   "id": "pair-middle-16-inside",
+   "why": "middle rule's row k^2 = 16, just inside k L from the centroid: the closed form",
+   "source": "pair_middle_16",
+   "observer": [0.041015625, 0.03125, 0.001953125],
+   "H": [0.0009311915749825543, 0.0005660709400684199, 4.421017705562878e-05],
+   "atol_H": 1e-14
+  },
+  {
+   "id": "pair-middle-36-on",
+   "why": "middle rule's row k^2 = 36, exactly at k L from the centroid: the sixteen-point rule",
+   "source": "pair_middle_36",
+   "observer": [0.0625, 0.04296875, 0.0078125],
+   "H": [0.00040798836914947805, 0.00023970779911388807, 5.0874442548739646e-05]
   }
  ],
  "relations": [

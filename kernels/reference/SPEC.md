@@ -193,10 +193,29 @@ charge would make all of one sign (area times the largest corner density, over
 the distance squared). The bounds are `6.5e-3 / k^4`, rounded up: twice the
 worst case an adversarial search found, a needle whose charge falls linearly
 along it, seen along its axis at `k L` (`3.3e-3 / k^4` at k = 1.5,
-`2.5e-3 / k^4` far out); measured at 50 digits, not proven. On the solved
-plate's grid the error of H relative to |H| is about 1e-5 at a tolerance of 1e-3
-and 2e-8 at 1e-6. A negative or NaN tolerance, or one below the last bound, is
-exact.
+`2.5e-3 / k^4` far out); measured at 50 digits, not proven.
+
+Closer than that, a pair takes the middle rule where
+`|x - centroid|^2 >= m^2 L^2` (the same sums), `m^2` from this second table,
+chosen the same way: sixteen point charges per triangle, Dunavant's degree-8
+rule, at the centroid (weight `0.144315607677787`), the permutations of
+`(a, b, b)` for `(a, b) = (0.081414823414554, 0.459292588292723)` (weight
+`0.095091634267285`), `(0.658861384496480, 0.170569307751760)`
+(`0.103217370534718`) and `(0.898905543365938, 0.050547228317031)`
+(`0.032458497623198`), and of
+`(0.008394777409958, 0.263112829634638, 0.728492392955404)`
+(`0.027230314174435`), the weights divided by their sum in double precision. Its
+bounds are `1.7e-4 / m^8`, rounded up: twice the worst case found (the same
+needle at 1.5, `8.3e-5 / m^8`; `5.6e-5 / m^8` far out).
+
+| bound  | m^2  | bound  | m^2 | bound   | m^2 |
+| ------ | ---- | ------ | --- | ------- | --- |
+| 6.7e-6 | 2.25 | 2.6e-8 | 9   | 1.1e-10 | 36  |
+| 6.7e-7 | 4    | 2.6e-9 | 16  | 1.1e-11 | 64  |
+
+Closer still, the closed form. On the solved plate's grid the error of H
+relative to |H| is about 3e-6 at a tolerance of 1e-3 and 3e-9 at 1e-6. A
+negative or NaN tolerance, or one below both tables' last bounds, is exact.
 
 Parameters: those of `triangle_linear_charge`, `center`, `far_from`,
 `tolerance`. The solver's `center` (the mean of the centroids) and `far_from`
@@ -214,14 +233,16 @@ turned, as a sheet by the far rule everywhere, as a sheet switching at 20 mm,
 and as a sheet centered on the origin switching at 2^-6 m, where a point at
 exactly `far_from` (an exact binary distance) tells "at or beyond" from
 "beyond". `box_sheet_1e-3`, `box_sheet_1e-6` the cuboid's surface charge as
-sheets at those tolerances, with points where some of the 12 pairs take the far
-rule and some the closed form; `box_sheet_switch` the same sheet switching whole
-at 5 cm, closer than its pairs would; `pair_row_<k^2>` one triangle in exact
-binary coordinates per row of the table, at that row's bound, with a point
-exactly at `k L` from its centroid (the far rule) and, up to k^2 = 1024, one
-just inside (the closed form). Farther out the closed form is only as accurate
-as NumPy there, which cannot tell the far rule's own error apart: a k^2 slightly
-too small in those two rows changes H by less than that.
+sheets at those tolerances, with points where the 12 pairs take different rules;
+`box_sheet_switch` the same sheet switching whole at 5 cm, closer than its pairs
+would; `pair_row_<k^2>` and `pair_middle_<m^2>` one triangle in exact binary
+coordinates per row of each table, at that row's bound, with a point exactly at
+`k L` (or `m L`) from its centroid and one just inside, each taking the rule its
+`why` names. Points where the rules differ by less than twice the files'
+tolerance are left out (`pair-row-64-inside`, `pair-middle-36-inside`,
+`pair-middle-64-*`): there the closed form is only as accurate as NumPy, which
+cannot tell the rules apart, and an error in those rows changes H by less than
+that.
 
 **Reserved, waiting for #1073**: points in a triangle's plane (the production
 code lifts them 1e-12 sides off it, a convention: `plane-*`, `near-edge-*`,

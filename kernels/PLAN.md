@@ -244,6 +244,21 @@ Auto-vectorisation alone gave 3%. Next levers: the treecode (decision pending);
 a higher-order rule for pairs between near and far, so fine tolerances switch
 closer.
 
+Speed, step 3 (2026-11-22, uncommitted): a middle rule between the closed form
+and the six-point rule: Dunavant's 16-point degree-8 rule, error `1.7e-4 / m^8`
+of the one-sign field (twice the worst of an adversarial search; the needle
+again at 1.5, a near-equilateral triangle far out), its own table
+`PAIR_RULE_MIDDLE`; per pair: six-point from k L, else 16-point from m L, else
+the closed form. Python reference, Rust `Sheet` (16 charges per triangle, the
+same SIMD accumulator), SPEC; fill.py scope checks both switches. Plate, 2,744
+points, wasm one thread, perf lock: 1e-6 80.7 -> 21.4 ms (3.8x), 1e-8 85.5 ->
+33.7, 1e-5 44.9 -> 15.2, 1e-4 15.2 -> 10.2, 1e-3 9.7 -> 9.1; exact 83 ms. Real
+error on the plate grid: 3e-6 at 1e-3, 3e-9 at 1e-6. Reference: one exact-binary
+triangle per row of each table, points at and inside the switch, those where the
+rules differ by less than twice the tolerance left out. Planted Rust bugs: rows,
+rule order, wrong charges caught; 14th-digit constant changes survive (1e-14 of
+H, below rtol).
+
 Open:
 
 ## Decided earlier

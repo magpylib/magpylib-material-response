@@ -190,13 +190,69 @@ fn far_weights() -> [f64; 6] {
     [FAR_W1, FAR_W1, FAR_W1, FAR_W2, FAR_W2, FAR_W2].map(|w| w / sum)
 }
 
+// the sixteen points of the middle rule, exact to degree 8 (Dunavant 1985),
+// in `_triangle._MID_POINTS`' order: the centroid, three orbits (a, b, b) and
+// one (a, b, c)
+const MID_A1: f64 = 0.081414823414554;
+const MID_B1: f64 = 0.459292588292723;
+const MID_A2: f64 = 0.658861384496480;
+const MID_B2: f64 = 0.170569307751760;
+const MID_A3: f64 = 0.898905543365938;
+const MID_B3: f64 = 0.050547228317031;
+const MID_A4: f64 = 0.008394777409958;
+const MID_B4: f64 = 0.263112829634638;
+const MID_C4: f64 = 0.728492392955404;
+const THIRD: f64 = 1.0 / 3.0;
+const MID_POINTS: [V3; 16] = [
+    [THIRD, THIRD, THIRD],
+    [MID_A1, MID_B1, MID_B1],
+    [MID_B1, MID_A1, MID_B1],
+    [MID_B1, MID_B1, MID_A1],
+    [MID_A2, MID_B2, MID_B2],
+    [MID_B2, MID_A2, MID_B2],
+    [MID_B2, MID_B2, MID_A2],
+    [MID_A3, MID_B3, MID_B3],
+    [MID_B3, MID_A3, MID_B3],
+    [MID_B3, MID_B3, MID_A3],
+    [MID_A4, MID_B4, MID_C4],
+    [MID_A4, MID_C4, MID_B4],
+    [MID_B4, MID_A4, MID_C4],
+    [MID_B4, MID_C4, MID_A4],
+    [MID_C4, MID_A4, MID_B4],
+    [MID_C4, MID_B4, MID_A4],
+];
+
+fn mid_weights() -> [f64; 16] {
+    let w: [f64; 16] = std::array::from_fn(|g| match g {
+        0 => 0.144315607677787,
+        1..=3 => 0.095091634267285,
+        4..=6 => 0.103217370534718,
+        7..=9 => 0.032458497623198,
+        _ => 0.027230314174435,
+    });
+    let sum: f64 = w.iter().sum();
+    w.map(|x| x / sum)
+}
+
 /// `far_points`: the points `y` (6, N, 3) and the charge each stands for (6, N).
 pub fn far_points(v: &[f64], frames: &[Frame], c: &[f64]) -> (Vec<f64>, Vec<f64>) {
-    let n = frames.len();
-    let weights = far_weights();
-    let mut y = vec![0.0; 6 * n * 3];
-    let mut charge = vec![0.0; 6 * n];
-    for (g, (bary, wg)) in FAR_POINTS.iter().zip(weights).enumerate() {
+    rule_points(v, frames, c, &FAR_POINTS, &far_weights())
+}
+
+/// The points `y` (G, N, 3) of a rule's barycentric `points` on each triangle,
+/// and the charge each stands for (G, N): the density there times the weight
+/// times the area.
+fn rule_points(
+    v: &[f64],
+    frames: &[Frame],
+    c: &[f64],
+    points: &[V3],
+    weights: &[f64],
+) -> (Vec<f64>, Vec<f64>) {
+    let (n, count) = (frames.len(), points.len());
+    let mut y = vec![0.0; count * n * 3];
+    let mut charge = vec![0.0; count * n];
+    for (g, (bary, &wg)) in points.iter().zip(weights).enumerate() {
         for (t, f) in frames.iter().enumerate() {
             let tri = &v[9 * t..9 * t + 9];
             let p =
@@ -327,11 +383,36 @@ pub struct Sheet {
     pub c: Vec<f64>,
     pub center: V3,
     pub far_from: f64,
-    /// per triangle: its longest edge squared, and its six far-rule points
-    /// and charges, triangle by triangle, as x, y, z and q arrays
+    /// per triangle: its longest edge squared, and the point charges of the
+    /// six-point far rule and of the sixteen-point middle rule, triangle by
+    /// triangle, as x, y, z and q arrays
     pub longest2: Vec<f64>,
     pub rule: [Vec<f64>; 4],
+    pub middle: [Vec<f64>; 4],
 }
+
+/// A rule's point charges `y` (G, N, 3) and `charge` (G, N), triangle by
+/// triangle (entry `G t + g`), as x, y, z and q arrays.
+fn by_triangle(y: &[f64], charge: &[f64], count: usize) -> [Vec<f64>; 4] {
+    let n = charge.len() / count;
+    std::array::from_fn(|k| {
+        (0..n)
+            .flat_map(|t| (0..count).map(move |g| g * n + t))
+            .map(|i| if k < 3 { y[3 * i + k] } else { charge[i] })
+            .collect()
+    })
+}
+
+/// `_triangle.PAIR_RULE_MIDDLE`: the middle rule's (bound, k^2) rows, as
+/// [`PAIR_RULE`]'s.
+pub const PAIR_RULE_MIDDLE: [(f64, f64); 6] = [
+    (6.7e-6, 2.25),
+    (6.7e-7, 4.0),
+    (2.6e-8, 9.0),
+    (2.6e-9, 16.0),
+    (1.1e-10, 36.0),
+    (1.1e-11, 64.0),
+];
 
 /// `_triangle.PAIR_RULE`: (bound, k^2) rows; a tolerance takes the first row
 /// whose bound it reaches. From `k` longest edges of a triangle's centroid a
@@ -353,9 +434,9 @@ pub const PAIR_RULE: [(f64, f64); 12] = [
 ];
 
 /// `_triangle.pair_k2`: the squared distance in squared longest edges from
-/// which a pair takes the far rule; infinity for the closed form throughout.
-pub fn pair_k2(tolerance: f64) -> f64 {
-    PAIR_RULE
+/// which a pair takes the rule of `table`; infinity for never.
+pub fn pair_k2(tolerance: f64, table: &[(f64, f64)]) -> f64 {
+    table
         .iter()
         .find(|(bound, _)| *bound <= tolerance)
         .map_or(f64::INFINITY, |row| row.1)
@@ -365,7 +446,6 @@ impl Sheet {
     pub fn new(v: &[f64], c: &[f64], center: V3, far_from: f64) -> Self {
         let frames = frames(v);
         let (y, charge) = far_points(v, &frames, c);
-        let n = frames.len();
         let longest2 = v
             .chunks_exact(9)
             .map(|t| {
@@ -375,12 +455,9 @@ impl Sheet {
                 e0.max(e1).max(e2)
             })
             .collect();
-        let rule = std::array::from_fn(|k| {
-            (0..n)
-                .flat_map(|t| (0..6).map(move |g| g * n + t))
-                .map(|i| if k < 3 { y[3 * i + k] } else { charge[i] })
-                .collect()
-        });
+        let rule = by_triangle(&y, &charge, 6);
+        let (ym, qm) = rule_points(v, &frames, c, &MID_POINTS, &mid_weights());
+        let middle = by_triangle(&ym, &qm, 16);
         Sheet {
             frames,
             c: c.to_vec(),
@@ -388,24 +465,25 @@ impl Sheet {
             far_from,
             longest2,
             rule,
+            middle,
         }
     }
 
     /// H in A/m at one observer: the far rule at or beyond `far_from` from
-    /// the center; closer, the closed form, or with `k2` finite
-    /// (`pair_k2`) the far rule for each triangle whose centroid is at
-    /// least `k2` squared longest edges away.
+    /// the center; closer, per triangle, the far rule from `k2_far` squared
+    /// longest edges of its centroid, else the middle rule from `k2_middle`,
+    /// else the closed form (`pair_k2`; both infinite: the closed form).
     #[inline]
-    pub fn h_at(&self, x: V3, k2: f64) -> V3 {
+    pub fn h_at(&self, x: V3, k2_far: f64, k2_middle: f64) -> V3 {
         let d = sub(x, self.center);
         let g = if norm(d) >= self.far_from {
             let mut far = FarSum::new(x);
             far.add(&self.rule, 0..6 * self.frames.len());
             far.sum()
-        } else if k2.is_infinite() {
+        } else if k2_far.is_infinite() && k2_middle.is_infinite() {
             charge_at(x, &self.frames, &self.c)
         } else {
-            self.mixed_at(x, k2)
+            self.mixed_at(x, k2_far, k2_middle)
         };
         g.map(|k| k / (4.0 * std::f64::consts::PI))
     }
@@ -413,13 +491,15 @@ impl Sheet {
     /// The per-pair rule at one observer, the squares summed x, y, z as
     /// `_triangle.far_pairs`.
     #[inline]
-    fn mixed_at(&self, x: V3, k2: f64) -> V3 {
+    fn mixed_at(&self, x: V3, k2_far: f64, k2_middle: f64) -> V3 {
         let (mut near, mut far) = ([0.0; 3], FarSum::new(x));
         for (t, f) in self.frames.iter().enumerate() {
             let d = sub(x, f.centroid);
             let d2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-            if d2 >= k2 * self.longest2[t] {
+            if d2 >= k2_far * self.longest2[t] {
                 far.add(&self.rule, 6 * t..6 * t + 6);
+            } else if d2 >= k2_middle * self.longest2[t] {
+                far.add(&self.middle, 16 * t..16 * t + 16);
             } else {
                 let g = charge_pair(x, f, row(&self.c, t));
                 near[0] += g[0];
