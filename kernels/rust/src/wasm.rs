@@ -135,8 +135,8 @@ pub fn sphere_field(
 
 /// B in T (`field` "B") or H in A/m ("H") of magnetic dipoles at
 /// `observers` (M, 3), as `magpylib.func.dipole_field` at the origin:
-/// `moments` in A m^2, one (3,) or one per observer (M, 3). At the dipole,
-/// infinite in each nonzero component of the moment, 0 in the others.
+/// `moments` in A m^2, one (3,) or one per observer (M, 3). NaN at the
+/// dipole, as magpylib.
 #[wasm_bindgen]
 pub fn dipole_field(field: &str, observers: &[f64], moments: &[f64]) -> Result<Vec<f64>, JsError> {
     let field = field_byte(field)?;

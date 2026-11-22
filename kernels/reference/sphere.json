@@ -49,6 +49,50 @@
    "why": "2 cm across, another J, so that a batch's rows differ",
    "diameter": 0.02,
    "polarization": [-0.8, 0.4, 0.1]
+  },
+  "bhjm_ball_1": {
+   "kind": "sphere",
+   "why": "magpylib test_BHJM_magnet_sphere, row 1",
+   "diameter": 1.0,
+   "polarization": [0.0, 0.0, 0.0]
+  },
+  "bhjm_ball_2": {
+   "kind": "sphere",
+   "why": "magpylib test_BHJM_magnet_sphere, row 2",
+   "diameter": 2.0,
+   "polarization": [1.0, 2.0, 3.0]
+  },
+  "bhjm_ball_3": {
+   "kind": "sphere",
+   "why": "magpylib test_BHJM_magnet_sphere, row 3",
+   "diameter": 3.0,
+   "polarization": [2.0, 3.0, -1.0]
+  },
+  "bhjm_ball_4": {
+   "kind": "sphere",
+   "why": "magpylib test_BHJM_magnet_sphere, row 4",
+   "diameter": 4.0,
+   "polarization": [2.0, 3.0, -1.0]
+  },
+  "bhjm_dip_1": {
+   "kind": "dipole",
+   "why": "magpylib test_BHJM_dipole, row 1: moment J 4 pi / 3 / mu_0",
+   "moment": [0.0, 0.0, 3333333.333773442]
+  },
+  "bhjm_dip_2": {
+   "kind": "dipole",
+   "why": "magpylib test_BHJM_dipole, row 2: moment J 4 pi / 3 / mu_0",
+   "moment": [3333333.333773442, 0.0, 3333333.333773442]
+  },
+  "bhjm_dip_3": {
+   "kind": "dipole",
+   "why": "magpylib test_BHJM_dipole, row 3: moment J 4 pi / 3 / mu_0",
+   "moment": [-3333333.333773442, 1070000.000141275, 410000.0000541334]
+  },
+  "dip_123": {
+   "kind": "dipole",
+   "why": "magpylib test_func_dipole and test_Dipole_basicB/H",
+   "moment": [1.0, 2.0, 3.0]
   }
  },
  "points": [
@@ -217,6 +261,86 @@
    "observer": [0.00336, -0.0042, 0.00448],
    "B": [0.3007580174530015, -0.2483965014249295, 0.3524198250263554],
    "H": [239335.62579241875, -197667.65526865138, 280446.78601965465]
+  },
+  {
+   "id": "magpylib-bhjm-ball-1",
+   "why": "magpylib test_BHJM_magnet_sphere, row 1: zero J",
+   "source": "bhjm_ball_1",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "magpylib-bhjm-ball-2",
+   "why": "magpylib test_BHJM_magnet_sphere, row 2: outside",
+   "source": "bhjm_ball_2",
+   "observer": [1.0, -1.0, 0.0],
+   "B": [-0.2946278254943948, -0.05892556509887896, -0.3535533905932738],
+   "H": [-234457.37403020242, -46891.47480604048, -281348.8488362429],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "magpylib-bhjm-ball-3",
+   "why": "magpylib test_BHJM_magnet_sphere, row 3: inside",
+   "source": "bhjm_ball_3",
+   "observer": [0.0, -1.0, 0.0],
+   "B": [1.3333333333333333, 2.0, -0.6666666666666666],
+   "H": [-530516.4770430301, -795774.7155645451, 265258.23852151504],
+   "J": [2.0, 3.0, -1.0],
+   "M": [1591549.43112909, 2387324.146693635, -795774.715564545]
+  },
+  {
+   "id": "magpylib-bhjm-ball-4",
+   "why": "magpylib test_BHJM_magnet_sphere, row 4: inside",
+   "source": "bhjm_ball_4",
+   "observer": [1.0, -1.0, 0.5],
+   "B": [1.3333333333333333, 2.0, -0.6666666666666666],
+   "H": [-530516.4770430301, -795774.7155645451, 265258.23852151504],
+   "J": [2.0, 3.0, -1.0],
+   "M": [1591549.43112909, 2387324.146693635, -795774.715564545]
+  },
+  {
+   "id": "magpylib-bhjm-dipole-1",
+   "why": "magpylib test_BHJM_dipole, row 1",
+   "source": "bhjm_dip_1",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [0.004090733294577924, 0.008181466589155847, 0.005908836981057001],
+   "H": [3255.3021239431614, 6510.604247886323, 4702.103067917899]
+  },
+  {
+   "id": "magpylib-bhjm-dipole-2",
+   "why": "magpylib test_BHJM_dipole, row 2",
+   "source": "bhjm_dip_2",
+   "observer": [-1.0, -2.0, -3.0],
+   "B": [-0.0009090518432395387, 0.010908622118874464, 0.009999570275634924],
+   "H": [-723.4004719873692, 8680.80566384843, 7957.405191861061]
+  },
+  {
+   "id": "magpylib-bhjm-dipole-3",
+   "why": "magpylib test_BHJM_dipole, row 3",
+   "source": "bhjm_dip_3",
+   "observer": [3.0, 3.0, -1.0],
+   "B": [-9.320676168333038e-05, -0.005410017015069507, 0.0008776263946682707],
+   "H": [-74.17158426724457, -4305.154751366285, 698.3928945890801]
+  },
+  {
+   "id": "magpylib-func-dipole",
+   "why": "magpylib test_func_dipole",
+   "source": "dip_123",
+   "observer": [1.0, 1.0, 1.0],
+   "B": [9.622504485223277e-08, 7.698003588178622e-08, 5.7735026911339664e-08],
+   "H": [0.07657345769747112, 0.061258766157976895, 0.04594407461848267]
+  },
+  {
+   "id": "magpylib-basic-dipole",
+   "why": "magpylib test_Dipole_basicB/H, the sensor in the dipole's frame",
+   "source": "dip_123",
+   "observer": [-1.0, -2.0, -3.0],
+   "B": [3.818017741101959e-09, 7.636035482203918e-09, 1.1454053223305878e-08],
+   "H": [0.0030382819819457984, 0.006076563963891597, 0.009114845945837394]
   }
  ],
  "relations": [

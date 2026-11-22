@@ -42,6 +42,95 @@
    "segment_start": [0.00390625, -0.001953125, 0.0009765625],
    "segment_end": [-0.00390625, 0.001953125, 0.0],
    "current": 1.5
+  },
+  "bhjm_1": {
+   "kind": "polyline",
+   "why": "magpylib test_BHJM_current_polyline, segment 1",
+   "segment_start": [-1.5, 0.0, 0.0],
+   "segment_end": [-0.5, 0.0, 0.0],
+   "current": 1.0
+  },
+  "bhjm_2": {
+   "kind": "polyline",
+   "why": "magpylib test_BHJM_current_polyline, segment 2",
+   "segment_start": [-0.5, 0.0, 0.0],
+   "segment_end": [0.5, 0.0, 0.0],
+   "current": 1.0
+  },
+  "bhjm_3": {
+   "kind": "polyline",
+   "why": "magpylib test_BHJM_current_polyline, segment 3",
+   "segment_start": [0.5, 0.0, 0.0],
+   "segment_end": [1.5, 0.0, 0.0],
+   "current": 1.0
+  },
+  "diag": {
+   "kind": "polyline",
+   "why": "magpylib test_field_line_special_cases and test_func_polyline1",
+   "segment_start": [0.0, 0, 0],
+   "segment_end": [2.0, 2, 2],
+   "current": 1.0
+  },
+  "zero_length": {
+   "kind": "polyline",
+   "why": "a segment without length (magpylib test_field_line_special_cases, test_Polyline_specials)",
+   "segment_start": [0.0, 0, 0],
+   "segment_end": [0.0, 0, 0],
+   "current": 1.0
+  },
+  "no_current": {
+   "kind": "polyline",
+   "why": "no current (magpylib test_Polyline_specials)",
+   "segment_start": [1.0, 2, 3],
+   "segment_end": [3.0, 2, 1],
+   "current": 0.0
+  },
+  "vertical": {
+   "kind": "polyline",
+   "why": "magpylib test_func_polyline4 and 6 in the segment's own frame",
+   "segment_start": [1.0, 0, -1],
+   "segment_end": [1.0, 0, 1],
+   "current": 1.0
+  },
+  "long": {
+   "kind": "polyline",
+   "why": "2000 km along z (magpylib test_Polyline_vs_Infinite)",
+   "segment_start": [0.0, 0, -1000000.0],
+   "segment_end": [0.0, 0, 1000000.0],
+   "current": 1.0
+  },
+  "square_1": {
+   "kind": "polyline",
+   "why": "side 1 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [1.0, 1.0, 0.0],
+   "segment_end": [1.0, -1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_2": {
+   "kind": "polyline",
+   "why": "side 2 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [1.0, -1.0, 0.0],
+   "segment_end": [-1.0, -1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_3": {
+   "kind": "polyline",
+   "why": "side 3 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [-1.0, -1.0, 0.0],
+   "segment_end": [-1.0, 1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_4": {
+   "kind": "polyline",
+   "why": "side 4 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [-1.0, 1.0, 0.0],
+   "segment_end": [1.0, 1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_dipole": {
+   "kind": "dipole",
+   "why": "the square loop's moment I A, 4000 A m^2 along z",
+   "moment": [0.0, 0.0, 4000.0]
   }
  },
  "points": [
@@ -140,6 +229,62 @@
    "observer": [0.00606511643312258, 0.00176093014012645, -0.001],
    "B": [-1.2354240941658398e-05, -2.059040156943063e-05, -9.334315378141889e-05],
    "H": [-9.831192571364069, -16.38532095227342, -74.2801216503062]
+  },
+  {
+   "id": "magpylib-bhjm-level-1",
+   "why": "magpylib test_BHJM_current_polyline, row 1",
+   "source": "bhjm_1",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, -3.848366987870747e-08, 0.0],
+   "H": [0.0, -0.030624331451608283, 0.0]
+  },
+  {
+   "id": "magpylib-bhjm-level-2",
+   "why": "magpylib test_BHJM_current_polyline, row 2",
+   "source": "bhjm_2",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, -8.944271908818222e-08, 0.0],
+   "H": [0.0, -0.0711762543417177, 0.0]
+  },
+  {
+   "id": "magpylib-bhjm-level-3",
+   "why": "magpylib test_BHJM_current_polyline, row 3",
+   "source": "bhjm_3",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, -3.848366987870747e-08, 0.0],
+   "H": [0.0, -0.030624331451608283, 0.0]
+  },
+  {
+   "id": "magpylib-special-normal",
+   "why": "magpylib test_field_line_special_cases, the normal case",
+   "source": "diag",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [2.6726124187713715e-08, -5.345224837542743e-08, 2.6726124187713715e-08],
+   "H": [0.021267973873620588, -0.042535947747241176, 0.021267973873620588]
+  },
+  {
+   "id": "zero-length",
+   "why": "a segment without length: 0 (magpylib test_field_line_special_cases)",
+   "source": "zero_length",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "zero-current",
+   "why": "no current: 0 (magpylib test_Polyline_specials)",
+   "source": "no_current",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "magpylib-func-polyline4",
+   "why": "magpylib test_func_polyline4/6 without the turn: the origin beside a vertical segment",
+   "source": "vertical",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, -1.4142135621863726e-07, 0.0],
+   "H": [0.0, -0.11253953951963826, 0.0]
   }
  ],
  "relations": [
@@ -208,6 +353,58 @@
    ],
    "target": [0.0, 0.0, 0.0],
    "atol": 1e-15
+  },
+  {
+   "id": "long-wire",
+   "why": "a 2000 km segment is the infinite wire, H = I / (2 pi r) e_phi (magpylib test_Polyline_vs_Infinite; approximate: the ends)",
+   "terms": [
+    {
+     "source": "long",
+     "field": "H",
+     "observer": [1.0, 2.0, 3.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [-0.06366197723675814, 0.03183098861837907, 0.0],
+   "atol": 1e-12
+  },
+  {
+   "id": "square-loop-far-is-dipole",
+   "why": "a square loop far off is the dipole I A, here -z by the loop's sense (magpylib test_core_phys_moment_of_current_square; approximate)",
+   "terms": [
+    {
+     "source": "square_1",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_2",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_3",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_4",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_dipole",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-05
   }
  ]
 }

@@ -64,15 +64,15 @@ def cuboid_scope(x, p):
 def polyline_scope(x, p):
     """Why an observer is out of scope for a straight current segment, or
     None: on the segment's line, its extensions included (within today's
-    1e-15 L, or #1081's 100 eps max(L, |x|, |start|, |end|), of it: there magpylib gives 0,
-    and the distance is rounding), a segment without length, or not
-    finite."""
+    1e-15 L, or #1081's 100 eps max(L, |x|, |start|, |end|), of it: there
+    magpylib gives 0, and the distance is rounding), or not finite. A
+    segment without length is in scope: 0 everywhere."""
     if not np.isfinite(x).all():
         return "a non-finite observer"
     a, b = p["segment_start"], p["segment_end"]
     L = np.linalg.norm(b - a)
-    if L == 0:
-        return "a segment without length"
+    if L == 0:  # 0 everywhere, as magpylib (test_field_line_special_cases)
+        return None
     e = (b - a) / L
     t = e @ (x - a)
     d = np.linalg.norm(x - a - t * e)

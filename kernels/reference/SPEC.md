@@ -142,6 +142,12 @@ A magpylib checker skips `beside-edge-1e-12` and `near-edge-*` for magpylib <=
 6.3.0, which gives NaN or is off there (fixed by #1066); that list is in the
 test, not in the file.
 
+The relation `far-is-dipole` ties a cuboid to the dipole `J V / mu_0` 100 sides
+off, in the direction of magpylib's `test_dipole_approximation` (approximate;
+its dipole in this file). Its own 1300 sides are not taken: there the cuboid's
+formula in doubles is off by 2e-6 (1.5e-6 at 1000 sides, 3e-3 at 10000), more
+than this file's rule allows.
+
 Not taken from magpylib's tests: `test_vs_mag2` (magpylib 2's outputs; these
 values are exact), `test_Cuboid_basics` (the pose). Waiting for other kinds: the
 cuboid against charged triangles, tetrahedra, triangle strips and triangle
@@ -151,13 +157,12 @@ meshes.
 
 `magpylib.func.sphere_field` and `magpylib.func.dipole_field`, at the origin. A
 dipole: `moment` (3, A m^2); fields `B` and `H`,
-`H = (3 (m.r) r / r^5 - m / r^3) / (4 pi)`, `B = mu_0 H`; at the dipole, as
-magpylib, infinite in each nonzero component of the moment, 0 in the others. A
-sphere: `diameter` (m), `polarization` (J, 3, T); fields `B`, `H`, `J`, `M`.
-Outside (`r > d/2`), the dipole of moment `J V / mu_0`, `V` its volume, and
-`J = 0`; inside, the surface counted inside as magpylib does today (its points
-are reserved), `B = 2 J / 3` and `J` the polarization; `H = (B - J) / mu_0`,
-`M = J / mu_0`.
+`H = (3 (m.r) r / r^5 - m / r^3) / (4 pi)`, `B = mu_0 H`; NaN at the dipole, as
+magpylib's `getB` and `func.dipole_field`. A sphere: `diameter` (m),
+`polarization` (J, 3, T); fields `B`, `H`, `J`, `M`. Outside (`r > d/2`), the
+dipole of moment `J V / mu_0`, `V` its volume, and `J = 0`; inside, the surface
+counted inside as magpylib does today (its points are reserved), `B = 2 J / 3`
+and `J` the polarization; `H = (B - J) / mu_0`, `M = J / mu_0`.
 
 Sources: `ball` 12 mm across, every component of `J` nonzero; `ball2` 2 cm
 across with another `J`, so that a batch's rows differ; `ball_nm`, `ball_km` a
@@ -165,14 +170,22 @@ million times smaller and larger (B depends on `x / R` only); `dip` a generic
 moment; `dip_ball` the moment `J`; `dip_a`, `dip_b`, `dip_ab` exact binary
 moments and their sum. Points inside, at the center, at 0.999 and 1.001 radii,
 along and across `J`, 100 radii out, at both scales; a dipole's along, across
-and generic, 1e-9 m and 1 km out, and of `dip_a` and `dip_b`. **Relations**:
-`sphere-outside-is-dipole` (approximate: the weight `V / mu_0` is a rounded
-double), `sphere-b-h-j-inside`, `dipole-linear` (exact binary moments),
-`dipole-b-mu0-h`.
+and generic, 1e-9 m and 1 km out, and of `dip_a` and `dip_b`. From magpylib's
+tests: `test_BHJM_magnet_sphere`'s four rows (`bhjm_ball_*`),
+`test_BHJM_dipole`'s three (`bhjm_dip_*`), `test_func_dipole` and
+`test_Dipole_basicB/H` (`dip_123`); `test_magnet_sphere_Bfield` is `center`,
+`test_core_physics_dipole_sphere` the relation `sphere-outside-is-dipole`.
+**Relations**: `sphere-outside-is-dipole` (approximate: the weight `V / mu_0` is
+a rounded double), `sphere-b-h-j-inside`, `dipole-linear` (exact binary
+moments), `dipole-b-mu0-h`.
 
 **Reserved, waiting for #1073**: on a sphere's surface (`surface-*`); a diameter
 not positive (`zero-diameter`, `negative-diameter`); at a dipole
-(`dipole-origin`); `observer-nan`, `observer-inf`.
+(`dipole-origin`: NaN, magpylib's `test_Dipole_zero_position`); `observer-nan`,
+`observer-inf`.
+
+Not taken from magpylib's tests: `test_Sphere_basics`, `test_Dipole_basic*`'s
+poses and `test_func_sphere*` (the pose and the interface, not the kernel).
 
 ## polyline
 
@@ -189,20 +202,36 @@ nearer to it (`axis-far-1e3` off by 3e-6, `axis-far-1e3-before` by 9e-6:
 magpylib's check skips them).
 
 - **on the line**: within 1e-15 L of the segment's line, its extensions
-  included, `B = H = 0`, as magpylib; for a segment without length too.
+  included, `B = H = 0`, as magpylib.
+- **without length or current**: `B = H = 0` everywhere (magpylib's
+  `test_field_line_special_cases`, `test_Polyline_specials`).
 
 Sources: `seg` 6 mm at a generic orientation off the origin, 2.5 A; `seg_km` a
 million times larger, -1.5 A; `bin` in exact binary coordinates, its halves
 `bin_first`, `bin_second` and `bin_reversed`. Points beside the middle, the
 start and the end (square to it: the branches' boundary), beyond either end,
 1000 lengths along the axis on either side (the rationalized branch), 1e-6 and
-1e-9 lengths from the middle, 100 lengths away, and at the km scale.
-**Relations**: `split-halves` (superposition, exact midpoint),
-`reverse-current`, `b-mu0-h`.
+1e-9 lengths from the middle, 100 lengths away, and at the km scale. From
+magpylib's tests: `test_BHJM_current_polyline`'s three rows (`bhjm_*`),
+`test_field_line_special_cases`' normal case (`diag`), a segment without length
+and one without current (`test_Polyline_specials`), `test_func_polyline4/6`
+without the turn (`vertical`). **Relations**: `split-halves` (superposition,
+exact midpoint), `reverse-current`, `b-mu0-h`; `long-wire`, a 2000 km segment
+against the infinite wire (`test_Polyline_vs_Infinite`; approximate);
+`square-loop-far-is-dipole`, four segments against the dipole `I A`
+(`test_core_phys_moment_of_current_square`; approximate, its dipole in this
+file).
 
 **Reserved, waiting for #1073**: on the segment's line, its extensions included
-(the distance there is rounding: `axis-beyond-end`); `zero-length`;
-`observer-nan`, `observer-inf`.
+(the distance there is rounding: `axis-beyond-end`; magpylib's
+`test_field_line_special_cases` and `test_Polyline_specials` set 0 there, at an
+end too); `observer-nan`, `observer-inf`.
+
+Not taken from magpylib's tests: `test_vs_mag2_line` and `test_Polyline_basic*`
+(magpylib 2's outputs, with poses); `test_core_physics_cube_current_replacement`
+(4000 segments: it tests the discretization); `test_line_position_bug`,
+`test_discontinous_line` (the interface). Waiting for other kinds: the polyline
+against `Circle`, triangle strips and current sheets.
 
 ## triangle_linear_charge
 

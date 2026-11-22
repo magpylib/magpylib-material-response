@@ -17,9 +17,8 @@ from magpylib_material_response._array_api.cuboid import MU0, _promote
 
 def dipole_field(field, observers, moment):
     """B in T or H in A/m (``field`` 'B' or 'H') of magnetic dipoles at the
-    origin, one per observer: ``moment`` (i, 3) in A m^2. At the dipole, as
-    magpylib: infinite in each nonzero component of the moment, signed as it,
-    and 0 in the others."""
+    origin, one per observer: ``moment`` (i, 3) in A m^2. NaN at the dipole,
+    as magpylib's ``getB`` and ``func.dipole_field`` (test_Dipole_zero_position)."""
     if field not in ("B", "H"):
         msg = f"field must be 'B' or 'H'; instead received {field!r}."
         raise ValueError(msg)
@@ -32,8 +31,7 @@ def dipole_field(field, observers, moment):
         H = (3 * (mr / r**5)[:, None] * observers - moment / (r**3)[:, None]) / (
             4 * xp.pi
         )
-        at_dipole = xp.where(moment == 0, 0.0, xp.sign(moment) * float("inf"))
-    H = xp.where((r2 == 0)[:, None], at_dipole, H)
+    H = xp.where((r2 == 0)[:, None], float("nan"), H)
     return H if field == "H" else MU0 * H
 
 

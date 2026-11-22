@@ -114,6 +114,17 @@
    "why": "a square prism 400 times longer than wide (magpylib test_core_physics_long_solenoid)",
    "dimension": [3.086, 3.086, 1234.0],
    "polarization": [0.0, 0.0, 0.0006822907869132092]
+  },
+  "unit_cube": {
+   "kind": "cuboid",
+   "why": "1 m cube (magpylib test_dipole_approximation)",
+   "dimension": [1.0, 1.0, 1.0],
+   "polarization": [0.111, 0.222, 0.333]
+  },
+  "unit_cube_dipole": {
+   "kind": "dipole",
+   "why": "the moment J in A m^2, for unit_cube far off (times V / mu_0, V = 1)",
+   "moment": [0.111, 0.222, 0.333]
   }
  },
  "points": [
@@ -942,6 +953,26 @@
    ],
    "target": [0.0, 0.0, 0.0006822907869132092],
    "atol": 1e-08
+  },
+  {
+   "id": "far-is-dipole",
+   "why": "100 sides off, a cuboid is the dipole J V / mu_0 (magpylib test_dipole_approximation's direction; approximate: the size and the rounded weight). Its 1300 sides lose 2e-6 in doubles",
+   "terms": [
+    {
+     "source": "unit_cube",
+     "field": "B",
+     "observer": [94.7400243168727, -17.9652882416112, 26.4872839459652],
+     "weight": 1.0
+    },
+    {
+     "source": "unit_cube_dipole",
+     "field": "B",
+     "observer": [94.7400243168727, -17.9652882416112, 26.4872839459652],
+     "weight": -795774.715564545
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-14
   }
  ]
 }

@@ -11,21 +11,12 @@ fn dot(a: V3, b: V3) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-/// H in A/m at `x` of a dipole of `moment` A m^2 at the origin. At the
-/// dipole, as magpylib: infinite in each nonzero component of the moment,
-/// signed as it, and 0 in the others.
+/// H in A/m at `x` of a dipole of `moment` A m^2 at the origin; NaN at the
+/// dipole, as magpylib's `getB` and `func.dipole_field`.
 pub fn dipole_h(x: V3, moment: V3) -> V3 {
     let r2 = dot(x, x);
     if r2 == 0.0 {
-        return moment.map(|m| {
-            if m > 0.0 {
-                f64::INFINITY
-            } else if m < 0.0 {
-                f64::NEG_INFINITY
-            } else {
-                0.0
-            }
-        });
+        return [f64::NAN; 3];
     }
     let r = r2.sqrt();
     let mr = dot(moment, x);

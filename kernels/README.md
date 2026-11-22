@@ -50,7 +50,7 @@ api_version(); // 1: a caller refuses any other
 cuboid_field(field, observers, dimensions, polarizations); // magpylib.func.cuboid_field: "B" or "H"; one cuboid (3,) or one per observer (M, 3)
 polyline_field(field, observers, segments_start, segments_end, currents); // magpylib.func.polyline_field: segments (3,) or (M, 3), currents (1,) or (M,); 0 on a segment's line
 sphere_field(field, observers, diameters, polarizations); // magpylib.func.sphere_field: diameters (1,) or (M,), polarizations (3,) or (M, 3)
-dipole_field(field, observers, moments); // magpylib.func.dipole_field: moments (3,) or (M, 3); at the dipole infinite where the moment is nonzero
+dipole_field(field, observers, moments); // magpylib.func.dipole_field: moments (3,) or (M, 3); NaN at the dipole
 const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments
 sheet.h(observers, tolerance); // H in A/m; B = mu_0 H outside the body only
 ```
