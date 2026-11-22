@@ -89,6 +89,9 @@ docs = [
 [tool.hatch]
 version.source = "vcs"
 build.hooks.vcs.version-file = "src/magpylib_material_response/_version.py"
+# the browser's field kernels (#208), built by CD into this ignored folder: in
+# both distributions where present, absent from a build without Rust
+build.artifacts = ["src/magpylib_material_response/kernels/*"]
 
 [tool.hatch.envs.default]
 dependency-groups = ["dev"]

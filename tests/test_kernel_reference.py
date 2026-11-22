@@ -137,7 +137,7 @@ def _skipped(name, impl, point):
     if OLD_MAGPYLIB and key in BEFORE_1066:
         return "magpylib <= 6.3.0 lacks the stable edge logarithms (#1066)"
     if key in MAGPYLIB_OFF:
-        return "magpylib subtracts two sines that cancel beyond a segment's end"
+        return "magpylib subtracts two sines that cancel beyond a segment's end (#1097)"
     return None
 
 

@@ -70,6 +70,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# the browser's field kernels, built from kernels/rust by CD (#208)
+src/magpylib_material_response/kernels/
+
 # PyBuilder
 .pybuilder/
 target/

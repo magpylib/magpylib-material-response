@@ -59,6 +59,18 @@ The browser computes B and H; J and M (cuboid, sphere) are checked in Python
 only. `ChargeSheet.from_coefficients` and `charge_field` exist for
 `js/check.mjs` only. Raise `api_version` with every change a caller must follow.
 
+## Delivery
+
+MR's wheel and sdist carry the browser build as package data,
+`magpylib_material_response/kernels/` (`mmr_kernels.js`, `mmr_kernels_bg.wasm`;
+`importlib.resources.files("magpylib_material_response") / "kernels"`), so that
+a page's data and its kernels come from one install. CD builds them into that
+ignored folder before packaging (`.github/workflows/cd.yml`) and fails a release
+whose distributions lack them; pyproject.toml's `artifacts` takes them in. A
+build without Rust has none, and a page then keeps its saved lines. To have them
+in a local install, run the build above and copy the two files from `rust/pkg/`
+there.
+
 ## Add a case
 
 A case starts where a kernel is used or goes wrong: a use case met while

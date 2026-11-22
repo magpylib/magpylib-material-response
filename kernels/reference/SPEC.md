@@ -145,8 +145,8 @@ test, not in the file.
 The relation `far-is-dipole` ties a cuboid to the dipole `J V / mu_0` 100 sides
 off, in the direction of magpylib's `test_dipole_approximation` (approximate;
 its dipole in this file). Its own 1300 sides are not taken: there the cuboid's
-formula in doubles is off by 2e-6 (1.5e-6 at 1000 sides, 3e-3 at 10000), more
-than this file's rule allows.
+formula in doubles is off by 2e-6 (1.5e-6 at 1000 sides, 3e-3 at 10000; magpylib
+#1098), more than this file's rule allows.
 
 Not taken from magpylib's tests: `test_vs_mag2` (magpylib 2's outputs; these
 values are exact), `test_Cuboid_basics` (the pose). Waiting for other kinds: the
@@ -199,7 +199,7 @@ position or orientation). Parameters: `segment_start`, `segment_end` (3, m),
 `k = L (t1 + t2) / (R1 R2 (t1 R2 + t2 R1))`. Magpylib subtracts the sines there
 instead: they cancel beyond an end, more the farther along the axis and the
 nearer to it (`axis-far-1e3` off by 3e-6, `axis-far-1e3-before` by 9e-6:
-magpylib's check skips them).
+magpylib's check skips them; magpylib #1097).
 
 - **on the line**: within 1e-15 L of the segment's line, its extensions
   included, `B = H = 0`, as magpylib.
