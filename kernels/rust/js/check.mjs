@@ -4,7 +4,7 @@
 // kernels/rust/.cargo/config.toml). Node runs the same engine as Chrome (V8):
 //
 //     wasm-pack build --release --target web --out-dir pkg -- --features wasm
-//     node www/check.mjs
+//     node js/check.mjs
 
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";

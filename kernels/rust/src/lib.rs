@@ -1,7 +1,6 @@
 //! Field kernels for magpylib-material-response's solved face charge and
-//! magpylib's cuboid, one source for Python (maturin), C and the browser
-//! (WebAssembly). Checked against `kernels/reference/*.json`, the files the
-//! generators next to them write (issue #208).
+//! magpylib's cuboid, for the browser (WebAssembly, `wasm` feature). Checked
+//! against `kernels/reference/*.json` (issue #208).
 //!
 //! All arrays are flat f64 slices in numpy's C order. Every batch function
 //! fills `out` (M, 3), one row per observer; with `threads`, and the
@@ -10,9 +9,6 @@
 pub mod cuboid;
 pub mod triangle;
 
-mod ffi;
-#[cfg(feature = "python")]
-mod python;
 #[cfg(feature = "wasm")]
 mod wasm;
 

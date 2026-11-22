@@ -263,5 +263,5 @@ frame (the linear terms); `cycle-axes` a cyclic permutation of the axes turns H
 the same way (the frames follow the triangle).
 
 Not in these files: the solved plate of studio (664 triangles) is in
-`kernels/rust/www/plate.json`, a timing input without expected values; the far
+`kernels/rust/js/plate.json`, a timing input without expected values; the far
 rule's points and charges are not separate fields.

@@ -2,6 +2,8 @@
 array API standard: one implementation for NumPy, any other array library,
 and the 50-digit namespace that writes the reference values (#208).
 
+The reference implementation of ``kernels/reference/cuboid.json``: only its
+test and ``kernels/reference/fill.py`` use it, the solvers keep magpylib's.
 Kept here until magpylib's own array API rewrite takes over. It is Jack
 Smith's rewrite of magpylib's ``field_BH_cuboid`` (branch ``array-api`` of
 jack-smithy/magpylib, 81ddc1e4), with the stable edge logarithms of magpylib

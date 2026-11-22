@@ -2,7 +2,7 @@
 name = "mmr-kernels"
 version = "0.1.0"
 edition = "2024"
-description = "Field kernels of magpylib-material-response's face charge and magpylib's cuboid, for Python, C and WebAssembly (issue #208)"
+description = "Field kernels of magpylib-material-response's face charge and magpylib's cuboid, for the browser (WebAssembly, issue #208)"
 license = "BSD-3-Clause"
 publish = false
 
@@ -11,16 +11,12 @@ name = "mmr_kernels"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-numpy = { version = "0.30.0", optional = true }
-pyo3 = { version = "0.30", features = ["extension-module", "abi3-py311"], optional = true }
 rayon = { version = "1.12.0", optional = true }
 wasm-bindgen = { version = "0.2.130", optional = true }
 
 [features]
 # observers split over threads (not in the browser)
 parallel = ["dep:rayon"]
-# the Python extension, built by maturin
-python = ["dep:pyo3", "dep:numpy", "parallel"]
 # the browser build, by wasm-pack
 wasm = ["dep:wasm-bindgen"]
 
