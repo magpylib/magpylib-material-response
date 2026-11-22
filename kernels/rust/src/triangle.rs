@@ -268,21 +268,6 @@ fn rule_points(
     (y, charge)
 }
 
-/// `charge_field_far` at one observer: point charges `charge` at `y`.
-#[inline]
-pub fn far_at(x: V3, y: &[f64], charge: &[f64]) -> V3 {
-    let mut acc = [0.0; 3];
-    for (p, q) in y.chunks_exact(3).zip(charge) {
-        let d = [x[0] - p[0], x[1] - p[1], x[2] - p[2]];
-        let r2 = dot(d, d);
-        let scale = q / (r2 * r2.sqrt());
-        acc[0] += scale * d[0];
-        acc[1] += scale * d[1];
-        acc[2] += scale * d[2];
-    }
-    acc
-}
-
 /// The far rule's point charges at one observer, summed: `add` takes the
 /// entries `range` (an even count) of `rule` (x, y, z, q arrays), each adding
 /// `q (x - p) / |x - p|^3`; `sum` gives the total.

@@ -56,17 +56,6 @@ pub fn charge_field_frames(x: &[f64], frames: &[Frame], c: &[f64], out: &mut [f6
     each_observer(x, out, threads, |_, p| triangle::charge_at(p, frames, c));
 }
 
-/// `far_points`: points (6, N, 3) and charges (6, N).
-pub fn far_points(v: &[f64], c: &[f64]) -> (Vec<f64>, Vec<f64>) {
-    triangle::far_points(v, &triangle::frames(v), c)
-}
-
-/// `charge_field_far`: point charges `charge` (6, N) at `y` (6, N, 3), summed.
-pub fn charge_field_far(x: &[f64], y: &[f64], charge: &[f64], out: &mut [f64], threads: bool) {
-    assert_eq!(y.len(), 3 * charge.len(), "one point per charge");
-    each_observer(x, out, threads, |_, p| triangle::far_at(p, y, charge));
-}
-
 /// A solved sheet's H in A/m in its frame, as `_triangle.charge_sheet_field`:
 /// `tolerance` 0 the closed form below `far_from`, as `ChargeSheet._field`;
 /// above, per pair the far, middle or closed rule (`triangle::PAIR_RULE`,
