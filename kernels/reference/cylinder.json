@@ -1,0 +1,1062 @@
+{
+ "rtol": 1e-12,
+ "sources": {
+  "cyl": {
+   "kind": "cylinder",
+   "why": "10 mm across, 8 mm high, every component of J nonzero",
+   "dimension": [0.01, 0.008],
+   "polarization": [0.3, -0.5, 1.2]
+  },
+  "cyl_axial": {
+   "kind": "cylinder",
+   "why": "cyl's J_z alone",
+   "dimension": [0.01, 0.008],
+   "polarization": [0.0, 0.0, 1.2]
+  },
+  "cyl_tv": {
+   "kind": "cylinder",
+   "why": "cyl's J_xy alone",
+   "dimension": [0.01, 0.008],
+   "polarization": [0.3, -0.5, 0.0]
+  },
+  "cyl_tv_turned": {
+   "kind": "cylinder",
+   "why": "cyl_tv's J turned 90 degrees about z",
+   "dimension": [0.01, 0.008],
+   "polarization": [0.5, 0.3, 0.0]
+  },
+  "cyl_big": {
+   "kind": "cylinder",
+   "why": "cyl 1024 times larger, exactly in binary: B depends on x / size only",
+   "dimension": [10.24, 8.192],
+   "polarization": [0.3, -0.5, 1.2]
+  },
+  "cyl_km": {
+   "kind": "cylinder",
+   "why": "cyl a million times larger",
+   "dimension": [10000.0, 8000.0],
+   "polarization": [0.3, -0.5, 1.2]
+  },
+  "cyl_tall": {
+   "kind": "cylinder",
+   "why": "a rod 4 mm across, 40 mm high: beside its hull the near-axis series must not be taken",
+   "dimension": [0.004, 0.04],
+   "polarization": [0.3, -0.5, 1.2]
+  },
+  "cyl_disk": {
+   "kind": "cylinder",
+   "why": "a disk 40 mm across, 1 mm high",
+   "dimension": [0.04, 0.001],
+   "polarization": [0.3, -0.5, 1.2]
+  },
+  "cyl_no_pol": {
+   "kind": "cylinder",
+   "why": "without polarization",
+   "dimension": [0.01, 0.008],
+   "polarization": [0.0, 0.0, 0.0]
+  },
+  "cyl_no_height": {
+   "kind": "cylinder",
+   "why": "without height: 0 everywhere off it (as magpylib)",
+   "dimension": [0.01, 0.0],
+   "polarization": [0.3, -0.5, 1.2]
+  },
+  "cyl_exact_ax": {
+   "kind": "cylinder",
+   "why": "2 m across, 1.5 m high: f(z0) = 3/5 at the center, B_z = 3/5 J_z",
+   "dimension": [2.0, 1.5],
+   "polarization": [0.0, 0.0, 5.0]
+  },
+  "cyl_exact_tv": {
+   "kind": "cylinder",
+   "why": "as cyl_exact_ax, transverse: B = J - 3/10 J at the center",
+   "dimension": [2.0, 1.5],
+   "polarization": [10.0, 0.0, 0.0]
+  },
+  "bhjm_cyl_1": {
+   "kind": "cylinder",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 1",
+   "dimension": [1.0, 2.0],
+   "polarization": [0.0, 0.0, 0.0]
+  },
+  "bhjm_cyl_2": {
+   "kind": "cylinder",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 2",
+   "dimension": [2.0, 2.0],
+   "polarization": [1.0, 2.0, 3.0]
+  },
+  "bhjm_cyl_3": {
+   "kind": "cylinder",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 3",
+   "dimension": [1.0, 2.0],
+   "polarization": [3.0, 2.0, -1.0]
+  },
+  "bhjm_cyl_4": {
+   "kind": "cylinder",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 4",
+   "dimension": [3.0, 3.0],
+   "polarization": [1.0, 1.0, 1.0]
+  },
+  "getj_cyl": {
+   "kind": "cylinder",
+   "why": "magpylib test_getJ (Cylinder)",
+   "dimension": [2.0, 2.0],
+   "polarization": [0.1, 0.2, 0.3]
+  },
+  "rauber_cyl": {
+   "kind": "cylinder",
+   "why": "magpylib test_cylinder_rauber_field4",
+   "dimension": [2.0, 2.0],
+   "polarization": [22.0, 33.0, 0.0]
+  },
+  "small_r_cyl": {
+   "kind": "cylinder",
+   "why": "magpylib test_cylinder_diametral_small_r",
+   "dimension": [2.0, 2.0],
+   "polarization": [1.0, 1.0, 0.0]
+  },
+  "sumup_cyl": {
+   "kind": "cylinder",
+   "why": "magpylib test_dataframe_ouptut_sumup's Cylinder",
+   "dimension": [1.0, 1.0],
+   "polarization": [0.0, 1000.0, 0.0]
+  },
+  "full_cyl_0": {
+   "kind": "cylinder",
+   "why": "magpylib test_cylinder_field1 (testdata_full_cyl.npy), row 0",
+   "dimension": [0.8778880790604309, 0.6669415372138098],
+   "polarization": [306.6661538364062, -181.53316313152024, -176.08892807233934]
+  },
+  "full_cyl_1": {
+   "kind": "cylinder",
+   "why": "magpylib test_cylinder_field1 (testdata_full_cyl.npy), row 1",
+   "dimension": [0.9691741954578282, 0.5821264344693481],
+   "polarization": [-263.03598525308735, 202.47157808614347, -299.1354378919723]
+  },
+  "scale_cyl_1": {
+   "kind": "cylinder",
+   "why": "magpylib test_cylinder_scaling_invariance, a = 1",
+   "dimension": [2.0, 2.0],
+   "polarization": [10.0, 10.0, 1000.0]
+  },
+  "scale_cyl_small": {
+   "kind": "cylinder",
+   "why": "as scale_cyl_1 with a = 2^-20, magpylib's 1e-6 exact in binary",
+   "dimension": [1.9073486328125e-06, 1.9073486328125e-06],
+   "polarization": [10.0, 10.0, 1000.0]
+  },
+  "dipole_test_cyl": {
+   "kind": "cylinder",
+   "why": "magpylib test_dipole_approximation: volume 1 m^3",
+   "dimension": [1.1283791670955126, 1.0],
+   "polarization": [0.111, 0.222, 0.333]
+  },
+  "dipole_test_dip": {
+   "kind": "dipole",
+   "why": "the moment J in A m^2, for dipole_test_cyl's far field (times V / mu_0)",
+   "moment": [0.111, 0.222, 0.333]
+  },
+  "thin_cyl": {
+   "kind": "cylinder",
+   "why": "magpylib test_Circle_vs_Cylinder_field: 0.1 mm high, J_z = mu_0 I / h",
+   "dimension": [2.0, 0.0001],
+   "polarization": [0.0, 0.0, 0.0125663706127]
+  },
+  "thin_loop": {
+   "kind": "circle",
+   "why": "its loop, 1 A",
+   "diameter": 2.0,
+   "current": 1.0
+  },
+  "solenoid_cyl": {
+   "kind": "cylinder",
+   "why": "magpylib test_core_physics_long_solenoid: R 1.543, L 1234, J_z = mu_0 N I / L",
+   "dimension": [3.086, 1234.0],
+   "polarization": [0.0, 0.0, 0.0006822907869132092]
+  }
+ },
+ "points": [
+  {
+   "id": "cyl-center",
+   "why": "the center, inside",
+   "source": "cyl",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.20629574286683636, -0.34382623811139396, 0.7496340570653091],
+   "H": [-74567.47856733028, 124279.13094555047, -358389.8301388117],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "cyl-inside",
+   "why": "inside, off every axis",
+   "source": "cyl",
+   "observer": [0.001, -0.002, 0.0015],
+   "B": [0.22938636432228393, -0.38929634243542777, 0.7810070521965967],
+   "H": [-56192.5458464129, 88095.17161040225, -333423.9938618035],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "cyl-axis-inside",
+   "why": "on the axis inside, off the center",
+   "source": "cyl",
+   "observer": [0.0, 0.0, 0.003],
+   "B": [0.22426127952413108, -0.3737687992068851, 0.6059097638069514],
+   "H": [-60270.95874390717, 100451.59790651196, -472761.9887261966],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "cyl-axis-above",
+   "why": "on the axis, 0.4 radii above the top base",
+   "source": "cyl",
+   "observer": [0.0, 0.0, 0.006],
+   "B": [-0.03922773859843591, 0.06537956433072652, 0.3138219087874873],
+   "H": [-31216.44252541066, 52027.40420901777, 249731.5402032853],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-axis-below",
+   "why": "on the axis, below the bottom base",
+   "source": "cyl",
+   "observer": [0.0, 0.0, -0.006],
+   "B": [-0.03922773859843591, 0.06537956433072652, 0.3138219087874873],
+   "H": [-31216.44252541066, 52027.40420901777, 249731.5402032853],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-near-axis-1e-9",
+   "why": "1e-9 radii off the axis, above: the series' first terms",
+   "source": "cyl",
+   "observer": [5e-12, 0.0, 0.006],
+   "B": [-0.03922773838514544, 0.06537956433072652, 0.3138219088408099],
+   "H": [-31216.4423556795, 52027.40420901777, 249731.54024571806],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-near-axis-0.049",
+   "why": "0.049 radii off the axis, above: magpylib's three-term series off 2e-10 here (SPEC: cylinder)",
+   "source": "cyl",
+   "observer": [0.000245, 0.0, 0.006],
+   "B": [-0.028724216572147274, 0.06535249925099194, 0.316175640734519],
+   "H": [-22858.005272514885, 52005.86650289025, 251604.5805739496],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-near-axis-below",
+   "why": "0.19 radii off the axis, below the bottom base: the series at z < 0",
+   "source": "cyl",
+   "observer": [0.0008, -0.0005, -0.0052],
+   "B": [-0.08708352725726175, 0.10466324840929325, 0.36435112926009605],
+   "H": [-69298.86913350476, 83288.36673296665, 289941.4162525737],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-series-in",
+   "why": "just inside the series' region (SPEC: cylinder), 0.4 radii above the base",
+   "source": "cyl",
+   "observer": [0.0013449449105818426, 0.0, 0.006],
+   "B": [0.02024169779678676, 0.06453861474267752, 0.32010171480747435],
+   "H": [16107.831306781462, 51358.19778978395, 254728.851052641],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-series-out",
+   "why": "just outside it: the elliptic integrals",
+   "source": "cyl",
+   "observer": [0.0013476374929854097, 0.0, 0.006],
+   "B": [0.02036624009283499, 0.06453513688256157, 0.3200967857828153],
+   "H": [16206.938916994997, 51355.43019663942, 254724.92865944497],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-beside",
+   "why": "beside the hull, between the bases",
+   "source": "cyl",
+   "observer": [0.007, 0.002, 0.001],
+   "B": [0.05396857407518052, 0.08817047926333577, -0.12278211755053313],
+   "H": [42946.82668410086, 70163.83805697064, -97706.90467018803],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-above",
+   "why": "above the top base, within the hull's radius",
+   "source": "cyl",
+   "observer": [0.002, -0.001, 0.0055],
+   "B": [0.05868372477562409, 0.02146427684224399, 0.3819146672407151],
+   "H": [46699.024391590305, 17080.728798935364, 303918.03569340793],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-generic",
+   "why": "outside, off every axis and plane",
+   "source": "cyl",
+   "observer": [0.0071, -0.0043, 0.0052],
+   "B": [0.11434097159790665, -0.05206345215900535, 0.027072119653430562],
+   "H": [90989.65415069788, -41430.77883314078, 21543.308316938033],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-generic-below",
+   "why": "cyl-generic's mirror image in z = 0",
+   "source": "cyl",
+   "observer": [0.0071, -0.0043, -0.0052],
+   "B": [-0.042440943527914755, 0.04288897531156254, -0.05168687057409475],
+   "H": [-33773.42976421728, 34129.96212941348, -41131.1047295217],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-hull-outside",
+   "why": "1.001 radii off the axis, between the bases",
+   "source": "cyl",
+   "observer": [0.005005, 0.0, 0.001],
+   "B": [0.23580394991584797, 0.17419799027497973, -0.24385882364408565],
+   "H": [187646.82117328013, 138622.35616298736, -194056.6860232768],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-hull-inside",
+   "why": "0.999 radii off the axis, between the bases",
+   "source": "cyl",
+   "observer": [0.004995, 0.0, 0.001],
+   "B": [0.236258443269156, -0.32538683817363045, 0.9554382994536399],
+   "H": [-50723.919177128686, 138952.7391862051, -194616.0176902611],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "cyl-base-above",
+   "why": "1.001 half heights up, within the hull's radius",
+   "source": "cyl",
+   "observer": [0.002, 0.0, 0.004004],
+   "B": [0.046525651182679456, 0.10639967297355998, 0.5407312452089287],
+   "H": [37023.93683635198, 84670.1694966953, 430300.25285299745],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-base-below",
+   "why": "0.999 half heights up, inside",
+   "source": "cyl",
+   "observer": [0.002, 0.0, 0.003996],
+   "B": [0.34635898446106217, -0.39341546512462844, 0.5416870373926622],
+   "H": [36891.30767336291, 84817.27792402811, -523868.8105713071],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "cyl-near-edge-1e-3",
+   "why": "1e-3 radii off the top edge, outside, at 45 degrees",
+   "source": "cyl",
+   "observer": [0.005003535533905933, 0.0, 0.004003535533905932],
+   "B": [1.3441676119904333, 0.10821164314870353, 0.4083493413325234],
+   "H": [1069654.599102761, 86112.0895474316, 324954.08094985806],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-near-edge-1e-6",
+   "why": "1e-6 radii off the top edge, outside, at 45 degrees",
+   "source": "cyl",
+   "observer": [0.005000003535533906, 0.0, 0.004000003535533906],
+   "B": [2.6640416284772566, 0.10877864393126489, 0.7388081038012332],
+   "H": [2119976.969153596, 86563.29443389924, 587924.8086592072],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0],
+   "atol_B": 1e-09,
+   "atol_H": 0.001
+  },
+  {
+   "id": "cyl-near-edge-1e-9",
+   "why": "1e-9 radii off the top edge, outside, at 45 degrees",
+   "source": "cyl",
+   "observer": [0.005000000003535534, 0.0, 0.004000000003535534],
+   "B": [3.9833268829428414, 0.10877959982952211, 1.0686303447017154],
+   "H": [3169830.817274445, 86564.05511356298, 850389.0085986492],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0],
+   "atol_B": 1e-06,
+   "atol_H": 1.0
+  },
+  {
+   "id": "cyl-hull-line",
+   "why": "on the hull's radius beyond the top base: magpylib takes 1e16 for Pi's infinite characteristic there",
+   "source": "cyl",
+   "observer": [0.005, 0.0, 0.006],
+   "B": [0.1788532150489809, 0.048837123351192877, 0.1826384032408788],
+   "H": [142326.8663334072, 38863.34794378611, 145339.023390173],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "far-cyl-100",
+   "why": "about 90 radii out, off the axis's cone (SPEC: cylinder)",
+   "source": "cyl",
+   "observer": [0.3, -0.2, 0.25],
+   "B": [1.1786241696553908e-06, -6.081493380142156e-07, 4.1980321139929947e-07],
+   "H": [0.9379193133650167, -0.4839498664790288, 0.33406878114436006],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0],
+   "atol_B": 1e-14,
+   "atol_H": 1e-09
+  },
+  {
+   "id": "far-cyl-axis-1e3",
+   "why": "1000 radii up, 0.045 off the axis: in the series' cone; magpylib off 6e-9 here",
+   "source": "cyl",
+   "observer": [0.0002, 0.0001, 5.0],
+   "B": [-1.1994237316520495e-10, 2.0002875543695696e-10, 9.600021830374829e-10],
+   "H": [-9.544710788967748e-05, 0.00015917782596257436, 0.0007639454641479951],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-axial-generic",
+   "why": "cyl_axial at cyl-generic",
+   "source": "cyl_axial",
+   "observer": [0.0071, -0.0043, 0.0052],
+   "B": [0.0783909575629107, -0.04747621373528395, -0.012307375460332094],
+   "H": [62381.541957457586, -37780.370481277125, -9793.898206291833],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-tv-generic",
+   "why": "cyl_tv at cyl-generic",
+   "source": "cyl_tv",
+   "observer": [0.0071, -0.0043, 0.0052],
+   "B": [0.035950014034995946, -0.004587238423721403, 0.03937949511376265],
+   "H": [28608.1121932403, -3650.408351863651, 31337.206523229866],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-km-generic",
+   "why": "cyl_km at cyl-generic, a million times out",
+   "source": "cyl_km",
+   "observer": [7100.0, -4300.0, 5200.0],
+   "B": [0.11434097159790665, -0.052063452159005354, 0.027072119653430572],
+   "H": [90989.65415069788, -41430.77883314078, 21543.30831693804],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "tall-beside",
+   "why": "1.5 radii off the axis between the bases: the near-axis series' sum is not the field here",
+   "source": "cyl_tall",
+   "observer": [0.003, 0.0, 0.005],
+   "B": [0.06825962911771427, 0.10965162674640944, -0.0066521963269493365],
+   "H": [54319.286945690415, 87257.99208531363, -5293.649639957619],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "tall-axis-middle",
+   "why": "inside near the axis, half way up",
+   "source": "cyl_tall",
+   "observer": [0.0001, -5e-05, 0.0],
+   "B": [0.1507443540295738, -0.25124064872458907, 1.194044902581537],
+   "H": [-118773.86921851832, 197956.4020052109, -4738.915954336476],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "tall-axis-low",
+   "why": "inside near the axis, 6 radii below the middle: the series between the bases, away from z = 0",
+   "source": "cyl_tall",
+   "observer": [0.0001, 5e-05, -0.012],
+   "B": [0.15217468709207288, -0.2540803141348323, 1.1809130253080493],
+   "H": [-117635.64633254556, 195696.6680710761, -15188.931856474725],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "tall-far-axis",
+   "why": "40 radii above the top, in the series' cone",
+   "source": "cyl_tall",
+   "observer": [0.0004, 0.0002, 0.1],
+   "B": [-1.2352543369840165e-05, 2.2015490065583666e-05, 0.00010411659382833509],
+   "H": [-9.829841686633264, 17.519370344953906, 82.85335283929261],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "disk-above-center",
+   "why": "above the disk's center",
+   "source": "cyl_disk",
+   "observer": [0.0, 0.0, 0.002],
+   "B": [-0.003693358976068067, 0.006155598293446778, 0.029546871808544536],
+   "H": [-2939.081688658325, 4898.469481097209, 23512.6535092666],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "disk-beside-edge",
+   "why": "above the disk's plane, just beyond its edge",
+   "source": "cyl_disk",
+   "observer": [0.021, 0.0, 0.0007],
+   "B": [0.11256591798902593, 0.010697824002130943, -0.08881518805379958],
+   "H": [89577.11136997901, 8513.057852455315, -70676.88101132395],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "disk-inside",
+   "why": "inside the disk",
+   "source": "cyl_disk",
+   "observer": [0.01, 0.005, 0.0002],
+   "B": [0.2959714002095763, -0.4927023185490159, 0.03996255806353544],
+   "H": [-3205.857852347816, 5807.310380937513, -923128.4654012125],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "disk-inside-0.49",
+   "why": "inside the disk, 0.49 radii off the axis: the elliptic integrals, where a series' region twice as wide would be off 2e-11",
+   "source": "cyl_disk",
+   "observer": [0.0098, 0.0, 0.0002],
+   "B": [0.2952768331344523, -0.49308938650729706, 0.03704519306652009],
+   "H": [-3758.576768995105, 5499.291486532177, -925450.0307019103],
+   "J": [0.3, -0.5, 1.2],
+   "M": [238732.4146693635, -397887.3577822725, 954929.658677454]
+  },
+  {
+   "id": "cyl-no-pol",
+   "why": "no polarization: 0",
+   "source": "cyl_no_pol",
+   "observer": [0.001, 0.002, 0.003],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-no-height",
+   "why": "no height, above its disk: 0",
+   "source": "cyl_no_height",
+   "observer": [0.001, 0.002, 0.003],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-bhjm-1",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 1: no polarization",
+   "source": "bhjm_cyl_1",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-bhjm-2",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 2: beside the hull",
+   "source": "bhjm_cyl_2",
+   "observer": [1.0, -1.0, 0.0],
+   "B": [-0.36846056628423807, -0.10171405289381351, -0.33006492099322216],
+   "H": [-293211.6023315907, -80941.47151049152, -262657.31862121535],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-bhjm-3",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 3: in a base's plane, beyond the hull",
+   "source": "bhjm_cyl_3",
+   "observer": [1.0, 1.0, 1.0],
+   "B": [0.05331225054004426, 0.07895873346514122, 0.1040699781060002],
+   "H": [42424.54100960948, 62833.36366455948, 82816.25722611074],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-bhjm-4",
+   "why": "magpylib test_BHJM_magnet_cylinder, row 4: the center",
+   "source": "bhjm_cyl_4",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.6464466094067263, 0.6464466094067263, 0.7071067811865476],
+   "H": [-281348.8488362429, -281348.8488362429, -233077.01789205917],
+   "J": [1.0, 1.0, 1.0],
+   "M": [795774.715564545, 795774.715564545, 795774.715564545]
+  },
+  {
+   "id": "cyl-magpylib-getj-0",
+   "why": "magpylib test_getJ (Cylinder), point 0: outside",
+   "source": "getj_cyl",
+   "observer": [-2.0, 2.0, -2.0],
+   "B": [0.0011365454963719686, -0.004781051627765401, -0.0013450041882002645],
+   "H": [904.4341691015678, -3804.639999184417, -1070.3203252981873],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-getj-1",
+   "why": "magpylib test_getJ (Cylinder), point 1: the center",
+   "source": "getj_cyl",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.06464466094067263, 0.12928932188134526, 0.21213203435596426],
+   "H": [-28134.884883624294, -56269.76976724859, -69923.10536761775],
+   "J": [0.1, 0.2, 0.3],
+   "M": [79577.4715564545, 159154.943112909, 238732.4146693635]
+  },
+  {
+   "id": "cyl-magpylib-getj-2",
+   "why": "magpylib test_getJ (Cylinder), point 2: inside",
+   "source": "getj_cyl",
+   "observer": [-0.5, -0.5, 0.5],
+   "B": [0.040150864078901234, 0.10630438938736828, 0.1951103178288035],
+   "H": [-47626.42911439617, -74560.59788491338, -83468.55699543942],
+   "J": [0.1, 0.2, 0.3],
+   "M": [79577.4715564545, 159154.943112909, 238732.4146693635]
+  },
+  {
+   "id": "cyl-magpylib-getj-3",
+   "why": "magpylib test_getJ (Cylinder), point 3: outside",
+   "source": "getj_cyl",
+   "observer": [-3.0, 0.0, 0.0],
+   "B": [0.003559657311789832, -0.003638168035245839, -0.005221719882500737],
+   "H": [2832.6852847968066, -2895.162133423777, -4155.312654254753],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-rauber-in-1e-11",
+   "why": "magpylib test_cylinder_rauber_field4: 1e-11 radii inside the hull's radius, above the base",
+   "source": "rauber_cyl",
+   "observer": [0.99999999999, 0.0, 1.5],
+   "B": [-0.4765816049432567, -2.9423746581896832, 2.86134844255497],
+   "H": [-379251.59111701447, -2341467.3567052204, 2276988.7430052347],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-rauber-on",
+   "why": "magpylib test_cylinder_rauber_field4: on the hull's radius, above the base",
+   "source": "rauber_cyl",
+   "observer": [1.0, 0.0, 1.5],
+   "B": [-0.47658160490270146, -2.942374658167408, 2.86134844255226],
+   "H": [-379251.59108474164, -2341467.3566874946, 2276988.7430030787],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-rauber-out-1e-15",
+   "why": "magpylib test_cylinder_rauber_field4: 1e-15 radii outside it",
+   "source": "rauber_cyl",
+   "observer": [1.000000000000001, 0.0, 1.5],
+   "B": [-0.47658160490269696, -2.942374658167406, 2.8613484425522597],
+   "H": [-379251.59108473803, -2341467.3566874927, 2276988.7430030783],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-rauber-out-1e-11",
+   "why": "magpylib test_cylinder_rauber_field4: 1e-11 radii outside it",
+   "source": "rauber_cyl",
+   "observer": [1.00000000001, 0.0, 1.5],
+   "B": [-0.47658160486214624, -2.942374658145133, 2.8613484425495503],
+   "H": [-379251.5910524688, -2341467.3566697687, 2276988.7430009223],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-small-r-0.0499",
+   "why": "magpylib test_cylinder_diametral_small_r: below magpylib's switch to its series",
+   "source": "small_r_cyl",
+   "observer": [0.0499, 0.0, 3.0],
+   "B": [-0.01890613376135146, -0.01892126133381456, 0.0009372308762881057],
+   "H": [-15045.0232163647, -15057.061356038706, 745.8246339964766],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-small-r-0.0501",
+   "why": "magpylib test_cylinder_diametral_small_r: above it",
+   "source": "small_r_cyl",
+   "observer": [0.0501, 0.0, 3.0],
+   "B": [-0.018905951572460153, -0.018921200580895216, 0.0009409825669114575],
+   "H": [-15044.878235051541, -15057.013010401595, 748.8101345351605],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-sumup",
+   "why": "magpylib test_dataframe_ouptut_sumup's Cylinder: the center",
+   "source": "sumup_cyl",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 646.4466094067262, 0.0],
+   "H": [0.0, -281348848.8362429, 0.0],
+   "J": [0.0, 1000.0, 0.0],
+   "M": [0.0, 795774715.564545, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-full-0",
+   "why": "magpylib test_cylinder_field1, row 0",
+   "source": "full_cyl_0",
+   "observer": [-0.4265047993809461, 0.48902941203754446, 0.17753711598884625],
+   "B": [42.92780385900458, -67.51212580681285, -7.51527379847516],
+   "H": [34160860.905709945, -53724442.71107428, -5980464.869371248],
+   "J": [0.0, 0.0, 0.0],
+   "M": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "cyl-magpylib-full-1",
+   "why": "magpylib test_cylinder_field1, row 1",
+   "source": "full_cyl_1",
+   "observer": [0.28783652778824076, -0.08939389725470559, -0.24967969075683616],
+   "B": [-159.68640953126055, 144.206225734946, -92.05432699594564],
+   "H": [82242979.22375314, -46366094.194542155, 164789912.12207562],
+   "J": [-263.03598525308735, 202.47157808614347, -299.1354378919723],
+   "M": [-209317386.34801543, 161121762.46140537, -238044418.00375986]
+  }
+ ],
+ "relations": [
+  {
+   "id": "cyl-b-h-j-inside",
+   "why": "B - mu_0 H = J inside, J the law's value",
+   "terms": [
+    {
+     "source": "cyl",
+     "field": "B",
+     "observer": [0.001, -0.002, 0.0015],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl",
+     "field": "H",
+     "observer": [0.001, -0.002, 0.0015],
+     "weight": -1.25663706127e-06
+    }
+   ],
+   "target": [0.3, -0.5, 1.2],
+   "atol": 1e-11
+  },
+  {
+   "id": "cyl-b-mu0-h",
+   "why": "B = mu_0 H outside",
+   "terms": [
+    {
+     "source": "cyl",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl",
+     "field": "H",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": -1.25663706127e-06
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-superposition",
+   "why": "cyl's field is cyl_axial's plus cyl_tv's (J split exactly), outside",
+   "terms": [
+    {
+     "source": "cyl_axial",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl_tv",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": -1.0
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-superposition-inside",
+   "why": "the same inside, where the transverse part is computed as H and the axial as B",
+   "terms": [
+    {
+     "source": "cyl_axial",
+     "field": "B",
+     "observer": [0.001, -0.002, 0.0015],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl_tv",
+     "field": "B",
+     "observer": [0.001, -0.002, 0.0015],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl",
+     "field": "B",
+     "observer": [0.001, -0.002, 0.0015],
+     "weight": -1.0
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-11
+  },
+  {
+   "id": "cyl-mirror-axial",
+   "why": "mirrored in z = 0, an axial J's B_xy flips and B_z stays",
+   "terms": [
+    {
+     "source": "cyl_axial",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl_axial",
+     "field": "B",
+     "observer": [0.0071, -0.0043, -0.0052],
+     "weight": [
+      [1.0, 0, 0],
+      [0, 1.0, 0],
+      [0, 0, -1.0]
+     ]
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-mirror-transverse",
+   "why": "mirrored in z = 0, a transverse J's B_xy stays and B_z flips",
+   "terms": [
+    {
+     "source": "cyl_tv",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl_tv",
+     "field": "B",
+     "observer": [0.0071, -0.0043, -0.0052],
+     "weight": [
+      [-1.0, 0, 0],
+      [0, -1.0, 0],
+      [0, 0, 1.0]
+     ]
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-mirror-axial-near",
+   "why": "cyl-mirror-axial 0.19 radii off the axis, where the series gives both sides",
+   "terms": [
+    {
+     "source": "cyl_axial",
+     "field": "B",
+     "observer": [0.0008, -0.0005, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl_axial",
+     "field": "B",
+     "observer": [0.0008, -0.0005, -0.0052],
+     "weight": [
+      [1.0, 0, 0],
+      [0, 1.0, 0],
+      [0, 0, -1.0]
+     ]
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-mirror-transverse-near",
+   "why": "cyl-mirror-transverse there",
+   "terms": [
+    {
+     "source": "cyl_tv",
+     "field": "B",
+     "observer": [0.0008, -0.0005, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl_tv",
+     "field": "B",
+     "observer": [0.0008, -0.0005, -0.0052],
+     "weight": [
+      [-1.0, 0, 0],
+      [0, -1.0, 0],
+      [0, 0, 1.0]
+     ]
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-turn-about-axis",
+   "why": "turning the observer and J by 90 degrees about the axis turns B",
+   "terms": [
+    {
+     "source": "cyl_tv_turned",
+     "field": "B",
+     "observer": [0.0043, 0.0071, 0.0052],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl_tv",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": [
+      [-0.0, 1.0, -0.0],
+      [-1.0, -0.0, -0.0],
+      [-0.0, -0.0, -1.0]
+     ]
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-scaling",
+   "why": "1024 times larger, exactly in binary: the same B at 1024 times the distance",
+   "terms": [
+    {
+     "source": "cyl_big",
+     "field": "B",
+     "observer": [7.2704, -4.4032, 5.3248],
+     "weight": 1.0
+    },
+    {
+     "source": "cyl",
+     "field": "B",
+     "observer": [0.0071, -0.0043, 0.0052],
+     "weight": -1.0
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-12
+  },
+  {
+   "id": "cyl-magpylib-scaling",
+   "why": "magpylib test_cylinder_scaling_invariance, its first observer, a = 1 against a = 2^-20",
+   "terms": [
+    {
+     "source": "scale_cyl_1",
+     "field": "B",
+     "observer": [-0.12788963, 0.14872334, -0.35838915],
+     "weight": 1.0
+    },
+    {
+     "source": "scale_cyl_small",
+     "field": "B",
+     "observer": [-1.2196505546569825e-07, 1.418336296081543e-07, -3.41786527633667e-07],
+     "weight": -1.0
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-08
+  },
+  {
+   "id": "cyl-on-axis-axial",
+   "why": "B_z = J_z (f(z + z0) - f(z - z0)) / 2 on the axis, f(z) = z / sqrt(z^2 + r0^2): 3 T here",
+   "terms": [
+    {
+     "source": "cyl_exact_ax",
+     "field": "B",
+     "observer": [0.0, 0.0, 0.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [0, 0, 3.0],
+   "atol": 1e-11
+  },
+  {
+   "id": "cyl-on-axis-transverse",
+   "why": "on the axis mu_0 H = -J_xy (f(z + z0) - f(z - z0)) / 4, B = J + mu_0 H inside: 7 T here",
+   "terms": [
+    {
+     "source": "cyl_exact_tv",
+     "field": "B",
+     "observer": [0.0, 0.0, 0.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [7.0, 0, 0],
+   "atol": 1e-11
+  },
+  {
+   "id": "cyl-far-is-dipole",
+   "why": "100 sizes off, the cylinder of 1 m^3 is the dipole J V / mu_0 (magpylib test_dipole_approximation's direction; approximate: the size and the rounded weight). Its 1300 m lose 7e-7 in doubles (SPEC: cylinder)",
+   "terms": [
+    {
+     "source": "dipole_test_cyl",
+     "field": "B",
+     "observer": [106.90266972928147, -20.27165698270005, 29.88769939757059],
+     "weight": 1.0
+    },
+    {
+     "source": "dipole_test_dip",
+     "field": "B",
+     "observer": [106.90266972928147, -20.27165698270005, 29.88769939757059],
+     "weight": -795774.7155645449
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-13
+  },
+  {
+   "id": "cyl-thin-is-loop",
+   "why": "magpylib test_Circle_vs_Cylinder_field, its first observer: a disk 1e-4 high with J_z = mu_0 I / h is the loop (approximate)",
+   "terms": [
+    {
+     "source": "thin_cyl",
+     "field": "H",
+     "observer": [0.262974227, 0.847810369, 10.8754479],
+     "weight": 1.0
+    },
+    {
+     "source": "thin_loop",
+     "field": "H",
+     "observer": [0.262974227, 0.847810369, 10.8754479],
+     "weight": -1.0
+    }
+   ],
+   "target": [0, 0, 0],
+   "atol": 1e-13
+  },
+  {
+   "id": "cyl-long-solenoid",
+   "why": "magpylib test_core_physics_long_solenoid: B = J at the center of a long cylinder (approximate)",
+   "terms": [
+    {
+     "source": "solenoid_cyl",
+     "field": "B",
+     "observer": [0.0, 0.0, 0.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [0, 0, 0.0006822907869132092],
+   "atol": 1e-08
+  }
+ ]
+}

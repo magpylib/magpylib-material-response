@@ -66,13 +66,17 @@ NO_AREA = 100 * sys.float_info.epsilon
 def has_area(V):
     """Which triangles of ``V`` (N, 3, 3) have an area: corners not in a line
     to within ``NO_AREA`` (``|AB x AC| > NO_AREA |AB| |AC|``). A sheet drops
-    the others: they carry no charge, and their frame would be NaN."""
+    the others: they carry no charge, and their frame would be NaN. A
+    triangle with a non-finite corner is kept, so that its NaN reaches the
+    field instead of the triangle vanishing."""
     xp = namespace(V)
     ab, ac = V[:, 1, ...] - V[:, 0, ...], V[:, 2, ...] - V[:, 0, ...]
     norm = xp.linalg.vector_norm
-    return norm(xp.linalg.cross(ab, ac), axis=1) > NO_AREA * norm(ab, axis=1) * norm(
-        ac, axis=1
-    )
+    with quiet("invalid", "over"):
+        flat = norm(xp.linalg.cross(ab, ac), axis=1) <= NO_AREA * norm(
+            ab, axis=1
+        ) * norm(ac, axis=1)
+    return ~flat
 
 
 _EDGES = ((0, 1), (1, 2), (2, 0))

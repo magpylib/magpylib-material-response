@@ -1,5 +1,5 @@
 //! Field kernels for magpylib-material-response's solved face charge and
-//! magpylib's cuboid, straight current segment, circular loop, sphere and dipole, for the browser
+//! magpylib's cuboid, straight current segment, circular loop, cylinder, sphere and dipole, for the browser
 //! (WebAssembly, `wasm` feature). Checked against `kernels/reference/*.json`
 //! (issue #208).
 //!
@@ -9,6 +9,7 @@
 
 pub mod circle;
 pub mod cuboid;
+pub mod cylinder;
 pub mod polyline;
 pub mod sphere;
 pub mod triangle;
@@ -162,6 +163,42 @@ pub fn circle_field(
     let at = |a: &[f64], i: usize| if a.len() == 1 { a[0] } else { a[i] };
     each_observer(x, out, threads, |i, p| {
         circle::circle_h(p, at(diameter, i), at(current, i)).map(|v| scale * v)
+    });
+}
+
+/// B in T (`field` b'B') or H in A/m (b'H') of cylinders in their own
+/// frames, as `magpylib.func.cylinder_field`: `dimension` (diameter, height)
+/// one row (2,) for every observer or one per observer (M, 2),
+/// `polarization` one row (3,) or one per observer (M, 3).
+pub fn cylinder_field(
+    field: u8,
+    x: &[f64],
+    dimension: &[f64],
+    polarization: &[f64],
+    out: &mut [f64],
+    threads: bool,
+) {
+    let m = x.len() / 3;
+    assert!(
+        dimension.len() == 2 || dimension.len() == 2 * m,
+        "one cylinder for all observers, or one per observer"
+    );
+    assert!(
+        polarization.len() == 3 || polarization.len() == x.len(),
+        "one cylinder for all observers, or one per observer"
+    );
+    let kernel = match field {
+        b'B' => cylinder::cylinder_b,
+        b'H' => cylinder::cylinder_h,
+        _ => panic!("field must be 'B' or 'H'"),
+    };
+    let dim = |i: usize| {
+        let j = if dimension.len() == 2 { 0 } else { 2 * i };
+        [dimension[j], dimension[j + 1]]
+    };
+    let at = |a: &[f64], i: usize| if a.len() == 3 { row(a, 0) } else { row(a, i) };
+    each_observer(x, out, threads, |i, p| {
+        kernel(p, dim(i), at(polarization, i))
     });
 }
 

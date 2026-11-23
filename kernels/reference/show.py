@@ -85,6 +85,14 @@ def _shape(src, name, X):
                             line={"color": "grey", "width": 6}, name=name,
                             hoverinfo="name", showlegend=False)  # fmt: skip
         return ring, 2 * r or 1.0
+    if kind == "cylinder":
+        t = np.linspace(0, 2 * np.pi, 49)
+        r, h = (abs(float(v)) / 2 for v in src["dimension"])
+        x, y = np.r_[r * np.cos(t), r * np.cos(t)], np.r_[r * np.sin(t), r * np.sin(t)]
+        z = np.r_[np.full(49, -h), np.full(49, h)]
+        hull = go.Mesh3d(x=x, y=y, z=z, alphahull=0, opacity=0.15, color="grey",
+                         name=name, hoverinfo="name", showlegend=False)  # fmt: skip
+        return hull, 2 * max(r, h) or 1.0
     if kind == "dipole":
         dot = go.Scatter3d(x=[0], y=[0], z=[0], mode="markers",
                            marker={"size": 6, "color": "grey", "symbol": "x"},

@@ -21,3 +21,16 @@ def quiet(*warnings):
     infinities and NaN are expected: on NumPy and on the namespaces built on it
     (``array_api_strict``); a namespace that does not warn ignores it."""
     return np.errstate(**dict.fromkeys(warnings, "ignore"))
+
+
+# Bulirsch's stop for cel in doubles, magpylib's
+ERRTOL = 1e-8
+
+
+def cel_errtol(eps):
+    """Bulirsch's relative stop for ``cel`` at the precision ``eps``. The
+    iteration converges quadratically, so a step below ``sqrt(eps)`` leaves the
+    integral exact to it: magpylib's 1e-8 in doubles, ``sqrt(eps)`` above
+    (float32: 1e-8 would never be met) and below (5e-26 at 50 digits)."""
+    root = float(eps) ** 0.5
+    return min(ERRTOL, root) if float(eps) <= 2.0**-52 else root

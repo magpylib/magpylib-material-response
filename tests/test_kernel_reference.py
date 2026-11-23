@@ -4,7 +4,8 @@ implementation of them is checked against (#208), by the rules of
 
 Each kernel runs on NumPy and, where it is installed, on ``array_api_strict``,
 which allows nothing beyond the array API standard; the installed magpylib's
-cuboid, straight current segment, circle, sphere and dipole are checked as ports.
+cuboid, straight current segment, circle, cylinder, sphere and dipole are checked as
+ports.
 Every point is checked alone and, per file and kind, all in one call, so that
 batches are covered too."""
 
@@ -16,7 +17,13 @@ import numpy as np
 import pytest
 from packaging.version import Version
 
-from magpylib_material_response._array_api import circle, cuboid, polyline, sphere
+from magpylib_material_response._array_api import (
+    circle,
+    cuboid,
+    cylinder,
+    polyline,
+    sphere,
+)
 from magpylib_material_response.face_charge import _triangle as T
 
 try:
@@ -36,8 +43,21 @@ OLD_MAGPYLIB = Version(magpy.__version__) <= Version("6.3.0")
 # the points magpylib gets wrong in every release: beyond a segment's end it
 # subtracts two sines that nearly cancel
 MAGPYLIB_OFF = {"current/axis-far-1e3", "current/axis-far-1e3-before"}
+# and its Cylinder (SPEC: cylinder)
+_AXIS = "magpylib's Cylinder near or far along the axis: a three-term series, or elliptic integrals that cancel"
+MAGPYLIB_CYLINDER_OFF = {
+    "cylinder/cyl-near-axis-0.049": _AXIS,
+    "cylinder/far-cyl-axis-1e3": _AXIS,
+    "cylinder/tall-axis-middle": _AXIS,
+    "cylinder/tall-axis-low": _AXIS,
+    "cylinder/tall-far-axis": _AXIS,
+    "cylinder/cyl-magpylib-small-r-0.0499": _AXIS,
+    "cylinder/cyl-magpylib-small-r-0.0501": _AXIS,
+}
+# and in a batch only: a cylinder without height as any other, rounding not 0
+MAGPYLIB_BATCH_OFF = {"cylinder/cyl-no-height"}
 # the kinds whose implementations take one row of parameters per observer
-PER_OBSERVER = {"cuboid", "polyline", "circle", "sphere", "dipole"}
+PER_OBSERVER = {"cuboid", "polyline", "circle", "cylinder", "sphere", "dipole"}
 
 
 def _decode(a):
@@ -73,6 +93,12 @@ def _magpylib_circle(field, X, diameter, current):
     )
 
 
+def _magpylib_cylinder(field, X, dimension, polarization):
+    return magpy.func.cylinder_field(
+        field, X, dimension, polarization, squeeze=False
+    ).reshape(-1, 3)
+
+
 def _magpylib_sphere(field, X, diameter, polarization):
     return magpy.func.sphere_field(
         field, X, diameter, polarization, squeeze=False
@@ -103,6 +129,8 @@ IMPLS = {
     | {"magpylib": (_magpylib_polyline, np.asarray, "BH")},
     "circle": _impls(circle.circle_field, "BH")
     | {"magpylib": (_magpylib_circle, np.asarray, "BH")},
+    "cylinder": _impls(cylinder.cylinder_field, "BHJM")
+    | {"magpylib": (_magpylib_cylinder, np.asarray, "BH")},
     "sphere": _impls(sphere.sphere_field, "BHJM")
     | {"magpylib": (_magpylib_sphere, np.asarray, "BH")},
     "dipole": _impls(sphere.dipole_field, "BH")
@@ -137,8 +165,9 @@ def _cases():
                 yield pytest.param(name, point, impl, id=f"{name}-{point['id']}-{impl}")
 
 
-def _skipped(name, impl, point):
-    """Why a port skips a point of file ``name``, or None."""
+def _skipped(name, impl, point, batch=False):
+    """Why a port skips a point of file ``name``, alone or in a batch, or
+    None."""
     if impl not in PORTS:
         return None
     key = f"{name}/{point['id']}"
@@ -146,7 +175,16 @@ def _skipped(name, impl, point):
         return "magpylib <= 6.3.0 lacks the stable edge logarithms (#1066)"
     if key in MAGPYLIB_OFF:
         return "magpylib subtracts two sines that cancel beyond a segment's end (#1097)"
+    if key in MAGPYLIB_CYLINDER_OFF:
+        return MAGPYLIB_CYLINDER_OFF[key]
+    if batch and key in MAGPYLIB_BATCH_OFF:
+        return "magpylib's batch computes a cylinder without height: rounding, not 0"
     return None
+
+
+def test_files_found():
+    """Every family's file is read: an empty folder would pass silently."""
+    assert set(FILES) >= {"cuboid", "current", "cylinder", "face_charge", "sphere"}
 
 
 @pytest.mark.parametrize(("name", "point", "impl"), list(_cases()))
@@ -180,7 +218,8 @@ def test_batch(name, kind, impl):
     points = [
         p
         for p in doc["points"]
-        if doc["sources"][p["source"]]["kind"] == kind and not _skipped(name, impl, p)
+        if doc["sources"][p["source"]]["kind"] == kind
+        and not _skipped(name, impl, p, batch=True)
     ]
     groups = (
         [points]
@@ -205,6 +244,25 @@ def test_batch(name, kind, impl):
             expected = _decode([p[field] for p in group])
             atol = [p.get(f"atol_{field}", 0.0) for p in group]
             _within(got, expected, doc["rtol"], atol, f"{kind} {field} batch")
+
+
+@pytest.mark.parametrize("kind", ["circle", "cylinder"])
+def test_float32(kind):
+    """In float32 the kernels that iterate ``cel`` stop at its precision: every
+    point of the kind finite where its value is (1e-8 would never be met)."""
+    func = IMPLS[kind]["array-api-numpy"][0]
+    for doc in FILES.values():
+        points = [
+            p for p in doc["points"] if doc["sources"][p["source"]]["kind"] == kind
+        ]
+        for p in points:
+            params = _params(doc["sources"][p["source"]])
+            got = func(
+                "B",
+                _decode([p["observer"]]).astype(np.float32),
+                **{k: v[None].astype(np.float32) for k, v in params.items()},
+            )
+            assert np.isfinite(got).all() == np.isfinite(_decode(p["B"])).all(), p["id"]
 
 
 def _relations():

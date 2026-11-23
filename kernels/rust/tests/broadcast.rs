@@ -46,5 +46,9 @@ fn shared_parameters_equal_rows() {
         k::circle_field(field, &x, &[0.004], &c, &mut once, false);
         k::circle_field(field, &x, &[0.004; M], &tiled(&c), &mut rows, false);
         assert_eq!(once, rows, "circle {}", field as char);
+        let cyl = [0.004, 0.003];
+        k::cylinder_field(field, &x, &cyl, &p, &mut once, false);
+        k::cylinder_field(field, &x, &tiled(&cyl), &tiled(&p), &mut rows, false);
+        assert_eq!(once, rows, "cylinder {}", field as char);
     }
 }

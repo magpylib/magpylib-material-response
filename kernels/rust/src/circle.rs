@@ -11,7 +11,7 @@ type V3 = [f64; 3];
 /// `_array_api/circle.RTOL_WIRE`: distance from the wire in the loop's
 /// plane, in radii, taken as on it (H 0 there, as magpylib).
 const RTOL_WIRE: f64 = 1e-15;
-/// `_array_api/circle.ERRTOL`: Bulirsch's stop in doubles.
+/// `_array_api.ERRTOL`: Bulirsch's stop in doubles.
 const ERRTOL: f64 = 1e-8;
 
 /// Bulirsch's `cel` from the state after its first step (`qc = kk = q`,

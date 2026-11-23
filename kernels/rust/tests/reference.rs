@@ -93,6 +93,15 @@ fn field(name: &str, srcs: &[&Value], x: &[f64], threads: bool) -> Option<Vec<f6
             let (d, c) = (rows("diameter"), rows("current"));
             k::circle_field(name.as_bytes()[0], x, &d, &c, &mut out, threads);
         }
+        ("cylinder", "B" | "H") => {
+            let rows = |key: &str| -> Vec<f64> {
+                (0..x.len() / 3)
+                    .flat_map(|i| floats(&srcs[i % srcs.len()][key]))
+                    .collect()
+            };
+            let (d, p) = (rows("dimension"), rows("polarization"));
+            k::cylinder_field(name.as_bytes()[0], x, &d, &p, &mut out, threads);
+        }
         ("sphere", "B" | "H") => {
             let rows = |key: &str| -> Vec<f64> {
                 (0..x.len() / 3)
@@ -152,7 +161,14 @@ const PASSES: &[bool] = if cfg!(feature = "parallel") {
 const BATCH: usize = 130;
 /// What the crate leaves to Python (README: the browser computes B and H);
 /// any other kind or field the files hold and the crate lacks fails.
-const PYTHON_ONLY: &[&str] = &["cuboid J", "cuboid M", "sphere J", "sphere M"];
+const PYTHON_ONLY: &[&str] = &[
+    "cuboid J",
+    "cuboid M",
+    "cylinder J",
+    "cylinder M",
+    "sphere J",
+    "sphere M",
+];
 
 #[test]
 fn reference_points() {
@@ -209,8 +225,10 @@ fn reference_points() {
             let same = |q: &Value| {
                 let qk = source(q)["kind"].as_str().unwrap();
                 qk == kind
-                    && (matches!(kind, "cuboid" | "polyline" | "circle" | "sphere" | "dipole")
-                        || q["source"] == p["source"])
+                    && (matches!(
+                        kind,
+                        "cuboid" | "polyline" | "circle" | "cylinder" | "sphere" | "dipole"
+                    ) || q["source"] == p["source"])
             };
             if !groups.iter().any(|g| same(g[0])) {
                 groups.push(points.iter().filter(|q| same(q)).collect());
