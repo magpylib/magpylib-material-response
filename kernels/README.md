@@ -13,7 +13,7 @@ reference/   the single source of truth
   mp_namespace.py  the 50-digit array namespace fill.py runs the kernels on
   show.py          plots a file's points
 rust/        one crate, built for the browser (wasm feature)
-  src/             the kernels (circle.rs, cuboid.rs, polyline.rs, sphere.rs, triangle.rs), the browser binding (wasm.rs)
+  src/             the kernels (circle.rs, cuboid.rs, cylinder.rs, polyline.rs, sphere.rs, triangle.rs), the browser binding (wasm.rs)
   tests/           the Rust checker
   js/              the WebAssembly checker, and plate.json for its timing
 ```
@@ -21,6 +21,7 @@ rust/        one crate, built for the browser (wasm feature)
 The Python kernels live in the package:
 `src/magpylib_material_response/_array_api/circle.py`,
 `src/magpylib_material_response/_array_api/cuboid.py`,
+`src/magpylib_material_response/_array_api/cylinder.py`,
 `src/magpylib_material_response/_array_api/polyline.py`,
 `src/magpylib_material_response/_array_api/sphere.py` and
 `src/magpylib_material_response/face_charge/_triangle.py`.
@@ -54,14 +55,15 @@ api_version(); // 1: a caller refuses any other
 cuboid_field(field, observers, dimensions, polarizations); // magpylib.func.cuboid_field: "B" or "H"; one cuboid (3,) or one per observer (M, 3)
 polyline_field(field, observers, segments_start, segments_end, currents); // magpylib.func.polyline_field: segments (3,) or (M, 3), currents (1,) or (M,); 0 on a segment's line
 circle_field(field, observers, diameters, currents); // magpylib.func.circle_field: the loop in the z = 0 plane, diameters (1,) or (M,), currents (1,) or (M,); 0 on the wire
+cylinder_field(field, observers, dimensions, polarizations); // magpylib.func.cylinder_field: centered, axis along z; dimensions (diameter, height) (2,) or (M, 2), polarizations (3,) or (M, 3); 0 on the edge
 sphere_field(field, observers, diameters, polarizations); // magpylib.func.sphere_field: diameters (1,) or (M,), polarizations (3,) or (M, 3)
 dipole_field(field, observers, moments); // magpylib.func.dipole_field: moments (3,) or (M, 3); NaN at the dipole
 const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments; a triangle without area is dropped
 sheet.h(observers, tolerance); // H in A/m; B = mu_0 H outside the body only
 ```
 
-The browser computes B and H; J and M (cuboid, sphere) are checked in Python
-only. `ChargeSheet.from_coefficients` and `charge_field` exist for
+The browser computes B and H; J and M (cuboid, cylinder, sphere) are checked in
+Python only. `ChargeSheet.from_coefficients` and `charge_field` exist for
 `js/check.mjs` only. Raise `api_version` with every change a caller must follow.
 
 ## Delivery
@@ -141,6 +143,8 @@ Faces, edges, corners, the tolerance band and non-finite observers wait for it
 ## Open
 
 - A treecode for large meshes: #214.
-- Kinds with elliptic integrals: the circle's `cel` runs on `mp_namespace`, its
-  stop set by the precision (SPEC: circle); the cylinder needs the general
-  `cel`, the cylinder segment `el3` too.
+- The cylinder segment (`el3`) and the current sheets wait for magpylib's array
+  API release, whose ports this directory would then use.
+- The cylinder far off its axis's cone: both its formulas cancel there (2e-8 of
+  |B| at 1000 radii, worse for a thin disk; SPEC: cylinder). A multipole
+  expansion of the far field would hold it to rounding.

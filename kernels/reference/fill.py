@@ -29,6 +29,7 @@ import numpy as np
 
 from magpylib_material_response._array_api.circle import circle_field
 from magpylib_material_response._array_api.cuboid import cuboid_field
+from magpylib_material_response._array_api.cylinder import cylinder_field
 from magpylib_material_response._array_api.polyline import polyline_field
 from magpylib_material_response._array_api.sphere import dipole_field, sphere_field
 from magpylib_material_response.face_charge import _triangle as T
@@ -100,6 +101,30 @@ def circle_scope(x, p):
     wire = math.hypot(math.hypot(x[0], x[1]) - d / 2, x[2])
     if wire <= max(1e-15 * d / 2, 100 * EPS * max(d, np.linalg.norm(x))):
         return "on the wire"
+    return None
+
+
+def cylinder_scope(x, p):
+    """Why an observer is out of scope for a cylinder, or None: on its hull,
+    a base or the edge (within today's 1e-15 r0 or 1e-15 z0, or #1081's 100
+    eps max(size, |x|), of it), on a cylinder without height, of one with a
+    negative dimension or without diameter (magpylib gives NaN), or not
+    finite."""
+    if not np.isfinite(x).all():
+        return "a non-finite observer"
+    d, h = p["dimension"]
+    if d < 0 or h < 0:
+        return "a negative dimension"
+    if d == 0:
+        return "a cylinder without diameter"
+    r0, z0 = d / 2, h / 2
+    wide = 100 * EPS * max(d, h, np.linalg.norm(x))
+    r, z = np.hypot(x[0], x[1]), abs(x[2])
+    hull, base = max(1e-15 * r0, wide), max(1e-15 * z0, wide)
+    if abs(r - r0) <= hull and z <= z0 + base:
+        return "on the hull or the edge"
+    if abs(z - z0) <= base and r <= r0 + hull:
+        return "on a base" if h else "on a cylinder without height"
     return None
 
 
@@ -222,6 +247,7 @@ KINDS = {
     "cuboid": Kind(cuboid_field, "BHJM", True, cuboid_scope),
     "polyline": Kind(polyline_field, "BH", True, polyline_scope),
     "circle": Kind(circle_field, "BH", True, circle_scope),
+    "cylinder": Kind(cylinder_field, "BHJM", True, cylinder_scope),
     "dipole": Kind(dipole_field, "BH", True, dipole_scope),
     "sphere": Kind(sphere_field, "BHJM", True, sphere_scope),
     "triangle_linear_charge": Kind(

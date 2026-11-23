@@ -32,6 +32,16 @@ def _promote(xp, *arrays):
     return tuple(xp.astype(a, dtype, copy=False) for a in arrays)
 
 
+def _magnet_inputs(field, *arrays):
+    """A magnet kernel's checked ``field`` ('B', 'H', 'J' or 'M'), and its
+    arrays' namespace and the arrays in their common floating dtype."""
+    if field not in ("B", "H", "J", "M"):
+        msg = f"field must be 'B', 'H', 'J' or 'M'; instead received {field!r}."
+        raise ValueError(msg)
+    xp = namespace(*arrays)
+    return xp, _promote(xp, *arrays)
+
+
 def _sqrt_plus_signed(xp, q, radius, transverse_squared):
     """``sqrt(q**2 + transverse_squared) + q`` without cancellation (#1066): a
     radius can round to ``|q|`` near an edge, although the transverse distance
@@ -142,12 +152,8 @@ def cuboid_field(field, observers, dimension, polarization):
     magpylib's special cases: B and H 0 on edges and corners and for a zero
     dimension or polarization; J the polarization inside, faces included, and
     0 outside; H = (B - J) / mu_0, M = J / mu_0."""
-    if field not in ("B", "H", "J", "M"):
-        msg = f"field must be 'B', 'H', 'J' or 'M'; instead received {field!r}."
-        raise ValueError(msg)
-    xp = namespace(observers, dimension, polarization)
-    observers, dimension, polarization = _promote(
-        xp, observers, dimension, polarization
+    xp, (observers, dimension, polarization) = _magnet_inputs(
+        field, observers, dimension, polarization
     )
     half = xp.abs(dimension) / 2
     dist = xp.abs(observers) - half  # distance to the faces, per axis

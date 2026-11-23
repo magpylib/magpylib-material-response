@@ -118,6 +118,36 @@ pub fn circle_field(
     Ok(out)
 }
 
+/// B in T (`field` "B") or H in A/m ("H") of homogeneously polarized
+/// cylinders at `observers` (M, 3), as `magpylib.func.cylinder_field` in the
+/// cylinder's frame (centered, its axis along z): `dimensions` (diameter,
+/// height) one (2,) or one per observer (M, 2), `polarizations` one (3,) or
+/// one per observer (M, 3). 0 on the edge and for a zero dimension or
+/// polarization.
+#[wasm_bindgen]
+pub fn cylinder_field(
+    field: &str,
+    observers: &[f64],
+    dimensions: &[f64],
+    polarizations: &[f64],
+) -> Result<Vec<f64>, JsError> {
+    let field = field_byte(field)?;
+    check_observers(observers)?;
+    if dimensions.len() != 2 && 3 * dimensions.len() != 2 * observers.len() {
+        return Err(JsError::new(
+            "dimensions: (2,) for every observer, or (M, 2)",
+        ));
+    }
+    if polarizations.len() != 3 && polarizations.len() != observers.len() {
+        return Err(JsError::new(
+            "polarizations: (3,) for every observer, or (M, 3)",
+        ));
+    }
+    let mut out = vec![0.0; observers.len()];
+    crate::cylinder_field(field, observers, dimensions, polarizations, &mut out, false);
+    Ok(out)
+}
+
 fn field_byte(field: &str) -> Result<u8, JsError> {
     match field {
         "B" => Ok(b'B'),

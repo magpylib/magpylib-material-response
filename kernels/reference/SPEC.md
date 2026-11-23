@@ -7,8 +7,8 @@ what they mean.
 
 ## Format
 
-One file per family (`cuboid`, `face_charge`, `current`, `sphere`): its kinds
-and the relations that tie them. Top level:
+One file per family (`cuboid`, `cylinder`, `face_charge`, `current`, `sphere`):
+its kinds and the relations that tie them. Top level:
 
 | key         | value                                                        |
 | ----------- | ------------------------------------------------------------ |
@@ -76,11 +76,12 @@ triangle's plane or within the same band of it, on a triangle without area
 the product of two sides), where a sheet's double and exact distance to its
 center fall on different sides of `far_from` or a pair's side of `k L` (rounding
 picks the branch), on a circular loop's wire (within today's 1e-15 r0 in its
-plane, or the same band of it), of a cuboid with a negative dimension
-(magpylib's formula then flips B) or a loop with a negative diameter, or at a
-non-finite observer wait for the surface rules (magpylib #1073; proposal #1081)
-and are added once those are decided. Their ids are reserved: listed per kind
-below, to be used with the same meaning.
+plane, or the same band of it), on a cylinder's hull, base or edge (within 1e-15
+r0 or 1e-15 z0, or the same band), of a cuboid or cylinder with a negative
+dimension (magpylib's formula then flips B), a cylinder without diameter or a
+loop with a negative diameter, or at a non-finite observer wait for the surface
+rules (magpylib #1073; proposal #1081) and are added once those are decided.
+Their ids are reserved: listed per kind below, to be used with the same meaning.
 
 ## Where the values come from
 
@@ -291,8 +292,100 @@ by rounding is `circle-near-axis-1e-9`); `test_core_phys_circle_polyline`,
 `test_Polyline_vs_Circle`, `test_core_physics_long_solenoid` and
 `test_core_physics_current_replacement` (299 to 9999 segments, or 1000 to 5000
 loops: they test the discretization); `test_dipole_approximation`'s loop, whose
-moment is not the loop's `I A` (magpylib #1099). Waiting for other kinds:
-`test_Circle_vs_Cylinder_field` and the cylinder's current replacement.
+moment is not the loop's `I A` (magpylib #1099). `test_Circle_vs_Cylinder_field`
+is the cylinder's relation `cyl-thin-is-loop` (in `cylinder.json`).
+
+## cylinder
+
+`magpylib.func.cylinder_field` in the cylinder's frame: centered on the origin,
+its axis along `z`. Parameters: `dimension` (diameter, height; m, none
+negative), `polarization` (J, 3, T). Fields `B` and `H` (as
+`magpylib.func.cylinder_field`), `J` and `M` (by the inside rule; magpylib has
+them only internally). Lengths are scaled by the radius `r0`: the observer at
+radius `r` and height `z`, the bases at `+-z0`.
+
+- **inside**: `|z| <= z0` and `r <= 1`, the surface included; `J` the
+  polarization there (none for a zero height or diameter), 0 outside;
+  `M = J / mu_0`; `H = (B - J) / mu_0`.
+- **the formulas** (`_array_api/cylinder.py`): `J_z`'s B by Derby's (American
+  Journal of Physics 78, 2010), two `cel` per component; `J_xy`'s `mu_0 H` by
+  `K`, `E` and `Pi` of a negative parameter (Caciagli, JMMM 456, 2018), each a
+  `cel`. Both instead by one series in `r` wherever `r` is below
+  `SERIES_RADIUS = 0.25` times the distance from the axis point to the hull (1
+  between the bases, to the edge beyond them): near the axis, where the elliptic
+  integrals lose `eps / r^2`, and in a cone along the axis far away, where they
+  cancel. Its terms are derivatives of `z / sqrt(1 + z^2)` at the bases
+  (Gegenbauer polynomials), each about `(r / rho)^2` times the last; it is kept
+  to the precision (15 terms in doubles, 44 at 50 digits). `cel` stops as the
+  circle's: 1e-8 in doubles, 5e-26 at 50 digits.
+- **on the hull's radius beyond a base** (`r = 1`, `|z| > z0`): `Pi`'s
+  characteristic is infinite, and its terms take their limit 0 (magpylib takes
+  1e16 there).
+- **on the edge**: within 1e-15 r0 of the hull's radius and 1e-15 z0 of a base's
+  height, `B = H = 0`, as magpylib; also where the distance from the edge
+  squares below the smallest normal double.
+- **degenerate**: for a zero polarization, height or diameter, `B = H = 0`
+  (magpylib: the same for the first two; NaN for a zero diameter, where magpylib
+  6.1.0 hangs, fixed by magpylib #1094).
+
+magpylib's own `Cylinder` takes the transverse series to three terms below 0.05
+radii (off about 1e-9 just below it) and the elliptic integrals everywhere else:
+far along the axis they cancel (its axial field off 3e-8 at 1000 radii up, its
+transverse field 6e-5 at 100 radii up and 0.1 out, 8e-4 at 185). The magpylib
+checker skips those points (`cyl-near-axis-0.049`, `far-cyl-axis-1e3`,
+`tall-axis-middle`, `tall-far-axis`, `cyl-magpylib-small-r-*`) and
+`cyl-no-height`, where magpylib's batch gives rounding instead of 0. Off the
+cone, far away, both cancel alike: off about `1e-16 (R / r0)^3` of |B| (3e-11 at
+100 radii, 2e-8 at 1000), divided by `z0` for a thin disk; the file's far points
+stay within about 100 radii.
+
+Sources: `cyl` 10 mm across, 8 mm high, every component of `J` nonzero;
+`cyl_axial` and `cyl_tv` its `J_z` and `J_xy` alone; `cyl_tv_turned`; `cyl_big`
+1024 times larger (exact in binary) and `cyl_km` a million times; `cyl_tall` a
+rod and `cyl_disk` a disk; `cyl_no_pol`, `cyl_no_height`; `cyl_exact_ax`,
+`cyl_exact_tv` with exact on-axis values. Points at the center, inside, on the
+axis inside, above and below, 1e-9 and 0.049 radii off it above and 0.19 below,
+either side of the series' boundary, beside the hull, above a base, generic and
+mirrored, 0.999 and 1.001 radii and half heights, 1e-3, 1e-6 and 1e-9 radii off
+the edge, on the hull's radius beyond a base, 90 radii out and 1000 up the axis,
+at the km scale; the rod beside its hull (where the series' sum is not the
+field), inside at its middle and 6 radii below it, and 40 radii up; the disk
+above, beside, inside and 0.49 radii off its axis (where a wider series' region
+would show). From magpylib's tests: `test_BHJM_magnet_cylinder`'s four rows
+(`bhjm_cyl_*`), `test_getJ`'s four points (`getj_cyl`; `test_getM` is the same
+rule, `M = J / mu_0`), `test_cylinder_rauber_field4`'s points on and by the
+hull's radius (`rauber_cyl`), `test_cylinder_diametral_small_r` either side of
+0.05 radii (`small_r_cyl`), `test_dataframe_ouptut_sumup`'s cylinder
+(`sumup_cyl`) and two rows of `test_cylinder_field1` (`full_cyl_*`).
+**Relations**: `cyl-b-h-j-inside`; `cyl-b-mu0-h`; `cyl-superposition` and
+`cyl-superposition-inside` (axial plus transverse); `cyl-mirror-axial`,
+`cyl-mirror-transverse` in `z = 0`, and their `-near` pair 0.19 radii off the
+axis (the series on both sides); `cyl-turn-about-axis`; `cyl-scaling`;
+`cyl-magpylib-scaling` (`test_cylinder_scaling_invariance`, its `a = 1e-6` as
+2^-20); `cyl-on-axis-axial`, `cyl-on-axis-transverse` (3 T and 7 T exactly);
+approximate: `cyl-far-is-dipole` (`test_dipole_approximation`'s cylinder, 1300 m
+out, its dipole in this file;
+`test_core_physics_dipole_approximation_magnet_far_field` is the same law),
+`cyl-thin-is-loop` (`test_Circle_vs_Cylinder_field`, its first observer, its
+loop in this file), `cyl-long-solenoid` (`test_core_physics_long_solenoid`).
+
+**Reserved, waiting for #1073**: on the hull, a base or the edge (`cyl-on-hull`,
+`cyl-on-base`, `cyl-on-edge`: magpylib's `test_cylinder_corner` sets 0 on the
+edge, and `test_cylinder_corner_scaling`'s 1e-14 is within #1081's band of it),
+a negative dimension (`cyl-negative-dimension`: magpylib then flips the field;
+this kernel takes absolute values), a zero diameter (`cyl-no-diameter`), on a
+cylinder without height (`cyl-on-zero-height`), `cyl-observer-nan`,
+`cyl-observer-inf`, `cyl-observer-huge` (`1e300`: `r^2` overflows, NaN).
+
+Not taken from magpylib's tests: `test_Cylinder_add`, `test_Cylinder_squeeze`,
+`test_repr`, `test_Cylinder_volume`, `test_Cylinder_centroid`,
+`test_cylinder_dipole_moment` and `test_func_cylinder*` (the pose and the
+interface); `test_core_physics_current_replacement` (1000 loops: the
+discretization); the force and meshing tests. Waiting for other kinds: every
+comparison with `CylinderSegment` (`test_Cylinder_getBH`,
+`test_func_cylinder_variations`,
+`test_core_physics_geometry_cylinder_from_segments`,
+`test_cyl_vs_cylseg_axial_H_inside_mask`).
 
 ## triangle_linear_charge
 
