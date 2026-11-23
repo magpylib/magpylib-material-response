@@ -41,7 +41,8 @@ fn cel_pair(q: f64, p0: f64, cs1: (f64, f64), cs2: (f64, f64)) -> (f64, f64) {
 
 /// H in A/m at `x` of a loop of `diameter` m (its sign ignored) carrying
 /// `current` A counter-clockwise about `+z`; 0 for a loop without diameter
-/// and on the wire, or so near it that the distance squares to 0.
+/// and on the wire, or so near it that the distance squares below the
+/// smallest normal number.
 pub fn circle_h(x: V3, diameter: f64, current: f64) -> V3 {
     let r0 = diameter.abs() / 2.0;
     let r = (x[0] * x[0] + x[1] * x[1]).sqrt();
@@ -54,23 +55,27 @@ pub fn circle_h(x: V3, diameter: f64, current: f64) -> V3 {
     let x0 = z2 + (rho + 1.0) * (rho + 1.0);
     let k2 = 4.0 * rho / x0;
     let q2 = (z2 + (rho - 1.0) * (rho - 1.0)) / x0;
-    if q2 == 0.0 {
-        // on the wire to the precision: the iteration never stops at q = 0
+    if q2 < f64::MIN_POSITIVE {
+        // on the wire to the precision: the iteration never stops at q = 0,
+        // and 1 / q2 overflows above it
         return [0.0; 3];
     }
     let q = q2.sqrt();
     let p = 1.0 + q;
-    let pf = current / (4.0 * PI * r0 * x0.sqrt() * q2);
+    let pf = current / (4.0 * PI * r0 * x0.sqrt());
+    let inv_q2 = 1.0 / q2;
     let cc_r = k2 * 4.0 * zeta / x0;
     let ss_r = 2.0 * cc_r * q / p;
     let k4 = k2 * k2;
     let cc_z = k4 - (q2 + 1.0) * (4.0 / x0);
     let ss_z = 2.0 * q * (k4 / p - (4.0 / x0) * p);
     let (cel_r, cel_z) = cel_pair(q, p, (cc_r, ss_r), (cc_z, ss_z));
-    let hr = pf * cel_r;
-    let hz = -pf * cel_z;
+    // 1 / q2 applied to the integrals, which scale as q: no overflow
+    let hr = pf * (cel_r * inv_q2);
+    let hz = -pf * (cel_z * inv_q2);
     if r == 0.0 {
-        [0.0, 0.0, hz]
+        // H_r is 0 there; 0 * H_r keeps a NaN
+        [0.0 * hr, 0.0 * hr, hz]
     } else {
         [hr * x[0] / r, hr * x[1] / r, hz]
     }

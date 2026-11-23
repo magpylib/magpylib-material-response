@@ -409,7 +409,7 @@
   },
   {
    "id": "circle-axis",
-   "why": "on the axis, 0.7 radii up: H_r exactly 0 (magpylib test_current_circle_on_axis)",
+   "why": "on the axis, 0.7 radii up: H_r 0 (magpylib test_current_circle_on_axis)",
    "source": "loop",
    "observer": [0.0, 0.0, 0.0021],
    "B": [0.0, 0.0, 0.00028788512111287064],
@@ -417,7 +417,7 @@
   },
   {
    "id": "circle-axis-below",
-   "why": "on the axis, 0.7 radii below: H_z as above, H_r exactly 0 (magpylib test_current_circle_on_axis, z < 0)",
+   "why": "on the axis, 0.7 radii below: H_z as above, H_r 0 (magpylib test_current_circle_on_axis, z < 0)",
    "source": "loop",
    "observer": [0.0, 0.0, -0.0021],
    "B": [0.0, 0.0, 0.00028788512111287064],

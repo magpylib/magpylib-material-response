@@ -250,12 +250,13 @@ Parameters: `diameter` (m), `current` (A). Fields `B` in T and `H` in A/m,
 less than `errtol` relative. The iteration converges quadratically, so `errtol`
 is about the square root of the precision: magpylib's 1e-8 in doubles, 5e-26 at
 50 digits (1e-8 there would stop near double precision). `H_x = H_r x / r`,
-`H_y = H_r y / r` off the axis; on it `H_r` is exactly 0.
+`H_y = H_r y / r` off the axis; on it `H_r` is exactly 0, and `H_x = H_y = 0`
+(NaN for a NaN observer, as magpylib).
 
 - **on the wire**: within 1e-15 r0 of the wire in the loop's plane, `B = H = 0`,
-  as magpylib; also where the distance from the wire squares to 0 in doubles
-  (1e-200 radii off it), on which Bulirsch's iteration never stops (magpylib's
-  hangs there, magpylib #1100).
+  as magpylib; also where the distance from the wire squares below the smallest
+  normal double (about 1e-154 radii off it): Bulirsch's iteration never stops at
+  0 (magpylib's hangs there, magpylib #1100), and divides by that square.
 - **without diameter or current**: `B = H = 0` everywhere (magpylib's
   `test_field_loop_specials`).
 

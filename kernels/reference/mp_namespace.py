@@ -224,8 +224,9 @@ def result_type(*_dtypes):
 
 def finfo(_dtype):
     """The working precision's machine epsilon, for iterations that stop at
-    a share of it."""
-    return SimpleNamespace(eps=+mp.mp.eps)
+    a share of it, and float64's smallest normal number: no underflow at 50
+    digits, so a band below it stays the band it is in doubles."""
+    return SimpleNamespace(eps=+mp.mp.eps, smallest_normal=mp.mpf(2) ** -1022)
 
 
 def astype(x, dtype, copy=True):
