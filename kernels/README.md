@@ -13,12 +13,13 @@ reference/   the single source of truth
   mp_namespace.py  the 50-digit array namespace fill.py runs the kernels on
   show.py          plots a file's points
 rust/        one crate, built for the browser (wasm feature)
-  src/             the kernels (cuboid.rs, polyline.rs, sphere.rs, triangle.rs), the browser binding (wasm.rs)
+  src/             the kernels (circle.rs, cuboid.rs, polyline.rs, sphere.rs, triangle.rs), the browser binding (wasm.rs)
   tests/           the Rust checker
   js/              the WebAssembly checker, and plate.json for its timing
 ```
 
 The Python kernels live in the package:
+`src/magpylib_material_response/_array_api/circle.py`,
 `src/magpylib_material_response/_array_api/cuboid.py`,
 `src/magpylib_material_response/_array_api/polyline.py`,
 `src/magpylib_material_response/_array_api/sphere.py` and
@@ -52,6 +53,7 @@ and turns the field back); a wrong argument throws.
 api_version(); // 1: a caller refuses any other
 cuboid_field(field, observers, dimensions, polarizations); // magpylib.func.cuboid_field: "B" or "H"; one cuboid (3,) or one per observer (M, 3)
 polyline_field(field, observers, segments_start, segments_end, currents); // magpylib.func.polyline_field: segments (3,) or (M, 3), currents (1,) or (M,); 0 on a segment's line
+circle_field(field, observers, diameters, currents); // magpylib.func.circle_field: the loop in the z = 0 plane, diameters (1,) or (M,), currents (1,) or (M,); 0 on the wire
 sphere_field(field, observers, diameters, polarizations); // magpylib.func.sphere_field: diameters (1,) or (M,), polarizations (3,) or (M, 3)
 dipole_field(field, observers, moments); // magpylib.func.dipole_field: moments (3,) or (M, 3); NaN at the dipole
 const sheet = new ChargeSheet(triangles, charge_densities); // ChargeSheet.from_triangles' arguments; a triangle without area is dropped
@@ -139,5 +141,6 @@ Faces, edges, corners, the tolerance band and non-finite observers wait for it
 ## Open
 
 - A treecode for large meshes: #214.
-- Kinds with elliptic integrals (cylinder, circle, cylinder segment) need `cel`
-  in `mp_namespace` and an array API implementation.
+- Kinds with elliptic integrals: the circle's `cel` runs on `mp_namespace`, its
+  stop set by the precision (SPEC: circle); the cylinder needs the general
+  `cel`, the cylinder segment `el3` too.

@@ -84,6 +84,15 @@ fn field(name: &str, srcs: &[&Value], x: &[f64], threads: bool) -> Option<Vec<f6
             let (a, b, c) = (rows("segment_start"), rows("segment_end"), rows("current"));
             k::polyline_field(name.as_bytes()[0], x, &a, &b, &c, &mut out, threads);
         }
+        ("circle", "B" | "H") => {
+            let rows = |key: &str| -> Vec<f64> {
+                (0..x.len() / 3)
+                    .flat_map(|i| floats(&srcs[i % srcs.len()][key]))
+                    .collect()
+            };
+            let (d, c) = (rows("diameter"), rows("current"));
+            k::circle_field(name.as_bytes()[0], x, &d, &c, &mut out, threads);
+        }
         ("sphere", "B" | "H") => {
             let rows = |key: &str| -> Vec<f64> {
                 (0..x.len() / 3)
@@ -200,7 +209,7 @@ fn reference_points() {
             let same = |q: &Value| {
                 let qk = source(q)["kind"].as_str().unwrap();
                 qk == kind
-                    && (matches!(kind, "cuboid" | "polyline" | "sphere" | "dipole")
+                    && (matches!(kind, "cuboid" | "polyline" | "circle" | "sphere" | "dipole")
                         || q["source"] == p["source"])
             };
             if !groups.iter().any(|g| same(g[0])) {

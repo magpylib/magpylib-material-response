@@ -12,6 +12,7 @@ import init, {
   ChargeSheet,
   api_version,
   charge_field,
+  circle_field,
   cuboid_field,
   dipole_field,
   polyline_field,
@@ -51,6 +52,18 @@ for (const [what, call] of [
   ],
   ["diameters (2,)", () => sphere_field("B", one, one.subarray(0, 2), unit)],
   ["moments (2,)", () => dipole_field("H", one, one.subarray(0, 2))],
+  [
+    "circle diameters (2,)",
+    () => circle_field("B", one, one.subarray(0, 2), one.subarray(0, 1)),
+  ],
+  [
+    "circle currents (2,)",
+    () => circle_field("H", one, one.subarray(0, 1), one.subarray(0, 2)),
+  ],
+  [
+    "circle field J",
+    () => circle_field("J", one, one.subarray(0, 1), one.subarray(0, 1)),
+  ],
   ["dipole field J", () => dipole_field("J", one, unit)],
   ["sphere field J", () => sphere_field("J", one, one.subarray(0, 1), unit)],
   [
@@ -114,6 +127,11 @@ cuboid_field("B", one, unit, unit); // still usable
         sphere_field(f, x, tile(Float64Array.of(0.004)), tile(p)),
       ],
       ["dipole", dipole_field(f, x, p), dipole_field(f, x, tile(p))],
+      [
+        "circle",
+        circle_field(f, x, Float64Array.of(0.004), c),
+        circle_field(f, x, tile(Float64Array.of(0.004)), tile(c)),
+      ],
     ];
     for (const [what, once, rows] of pairs)
       if (!once.every((v, i) => v === rows[i]))
@@ -147,7 +165,7 @@ const rows = (srcs, x, key) =>
 // with one row of parameters per observer (PER_ROW) takes the sources mixed,
 // another kind one source for all; any other field
 // is skipped and reported
-const PER_ROW = new Set(["cuboid", "polyline", "sphere", "dipole"]);
+const PER_ROW = new Set(["cuboid", "polyline", "circle", "sphere", "dipole"]);
 const fields = {
   cuboid: {
     B: (srcs, x) =>
@@ -182,6 +200,12 @@ const fields = {
         rows(srcs, x, "segment_end"),
         rows(srcs, x, "current"),
       ),
+  },
+  circle: {
+    B: (srcs, x) =>
+      circle_field("B", x, rows(srcs, x, "diameter"), rows(srcs, x, "current")),
+    H: (srcs, x) =>
+      circle_field("H", x, rows(srcs, x, "diameter"), rows(srcs, x, "current")),
   },
   sphere: {
     B: (srcs, x) =>

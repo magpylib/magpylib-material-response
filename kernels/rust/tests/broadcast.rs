@@ -43,5 +43,8 @@ fn shared_parameters_equal_rows() {
         k::dipole_field(field, &x, &p, &mut once, false);
         k::dipole_field(field, &x, &tiled(&p), &mut rows, false);
         assert_eq!(once, rows, "dipole {}", field as char);
+        k::circle_field(field, &x, &[0.004], &c, &mut once, false);
+        k::circle_field(field, &x, &[0.004; M], &tiled(&c), &mut rows, false);
+        assert_eq!(once, rows, "circle {}", field as char);
     }
 }

@@ -131,6 +131,119 @@
    "kind": "dipole",
    "why": "the square loop's moment I A, 4000 A m^2 along z",
    "moment": [0.0, 0.0, 4000.0]
+  },
+  "loop": {
+   "kind": "circle",
+   "why": "a loop 6 mm across, 2.5 A",
+   "diameter": 0.006,
+   "current": 2.5
+  },
+  "loop_reversed": {
+   "kind": "circle",
+   "why": "loop with its current reversed",
+   "diameter": 0.006,
+   "current": -2.5
+  },
+  "loop_km": {
+   "kind": "circle",
+   "why": "loop a million times larger, -1.5 A: H falls as 1/size, flips with the current",
+   "diameter": 6000.0,
+   "current": -1.5
+  },
+  "loop_axis_exact": {
+   "kind": "circle",
+   "why": "2 m across, 125/32 A: H = (0, 0, 1) A/m at z = 0.75 m on the axis, every input exact",
+   "diameter": 2.0,
+   "current": 3.90625
+  },
+  "loop_no_diameter": {
+   "kind": "circle",
+   "why": "a loop without diameter: 0 everywhere (magpylib test_field_loop_specials)",
+   "diameter": 0.0,
+   "current": 1.0
+  },
+  "loop_no_current": {
+   "kind": "circle",
+   "why": "no current: 0 (magpylib test_field_loop_specials)",
+   "diameter": 2.0,
+   "current": 0.0
+  },
+  "loop_bhjm_1": {
+   "kind": "circle",
+   "why": "magpylib test_BHJM_circle, loop 1",
+   "diameter": 2.0,
+   "current": 1000.0
+  },
+  "loop_bhjm_2": {
+   "kind": "circle",
+   "why": "magpylib test_BHJM_circle, loop 2",
+   "diameter": 4.0,
+   "current": 1000.0
+  },
+  "loop_bhjm_3": {
+   "kind": "circle",
+   "why": "magpylib test_BHJM_circle, loop 3",
+   "diameter": 6.0,
+   "current": 2000.0
+  },
+  "loop_d1": {
+   "kind": "circle",
+   "why": "1 m across, 1 A (magpylib test_obj_Circle test_BHJM_circle)",
+   "diameter": 1.0,
+   "current": 1.0
+  },
+  "loop_d2": {
+   "kind": "circle",
+   "why": "2 m across, 1 A (magpylib test_obj_Circle test_BHJM_circle, test_func_circle, test_field_loop_specials)",
+   "diameter": 2.0,
+   "current": 1.0
+  },
+  "loop_d2_2a": {
+   "kind": "circle",
+   "why": "2 m across, 2 A (magpylib test_field_loop_specials)",
+   "diameter": 2.0,
+   "current": 2.0
+  },
+  "loop_basic": {
+   "kind": "circle",
+   "why": "2 m across, 123 A (magpylib test_Circle_basic_B and _H)",
+   "diameter": 2.0,
+   "current": 123.0
+  },
+  "loop_scale_1": {
+   "kind": "circle",
+   "why": "10 m across, 123 A (magpylib test_scaling_loop)",
+   "diameter": 10.0,
+   "current": 123.0
+  },
+  "loop_scale_1000": {
+   "kind": "circle",
+   "why": "loop_scale_1 1000 times larger, 1000 times the current (magpylib test_scaling_loop)",
+   "diameter": 10000.0,
+   "current": 123000.0
+  },
+  "loop_dipole_test": {
+   "kind": "circle",
+   "why": "2 m across, 1 kA (magpylib test_core_phys_moment_of_current_circle)",
+   "diameter": 2.0,
+   "current": 1000.0
+  },
+  "loop_dipole": {
+   "kind": "dipole",
+   "why": "loop_dipole_test's moment I A = 1000 pi A m^2 along z, rounded",
+   "moment": [0.0, 0.0, 3141.592653589793]
+  },
+  "loop_webpage": {
+   "kind": "circle",
+   "why": "2 m across, 1 kA (magpylib test_core_physics_circle_VS_webpage_numbers)",
+   "diameter": 2.0,
+   "current": 1000.0
+  },
+  "loop_stability": {
+   "kind": "circle",
+   "why": "1 m across, 1 kA (magpylib test_loop_field)",
+   "diameter": 1.0,
+   "current": 1000.0
   }
  },
  "points": [
@@ -285,6 +398,260 @@
    "observer": [0.0, 0.0, 0.0],
    "B": [0.0, -1.4142135621863726e-07, 0.0],
    "H": [0.0, -0.11253953951963826, 0.0]
+  },
+  {
+   "id": "circle-center",
+   "why": "the center: H along the axis only, I / (2 r0)",
+   "source": "loop",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 0.0005235987755291667],
+   "H": [0.0, 0.0, 416.6666666666667]
+  },
+  {
+   "id": "circle-axis",
+   "why": "on the axis, 0.7 radii up: H_r exactly 0 (magpylib test_current_circle_on_axis)",
+   "source": "loop",
+   "observer": [0.0, 0.0, 0.0021],
+   "B": [0.0, 0.0, 0.00028788512111287064],
+   "H": [0.0, 0.0, 229.0917003688592]
+  },
+  {
+   "id": "circle-axis-below",
+   "why": "on the axis, 0.7 radii below: H_z as above, H_r exactly 0 (magpylib test_current_circle_on_axis, z < 0)",
+   "source": "loop",
+   "observer": [0.0, 0.0, -0.0021],
+   "B": [0.0, 0.0, 0.00028788512111287064],
+   "H": [0.0, 0.0, 229.0917003688592]
+  },
+  {
+   "id": "circle-near-axis-1e-9",
+   "why": "1e-9 radii off the axis, as rounding puts an observer meant on it: H_r tiny, H_z as on the axis",
+   "source": "loop",
+   "observer": [2.2945265618534654e-12, 1.932653061713073e-12, 0.002],
+   "B": [1.5970493997577272e-13, 1.345176152441469e-13, 0.0003016111259727538],
+   "H": [1.2708915318347327e-07, 1.070457170093319e-07, 240.01450798207028]
+  },
+  {
+   "id": "circle-inside-plane",
+   "why": "in the loop's plane, half a radius from the center",
+   "source": "loop",
+   "observer": [-0.0007572691568997863, 0.0012948140499733107, 0.0],
+   "B": [0.0, 0.0, 0.0006522054262869662],
+   "H": [0.0, 0.0, 519.0085875931634]
+  },
+  {
+   "id": "circle-outside-plane",
+   "why": "in the loop's plane, two radii from the center: H_z reversed",
+   "source": "loop",
+   "observer": [0.0037296598096239865, -0.0046999614577649005, 0.0],
+   "B": [0.0, 0.0, -4.514432071181283e-05],
+   "H": [0.0, 0.0, -35.92470897379746]
+  },
+  {
+   "id": "circle-generic",
+   "why": "a generic point about a radius off the wire",
+   "source": "loop",
+   "observer": [0.0013, -0.0021, 0.0017],
+   "B": [0.00011567932484797732, -0.00018686660167750184, 0.0002267490818953831],
+   "H": [92.05468182759776, -148.70371679842714, 180.44118614982023]
+  },
+  {
+   "id": "circle-below",
+   "why": "circle-generic mirrored in the loop's plane",
+   "source": "loop",
+   "observer": [0.0013, -0.0021, -0.0017],
+   "B": [-0.00011567932484797732, 0.00018686660167750184, 0.0002267490818953831],
+   "H": [-92.05468182759776, 148.70371679842714, 180.44118614982023]
+  },
+  {
+   "id": "circle-near-wire-1e-3",
+   "why": "1e-3 radii from the wire, 40 degrees out of the plane: the integrals' modulus near 1",
+   "source": "loop",
+   "observer": [0.0008031112338473882, 0.002892888941432261, 1.9283628290596178e-06],
+   "B": [0.028646431088303975, 0.10318737954872576, -0.1269599425493527],
+   "H": [22796.105551234436, 82113.90761023799, -101031.51217030211],
+   "atol_B": 1e-12,
+   "atol_H": 1e-06
+  },
+  {
+   "id": "circle-near-wire-1e-6",
+   "why": "1e-6 radii from the wire, 40 degrees out of the plane: the integrals' modulus near 1",
+   "source": "loop",
+   "observer": [0.0008024971006217358, 0.0028906767706367597, 1.928362829059618e-09],
+   "B": [28.65747779319252, 103.22717091144676, -127.67278368854926],
+   "H": [22804896.23967504, 82145572.57058921, -101598773.12508896],
+   "atol_B": 1e-06,
+   "atol_H": 1.0
+  },
+  {
+   "id": "circle-near-wire-1e-9",
+   "why": "1e-9 radii from the wire, 40 degrees out of the plane: the integrals' modulus near 1",
+   "source": "loop",
+   "observer": [0.00080249648648851, 0.002890674558465964, 1.928362829059618e-12],
+   "B": [28657.488389917802, 103227.20908193685, -127674.07172689583],
+   "H": [22804904672.28109, 82145602945.70012, -101599798113.43785],
+   "atol_B": 1.0,
+   "atol_H": 1000000.0
+  },
+  {
+   "id": "far-circle-100",
+   "why": "about 100 radii away, generic direction",
+   "source": "loop",
+   "observer": [0.17910669423779804, -0.11940446282519868, 0.2089578099440977],
+   "B": [3.2659312903847703e-10, -2.1772875269231797e-10, 1.1926792363720842e-10],
+   "H": [0.0002598945543659288, -0.0001732630362439525, 9.49103980083734e-05]
+  },
+  {
+   "id": "far-circle-1e4",
+   "why": "about 1e4 radii away, generic direction: the dipole's field",
+   "source": "loop",
+   "observer": [17.910669423779805, -11.940446282519869, 20.89578099440977],
+   "B": [3.266012156107644e-16, -2.1773414374050957e-16, 1.1923536798046684e-16],
+   "H": [2.5990098945569067e-10, -1.7326732630379377e-10, 9.488449103988987e-11]
+  },
+  {
+   "id": "circle-km-generic",
+   "why": "circle-generic a million times larger, -1.5 A: H a million times smaller, times -0.6",
+   "source": "loop_km",
+   "observer": [1300.0, -2100.0, 1700.0],
+   "B": [-6.940759490878639e-11, 1.121199610065011e-10, -1.3604944913722983e-10],
+   "H": [-5.5232809096558655e-05, 8.922223007905629e-05, -0.00010826471168989211]
+  },
+  {
+   "id": "circle-no-diameter-center",
+   "why": "a loop without diameter, at its center: 0 (magpylib test_field_loop_specials)",
+   "source": "loop_no_diameter",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "circle-no-diameter-off",
+   "why": "a loop without diameter, 1 m off: 0 (magpylib test_field_loop_specials)",
+   "source": "loop_no_diameter",
+   "observer": [1.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "circle-no-current",
+   "why": "no current, at the center: 0 (magpylib test_field_loop_specials, whose row is on the wire)",
+   "source": "loop_no_current",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "circle-magpylib-bhjm-level-1",
+   "why": "magpylib test_BHJM_circle, row 1",
+   "source": "loop_bhjm_1",
+   "observer": [1.0, 1.0, 1.0],
+   "B": [6.235973878548773e-05, 6.235973878548773e-05, 2.6697781008419262e-05],
+   "H": [49.624303394700824, 49.624303394700824, 21.24541908817935]
+  },
+  {
+   "id": "circle-magpylib-bhjm-level-2",
+   "why": "magpylib test_BHJM_circle, row 2",
+   "source": "loop_bhjm_2",
+   "observer": [2.0, 2.0, 2.0],
+   "B": [3.1179869392743866e-05, 3.1179869392743866e-05, 1.3348890504209631e-05],
+   "H": [24.812151697350412, 24.812151697350412, 10.622709544089675]
+  },
+  {
+   "id": "circle-magpylib-bhjm-level-3",
+   "why": "magpylib test_BHJM_circle, row 3",
+   "source": "loop_bhjm_3",
+   "observer": [3.0, 3.0, 3.0],
+   "B": [4.157315919032515e-05, 4.157315919032515e-05, 1.7798520672279507e-05],
+   "H": [33.08286892980055, 33.08286892980055, 14.1636127254529]
+  },
+  {
+   "id": "circle-magpylib-webpage-z0",
+   "why": "magpylib test_core_physics_circle_VS_webpage_numbers, z = 0 m",
+   "source": "loop_webpage",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 0.000628318530635],
+   "H": [0.0, 0.0, 500.0]
+  },
+  {
+   "id": "circle-magpylib-webpage-z1",
+   "why": "magpylib test_core_physics_circle_VS_webpage_numbers, z = 1 m",
+   "source": "loop_webpage",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, 0.0, 0.000222144146878588],
+   "H": [0.0, 0.0, 176.7766952966369]
+  },
+  {
+   "id": "circle-magpylib-webpage-z2",
+   "why": "magpylib test_core_physics_circle_VS_webpage_numbers, z = 2 m",
+   "source": "loop_webpage",
+   "observer": [0.0, 0.0, 2.0],
+   "B": [0.0, 0.0, 5.619851784090577e-05],
+   "H": [0.0, 0.0, 44.721359549995796]
+  },
+  {
+   "id": "circle-magpylib-webpage-z3",
+   "why": "magpylib test_core_physics_circle_VS_webpage_numbers, z = 3 m",
+   "source": "loop_webpage",
+   "observer": [0.0, 0.0, 3.0],
+   "B": [0.0, 0.0, 1.986917652896882e-05],
+   "H": [0.0, 0.0, 15.811388300841896]
+  },
+  {
+   "id": "circle-magpylib-d1-center",
+   "why": "magpylib test_obj_Circle test_BHJM_circle, 1 m loop at its center",
+   "source": "loop_d1",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 1.25663706127e-06],
+   "H": [0.0, 0.0, 1.0]
+  },
+  {
+   "id": "circle-magpylib-d1-z1",
+   "why": "magpylib test_obj_Circle test_BHJM_circle, 1 m loop, 1 m up",
+   "source": "loop_d1",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, 0.0, 1.1239703568181154e-07],
+   "H": [0.0, 0.0, 0.08944271909999159]
+  },
+  {
+   "id": "circle-magpylib-d2-center",
+   "why": "magpylib test_obj_Circle test_BHJM_circle, test_func_circle and test_field_loop_specials: 2 m loop at its center",
+   "source": "loop_d2",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 6.28318530635e-07],
+   "H": [0.0, 0.0, 0.5]
+  },
+  {
+   "id": "circle-magpylib-d2-z1",
+   "why": "magpylib test_obj_Circle test_BHJM_circle, 2 m loop, 1 m up",
+   "source": "loop_d2",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, 0.0, 2.22144146878588e-07],
+   "H": [0.0, 0.0, 0.1767766952966369]
+  },
+  {
+   "id": "circle-magpylib-d2-2a-center",
+   "why": "magpylib test_field_loop_specials, 2 A at the center",
+   "source": "loop_d2_2a",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 1.25663706127e-06],
+   "H": [0.0, 0.0, 1.0]
+  },
+  {
+   "id": "circle-magpylib-basic",
+   "why": "magpylib test_Circle_basic_B and _H",
+   "source": "loop_basic",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [4.4179832553702245e-07, 8.835966510740449e-07, 7.154623145829313e-07],
+   "H": [0.3515719368411163, 0.7031438736822326, 0.5693468198843832]
+  },
+  {
+   "id": "circle-magpylib-loop-field",
+   "why": "magpylib test_loop_field in the loop's frame: 2 radii up the axis",
+   "source": "loop_stability",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, 0.0, 0.00011239703568181154],
+   "H": [0.0, 0.0, 89.44271909999159]
   }
  ],
  "relations": [
@@ -401,6 +768,148 @@
      "field": "H",
      "observer": [10.0, 20.0, 30.0],
      "weight": 1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-05
+  },
+  {
+   "id": "circle-b-mu0-h",
+   "why": "B = mu_0 H for the loop: a current has no magnetization",
+   "terms": [
+    {
+     "source": "loop",
+     "field": "B",
+     "observer": [0.0013, -0.0021, 0.0017],
+     "weight": 1.0
+    },
+    {
+     "source": "loop",
+     "field": "H",
+     "observer": [0.0013, -0.0021, 0.0017],
+     "weight": -1.25663706127e-06
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-15
+  },
+  {
+   "id": "circle-on-axis",
+   "why": "on the axis H_z = I r0^2 / (2 (r0^2 + z^2)^(3/2)), here exactly 1 A/m (magpylib test_current_circle_on_axis)",
+   "terms": [
+    {
+     "source": "loop_axis_exact",
+     "field": "H",
+     "observer": [0.0, 0.0, 0.75],
+     "weight": 1.0
+    }
+   ],
+   "target": [0.0, 0.0, 1.0],
+   "atol": 1e-12
+  },
+  {
+   "id": "circle-mirror",
+   "why": "mirrored in the loop's plane, H_z stays and H_x, H_y flip",
+   "terms": [
+    {
+     "source": "loop",
+     "field": "H",
+     "observer": [0.0013, -0.0021, -0.0017],
+     "weight": 1.0
+    },
+    {
+     "source": "loop",
+     "field": "H",
+     "observer": [0.0013, -0.0021, 0.0017],
+     "weight": [
+      [1.0, 0, 0],
+      [0, 1.0, 0],
+      [0, 0, -1.0]
+     ]
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-09
+  },
+  {
+   "id": "circle-turn-about-axis",
+   "why": "the observer turned 90 degrees about the axis turns H with it",
+   "terms": [
+    {
+     "source": "loop",
+     "field": "H",
+     "observer": [0.0021, 0.0013, 0.0017],
+     "weight": 1.0
+    },
+    {
+     "source": "loop",
+     "field": "H",
+     "observer": [0.0013, -0.0021, 0.0017],
+     "weight": [
+      [0, 1.0, 0],
+      [-1.0, 0, 0],
+      [0, 0, -1.0]
+     ]
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-09
+  },
+  {
+   "id": "circle-reverse-current",
+   "why": "the current reversed gives -H",
+   "terms": [
+    {
+     "source": "loop",
+     "field": "H",
+     "observer": [0.0013, -0.0021, 0.0017],
+     "weight": 1.0
+    },
+    {
+     "source": "loop_reversed",
+     "field": "H",
+     "observer": [0.0013, -0.0021, 0.0017],
+     "weight": 1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-09
+  },
+  {
+   "id": "circle-scaling",
+   "why": "1000 times the size, observer and current give the same B (magpylib test_scaling_loop)",
+   "terms": [
+    {
+     "source": "loop_scale_1",
+     "field": "B",
+     "observer": [1.0, 2.0, 3.0],
+     "weight": 1.0
+    },
+    {
+     "source": "loop_scale_1000",
+     "field": "B",
+     "observer": [1000.0, 2000.0, 3000.0],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-16
+  },
+  {
+   "id": "circle-far-is-dipole",
+   "why": "a loop far off is the dipole I A (magpylib test_core_phys_moment_of_current_circle; approximate)",
+   "terms": [
+    {
+     "source": "loop_dipole_test",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "loop_dipole",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": -1.0
     }
    ],
    "target": [0.0, 0.0, 0.0],

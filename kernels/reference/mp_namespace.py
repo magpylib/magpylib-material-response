@@ -70,6 +70,12 @@ class MPArray:
     def __float__(self):
         return float(self._a.item())
 
+    def __bool__(self):  # a 0-d boolean, as a loop's test
+        if self.dtype != BOOL or self._a.ndim:
+            msg = "only a 0-d boolean array has a truth value"
+            raise TypeError(msg)
+        return bool(self._a.item())
+
     def tolist(self):
         return self._a.tolist()
 
@@ -214,6 +220,12 @@ def isdtype(dtype, kind):
 
 def result_type(*_dtypes):
     return FLOAT
+
+
+def finfo(_dtype):
+    """The working precision's machine epsilon, for iterations that stop at
+    a share of it."""
+    return SimpleNamespace(eps=+mp.mp.eps)
 
 
 def astype(x, dtype, copy=True):

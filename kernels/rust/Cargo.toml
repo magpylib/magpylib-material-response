@@ -2,7 +2,7 @@
 name = "mmr-kernels"
 version = "0.1.0"
 edition = "2024"
-description = "Field kernels of magpylib-material-response's face charge and magpylib's cuboid, straight current segment, sphere and dipole, for the browser (WebAssembly, issue #208)"
+description = "Field kernels of magpylib-material-response's face charge and magpylib's cuboid, straight current segment, circular loop, sphere and dipole, for the browser (WebAssembly, issue #208)"
 license = "BSD-3-Clause"
 publish = false
 
