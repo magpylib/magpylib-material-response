@@ -34,8 +34,36 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # the browser's field kernels (#208), package data in an ignored folder
+      # that pyproject.toml's artifacts take into both distributions
+      - name: Add the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      # the build that ships, checked against the reference files as CI checks
+      # its own (the dependencies of Cargo.lock in both)
+      - name: Build the browser's field kernels
+        working-directory: kernels/rust
+        run: |
+          wasm-pack build --release --target web --out-dir pkg -- --features wasm --locked
+          node js/check.mjs
+          mkdir -p ../../src/magpylib_material_response/kernels
+          cp pkg/mmr_kernels.js pkg/mmr_kernels_bg.wasm ../../src/magpylib_material_response/kernels/
+
       - uses: hynek/build-and-inspect-python-package@v3.0.2
         id: baipp
+
+      # a release without them would load in a page as no kernels at all
+      - name: Check the field kernels ship
+        env:
+          DIST: ${{ steps.baipp.outputs.dist }}
+        run: |
+          expected=$'magpylib_material_response/kernels/mmr_kernels.js\nmagpylib_material_response/kernels/mmr_kernels_bg.wasm'
+          diff <(echo "$expected") <(unzip -Z1 "$DIST"/*.whl | grep '^magpylib_material_response/kernels/' | sort)
+          diff <(echo "$expected") <(tar -tzf "$DIST"/*.tar.gz | grep -o 'magpylib_material_response/kernels/.*[^/]$' | sort)
 
       # The Agent Skill is package data in a dot-directory; check that both
       # distributions carry every file of it.

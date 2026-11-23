@@ -231,9 +231,43 @@ jobs:
       - name: Check the time budget
         run: python docs/check_budget.py docs-build.log
 
+  kernels:
+    name: Compiled kernels against the reference files
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: kernels/rust
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Add the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      # --locked: the dependencies of Cargo.lock, as CD's release build
+      - name: Check natively, on one thread and on all
+        run: |
+          cargo test --release --locked
+          cargo test --release --locked --features parallel
+
+      # the build the browser loads (SIMD, from .cargo/config.toml), then its
+      # check on Node, which runs the same engine as Chrome
+      - name: Check the WebAssembly build
+        run: |
+          wasm-pack build --release --target web --out-dir pkg -- --features wasm --locked
+          node js/check.mjs
+
   pass:
     if: always()
-    needs: [lint, checks, slow, bare, lowest, docs]
+    needs: [lint, checks, slow, bare, lowest, docs, kernels]
     runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:

@@ -1,0 +1,410 @@
+{
+ "rtol": 1e-12,
+ "sources": {
+  "seg": {
+   "kind": "polyline",
+   "why": "a segment 6 mm long at a generic orientation off the origin, 2.5 A",
+   "segment_start": [0.001, -0.002, 0.0005],
+   "segment_end": [0.004, 0.003, -0.001],
+   "current": 2.5
+  },
+  "seg_km": {
+   "kind": "polyline",
+   "why": "seg a million times larger, -1.5 A: H falls as 1/length, flips with the current",
+   "segment_start": [1000.0, -2000.0, 500.0],
+   "segment_end": [4000.0, 3000.0, -1000.0],
+   "current": -1.5
+  },
+  "bin": {
+   "kind": "polyline",
+   "why": "a segment in exact binary coordinates, 1.5 A, its midpoint exact",
+   "segment_start": [-0.00390625, 0.001953125, 0.0],
+   "segment_end": [0.00390625, -0.001953125, 0.0009765625],
+   "current": 1.5
+  },
+  "bin_first": {
+   "kind": "polyline",
+   "why": "bin's first half",
+   "segment_start": [-0.00390625, 0.001953125, 0.0],
+   "segment_end": [0.0, 0.0, 0.00048828125],
+   "current": 1.5
+  },
+  "bin_second": {
+   "kind": "polyline",
+   "why": "bin's second half",
+   "segment_start": [0.0, 0.0, 0.00048828125],
+   "segment_end": [0.00390625, -0.001953125, 0.0009765625],
+   "current": 1.5
+  },
+  "bin_reversed": {
+   "kind": "polyline",
+   "why": "bin from end to start",
+   "segment_start": [0.00390625, -0.001953125, 0.0009765625],
+   "segment_end": [-0.00390625, 0.001953125, 0.0],
+   "current": 1.5
+  },
+  "bhjm_1": {
+   "kind": "polyline",
+   "why": "magpylib test_BHJM_current_polyline, segment 1",
+   "segment_start": [-1.5, 0.0, 0.0],
+   "segment_end": [-0.5, 0.0, 0.0],
+   "current": 1.0
+  },
+  "bhjm_2": {
+   "kind": "polyline",
+   "why": "magpylib test_BHJM_current_polyline, segment 2",
+   "segment_start": [-0.5, 0.0, 0.0],
+   "segment_end": [0.5, 0.0, 0.0],
+   "current": 1.0
+  },
+  "bhjm_3": {
+   "kind": "polyline",
+   "why": "magpylib test_BHJM_current_polyline, segment 3",
+   "segment_start": [0.5, 0.0, 0.0],
+   "segment_end": [1.5, 0.0, 0.0],
+   "current": 1.0
+  },
+  "diag": {
+   "kind": "polyline",
+   "why": "magpylib test_field_line_special_cases and test_func_polyline1",
+   "segment_start": [0.0, 0, 0],
+   "segment_end": [2.0, 2, 2],
+   "current": 1.0
+  },
+  "zero_length": {
+   "kind": "polyline",
+   "why": "a segment without length (magpylib test_field_line_special_cases, test_Polyline_specials)",
+   "segment_start": [0.0, 0, 0],
+   "segment_end": [0.0, 0, 0],
+   "current": 1.0
+  },
+  "no_current": {
+   "kind": "polyline",
+   "why": "no current (magpylib test_Polyline_specials)",
+   "segment_start": [1.0, 2, 3],
+   "segment_end": [3.0, 2, 1],
+   "current": 0.0
+  },
+  "vertical": {
+   "kind": "polyline",
+   "why": "magpylib test_func_polyline4 and 6 in the segment's own frame",
+   "segment_start": [1.0, 0, -1],
+   "segment_end": [1.0, 0, 1],
+   "current": 1.0
+  },
+  "long": {
+   "kind": "polyline",
+   "why": "2000 km along z (magpylib test_Polyline_vs_Infinite)",
+   "segment_start": [0.0, 0, -1000000.0],
+   "segment_end": [0.0, 0, 1000000.0],
+   "current": 1.0
+  },
+  "square_1": {
+   "kind": "polyline",
+   "why": "side 1 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [1.0, 1.0, 0.0],
+   "segment_end": [1.0, -1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_2": {
+   "kind": "polyline",
+   "why": "side 2 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [1.0, -1.0, 0.0],
+   "segment_end": [-1.0, -1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_3": {
+   "kind": "polyline",
+   "why": "side 3 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [-1.0, -1.0, 0.0],
+   "segment_end": [-1.0, 1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_4": {
+   "kind": "polyline",
+   "why": "side 4 of a 2 m square loop, 1 kA (magpylib test_core_phys_moment_of_current_square)",
+   "segment_start": [-1.0, 1.0, 0.0],
+   "segment_end": [1.0, 1.0, 0.0],
+   "current": 1000.0
+  },
+  "square_dipole": {
+   "kind": "dipole",
+   "why": "the square loop's moment I A, 4000 A m^2 along z",
+   "moment": [0.0, 0.0, 4000.0]
+  }
+ },
+ "points": [
+  {
+   "id": "beside-middle",
+   "why": "0.3 lengths from the middle, square to it",
+   "source": "seg",
+   "observer": [0.00404883732484194, -0.000429302394905163, -0.00025],
+   "B": [-3.042596348482651e-05, -5.070993914137757e-05, -0.0002298850574409116],
+   "H": [-24.212212437915046, -40.353687396525125, -182.93671619758052]
+  },
+  {
+   "id": "beside-start",
+   "why": "0.4 lengths from the start, in the plane square to the segment there",
+   "source": "seg",
+   "observer": [0.000691302546743484, -0.00251449575542753, -0.00183238075793812],
+   "B": [-8.264708930453716e-05, 4.958825358272228e-05, -6.197802593611713e-20],
+   "H": [-65.76846398355562, 39.46107839013335, -4.932054596056561e-14]
+  },
+  {
+   "id": "beyond-end",
+   "why": "beyond the end, 0.2 lengths off the line: the cosines of one sign",
+   "source": "seg",
+   "observer": [0.00653255821656129, 0.00488046507006322, -0.00175],
+   "B": [-1.6699257457463546e-06, -2.783209576243894e-06, -1.2617216745639023e-05],
+   "H": [-1.328884685335216, -2.2148078088920027, -10.040462066977108]
+  },
+  {
+   "id": "beyond-start",
+   "why": "before the start, 0.7 lengths off the line",
+   "source": "seg",
+   "observer": [-0.000440220543198903, -0.00440036757199817, -0.00313166632639171],
+   "B": [-2.474842661049693e-05, 1.484905596629816e-05, 6.65909222955328e-21],
+   "H": [-19.694172146638213, 11.816503287982929, 5.299137224890833e-15]
+  },
+  {
+   "id": "axis-far-1e3",
+   "why": "1000 lengths beyond the end, 1e-3 m off the line: the cosines cancel in a subtraction",
+   "source": "seg",
+   "observer": [3.00485749292571, 5.00248550424457, -1.501],
+   "B": [-8.826732548118498e-16, -1.4711220913421436e-15, -6.669086814097511e-15],
+   "H": [-7.024090582843308e-10, -1.170681763798513e-09, -5.307090662563705e-09],
+   "atol_B": 1e-25,
+   "atol_H": 1e-19
+  },
+  {
+   "id": "near-middle-1e-6",
+   "why": "1e-6 lengths from the middle",
+   "source": "seg",
+   "observer": [0.00250000516279108, 0.00049999690232535, -0.00025],
+   "B": [-10.644739774846446, -17.74123294690027, -80.42692270602711],
+   "H": [-8470814.76658703, -14118024.602083895, -64001711.54012038],
+   "atol_B": 1e-07,
+   "atol_H": 0.1
+  },
+  {
+   "id": "near-middle-1e-9",
+   "why": "1e-9 lengths from the middle",
+   "source": "seg",
+   "observer": [0.00249999999922826, 0.000499999998713761, -0.000250000005830952],
+   "B": [-71210.92241544514, 42726.54130343736, -0.04048609907438095],
+   "H": [-56667851530.23974, 34000701252.79965, -32217.813975233486],
+   "atol_B": 0.1,
+   "atol_H": 100000.0
+  },
+  {
+   "id": "far-100",
+   "why": "about 100 lengths away, generic direction",
+   "source": "seg",
+   "observer": [0.488618589963187, 0.248985980129303, 0.253607113690718],
+   "B": [1.8808782285901534e-09, -1.707608366130752e-09, -1.9302714299222e-09],
+   "H": [0.0014967553373678745, -0.0013588715618533366, -0.0015360611981087063]
+  },
+  {
+   "id": "km-beside-middle",
+   "why": "beside-middle a million times larger, -1.5 A: H a million times smaller, times -0.6",
+   "source": "seg_km",
+   "observer": [4048.83732484194, -429.302394905163, -250.0],
+   "B": [1.825557809089591e-11, 3.042596348482655e-11, 1.3793103446454698e-10],
+   "H": [1.4527327462749035e-05, 2.421221243791508e-05, 0.00010976202971854834]
+  },
+  {
+   "id": "axis-far-1e3-before",
+   "why": "1000 lengths before the start, 1e-3 m off the line: the rationalized branch on the start's side",
+   "source": "seg",
+   "observer": [-2.99912817964068, -5.00221363273446, 1.49953153160378],
+   "B": [-5.9048852666126885e-15, 3.5429311599745813e-15, 2.322652495869716e-26],
+   "H": [-4.698958393479985e-09, 2.819375036093536e-09, 1.8483081292560035e-20],
+   "atol_B": 1e-25,
+   "atol_H": 1e-19
+  },
+  {
+   "id": "beside-end",
+   "why": "0.4 lengths from the end, in the plane square to the segment there: t2 about 0, the branches' boundary",
+   "source": "seg",
+   "observer": [0.00606511643312258, 0.00176093014012645, -0.001],
+   "B": [-1.2354240941658398e-05, -2.059040156943063e-05, -9.334315378141889e-05],
+   "H": [-9.831192571364069, -16.38532095227342, -74.2801216503062]
+  },
+  {
+   "id": "magpylib-bhjm-level-1",
+   "why": "magpylib test_BHJM_current_polyline, row 1",
+   "source": "bhjm_1",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, -3.848366987870747e-08, 0.0],
+   "H": [0.0, -0.030624331451608283, 0.0]
+  },
+  {
+   "id": "magpylib-bhjm-level-2",
+   "why": "magpylib test_BHJM_current_polyline, row 2",
+   "source": "bhjm_2",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, -8.944271908818222e-08, 0.0],
+   "H": [0.0, -0.0711762543417177, 0.0]
+  },
+  {
+   "id": "magpylib-bhjm-level-3",
+   "why": "magpylib test_BHJM_current_polyline, row 3",
+   "source": "bhjm_3",
+   "observer": [0.0, 0.0, 1.0],
+   "B": [0.0, -3.848366987870747e-08, 0.0],
+   "H": [0.0, -0.030624331451608283, 0.0]
+  },
+  {
+   "id": "magpylib-special-normal",
+   "why": "magpylib test_field_line_special_cases, the normal case",
+   "source": "diag",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [2.6726124187713715e-08, -5.345224837542743e-08, 2.6726124187713715e-08],
+   "H": [0.021267973873620588, -0.042535947747241176, 0.021267973873620588]
+  },
+  {
+   "id": "zero-length",
+   "why": "a segment without length: 0 (magpylib test_field_line_special_cases)",
+   "source": "zero_length",
+   "observer": [1.0, 2.0, 3.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "zero-current",
+   "why": "no current: 0 (magpylib test_Polyline_specials)",
+   "source": "no_current",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, 0.0, 0.0],
+   "H": [0.0, 0.0, 0.0]
+  },
+  {
+   "id": "magpylib-func-polyline4",
+   "why": "magpylib test_func_polyline4/6 without the turn: the origin beside a vertical segment",
+   "source": "vertical",
+   "observer": [0.0, 0.0, 0.0],
+   "B": [0.0, -1.4142135621863726e-07, 0.0],
+   "H": [0.0, -0.11253953951963826, 0.0]
+  }
+ ],
+ "relations": [
+  {
+   "id": "split-halves",
+   "why": "a segment's H is the sum of its two halves' (superposition; exact midpoint)",
+   "terms": [
+    {
+     "source": "bin",
+     "field": "H",
+     "observer": [0.0023, 0.0041, -0.0017],
+     "weight": 1.0
+    },
+    {
+     "source": "bin_first",
+     "field": "H",
+     "observer": [0.0023, 0.0041, -0.0017],
+     "weight": -1.0
+    },
+    {
+     "source": "bin_second",
+     "field": "H",
+     "observer": [0.0023, 0.0041, -0.0017],
+     "weight": -1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-10
+  },
+  {
+   "id": "reverse-current",
+   "why": "the segment run from end to start gives -H",
+   "terms": [
+    {
+     "source": "bin",
+     "field": "H",
+     "observer": [0.0023, 0.0041, -0.0017],
+     "weight": 1.0
+    },
+    {
+     "source": "bin_reversed",
+     "field": "H",
+     "observer": [0.0023, 0.0041, -0.0017],
+     "weight": 1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-10
+  },
+  {
+   "id": "b-mu0-h",
+   "why": "B = mu_0 H: a current has no magnetization",
+   "terms": [
+    {
+     "source": "seg",
+     "field": "B",
+     "observer": [0.00404883732484194, -0.000429302394905163, -0.00025],
+     "weight": 1.0
+    },
+    {
+     "source": "seg",
+     "field": "H",
+     "observer": [0.00404883732484194, -0.000429302394905163, -0.00025],
+     "weight": -1.25663706127e-06
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-15
+  },
+  {
+   "id": "long-wire",
+   "why": "a 2000 km segment is the infinite wire, H = I / (2 pi r) e_phi (magpylib test_Polyline_vs_Infinite; approximate: the ends)",
+   "terms": [
+    {
+     "source": "long",
+     "field": "H",
+     "observer": [1.0, 2.0, 3.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [-0.06366197723675814, 0.03183098861837907, 0.0],
+   "atol": 1e-12
+  },
+  {
+   "id": "square-loop-far-is-dipole",
+   "why": "a square loop far off is the dipole I A, here -z by the loop's sense (magpylib test_core_phys_moment_of_current_square; approximate)",
+   "terms": [
+    {
+     "source": "square_1",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_2",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_3",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_4",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    },
+    {
+     "source": "square_dipole",
+     "field": "H",
+     "observer": [10.0, 20.0, 30.0],
+     "weight": 1.0
+    }
+   ],
+   "target": [0.0, 0.0, 0.0],
+   "atol": 1e-05
+  }
+ ]
+}

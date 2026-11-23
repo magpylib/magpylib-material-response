@@ -35,8 +35,9 @@ dependencies = [
   # NumPy's error state is per thread from 2.0; in 1.x it races between
   # threads, and face charge, which runs on threads, warned of divisions it
   # had told NumPy to ignore. 2.0.0 gave np.unique(..., axis=0) a 2-D inverse
-  # (85 tests fail); 2.0.1 took it back
-  "numpy>=2.0.1",
+  # (85 tests fail); 2.0.1 took it back. 2.1 is the first with the array API
+  # 2023.12 functions the kernels use (unstack)
+  "numpy>=2.1",
   "scipy>=1.17.1",  # as magpylib 6.1
 ]
 
@@ -56,9 +57,17 @@ test = [
   "pytest >=9",
   "pytest-cov >=7",
   "magpylib-material-response[tetgen,fem]",
+  # runs the array API kernels with nothing beyond the standard (#208)
+  "array-api-strict >=2.3",
 ]
 dev = [
   { include-group = "test" },
+  { include-group = "reference" },
+]
+# writes and shows the kernels' reference files (kernels/reference, #208)
+reference = [
+  "mpmath >=1.3",
+  "plotly >=6.7",
 ]
 docs = [
   "pydata-sphinx-theme",
@@ -80,6 +89,9 @@ docs = [
 [tool.hatch]
 version.source = "vcs"
 build.hooks.vcs.version-file = "src/magpylib_material_response/_version.py"
+# the browser's field kernels (#208), built by CD into this ignored folder: in
+# both distributions where present, absent from a build without Rust
+build.artifacts = ["src/magpylib_material_response/kernels/*"]
 
 [tool.hatch.envs.default]
 dependency-groups = ["dev"]
@@ -178,6 +190,7 @@ ignore = [
 "tests/**" = ["T20"]
 "scripts/**" = ["T20"]
 "validation/**" = ["T20"]
+"kernels/**" = ["T20"]
 "noxfile.py" = ["T20", "EXE001"]
 
 

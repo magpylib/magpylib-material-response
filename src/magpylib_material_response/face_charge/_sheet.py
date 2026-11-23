@@ -18,19 +18,18 @@ from scipy.spatial.transform import Rotation
 from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 from magpylib_material_response.face_charge._rectangle import FOUR_PI
 from magpylib_material_response.face_charge._triangle import (
+    beyond_far_from,
     charge_field,
     charge_field_far,
     far_points,
     frames,
+    has_area,
+    sheet_parameters,
 )
 from magpylib_material_response.meshing_utils import detached_copy
 from magpylib_material_response.uniform import shallow_copy, unseen
 
 SATURATE = 0.95  # the colour saturates at the charge this share of the area stays below
-# an observer this many of a sheet's longest triangle sides past all of it takes
-# `charge_field_far`. Each observer chooses for the whole sheet, so a near one costs
-# nothing: choosing per pair made fields 2 mm above six bars 1.3 times as slow
-FAR_SIDES = 64.0
 INSIDE_SAMPLE = 64  # observers tested for lying inside a part, at most
 # sets of observers a sheet remembers it has tested: field lines, sensor arrays
 # and sweeps read the same points again
@@ -145,7 +144,8 @@ class ChargeSheet(magpy.misc.CustomSource):
     vertices : array-like, shape (n, 3)
         Mesh points in m, in the source's own frame.
     faces : array-like, shape (m, 3)
-        Triplets of vertex indices, one per triangle.
+        Triplets of vertex indices, one per triangle. A face without area (its
+        corners in a line) is dropped, with its charge: it carries none.
     charge_densities : array-like, shape (m, 3)
         Surface charge density in A/m at each face's three corners, in the
         order of its vertex indices.
@@ -273,6 +273,10 @@ class ChargeSheet(magpy.misc.CustomSource):
             if len(panels) != len(F):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
+        keep = has_area(P[F])
+        if not keep.all():  # its frame would make the whole field NaN
+            F, q = F[keep], q[keep]
+            panels = None if panels is None else panels[keep]
         self._vertices, self._faces, self._q, self._panels = P, F, q, panels
         self._mean = None  # set by solve_face_charge on parts solved as one
         self._part = None  # set by solve_face_charge: new charges, no such part
@@ -280,23 +284,10 @@ class ChargeSheet(magpy.misc.CustomSource):
         self._inside_seen = None
         self._V = P[F]
         self._frames = frames(self._V)
-        cen, _, e1, e2, s, _ = self._frames
-        self._center, self._far_from, self._far_rule = np.zeros(3), np.inf, None
-        if len(F):
-            self._center = cen.mean(0)
-            side = np.linalg.norm(self._V - self._V[:, [1, 2, 0]], axis=2).max()
-            reach = np.linalg.norm(self._V - self._center, axis=2).max()
-            self._far_from = reach + FAR_SIDES * side
-        d = self._V - cen[:, None]
-        A = np.stack(
-            [
-                np.ones((len(F), 3)),
-                np.einsum("nkd,nd->nk", d, e1) / s[:, None],
-                np.einsum("nkd,nd->nk", d, e2) / s[:, None],
-            ],
-            axis=-1,
-        )  # (face, corner, basis)
-        self._c = np.linalg.solve(A, q[..., None])[..., 0]  # charge = c0 + c1 u + c2 v
+        self._far_rule = None
+        # charge = c0 + c1 u + c2 v; the browser's kernel derives the same
+        self._c, self._center, far_from = sheet_parameters(self._V, q, self._frames)
+        self._far_from = float(far_from)
 
     # ── what a solve tells ────────────────────────────────────────────────
     @property
@@ -509,7 +500,7 @@ class ChargeSheet(magpy.misc.CustomSource):
             out[rows] = charge_field_far(X[rows], *self._far_rule) / FOUR_PI
 
         with np.errstate(over="ignore"):  # past 1e154 m: inf, and so far
-            far = np.linalg.norm(X - self._center, axis=1) >= self._far_from
+            far = beyond_far_from(X, self._center, self._far_from)
         if far.any():
             if self._far_rule is None:
                 self._far_rule = far_points(self._V, self._frames, self._c)

@@ -1,0 +1,578 @@
+//! Field of flat triangles whose surface charge varies linearly across them:
+//! `face_charge/_triangle.py`'s `frames`, `charge_field`, `far_points`,
+//! `charge_field_far` and `sheet_parameters`, operation for operation. The formulas and their
+//! references are in that module's docstring.
+//!
+//! Arrays are flat and row-major, as numpy's C order: observers `x` (M, 3),
+//! triangles `v` (N, 3, 3), coefficients `c` (N, 3) of `1, u, v`, far points
+//! `y` (6, N, 3) and their charges (6, N).
+
+type V3 = [f64; 3];
+
+#[inline(always)]
+fn dot(a: V3, b: V3) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+#[inline(always)]
+fn sub(a: V3, b: V3) -> V3 {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+#[inline(always)]
+fn cross(a: V3, b: V3) -> V3 {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+#[inline(always)]
+fn norm(a: V3) -> f64 {
+    dot(a, a).sqrt()
+}
+
+#[inline(always)]
+pub(crate) fn row(a: &[f64], i: usize) -> V3 {
+    [a[3 * i], a[3 * i + 1], a[3 * i + 2]]
+}
+
+/// One triangle's frame, as `frames` gives it, and what `_in_plane` derives
+/// from it once per triangle: its corners in plane coordinates and the first
+/// corner's coordinates.
+#[derive(Clone, Copy, Debug)]
+pub struct Frame {
+    pub centroid: V3,
+    pub n: V3,
+    pub e1: V3,
+    pub e2: V3,
+    pub s: f64,
+    pub area: f64,
+    ub: f64,
+    uc: f64,
+    vc: f64,
+    a_dot: V3, // a.e1, a.e2, a.n
+}
+
+/// The frames of all triangles in `v` (N, 3, 3).
+pub fn frames(v: &[f64]) -> Vec<Frame> {
+    v.chunks_exact(9)
+        .map(|t| {
+            let (a, b, c) = (row(t, 0), row(t, 1), row(t, 2));
+            let cr = cross(sub(b, a), sub(c, a));
+            let area = 0.5 * norm(cr);
+            let n = cr.map(|x| x / (2.0 * area));
+            let ab = sub(b, a);
+            let lab = norm(ab);
+            let e1 = ab.map(|x| x / lab);
+            let e2 = cross(n, e1);
+            let centroid = [0, 1, 2].map(|d| (a[d] + b[d] + c[d]) / 3.0);
+            Frame {
+                centroid,
+                n,
+                e1,
+                e2,
+                s: area.sqrt(),
+                area,
+                ub: dot(sub(b, a), e1),
+                uc: dot(sub(c, a), e1),
+                vc: dot(sub(c, a), e2),
+                a_dot: [dot(a, e1), dot(a, e2), dot(a, n)],
+            }
+        })
+        .collect()
+}
+
+/// `R + l`, stable where `l < 0`: there it is `R0^2 / (R - l)`.
+#[inline(always)]
+fn r_plus_l(r: f64, l: f64, r02: f64) -> f64 {
+    if l >= 0.0 { r + l } else { r02 / (r - l) }
+}
+
+const EDGES: [(usize, usize, usize); 3] = [(0, 1, 2), (1, 2, 0), (2, 0, 1)]; // i, j, opposite k
+
+/// One triangle's `charge_field` at one observer: 4 pi times the field of
+/// charge `c0 + c1 u + c2 v` on it.
+#[inline(always)]
+pub fn charge_pair(x: V3, f: &Frame, c: V3) -> V3 {
+    let u = dot(x, f.e1) - f.a_dot[0];
+    let v = dot(x, f.e2) - f.a_dot[1];
+    let mut w = dot(x, f.n) - f.a_dot[2];
+    if w == 0.0 {
+        w = 1e-12 * f.s; // lifted off the plane, as numpy does
+    }
+    let w2 = w * w;
+    let cu = [0.0, f.ub, f.uc];
+    let cv = [0.0, 0.0, f.vc];
+    let du = [cu[0] - u, cu[1] - u, cu[2] - u];
+    let dv = [cv[0] - v, cv[1] - v, cv[2] - v];
+    let r = [0, 1, 2].map(|k| (du[k] * du[k] + dv[k] * dv[k] + w2).sqrt());
+    let mut den = r[0] * r[1] * r[2];
+    for (i, j, k) in EDGES {
+        den += (du[i] * du[j] + dv[i] * dv[j] + w2) * r[k];
+    }
+    let omega = 2.0 * (2.0 * f.area * w.abs()).atan2(den); // sum beta
+    let (c0, c1, c2) = (c[0], c[1], c[2]);
+    let (mut e0u, mut e0v, mut phi) = (0.0, 0.0, 0.0);
+    let (mut slu, mut slv, mut slw) = (0.0, 0.0, 0.0);
+    for (i, j, _) in EDGES {
+        let (pu, pv, qu, qv) = (cu[i], cv[i], cu[j], cv[j]);
+        let l = ((qu - pu) * (qu - pu) + (qv - pv) * (qv - pv)).sqrt();
+        let (tu, tv) = ((qu - pu) / l, (qv - pv) / l);
+        let l_minus = du[i] * tu + dv[i] * tv;
+        let l_plus = du[j] * tu + dv[j] * tv;
+        let p0 = du[i] * tv - dv[i] * tu;
+        let r02 = p0 * p0 + w2;
+        let fe = (r_plus_l(r[j], l_plus, r02) / r_plus_l(r[i], l_minus, r02)).ln();
+        let p0f = p0 * fe;
+        let dr = r[j] - r[i];
+        let gm = c1 * tv - c2 * tu;
+        e0u += tv * fe;
+        e0v -= tu * fe;
+        phi += p0f;
+        slu -= gm * (p0f * tv + dr * tu);
+        slv += gm * (p0f * tu - dr * tv);
+        slw += gm * fe;
+    }
+    phi -= w.abs() * omega;
+    let s = f.s;
+    let psi = c0 + (c1 * (u - (f.ub + f.uc) / 3.0) + c2 * (v - f.vc / 3.0)) / s;
+    let fu = psi * e0u - (slu + c1 * phi) / s;
+    let fv = psi * e0v - (slv + c2 * phi) / s;
+    let fw = psi * sign(w) * omega - w * slw / s;
+    [0, 1, 2].map(|d| fu * f.e1[d] + fv * f.e2[d] + fw * f.n[d])
+}
+
+/// numpy's `sign`: -1, 0 or 1, NaN for NaN.
+#[inline(always)]
+fn sign(x: f64) -> f64 {
+    if x > 0.0 {
+        1.0
+    } else if x < 0.0 {
+        -1.0
+    } else {
+        x // 0 or NaN
+    }
+}
+
+/// `charge_field` at one observer: summed over all triangles.
+#[inline]
+pub fn charge_at(x: V3, frames: &[Frame], c: &[f64]) -> V3 {
+    let mut acc = [0.0; 3];
+    for (t, f) in frames.iter().enumerate() {
+        let g = charge_pair(x, f, row(c, t));
+        acc[0] += g[0];
+        acc[1] += g[1];
+        acc[2] += g[2];
+    }
+    acc
+}
+
+// the six points of `charge_field_far`, exact to degree 4 (Dunavant 1985)
+const FAR_A: f64 = 0.816847572980459;
+const FAR_B: f64 = 0.091576213509771;
+const FAR_C: f64 = 0.108103018168070;
+const FAR_D: f64 = 0.445948490915965;
+const FAR_POINTS: [V3; 6] = [
+    [FAR_A, FAR_B, FAR_B],
+    [FAR_B, FAR_A, FAR_B],
+    [FAR_B, FAR_B, FAR_A],
+    [FAR_C, FAR_D, FAR_D],
+    [FAR_D, FAR_C, FAR_D],
+    [FAR_D, FAR_D, FAR_C],
+];
+const FAR_W1: f64 = 0.109951743655322;
+const FAR_W2: f64 = 0.223381589678011;
+
+fn far_weights() -> [f64; 6] {
+    let sum = 3.0 * FAR_W1 + 3.0 * FAR_W2;
+    [FAR_W1, FAR_W1, FAR_W1, FAR_W2, FAR_W2, FAR_W2].map(|w| w / sum)
+}
+
+// the sixteen points of the middle rule, exact to degree 8 (Dunavant 1985),
+// in `_triangle._MID_POINTS`' order: the centroid, three orbits (a, b, b) and
+// one (a, b, c)
+const MID_A1: f64 = 0.081414823414554;
+const MID_B1: f64 = 0.459292588292723;
+const MID_A2: f64 = 0.658861384496480;
+const MID_B2: f64 = 0.170569307751760;
+const MID_A3: f64 = 0.898905543365938;
+const MID_B3: f64 = 0.050547228317031;
+const MID_A4: f64 = 0.008394777409958;
+const MID_B4: f64 = 0.263112829634638;
+const MID_C4: f64 = 0.728492392955404;
+const THIRD: f64 = 1.0 / 3.0;
+const MID_POINTS: [V3; 16] = [
+    [THIRD, THIRD, THIRD],
+    [MID_A1, MID_B1, MID_B1],
+    [MID_B1, MID_A1, MID_B1],
+    [MID_B1, MID_B1, MID_A1],
+    [MID_A2, MID_B2, MID_B2],
+    [MID_B2, MID_A2, MID_B2],
+    [MID_B2, MID_B2, MID_A2],
+    [MID_A3, MID_B3, MID_B3],
+    [MID_B3, MID_A3, MID_B3],
+    [MID_B3, MID_B3, MID_A3],
+    [MID_A4, MID_B4, MID_C4],
+    [MID_A4, MID_C4, MID_B4],
+    [MID_B4, MID_A4, MID_C4],
+    [MID_B4, MID_C4, MID_A4],
+    [MID_C4, MID_A4, MID_B4],
+    [MID_C4, MID_B4, MID_A4],
+];
+
+fn mid_weights() -> [f64; 16] {
+    let w: [f64; 16] = std::array::from_fn(|g| match g {
+        0 => 0.144315607677787,
+        1..=3 => 0.095091634267285,
+        4..=6 => 0.103217370534718,
+        7..=9 => 0.032458497623198,
+        _ => 0.027230314174435,
+    });
+    let sum: f64 = w.iter().sum();
+    w.map(|x| x / sum)
+}
+
+/// `far_points`: the points `y` (6, N, 3) and the charge each stands for (6, N).
+pub fn far_points(v: &[f64], frames: &[Frame], c: &[f64]) -> (Vec<f64>, Vec<f64>) {
+    rule_points(v, frames, c, &FAR_POINTS, &far_weights())
+}
+
+/// The points `y` (G, N, 3) of a rule's barycentric `points` on each triangle,
+/// and the charge each stands for (G, N): the density there times the weight
+/// times the area.
+fn rule_points(
+    v: &[f64],
+    frames: &[Frame],
+    c: &[f64],
+    points: &[V3],
+    weights: &[f64],
+) -> (Vec<f64>, Vec<f64>) {
+    let (n, count) = (frames.len(), points.len());
+    let mut y = vec![0.0; count * n * 3];
+    let mut charge = vec![0.0; count * n];
+    for (g, (bary, &wg)) in points.iter().zip(weights).enumerate() {
+        for (t, f) in frames.iter().enumerate() {
+            let tri = &v[9 * t..9 * t + 9];
+            let p =
+                [0, 1, 2].map(|d| bary[0] * tri[d] + bary[1] * tri[3 + d] + bary[2] * tri[6 + d]);
+            let d = sub(p, f.centroid);
+            let (u, w) = (dot(d, f.e1), dot(d, f.e2));
+            let q = row(c, t);
+            let density = q[0] + (q[1] * u + q[2] * w) / f.s;
+            y[3 * (g * n + t)..3 * (g * n + t) + 3].copy_from_slice(&p);
+            charge[g * n + t] = wg * density * f.area;
+        }
+    }
+    (y, charge)
+}
+
+/// The far rule's point charges at one observer, summed: `add` takes the
+/// entries `range` (an even count) of `rule` (x, y, z, q arrays), each adding
+/// `q (x - p) / |x - p|^3`; `sum` gives the total.
+#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+struct FarSum {
+    x: V3,
+    acc: V3,
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+impl FarSum {
+    #[inline]
+    fn new(x: V3) -> Self {
+        FarSum { x, acc: [0.0; 3] }
+    }
+
+    #[inline]
+    fn add(&mut self, rule: &[Vec<f64>; 4], range: std::ops::Range<usize>) {
+        let x = self.x;
+        for i in range {
+            let r = [x[0] - rule[0][i], x[1] - rule[1][i], x[2] - rule[2][i]];
+            let r2 = dot(r, r);
+            let scale = rule[3][i] / (r2 * r2.sqrt());
+            self.acc[0] += scale * r[0];
+            self.acc[1] += scale * r[1];
+            self.acc[2] += scale * r[2];
+        }
+    }
+
+    #[inline]
+    fn sum(self) -> V3 {
+        self.acc
+    }
+}
+
+/// [`FarSum`] two charges at a time, in WebAssembly's 128-bit lanes; the
+/// lanes meet once, in `sum`.
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+struct FarSum {
+    x: [core::arch::wasm32::v128; 3],
+    acc: [core::arch::wasm32::v128; 3],
+}
+
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+impl FarSum {
+    #[inline]
+    fn new(x: V3) -> Self {
+        use core::arch::wasm32::f64x2_splat;
+        FarSum {
+            x: x.map(|v| f64x2_splat(v)),
+            acc: [f64x2_splat(0.0); 3],
+        }
+    }
+
+    #[inline]
+    fn add(&mut self, rule: &[Vec<f64>; 4], range: std::ops::Range<usize>) {
+        use core::arch::wasm32::*;
+        let [xs, ys, zs, qs] = rule;
+        assert!(range.end <= xs.len().min(ys.len()).min(zs.len()).min(qs.len()));
+        assert_eq!(range.len() % 2, 0, "far-rule charges come in pairs");
+        let [x0, x1, x2] = self.x;
+        let [mut a0, mut a1, mut a2] = self.acc;
+        for i in range.step_by(2) {
+            // SAFETY: i + 1 < range.end <= every array's length, checked
+            // above; v128_load needs no alignment
+            let (px, py, pz, q) = unsafe {
+                (
+                    v128_load(xs.as_ptr().add(i).cast()),
+                    v128_load(ys.as_ptr().add(i).cast()),
+                    v128_load(zs.as_ptr().add(i).cast()),
+                    v128_load(qs.as_ptr().add(i).cast()),
+                )
+            };
+            let (rx, ry, rz) = (f64x2_sub(x0, px), f64x2_sub(x1, py), f64x2_sub(x2, pz));
+            let r2 = f64x2_add(
+                f64x2_add(f64x2_mul(rx, rx), f64x2_mul(ry, ry)),
+                f64x2_mul(rz, rz),
+            );
+            let scale = f64x2_div(q, f64x2_mul(r2, f64x2_sqrt(r2)));
+            a0 = f64x2_add(a0, f64x2_mul(scale, rx));
+            a1 = f64x2_add(a1, f64x2_mul(scale, ry));
+            a2 = f64x2_add(a2, f64x2_mul(scale, rz));
+        }
+        self.acc = [a0, a1, a2];
+    }
+
+    #[inline]
+    fn sum(self) -> V3 {
+        use core::arch::wasm32::f64x2_extract_lane;
+        self.acc
+            .map(|a| f64x2_extract_lane::<0>(a) + f64x2_extract_lane::<1>(a))
+    }
+}
+
+/// A solved `ChargeSheet`: what `ChargeSheet._field` needs, set up once.
+pub struct Sheet {
+    pub frames: Vec<Frame>,
+    pub c: Vec<f64>,
+    pub center: V3,
+    pub far_from: f64,
+    /// per triangle: its longest edge squared, and the point charges of the
+    /// six-point far rule and of the sixteen-point middle rule, triangle by
+    /// triangle, as x, y, z and q arrays
+    pub longest2: Vec<f64>,
+    pub rule: [Vec<f64>; 4],
+    pub middle: [Vec<f64>; 4],
+}
+
+/// A rule's point charges `y` (G, N, 3) and `charge` (G, N), triangle by
+/// triangle (entry `G t + g`), as x, y, z and q arrays.
+fn by_triangle(y: &[f64], charge: &[f64], count: usize) -> [Vec<f64>; 4] {
+    let n = charge.len() / count;
+    std::array::from_fn(|k| {
+        (0..n)
+            .flat_map(|t| (0..count).map(move |g| g * n + t))
+            .map(|i| if k < 3 { y[3 * i + k] } else { charge[i] })
+            .collect()
+    })
+}
+
+/// `_triangle.PAIR_RULE_MIDDLE`: the middle rule's (bound, k^2) rows, as
+/// [`PAIR_RULE`]'s.
+pub const PAIR_RULE_MIDDLE: [(f64, f64); 6] = [
+    (6.7e-6, 2.25),
+    (6.7e-7, 4.0),
+    (2.6e-8, 9.0),
+    (2.6e-9, 16.0),
+    (1.1e-10, 36.0),
+    (1.1e-11, 64.0),
+];
+
+/// `_triangle.PAIR_RULE`: (bound, k^2) rows; a tolerance takes the first row
+/// whose bound it reaches. From `k` longest edges of a triangle's centroid a
+/// pair takes the far rule, off by at most `bound` times the field its charge
+/// would make all of one sign.
+pub const PAIR_RULE: [(f64, f64); 12] = [
+    (1.3e-3, 2.25),
+    (4.1e-4, 4.0),
+    (8.1e-5, 9.0),
+    (2.6e-5, 16.0),
+    (5.1e-6, 36.0),
+    (1.6e-6, 64.0),
+    (3.2e-7, 144.0),
+    (1.0e-7, 256.0),
+    (2.0e-8, 576.0),
+    (6.2e-9, 1024.0),
+    (1.3e-9, 2304.0),
+    (3.9e-10, 4096.0),
+];
+
+/// `_triangle.pair_k2`: the squared distance in squared longest edges from
+/// which a pair takes the rule of `table`; infinity for never.
+pub fn pair_k2(tolerance: f64, table: &[(f64, f64)]) -> f64 {
+    table
+        .iter()
+        .find(|(bound, _)| *bound <= tolerance)
+        .map_or(f64::INFINITY, |row| row.1)
+}
+
+/// `_triangle.FAR_SIDES`: past a sheet's reach by this many of its longest
+/// edges, an observer takes the far rule for the whole sheet.
+pub const FAR_SIDES: f64 = 64.0;
+
+/// `_triangle.sheet_parameters`: from triangles `v` (N, 3, 3) and the charge
+/// density at their corners `q` (N, 3), the coefficients (N, 3) of `1, u, v`,
+/// the center (the mean of the centroids) and `far_from` (the farthest corner
+/// from it plus `FAR_SIDES` longest edges; infinite for no triangle).
+pub fn sheet_parameters(v: &[f64], frames: &[Frame], q: &[f64]) -> (Vec<f64>, V3, f64) {
+    let mut c = Vec::with_capacity(q.len());
+    for (t, f) in frames.iter().enumerate() {
+        let tri = &v[9 * t..9 * t + 9];
+        let uv = [0, 1, 2].map(|k| {
+            let d = sub(row(tri, k), f.centroid);
+            (dot(d, f.e1) / f.s, dot(d, f.e2) / f.s)
+        });
+        let qt = row(q, t);
+        // the plane through the corners' densities, from corner 0
+        let (du1, du2) = (uv[1].0 - uv[0].0, uv[2].0 - uv[0].0);
+        let (dv1, dv2) = (uv[1].1 - uv[0].1, uv[2].1 - uv[0].1);
+        let (dq1, dq2) = (qt[1] - qt[0], qt[2] - qt[0]);
+        let det = du1 * dv2 - du2 * dv1;
+        let c1 = (dq1 * dv2 - dq2 * dv1) / det;
+        let c2 = (du1 * dq2 - du2 * dq1) / det;
+        c.extend([qt[0] - c1 * uv[0].0 - c2 * uv[0].1, c1, c2]);
+    }
+    if frames.is_empty() {
+        return (c, [0.0; 3], f64::INFINITY);
+    }
+    let mut sum = [0.0; 3];
+    for f in frames {
+        sum = [0, 1, 2].map(|d| sum[d] + f.centroid[d]);
+    }
+    let center = sum.map(|s| s / frames.len() as f64);
+    let (mut side, mut reach) = (0.0f64, 0.0f64);
+    for tri in v.chunks_exact(9) {
+        let (a, b, cc) = (row(tri, 0), row(tri, 1), row(tri, 2));
+        for e in [sub(b, a), sub(cc, b), sub(a, cc)] {
+            side = side.max(norm(e));
+        }
+        for k in 0..3 {
+            reach = reach.max(norm(sub(row(tri, k), center)));
+        }
+    }
+    (c, center, reach + FAR_SIDES * side)
+}
+
+/// Corners in a line to within this many eps of the product of two sides:
+/// `_triangle.NO_AREA`.
+const NO_AREA: f64 = 100.0 * f64::EPSILON;
+
+/// The triangles `v` (N, 3, 3) with an area and their corner densities `q`
+/// (N, 3), as `_triangle.has_area`: one without carries no charge, and its
+/// frame would make the whole field NaN.
+fn with_area(v: &[f64], q: &[f64]) -> (Vec<f64>, Vec<f64>) {
+    let (mut vk, mut qk) = (Vec::with_capacity(v.len()), Vec::with_capacity(q.len()));
+    for (tri, qt) in v.chunks_exact(9).zip(q.chunks_exact(3)) {
+        let (ab, ac) = (sub(row(tri, 1), row(tri, 0)), sub(row(tri, 2), row(tri, 0)));
+        if norm(cross(ab, ac)) > NO_AREA * norm(ab) * norm(ac) {
+            vk.extend_from_slice(tri);
+            qk.extend_from_slice(qt);
+        }
+    }
+    (vk, qk)
+}
+
+impl Sheet {
+    /// A sheet as `ChargeSheet` holds it: triangles `v` (N, 3, 3) and the
+    /// charge density at their corners `q` (N, 3), its coefficients, center
+    /// and far distance derived by [`sheet_parameters`]; a triangle without area
+    /// dropped first ([`with_area`]).
+    pub fn from_corners(v: &[f64], q: &[f64]) -> Self {
+        let (v, q) = with_area(v, q);
+        let frames = frames(&v);
+        let (c, center, far_from) = sheet_parameters(&v, &frames, &q);
+        Sheet::with_frames(&v, frames, &c, center, far_from)
+    }
+
+    pub fn new(v: &[f64], c: &[f64], center: V3, far_from: f64) -> Self {
+        Sheet::with_frames(v, frames(v), c, center, far_from)
+    }
+
+    fn with_frames(v: &[f64], frames: Vec<Frame>, c: &[f64], center: V3, far_from: f64) -> Self {
+        let (y, charge) = far_points(v, &frames, c);
+        let longest2 = v
+            .chunks_exact(9)
+            .map(|t| {
+                let (a, b, c) = (row(t, 0), row(t, 1), row(t, 2));
+                let [e0, e1, e2] = [sub(b, a), sub(c, b), sub(a, c)]
+                    .map(|e| e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
+                e0.max(e1).max(e2)
+            })
+            .collect();
+        let rule = by_triangle(&y, &charge, 6);
+        let (ym, qm) = rule_points(v, &frames, c, &MID_POINTS, &mid_weights());
+        let middle = by_triangle(&ym, &qm, 16);
+        Sheet {
+            frames,
+            c: c.to_vec(),
+            center,
+            far_from,
+            longest2,
+            rule,
+            middle,
+        }
+    }
+
+    /// H in A/m at one observer: the far rule at or beyond `far_from` from
+    /// the center; closer, per triangle, the far rule from `k2_far` squared
+    /// longest edges of its centroid, else the middle rule from `k2_middle`,
+    /// else the closed form (`pair_k2`; both infinite: the closed form).
+    #[inline]
+    pub fn h_at(&self, x: V3, k2_far: f64, k2_middle: f64) -> V3 {
+        let d = sub(x, self.center);
+        let g = if norm(d) >= self.far_from {
+            let mut far = FarSum::new(x);
+            far.add(&self.rule, 0..6 * self.frames.len());
+            far.sum()
+        } else if k2_far.is_infinite() && k2_middle.is_infinite() {
+            charge_at(x, &self.frames, &self.c)
+        } else {
+            self.mixed_at(x, k2_far, k2_middle)
+        };
+        g.map(|k| k / (4.0 * std::f64::consts::PI))
+    }
+
+    /// The per-pair rule at one observer, the squares summed x, y, z as
+    /// `_triangle.far_pairs`.
+    #[inline]
+    fn mixed_at(&self, x: V3, k2_far: f64, k2_middle: f64) -> V3 {
+        let (mut near, mut far) = ([0.0; 3], FarSum::new(x));
+        for (t, f) in self.frames.iter().enumerate() {
+            let d = sub(x, f.centroid);
+            let d2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+            if d2 >= k2_far * self.longest2[t] {
+                far.add(&self.rule, 6 * t..6 * t + 6);
+            } else if d2 >= k2_middle * self.longest2[t] {
+                far.add(&self.middle, 16 * t..16 * t + 16);
+            } else {
+                let g = charge_pair(x, f, row(&self.c, t));
+                near[0] += g[0];
+                near[1] += g[1];
+                near[2] += g[2];
+            }
+        }
+        let far = far.sum();
+        [near[0] + far[0], near[1] + far[1], near[2] + far[2]]
+    }
+}

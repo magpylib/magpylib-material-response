@@ -1,0 +1,4 @@
+# The browser build uses WebAssembly's 128-bit SIMD (every current browser;
+# Safari from 16.4): the far rule two charges at a time.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]
