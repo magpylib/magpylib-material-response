@@ -70,6 +70,12 @@ class MPArray:
     def __float__(self):
         return float(self._a.item())
 
+    def __bool__(self):  # a 0-d boolean, as a loop's test
+        if self.dtype != BOOL or self._a.ndim:
+            msg = "only a 0-d boolean array has a truth value"
+            raise TypeError(msg)
+        return bool(self._a.item())
+
     def tolist(self):
         return self._a.tolist()
 
@@ -214,6 +220,13 @@ def isdtype(dtype, kind):
 
 def result_type(*_dtypes):
     return FLOAT
+
+
+def finfo(_dtype):
+    """The working precision's machine epsilon, for iterations that stop at
+    a share of it, and float64's smallest normal number: no underflow at 50
+    digits, so a band below it stays the band it is in doubles."""
+    return SimpleNamespace(eps=+mp.mp.eps, smallest_normal=mp.mpf(2) ** -1022)
 
 
 def astype(x, dtype, copy=True):

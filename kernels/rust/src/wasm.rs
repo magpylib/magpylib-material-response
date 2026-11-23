@@ -91,6 +91,33 @@ pub fn polyline_field(
     Ok(out)
 }
 
+/// B in T (`field` "B") or H in A/m ("H") of circular current loops at
+/// `observers` (M, 3), as `magpylib.func.circle_field` at the origin,
+/// unturned (the loop in the `z = 0` plane, its current counter-clockwise
+/// about `+z`): `diameters` one (1,) or one per observer (M,), `currents` in A
+/// one (1,) or one per observer (M,). 0 on the wire and for a loop without
+/// diameter.
+#[wasm_bindgen]
+pub fn circle_field(
+    field: &str,
+    observers: &[f64],
+    diameters: &[f64],
+    currents: &[f64],
+) -> Result<Vec<f64>, JsError> {
+    let field = field_byte(field)?;
+    check_observers(observers)?;
+    for a in [diameters, currents] {
+        if a.len() != 1 && 3 * a.len() != observers.len() {
+            return Err(JsError::new(
+                "diameters, currents: (1,) for every observer, or (M,)",
+            ));
+        }
+    }
+    let mut out = vec![0.0; observers.len()];
+    crate::circle_field(field, observers, diameters, currents, &mut out, false);
+    Ok(out)
+}
+
 fn field_byte(field: &str) -> Result<u8, JsError> {
     match field {
         "B" => Ok(b'B'),

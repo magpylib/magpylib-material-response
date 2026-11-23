@@ -75,10 +75,12 @@ triangle's plane or within the same band of it, on a triangle without area
 (`charge_sheet_corners` drops it instead; corners in a line to within 100 eps of
 the product of two sides), where a sheet's double and exact distance to its
 center fall on different sides of `far_from` or a pair's side of `k L` (rounding
-picks the branch), of a cuboid with a negative dimension (magpylib's formula
-then flips B), or at a non-finite observer wait for the surface rules (magpylib
-#1073; proposal #1081) and are added once those are decided. Their ids are
-reserved: listed per kind below, to be used with the same meaning.
+picks the branch), on a circular loop's wire (within today's 1e-15 r0 in its
+plane, or the same band of it), of a cuboid with a negative dimension
+(magpylib's formula then flips B) or a loop with a negative diameter, or at a
+non-finite observer wait for the surface rules (magpylib #1073; proposal #1081)
+and are added once those are decided. Their ids are reserved: listed per kind
+below, to be used with the same meaning.
 
 ## Where the values come from
 
@@ -233,8 +235,64 @@ end too); `observer-nan`, `observer-inf`.
 Not taken from magpylib's tests: `test_vs_mag2_line` and `test_Polyline_basic*`
 (magpylib 2's outputs, with poses); `test_core_physics_cube_current_replacement`
 (4000 segments: it tests the discretization); `test_line_position_bug`,
-`test_discontinous_line` (the interface). Waiting for other kinds: the polyline
-against `Circle`, triangle strips and current sheets.
+`test_discontinous_line` (the interface). Waiting for other kinds: triangle
+strips and current sheets. The polyline against `Circle` is not taken (see
+circle).
+
+## circle
+
+`magpylib.func.circle_field` for one loop in its own frame: centered on the
+origin in the `z = 0` plane, its current counter-clockwise about `+z`.
+Parameters: `diameter` (m), `current` (A). Fields `B` in T and `H` in A/m,
+`B = mu_0 H`. In cylindrical coordinates scaled by the radius `r0`, `H_r` and
+`H_z` are each one complete elliptic integral `cel` (Ortner et al., Magnetism
+2023), by Bulirsch's iteration from its first step until a step changes it by
+less than `errtol` relative. The iteration converges quadratically, so `errtol`
+is about the square root of the precision: magpylib's 1e-8 in doubles, 5e-26 at
+50 digits (1e-8 there would stop near double precision). `H_x = H_r x / r`,
+`H_y = H_r y / r` off the axis; on it `H_r` is exactly 0, and `H_x = H_y = 0`
+(NaN for a NaN observer, as magpylib).
+
+- **on the wire**: within 1e-15 r0 of the wire in the loop's plane, `B = H = 0`,
+  as magpylib; also where the distance from the wire squares below the smallest
+  normal double (about 1e-154 radii off it): Bulirsch's iteration never stops at
+  0 (magpylib's hangs there, magpylib #1100), and divides by that square.
+- **without diameter or current**: `B = H = 0` everywhere (magpylib's
+  `test_field_loop_specials`).
+
+Sources: `loop` 6 mm across, 2.5 A; `loop_reversed` its current reversed;
+`loop_km` a million times larger, -1.5 A; `loop_axis_exact` with exact inputs.
+Points at the center, on the axis above and below, 1e-9 radii off it, in the
+plane inside and outside, generic and mirrored below, 1e-3, 1e-6 and 1e-9 radii
+from the wire, 100 and 1e4 radii away, and at the km scale. From magpylib's
+tests: `test_BHJM_circle`'s three rows (`loop_bhjm_*`), the on-axis values of
+`test_core_physics_circle_VS_webpage_numbers` (`loop_webpage`) and of
+`test_obj_Circle`'s `test_BHJM_circle` (`loop_d1`, `loop_d2`, the latter also
+`test_func_circle`), `test_Circle_basic_B/H` (`loop_basic`),
+`test_field_loop_specials` off the wire (`loop_d2_2a`, `loop_no_diameter`,
+`loop_no_current`), and `test_loop_field`'s point in the loop's frame
+(`loop_stability`). **Relations**: `circle-b-mu0-h`; `circle-on-axis`,
+`H_z = I r0^2 / (2 (r0^2 + z^2)^(3/2))`, exactly 1 A/m for its inputs
+(`test_current_circle_on_axis`); `circle-mirror` in the loop's plane;
+`circle-turn-about-axis`; `circle-reverse-current`; `circle-scaling`, 1000 times
+the size, observer and current (`test_scaling_loop`); `circle-far-is-dipole`,
+against the dipole `I A` (`test_core_phys_moment_of_current_circle`;
+approximate, its dipole in this file).
+
+**Reserved, waiting for #1073**: on the wire (`circle-on-wire`: magpylib's
+`test_field_loop_specials` sets 0 there); a negative diameter
+(`circle-negative-diameter`: magpylib takes its absolute value);
+`circle-observer-nan`, `circle-observer-inf`.
+
+Not taken from magpylib's tests: `test_Circle_basic*`'s sensor, `test_repr`,
+`test_Circle_centroid`, `test_func_squeeze` and `test_circle_dipole_moment` (the
+interface); `test_loop_field`'s 1000 turns (the pose: an observer off the axis
+by rounding is `circle-near-axis-1e-9`); `test_core_phys_circle_polyline`,
+`test_Polyline_vs_Circle`, `test_core_physics_long_solenoid` and
+`test_core_physics_current_replacement` (299 to 9999 segments, or 1000 to 5000
+loops: they test the discretization); `test_dipole_approximation`'s loop, whose
+moment is not the loop's `I A` (magpylib #1099). Waiting for other kinds:
+`test_Circle_vs_Cylinder_field` and the cylinder's current replacement.
 
 ## triangle_linear_charge
 

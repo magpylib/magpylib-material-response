@@ -27,6 +27,7 @@ import mp_namespace as M
 import mpmath as mp
 import numpy as np
 
+from magpylib_material_response._array_api.circle import circle_field
 from magpylib_material_response._array_api.cuboid import cuboid_field
 from magpylib_material_response._array_api.polyline import polyline_field
 from magpylib_material_response._array_api.sphere import dipole_field, sphere_field
@@ -80,6 +81,25 @@ def polyline_scope(x, p):
     band = max(1e-15 * L, 100 * EPS * size)
     if d <= band:
         return "on the segment's line"
+    return None
+
+
+def circle_scope(x, p):
+    """Why an observer is out of scope for a circular current loop, or None:
+    on the wire (within today's 1e-15 r0 in the loop's plane, or #1081's 100
+    eps max(d, |x|), of it: magpylib gives 0 there, and the field is infinite
+    beside it), a negative diameter, or not finite. A loop without diameter
+    is in scope: 0 everywhere."""
+    if not np.isfinite(x).all():
+        return "a non-finite observer"
+    d = float(p["diameter"])
+    if d < 0:
+        return "a negative diameter"
+    if d == 0:  # 0 everywhere, as magpylib (test_field_loop_specials)
+        return None
+    wire = math.hypot(math.hypot(x[0], x[1]) - d / 2, x[2])
+    if wire <= max(1e-15 * d / 2, 100 * EPS * max(d, np.linalg.norm(x))):
+        return "on the wire"
     return None
 
 
@@ -201,6 +221,7 @@ class Kind(NamedTuple):
 KINDS = {
     "cuboid": Kind(cuboid_field, "BHJM", True, cuboid_scope),
     "polyline": Kind(polyline_field, "BH", True, polyline_scope),
+    "circle": Kind(circle_field, "BH", True, circle_scope),
     "dipole": Kind(dipole_field, "BH", True, dipole_scope),
     "sphere": Kind(sphere_field, "BHJM", True, sphere_scope),
     "triangle_linear_charge": Kind(

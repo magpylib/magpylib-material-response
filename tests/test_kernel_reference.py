@@ -4,7 +4,7 @@ implementation of them is checked against (#208), by the rules of
 
 Each kernel runs on NumPy and, where it is installed, on ``array_api_strict``,
 which allows nothing beyond the array API standard; the installed magpylib's
-cuboid, straight current segment, sphere and dipole are checked as ports.
+cuboid, straight current segment, circle, sphere and dipole are checked as ports.
 Every point is checked alone and, per file and kind, all in one call, so that
 batches are covered too."""
 
@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from packaging.version import Version
 
-from magpylib_material_response._array_api import cuboid, polyline, sphere
+from magpylib_material_response._array_api import circle, cuboid, polyline, sphere
 from magpylib_material_response.face_charge import _triangle as T
 
 try:
@@ -37,7 +37,7 @@ OLD_MAGPYLIB = Version(magpy.__version__) <= Version("6.3.0")
 # subtracts two sines that nearly cancel
 MAGPYLIB_OFF = {"current/axis-far-1e3", "current/axis-far-1e3-before"}
 # the kinds whose implementations take one row of parameters per observer
-PER_OBSERVER = {"cuboid", "polyline", "sphere", "dipole"}
+PER_OBSERVER = {"cuboid", "polyline", "circle", "sphere", "dipole"}
 
 
 def _decode(a):
@@ -65,6 +65,12 @@ def _magpylib_polyline(field, X, segment_start, segment_end, current):
     return magpy.func.polyline_field(
         field, X, segment_start, segment_end, current, squeeze=False
     ).reshape(-1, 3)
+
+
+def _magpylib_circle(field, X, diameter, current):
+    return magpy.func.circle_field(field, X, diameter, current, squeeze=False).reshape(
+        -1, 3
+    )
 
 
 def _magpylib_sphere(field, X, diameter, polarization):
@@ -95,6 +101,8 @@ IMPLS = {
     "charge_sheet_corners": _impls(T.charge_sheet_corners_field, "H"),
     "polyline": _impls(polyline.polyline_field, "BH")
     | {"magpylib": (_magpylib_polyline, np.asarray, "BH")},
+    "circle": _impls(circle.circle_field, "BH")
+    | {"magpylib": (_magpylib_circle, np.asarray, "BH")},
     "sphere": _impls(sphere.sphere_field, "BHJM")
     | {"magpylib": (_magpylib_sphere, np.asarray, "BH")},
     "dipole": _impls(sphere.dipole_field, "BH")

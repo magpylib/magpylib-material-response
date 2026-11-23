@@ -78,6 +78,13 @@ def _shape(src, name, X):
                             line={"color": "grey", "width": 6}, name=name,
                             hoverinfo="name", showlegend=False)  # fmt: skip
         return line, float(np.linalg.norm(S[1] - S[0])) or 1.0
+    if kind == "circle":
+        t = np.linspace(0, 2 * np.pi, 73)
+        r = abs(float(src["diameter"])) / 2
+        ring = go.Scatter3d(x=r * np.cos(t), y=r * np.sin(t), z=0 * t, mode="lines",
+                            line={"color": "grey", "width": 6}, name=name,
+                            hoverinfo="name", showlegend=False)  # fmt: skip
+        return ring, 2 * r or 1.0
     if kind == "dipole":
         dot = go.Scatter3d(x=[0], y=[0], z=[0], mode="markers",
                            marker={"size": 6, "color": "grey", "symbol": "x"},

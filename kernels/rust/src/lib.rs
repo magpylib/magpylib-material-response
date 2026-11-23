@@ -1,5 +1,5 @@
 //! Field kernels for magpylib-material-response's solved face charge and
-//! magpylib's cuboid, straight current segment, sphere and dipole, for the browser
+//! magpylib's cuboid, straight current segment, circular loop, sphere and dipole, for the browser
 //! (WebAssembly, `wasm` feature). Checked against `kernels/reference/*.json`
 //! (issue #208).
 //!
@@ -7,6 +7,7 @@
 //! fills `out` (M, 3), one row per observer; with `threads`, and the
 //! `parallel` feature, observers are split over rayon's threads.
 
+pub mod circle;
 pub mod cuboid;
 pub mod polyline;
 pub mod sphere;
@@ -133,6 +134,34 @@ pub fn polyline_field(
             current[i]
         };
         polyline::polyline_h(p, at(start, i), at(end, i), c).map(|v| scale * v)
+    });
+}
+
+/// B in T (`field` b'B') or H in A/m (b'H') of circular current loops in
+/// their own frames, as `magpylib.func.circle_field`: `diameter` and
+/// `current` one value for every observer or one per observer (M,).
+pub fn circle_field(
+    field: u8,
+    x: &[f64],
+    diameter: &[f64],
+    current: &[f64],
+    out: &mut [f64],
+    threads: bool,
+) {
+    for a in [diameter, current] {
+        assert!(
+            a.len() == 1 || 3 * a.len() == x.len(),
+            "one loop for all observers, or one per observer"
+        );
+    }
+    let scale = match field {
+        b'B' => cuboid::MU0,
+        b'H' => 1.0,
+        _ => panic!("field must be 'B' or 'H'"),
+    };
+    let at = |a: &[f64], i: usize| if a.len() == 1 { a[0] } else { a[i] };
+    each_observer(x, out, threads, |i, p| {
+        circle::circle_h(p, at(diameter, i), at(current, i)).map(|v| scale * v)
     });
 }
 
