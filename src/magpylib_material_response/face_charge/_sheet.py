@@ -145,7 +145,9 @@ class ChargeSheet(magpy.misc.CustomSource):
         Mesh points in m, in the source's own frame.
     faces : array-like, shape (m, 3)
         Triplets of vertex indices, one per triangle. A face without area (its
-        corners in a line) is dropped, with its charge: it carries none.
+        corners in a line) is dropped, with its charge: it carries none. The
+        sheet's ``faces``, ``charge_densities``, ``triangles`` and ``panels``
+        then have fewer rows than given.
     charge_densities : array-like, shape (m, 3)
         Surface charge density in A/m at each face's three corners, in the
         order of its vertex indices.
@@ -625,9 +627,15 @@ class ChargeSheet(magpy.misc.CustomSource):
         (m, 3), in A/m; coincident corners become one vertex."""
         T = np.asarray(triangles, float).reshape(-1, 3, 3)
         P = T.reshape(-1, 3)
-        # none for a part inside parts of its material, all its faces shared
-        span = (np.ptp(P, axis=0).max() if len(P) else 0.0) or 1.0
-        key = np.round(P / (1e-9 * span)).astype(np.int64)
+        # none for a part inside parts of its material, all its faces shared;
+        # a non-finite corner is a vertex of its own, its NaN left to the field
+        finite = np.isfinite(P).all(axis=1)
+        span = (np.ptp(P[finite], axis=0).max() if finite.any() else 0.0) or 1.0
+        key = np.zeros((len(P), 4), np.int64)
+        with np.errstate(invalid="ignore", over="ignore"):
+            grid = np.round(P / (1e-9 * span))
+        key[:, :3] = np.where(finite[:, None], grid, 0).astype(np.int64)
+        key[~finite, 3] = np.arange(1, np.count_nonzero(~finite) + 1)
         _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
         return cls(P[first], inv.reshape(-1, 3), charge_densities, **kwargs)
 

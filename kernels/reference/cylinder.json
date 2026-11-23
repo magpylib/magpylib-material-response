@@ -1006,23 +1006,23 @@
   },
   {
    "id": "cyl-far-is-dipole",
-   "why": "magpylib test_dipole_approximation: 1300 m out, the cylinder of 1 m^3 is the dipole J V / mu_0 (approximate)",
+   "why": "100 sizes off, the cylinder of 1 m^3 is the dipole J V / mu_0 (magpylib test_dipole_approximation's direction; approximate: the size and the rounded weight). Its 1300 m lose 7e-7 in doubles (SPEC: cylinder)",
    "terms": [
     {
      "source": "dipole_test_cyl",
      "field": "B",
-     "observer": [1234.0, -234.0, 345.0],
+     "observer": [106.90266972928147, -20.27165698270005, 29.88769939757059],
      "weight": 1.0
     },
     {
      "source": "dipole_test_dip",
      "field": "B",
-     "observer": [1234.0, -234.0, 345.0],
+     "observer": [106.90266972928147, -20.27165698270005, 29.88769939757059],
      "weight": -795774.7155645449
     }
    ],
    "target": [0, 0, 0],
-   "atol": 1e-15
+   "atol": 1e-13
   },
   {
    "id": "cyl-thin-is-loop",

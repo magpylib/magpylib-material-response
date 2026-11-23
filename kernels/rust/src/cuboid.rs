@@ -112,7 +112,9 @@ pub fn cuboid_b_core(obs: [f64; 3], dim: [f64; 3], pol: [f64; 3]) -> [f64; 3] {
 
 /// Whether `obs` is inside the cuboid (faces included), and whether the
 /// field is computed there at all: not on edges and corners, nor for a zero
-/// polarization or dimension, all (0, 0, 0) by convention.
+/// polarization or dimension, all (0, 0, 0) by convention (a non-finite
+/// polarization's component stays NaN: a source parameter out of the
+/// reference files' scope).
 #[inline]
 fn classify(obs: [f64; 3], dim: [f64; 3], pol: [f64; 3]) -> (bool, bool) {
     const RTOL_SURFACE: f64 = 1e-15;

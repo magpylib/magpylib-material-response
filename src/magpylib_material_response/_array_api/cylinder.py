@@ -15,11 +15,12 @@ the observer at radius ``r`` and height ``z``, the bases at ``z = +-z0``.
   2018; Ortner, Leitner, Rauber) by ``K``, ``E`` and ``Pi`` of a negative
   parameter, each a ``cel``.
 - Both instead by one series in the radius wherever ``r`` is within
-  ``SERIES_RADIUS`` of the distance to the edge: near the axis, where
-  magpylib keeps the transverse series to three terms (``r < 0.05``, off
-  about 1e-9) and this module to the precision, and in a cone along the axis
-  far away, where the elliptic integrals cancel (magpylib's transverse field
-  off 6e-5 at 100 radii up, 0.1 out).
+  ``SERIES_RADIUS`` of the distance from the axis point to the hull: near the
+  axis, where magpylib keeps the transverse series to three terms (``r <
+  0.05``, off up to 1.5e-9 of the transverse field) and this module to the
+  precision, and in a cone along the axis far away, where the elliptic
+  integrals cancel (magpylib's transverse field off 6e-5 at 100 radii up, 0.1
+  out).
 
 With ``rho = (x, y) / r0``, the transverse field is
 ``mu_0 H_xy = -(S_f J_xy + D (J . rho) rho) / 4`` and
@@ -29,16 +30,12 @@ axis. Every ``cel`` is Bulirsch's, stopped as in ``circle.py``.
 
 import math
 
-from magpylib_material_response._array_api import quiet
+from magpylib_material_response._array_api import cel_errtol, quiet
 from magpylib_material_response._array_api.cuboid import MU0, _magnet_inputs
 
 # within this share of the radius of the hull's radius and of the half
 # height of a base's height, a point is on the edge, as magpylib (isclose)
 RTOL_EDGE = 1e-15
-# Bulirsch's stop: the iteration converges quadratically, so a relative step
-# below the square root of the precision leaves the integral exact to it.
-# Magpylib's 1e-8 in doubles; the 50-digit namespace's 5e-26
-ERRTOL = 1e-8
 # the transverse field is the series within this distance of the axis, in
 # radii: the elliptic integrals there lose eps / r^2 to cancellation (4e-15
 # at the switch), while each term of the series is about r^2 times the last
@@ -213,7 +210,7 @@ def cylinder_field(field, observers, dimension, polarization):
         field, observers, dimension, polarization
     )
     fi = xp.finfo(observers.dtype)
-    errtol = min(ERRTOL, fi.eps**0.5)
+    errtol = cel_errtol(fi.eps)
     n = series_terms(fi.eps)
     x, y, z = xp.unstack(observers, axis=-1)
     diameter, height = xp.unstack(dimension, axis=-1)

@@ -2,6 +2,8 @@
 name = "mmr-kernels"
 version = "0.1.0"
 edition = "2024"
+# the oldest Rust that builds it: `is_multiple_of` on integers (1.86 fails)
+rust-version = "1.87"
 description = "Field kernels of magpylib-material-response's face charge and magpylib's cuboid, straight current segment, circular loop, cylinder, sphere and dipole, for the browser (WebAssembly, issue #208)"
 license = "BSD-3-Clause"
 publish = false

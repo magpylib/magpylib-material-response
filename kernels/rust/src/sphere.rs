@@ -46,6 +46,7 @@ pub fn sphere_b(x: V3, diameter: f64, polarization: V3) -> V3 {
 pub fn sphere_h(x: V3, diameter: f64, polarization: V3) -> V3 {
     let b = sphere_b(x, diameter, polarization);
     // not outside: a NaN observer counts inside, as in Python and magpylib
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     let inside = !(dot(x, x).sqrt() > diameter.abs() / 2.0);
     [0, 1, 2].map(|k| (b[k] - if inside { polarization[k] } else { 0.0 }) / MU0)
 }

@@ -485,7 +485,9 @@ fn with_area(v: &[f64], q: &[f64]) -> (Vec<f64>, Vec<f64>) {
     let (mut vk, mut qk) = (Vec::with_capacity(v.len()), Vec::with_capacity(q.len()));
     for (tri, qt) in v.chunks_exact(9).zip(q.chunks_exact(3)) {
         let (ab, ac) = (sub(row(tri, 1), row(tri, 0)), sub(row(tri, 2), row(tri, 0)));
-        if norm(cross(ab, ac)) > NO_AREA * norm(ab) * norm(ac) {
+        // `!(a <= b)`: a non-finite corner keeps its triangle, and its NaN
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        if !(norm(cross(ab, ac)) <= NO_AREA * norm(ab) * norm(ac)) {
             vk.extend_from_slice(tri);
             qk.extend_from_slice(qt);
         }

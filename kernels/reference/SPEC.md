@@ -63,7 +63,8 @@ components. An expected value with a non-finite component is matched exactly,
 component by component (NaN by NaN, an infinity by the same infinity).
 
 A checker reads every file, checks every point and relation whose kinds and
-fields it has, and reports the ones it skips.
+fields it has, and reports the ones it skips (a port without J and M, as
+magpylib's `func`, is checked on B and H).
 
 ## Scope
 
@@ -82,6 +83,13 @@ dimension (magpylib's formula then flips B), a cylinder without diameter or a
 loop with a negative diameter, or at a non-finite observer wait for the surface
 rules (magpylib #1073; proposal #1081) and are added once those are decided.
 Their ids are reserved: listed per kind below, to be used with the same meaning.
+#1073 now proposes a band of 1e-8 instead: under it, also `cyl-near-edge-1e-9`,
+`circle-near-wire-1e-9`, `near-middle-1e-9` and the `off-plane-*` points up to
+1e-9 would be band points. Out of scope too, with no id: a non-finite source
+parameter (the implementations may then differ in which components are NaN), and
+an observer so far or so near that a power of its distance overflows or
+underflows in doubles (a dipole's `r^5` below about 1e-62 m, `r^2` above 1e154
+m).
 
 ## Where the values come from
 
@@ -151,8 +159,8 @@ test, not in the file.
 The relation `far-is-dipole` ties a cuboid to the dipole `J V / mu_0` 100 sides
 off, in the direction of magpylib's `test_dipole_approximation` (approximate;
 its dipole in this file). Its own 1300 sides are not taken: there the cuboid's
-formula in doubles is off by 3e-6 (1.5e-6 at 1000 sides, 4e-3 at 10000; magpylib
-#1098), more than this file's rule allows.
+formula in doubles is off by 2e-6 to 5e-6 (1.5e-6 at 1000 sides, 3e-3 at 10000;
+magpylib #1098), more than this file's rule allows.
 
 Not taken from magpylib's tests: `test_vs_mag2` (magpylib 2's outputs; these
 values are exact), `test_Cuboid_basics` (the pose). Waiting for other kinds: the
@@ -324,20 +332,22 @@ radius `r` and height `z`, the bases at `+-z0`.
 - **on the edge**: within 1e-15 r0 of the hull's radius and 1e-15 z0 of a base's
   height, `B = H = 0`, as magpylib; also where the distance from the edge
   squares below the smallest normal double.
-- **degenerate**: for a zero polarization, height or diameter, `B = H = 0`
-  (magpylib: the same for the first two; NaN for a zero diameter, where magpylib
-  6.1.0 hangs, fixed by magpylib #1094).
+- **degenerate**: for a zero polarization or height, `B = H = 0`, as magpylib. A
+  zero diameter is reserved (`cyl-no-diameter`): this kernel gives 0, magpylib
+  NaN (6.1.0 hangs there, fixed by magpylib #1094).
 
 magpylib's own `Cylinder` takes the transverse series to three terms below 0.05
-radii (off about 1e-9 just below it) and the elliptic integrals everywhere else:
-far along the axis they cancel (its axial field off 3e-8 at 1000 radii up, its
-transverse field 6e-5 at 100 radii up and 0.1 out, 8e-4 at 185). The magpylib
-checker skips those points (`cyl-near-axis-0.049`, `far-cyl-axis-1e3`,
-`tall-axis-middle`, `tall-far-axis`, `cyl-magpylib-small-r-*`) and
-`cyl-no-height`, where magpylib's batch gives rounding instead of 0. Off the
-cone, far away, both cancel alike: off about `1e-16 (R / r0)^3` of |B| (3e-11 at
-100 radii, 2e-8 at 1000), divided by `z0` for a thin disk; the file's far points
-stay within about 100 radii.
+radii (off up to 1.5e-9 of its transverse field just below it) and the elliptic
+integrals everywhere else: far along the axis they cancel (its axial field off
+3e-8 at 1000 radii up, its transverse field 6e-5 at 100 radii up and 0.1 out,
+8e-4 at 185). The magpylib checker skips those points (`cyl-near-axis-0.049`,
+`far-cyl-axis-1e3`, `tall-far-axis`, `cyl-magpylib-small-r-*`, and
+`tall-axis-middle`, `tall-axis-low`, where only its H is off, 1.4e-12 and
+1.7e-12), and `cyl-no-height` in a batch, where magpylib gives rounding instead
+of 0. Off the cone, far away, both cancel alike: up to about 3e-10 of |B| at 100
+radii and 5e-7 at 1000 (growing as the cube of the distance), and more for a
+thin disk (7e-8 and 3e-5 for one 0.01 radii high); the file's far points stay
+within 200 radii.
 
 Sources: `cyl` 10 mm across, 8 mm high, every component of `J` nonzero;
 `cyl_axial` and `cyl_tv` its `J_z` and `J_xy` alone; `cyl_tv_turned`; `cyl_big`
@@ -363,11 +373,11 @@ hull's radius (`rauber_cyl`), `test_cylinder_diametral_small_r` either side of
 axis (the series on both sides); `cyl-turn-about-axis`; `cyl-scaling`;
 `cyl-magpylib-scaling` (`test_cylinder_scaling_invariance`, its `a = 1e-6` as
 2^-20); `cyl-on-axis-axial`, `cyl-on-axis-transverse` (3 T and 7 T exactly);
-approximate: `cyl-far-is-dipole` (`test_dipole_approximation`'s cylinder, 1300 m
-out, its dipole in this file;
-`test_core_physics_dipole_approximation_magnet_far_field` is the same law),
-`cyl-thin-is-loop` (`test_Circle_vs_Cylinder_field`, its first observer, its
-loop in this file), `cyl-long-solenoid` (`test_core_physics_long_solenoid`).
+approximate: `cyl-far-is-dipole` (`test_dipole_approximation`'s cylinder in its
+direction, 100 sizes out: at its own 1300 m NumPy is off 7e-7; its dipole in
+this file; `test_core_physics_dipole_approximation_magnet_far_field` is the same
+law), `cyl-thin-is-loop` (`test_Circle_vs_Cylinder_field`, its first observer,
+its loop in this file), `cyl-long-solenoid` (`test_core_physics_long_solenoid`).
 
 **Reserved, waiting for #1073**: on the hull, a base or the edge (`cyl-on-hull`,
 `cyl-on-base`, `cyl-on-edge`: magpylib's `test_cylinder_corner` sets 0 on the

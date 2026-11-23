@@ -11,7 +11,7 @@ type V3 = [f64; 3];
 
 /// `_array_api/cylinder.RTOL_EDGE`.
 const RTOL_EDGE: f64 = 1e-15;
-/// `_array_api/cylinder.ERRTOL`: Bulirsch's stop in doubles.
+/// `_array_api.ERRTOL`: Bulirsch's stop in doubles.
 const ERRTOL: f64 = 1e-8;
 /// `_array_api/cylinder.SERIES_RADIUS`.
 const SERIES_RADIUS: f64 = 0.25;

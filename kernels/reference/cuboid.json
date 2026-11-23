@@ -646,7 +646,7 @@
   },
   {
    "id": "near-edge-z-1e-6",
-   "why": "1e-6 off an edge parallel to z, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "why": "1e-6 off an edge parallel to z, outside one face: magpylib <= 6.3.0 loses digits here, off 2e-6 (#1066); equals magpylib's 90-digit literal",
    "source": "near_edge_z",
    "observer": [1.000001, 1.999999, 0.7],
    "B": [-0.31342848854100824, 0.5910594099306999, -0.02750340127638744],
@@ -676,7 +676,7 @@
   },
   {
    "id": "near-edge-x-1e-6",
-   "why": "1e-6 off an edge parallel to x, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "why": "1e-6 off an edge parallel to x, outside one face: magpylib <= 6.3.0 loses digits here, off 2e-6 (#1066); equals magpylib's 90-digit literal",
    "source": "near_edge_x",
    "observer": [0.7, 1.000001, 1.999999],
    "B": [-0.02750340127638744, -0.31342848854100824, 0.5910594099306999],
@@ -706,7 +706,7 @@
   },
   {
    "id": "near-edge-y-1e-6",
-   "why": "1e-6 off an edge parallel to y, outside one face: a radius rounds to |q| (#1066); equals magpylib's 90-digit literal",
+   "why": "1e-6 off an edge parallel to y, outside one face: magpylib <= 6.3.0 loses digits here, off 2e-6 (#1066); equals magpylib's 90-digit literal",
    "source": "near_edge_y",
    "observer": [1.999999, 0.7, 1.000001],
    "B": [0.5910594099306999, -0.02750340127638744, -0.31342848854100824],
@@ -956,7 +956,7 @@
   },
   {
    "id": "far-is-dipole",
-   "why": "100 sides off, a cuboid is the dipole J V / mu_0 (magpylib test_dipole_approximation's direction; approximate: the size and the rounded weight). Its 1300 sides lose 2e-6 in doubles",
+   "why": "100 sides off, a cuboid is the dipole J V / mu_0 (magpylib test_dipole_approximation's direction; approximate: the size and the rounded weight). Its 1300 sides lose 2e-6 to 5e-6 in doubles",
    "terms": [
     {
      "source": "unit_cube",

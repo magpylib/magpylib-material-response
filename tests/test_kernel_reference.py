@@ -53,8 +53,9 @@ MAGPYLIB_CYLINDER_OFF = {
     "cylinder/tall-far-axis": _AXIS,
     "cylinder/cyl-magpylib-small-r-0.0499": _AXIS,
     "cylinder/cyl-magpylib-small-r-0.0501": _AXIS,
-    "cylinder/cyl-no-height": "magpylib computes a cylinder without height as any other: rounding, not 0, in a batch",
 }
+# and in a batch only: a cylinder without height as any other, rounding not 0
+MAGPYLIB_BATCH_OFF = {"cylinder/cyl-no-height"}
 # the kinds whose implementations take one row of parameters per observer
 PER_OBSERVER = {"cuboid", "polyline", "circle", "cylinder", "sphere", "dipole"}
 
@@ -164,8 +165,9 @@ def _cases():
                 yield pytest.param(name, point, impl, id=f"{name}-{point['id']}-{impl}")
 
 
-def _skipped(name, impl, point):
-    """Why a port skips a point of file ``name``, or None."""
+def _skipped(name, impl, point, batch=False):
+    """Why a port skips a point of file ``name``, alone or in a batch, or
+    None."""
     if impl not in PORTS:
         return None
     key = f"{name}/{point['id']}"
@@ -175,7 +177,14 @@ def _skipped(name, impl, point):
         return "magpylib subtracts two sines that cancel beyond a segment's end (#1097)"
     if key in MAGPYLIB_CYLINDER_OFF:
         return MAGPYLIB_CYLINDER_OFF[key]
+    if batch and key in MAGPYLIB_BATCH_OFF:
+        return "magpylib's batch computes a cylinder without height: rounding, not 0"
     return None
+
+
+def test_files_found():
+    """Every family's file is read: an empty folder would pass silently."""
+    assert set(FILES) >= {"cuboid", "current", "cylinder", "face_charge", "sphere"}
 
 
 @pytest.mark.parametrize(("name", "point", "impl"), list(_cases()))
@@ -209,7 +218,8 @@ def test_batch(name, kind, impl):
     points = [
         p
         for p in doc["points"]
-        if doc["sources"][p["source"]]["kind"] == kind and not _skipped(name, impl, p)
+        if doc["sources"][p["source"]]["kind"] == kind
+        and not _skipped(name, impl, p, batch=True)
     ]
     groups = (
         [points]
@@ -234,6 +244,25 @@ def test_batch(name, kind, impl):
             expected = _decode([p[field] for p in group])
             atol = [p.get(f"atol_{field}", 0.0) for p in group]
             _within(got, expected, doc["rtol"], atol, f"{kind} {field} batch")
+
+
+@pytest.mark.parametrize("kind", ["circle", "cylinder"])
+def test_float32(kind):
+    """In float32 the kernels that iterate ``cel`` stop at its precision: every
+    point of the kind finite where its value is (1e-8 would never be met)."""
+    func = IMPLS[kind]["array-api-numpy"][0]
+    for doc in FILES.values():
+        points = [
+            p for p in doc["points"] if doc["sources"][p["source"]]["kind"] == kind
+        ]
+        for p in points:
+            params = _params(doc["sources"][p["source"]])
+            got = func(
+                "B",
+                _decode([p["observer"]]).astype(np.float32),
+                **{k: v[None].astype(np.float32) for k, v in params.items()},
+            )
+            assert np.isfinite(got).all() == np.isfinite(_decode(p["B"])).all(), p["id"]
 
 
 def _relations():

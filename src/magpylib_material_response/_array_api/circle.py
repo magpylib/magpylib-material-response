@@ -12,15 +12,11 @@ loop", Magnetism 2023), ``H_r`` and ``H_z`` are each one complete elliptic
 integral ``cel``, by Bulirsch's iteration with its first step done.
 """
 
-from magpylib_material_response._array_api import namespace, quiet
+from magpylib_material_response._array_api import cel_errtol, namespace, quiet
 from magpylib_material_response._array_api.cuboid import MU0, _promote
 
 # distance from the wire in the loop's plane, in radii, taken as on it
 RTOL_WIRE = 1e-15
-# Bulirsch's stop: the iteration converges quadratically, so a relative step
-# below the square root of the precision leaves the integral exact to it.
-# Magpylib's 1e-8 in doubles; the 50-digit namespace's 5e-26
-ERRTOL = 1e-8
 
 
 def _cel_iter(xp, qc, p, g, cc, ss, em, kk, errtol):
@@ -51,7 +47,7 @@ def circle_field(field, observers, diameter, current):
     xp = namespace(observers, diameter, current)
     observers, diameter, current = _promote(xp, observers, diameter, current)
     fi = xp.finfo(observers.dtype)
-    errtol = min(ERRTOL, fi.eps**0.5)
+    errtol = cel_errtol(fi.eps)
     x, y, z = xp.unstack(observers, axis=-1)
     with quiet("divide", "invalid", "over"):
         r0 = xp.abs(diameter) / 2

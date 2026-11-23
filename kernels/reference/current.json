@@ -449,7 +449,7 @@
   },
   {
    "id": "circle-generic",
-   "why": "a generic point about a radius off the wire",
+   "why": "a generic point, 0.6 radii from the wire",
    "source": "loop",
    "observer": [0.0013, -0.0021, 0.0017],
    "B": [0.00011567932484797732, -0.00018686660167750184, 0.0002267490818953831],
