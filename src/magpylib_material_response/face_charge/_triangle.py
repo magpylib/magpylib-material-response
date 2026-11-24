@@ -118,9 +118,24 @@ _MID_WEIGHTS = np.array(
 _MID_WEIGHTS /= _MID_WEIGHTS.sum()
 
 
-def _r_plus_l(R, l, R02):
-    """``R + l``, stable where ``l < 0``: there it is ``R0^2 / (R - l)``."""
-    return namespace(R).where(l >= 0, R + l, R02 / (R - l))
+def _edge_log(R_minus, R_plus, l_minus, l_plus, R02):
+    """An edge's ``f = ln((R+ + l+) / (R- + l-))``, by one of three forms
+    equal by ``R^2 - l^2 = R0^2``, each where none of its sums cancels: R0^2
+    only where the foot of the observer is well inside the edge, so that a
+    gradient never takes the difference of two derivatives of ln R0^2 near
+    the edge's line. The forms switch at ``l = -R/4``, not at ``l = 0``, which
+    an observer above a corner meets exactly: there XLA's CPU fusion rounds
+    ``l`` to either side, and a gradient under ``jax.jit`` took the forward
+    pass's form for one and its backward pass's for another."""
+    xp = namespace(R_minus)
+    ahead, behind = l_minus > -0.25 * R_minus, l_plus < 0.25 * R_plus
+    num = xp.where(
+        ahead,
+        R_plus + l_plus,
+        xp.where(behind, R_minus - l_minus, (R_plus + l_plus) * (R_minus - l_minus)),
+    )
+    den = xp.where(ahead, R_minus + l_minus, xp.where(behind, R_plus - l_plus, R02))
+    return xp.log(num / den)
 
 
 def _dot(a, b):
@@ -167,23 +182,7 @@ def _edge_terms(corners, du, dv, R, w2):
         l_minus = du[i] * tu + dv[i] * tv
         l_plus = du[j] * tu + dv[j] * tv
         P0 = du[i] * tv - dv[i] * tu
-        R02 = P0 * P0 + w2
-        # ln((R+ + l+) / (R- + l-)), by one of three forms equal by
-        # R^2 - l^2 = R0^2, each where none of its sums cancels: R0^2 only
-        # where the foot of the observer is well inside the edge, so that a
-        # gradient never takes the difference of two derivatives of ln R0^2
-        # near the edge's line. The forms switch at l = -R/4, not at l = 0,
-        # which an observer above a corner meets exactly: there XLA's CPU
-        # fusion rounds l to either side, and a gradient under jax.jit took
-        # the forward pass's form for one and its backward pass's for another
-        ahead, behind = l_minus > -0.25 * R[i], l_plus < 0.25 * R[j]
-        num = xp.where(
-            ahead,
-            R[j] + l_plus,
-            xp.where(behind, R[i] - l_minus, (R[j] + l_plus) * (R[i] - l_minus)),
-        )
-        den = xp.where(ahead, R[i] + l_minus, xp.where(behind, R[j] - l_plus, R02))
-        f = xp.log(num / den)
+        f = _edge_log(R[i], R[j], l_minus, l_plus, P0 * P0 + w2)
         yield tu, tv, P0 * f, f, R[j] - R[i]
 
 
@@ -315,6 +314,13 @@ def charge_field_far(X, y, charge, keep=None):
     d = [X[:, k, None, None] - y[..., k] for k in range(3)]
     with quiet("over", "invalid"):
         r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+        # an observer on a point (a centroid is one) is near, so its pair is
+        # left out, here or by the caller; kept off 0 where a gradient may be
+        # taken (not NumPy's, unchanged to the last bit), for it takes a pair
+        # left out as 0 times its derivative
+        if xp is not np:
+            left_out = (r2 == 0) if keep is None else ~keep[:, None, :]
+            r2 = xp.where(left_out, 1.0, r2)
         scale = charge / (r2 * xp.sqrt(r2))
         if keep is not None:
             scale = xp.where(keep[:, None, :], scale, 0.0)
@@ -388,8 +394,7 @@ def normal_field(X, V, fr, pairs=False):
             l_minus = du[i] * tu + dv[i] * tv
             l_plus = du[j] * tu + dv[j] * tv
             P0 = du[i] * tv - dv[i] * tu
-            R02 = P0 * P0 + w2
-            f = np.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+            f = _edge_log(R[i], R[j], l_minus, l_plus, P0 * P0 + w2)
             sum_mu = sum_mu + tv * f
             sum_mv = sum_mv - tu * f
     # the densities at the projection, from the centroid (ub + uc, vc) / 3
@@ -458,9 +463,7 @@ def normal_field_far(X, V, fr):
                 R02 = np.maximum(np.sum(foot * foot, axis=1), w[a, b] ** 2)
                 R_minus = np.linalg.norm(x - p, axis=1)
                 R_plus = np.linalg.norm(x - q, axis=1)
-                f[a, b] = np.log(
-                    _r_plus_l(R_plus, l_plus, R02) / _r_plus_l(R_minus, l_minus, R02)
-                )
+                f[a, b] = _edge_log(R_minus, R_plus, l_minus, l_plus, R02)
             m = np.cross(t, n)
             for k, e in enumerate((e1, e2)):
                 sum_mf[k] = sum_mf[k] + (np.sum(e * m, axis=1) / s) * f
@@ -655,7 +658,9 @@ def charge_sheet_corners_field(
     the same field, as neither the longest edge nor the reach changes."""
     xp = namespace(vertices, charge_densities)
     keep = has_area(vertices)
-    if _data_dependent_shapes(xp) or vertices.shape[0] == 0:
+    if vertices.shape[0] == 0:
+        c, center, far_from = sheet_parameters(vertices, charge_densities)
+    elif _data_dependent_shapes(xp):
         vertices, charge_densities = vertices[keep], charge_densities[keep]
         c, center, far_from = sheet_parameters(vertices, charge_densities)
     else:

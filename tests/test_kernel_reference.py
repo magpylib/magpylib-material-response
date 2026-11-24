@@ -2,14 +2,16 @@
 implementation of them is checked against (#208), by the rules of
 ``kernels/reference/SPEC.md``.
 
-Each kernel runs on NumPy and, where it is installed, on ``array_api_strict``,
-which allows nothing beyond the array API standard; the installed magpylib's
+Each kernel runs on NumPy and, where they are installed, on ``array_api_strict``,
+which allows nothing beyond the array API standard, on JAX and on PyTorch
+(with ``array_api_compat``); the installed magpylib's
 cuboid, straight current segment, circle, cylinder, sphere and dipole are checked as
 ports.
 Every point is checked alone and, per file and kind, all in one call, so that
 batches are covered too."""
 
 import json
+from importlib.util import find_spec
 from pathlib import Path
 
 import magpylib as magpy
@@ -40,6 +42,8 @@ except ImportError:
 try:
     import torch
 except ImportError:
+    torch = None
+if find_spec("array_api_compat") is None:  # PyTorch's namespace
     torch = None
 
 REFERENCE = Path(__file__).parents[1] / "kernels" / "reference"
@@ -331,6 +335,12 @@ SHEET = np.array(
 SHEET_DENSITIES = np.random.default_rng(0).normal(size=(5, 3))
 
 
+def _sheet_H(x, v, q):
+    """A weighted sum of the sheet's H at one observer."""
+    H = T.charge_sheet_corners_field("H", x, v, q, tolerance=1e-6)
+    return (H @ namespace(H).asarray([1.0, -2.0, 0.7], dtype=H.dtype))[0]
+
+
 @pytest.mark.parametrize("library", GRADS)
 @pytest.mark.parametrize(
     "observer",
@@ -349,12 +359,7 @@ def test_sheet_gradient(library, observer):
     lib, grad = GRADS[library]
     if lib is None:
         pytest.skip(f"{library} not installed")
-    weights = np.array([1.0, -2.0, 0.7])
-
-    def f(x, v, q):
-        H = T.charge_sheet_corners_field("H", x, v, q, tolerance=1e-6)
-        return (H @ namespace(H).asarray(weights, dtype=H.dtype))[0]
-
+    f = _sheet_H
     args = [np.array([observer]), SHEET, SHEET_DENSITIES]
     got = [np.asarray(g) for g in grad(f, args)]
     for k, a in enumerate(args):
@@ -369,3 +374,27 @@ def test_sheet_gradient(library, observer):
             expected[i] = (f(*up) - f(*down)) / (2 * h)
         atol = 1e-6 * np.abs(expected).max()
         np.testing.assert_allclose(got[k], expected, rtol=0, atol=atol)
+
+
+@pytest.mark.parametrize("library", GRADS)
+@pytest.mark.parametrize(
+    ("observer", "sheet"),
+    [
+        # the first triangle's centroid, a point of the middle rule
+        pytest.param([2 / 3, 1 / 3, 0.0], slice(None), id="on-a-rule-point"),
+        pytest.param([0.5, 0.5, 1.0], slice(0, 0), id="no-triangle"),
+        # the centroid of the stand-in jax.jit takes for the triangle
+        pytest.param([1 / 3, 1 / 3, 1 / 3], slice(3, 4), id="no-area"),
+    ],
+)
+def test_sheet_gradient_finite(library, observer, sheet):
+    """On a point of the sheet's quadrature rules the gradient is finite,
+    and of a sheet without area it is 0."""
+    lib, grad = GRADS[library]
+    if lib is None:
+        pytest.skip(f"{library} not installed")
+    args = [np.array([observer]), SHEET[sheet], SHEET_DENSITIES[sheet]]
+    got = [np.asarray(g) for g in grad(_sheet_H, args)]
+    assert all(np.isfinite(g).all() for g in got)
+    if sheet != slice(None):
+        assert not any(g.any() for g in got)
