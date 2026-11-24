@@ -18,7 +18,8 @@ and this project adheres to
   collection, or in a file saved by `to_json`, raises an error that names
   `UniformField` in every solver, mesher and `from_json`, rather than solving
   without its field
-  ([#71](https://github.com/magpylib/magpylib-material-response/issues/71)).
+  ([#71](https://github.com/magpylib/magpylib-material-response/issues/71),
+  [#221](https://github.com/magpylib/magpylib-material-response/pull/221)).
 
 ## [0.14.0] - 2026-11-20
 
