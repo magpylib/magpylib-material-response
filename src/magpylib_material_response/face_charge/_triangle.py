@@ -142,8 +142,9 @@ def _in_plane(X, V, fr):
     axes = xp.permute_dims(xp.stack([e1, e2, n]), (0, 2, 1))
     origin = xp.stack([_dot(a, e1), _dot(a, e2), _dot(a, n)])[:, None, :]
     u, v, w = xp.unstack(xp.matmul(X, axes) - origin, axis=0)
-    # lifted off the plane as in `normal_field`
-    w = xp.where(w == 0, 1e-12 * s, w)
+    # lifted off the plane as in `normal_field`, by adding, so that a
+    # gradient keeps the derivative along the normal
+    w = w + xp.where(w == 0, 1e-12 * s, 0.0)
     w2 = w * w
     du = [pu - u for pu, _ in corners]
     dv = [pv - v for _, pv in corners]
@@ -167,7 +168,22 @@ def _edge_terms(corners, du, dv, R, w2):
         l_plus = du[j] * tu + dv[j] * tv
         P0 = du[i] * tv - dv[i] * tu
         R02 = P0 * P0 + w2
-        f = xp.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+        # ln((R+ + l+) / (R- + l-)), by one of three forms equal by
+        # R^2 - l^2 = R0^2, each where none of its sums cancels: R0^2 only
+        # where the foot of the observer is well inside the edge, so that a
+        # gradient never takes the difference of two derivatives of ln R0^2
+        # near the edge's line. The forms switch at l = -R/4, not at l = 0,
+        # which an observer above a corner meets exactly: there XLA's CPU
+        # fusion rounds l to either side, and a gradient under jax.jit took
+        # the forward pass's form for one and its backward pass's for another
+        ahead, behind = l_minus > -0.25 * R[i], l_plus < 0.25 * R[j]
+        num = xp.where(
+            ahead,
+            R[j] + l_plus,
+            xp.where(behind, R[i] - l_minus, (R[j] + l_plus) * (R[i] - l_minus)),
+        )
+        den = xp.where(ahead, R[i] + l_minus, xp.where(behind, R[j] - l_plus, R02))
+        f = xp.log(num / den)
         yield tu, tv, P0 * f, f, R[j] - R[i]
 
 
@@ -458,6 +474,13 @@ def normal_field_far(X, V, fr):
 # charge in A/m, as the array API functions of a source's own parameters.
 
 
+def _data_dependent_shapes(xp):
+    """Whether ``xp`` allows an array whose shape depends on values, as
+    boolean indexing gives (not ``jax.numpy``: ``jax.jit`` traces shapes)."""
+    info = getattr(xp, "__array_namespace_info__", None)
+    return info is None or info().capabilities().get("data-dependent shapes", True)
+
+
 def _check_H(field):
     if field != "H":
         msg = f"field must be 'H'; instead received {field!r}."
@@ -480,13 +503,14 @@ def beyond_far_from(observers, center, far_from):
 FAR_SIDES = 64.0
 
 
-def sheet_parameters(vertices, charge_densities, fr=None):
+def sheet_parameters(vertices, charge_densities, fr=None, counted=None):
     """A sheet of triangles ``vertices`` (N, 3, 3) with the charge density
     ``charge_densities`` (N, 3) at their corners, in A/m, as
     :func:`charge_sheet_field` takes it: the coefficients (N, 3) of ``1, u, v``
     in each triangle's frame (:func:`frames`, or ``fr``), the center, the mean
     of the centroids (3,), and ``far_from``, the farthest corner from it plus
-    ``FAR_SIDES`` longest edges (0-d; infinite for no triangle)."""
+    ``FAR_SIDES`` longest edges (0-d; infinite for no triangle). ``counted``
+    (N,) of bool, where given: the triangles the center is the mean of."""
     xp = namespace(vertices, charge_densities)
     cen, _, e1, e2, s, _ = frames(vertices) if fr is None else fr
     d = vertices - cen[:, None, :]
@@ -503,7 +527,12 @@ def sheet_parameters(vertices, charge_densities, fr=None):
     c = xp.stack([q[:, 0] - c1 * u[:, 0] - c2 * v[:, 0], c1, c2], axis=1)
     if vertices.shape[0] == 0:
         return c, xp.zeros(3, dtype=vertices.dtype), xp.asarray(float("inf"))
-    center = xp.mean(cen, axis=0)
+    if counted is None:
+        center = xp.mean(cen, axis=0)
+    else:
+        # none counted: the center 0, as for no triangle
+        n = xp.maximum(xp.sum(xp.astype(counted, cen.dtype)), 1.0)
+        center = xp.sum(xp.where(counted[:, None], cen, 0.0), axis=0) / n
     a, b, cc = vertices[:, 0, ...], vertices[:, 1, ...], vertices[:, 2, ...]
     side = xp.max(xp.linalg.vector_norm(xp.stack([b - a, cc - b, a - cc]), axis=2))
     reach = xp.max(xp.linalg.vector_norm(vertices - center, axis=2))
@@ -620,10 +649,24 @@ def charge_sheet_corners_field(
     triangles ``vertices`` (N, 3, 3) and the charge density at their corners
     ``charge_densities`` (N, 3) in A/m, its coefficients, center and
     ``far_from`` by :func:`sheet_parameters`; a triangle without area
-    (:func:`has_area`) dropped first."""
+    (:func:`has_area`) dropped first. Where an array's shape cannot depend on
+    its values (``jax.jit``), such a triangle is not dropped but replaced by
+    the first one with an area, without charge and left out of the center:
+    the same field, as neither the longest edge nor the reach changes."""
+    xp = namespace(vertices, charge_densities)
     keep = has_area(vertices)
-    vertices, charge_densities = vertices[keep], charge_densities[keep]
-    c, center, far_from = sheet_parameters(vertices, charge_densities)
+    if _data_dependent_shapes(xp) or vertices.shape[0] == 0:
+        vertices, charge_densities = vertices[keep], charge_densities[keep]
+        c, center, far_from = sheet_parameters(vertices, charge_densities)
+    else:
+        first = xp.argmax(xp.astype(keep, xp.int8))
+        # no triangle with an area: any stand-in, its charge is 0
+        stand_in = xp.where(
+            xp.any(keep), vertices[first, ...], xp.eye(3, dtype=vertices.dtype)
+        )
+        vertices = xp.where(keep[:, None, None], vertices, stand_in)
+        charge_densities = xp.where(keep[:, None], charge_densities, 0.0)
+        c, center, far_from = sheet_parameters(vertices, charge_densities, counted=keep)
     return charge_sheet_field(
         field, observers, vertices, c, center, far_from, tolerance
     )

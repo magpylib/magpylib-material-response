@@ -59,6 +59,8 @@ test = [
   "magpylib-material-response[tetgen,fem]",
   # runs the array API kernels with nothing beyond the standard (#208)
   "array-api-strict >=2.3",
+  # and on JAX, the charge sheet's gradients too; JAX 0.12 needs Python 3.12
+  "jax >=0.7; python_version >= '3.12'",
 ]
 dev = [
   { include-group = "test" },

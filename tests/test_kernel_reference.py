@@ -21,6 +21,7 @@ from magpylib_material_response._array_api import (
     circle,
     cuboid,
     cylinder,
+    namespace,
     polyline,
     sphere,
 )
@@ -30,6 +31,16 @@ try:
     import array_api_strict
 except ImportError:  # a CI job without the test group: NumPy and the port only
     array_api_strict = None
+try:
+    import jax
+
+    jax.config.update("jax_enable_x64", True)  # the files' values are doubles
+except ImportError:
+    jax = None
+try:
+    import torch
+except ImportError:
+    torch = None
 
 REFERENCE = Path(__file__).parents[1] / "kernels" / "reference"
 FILES = {p.stem: json.loads(p.read_text()) for p in sorted(REFERENCE.glob("*.json"))}
@@ -110,10 +121,15 @@ def _magpylib_dipole(field, X, moment):
 
 
 def _impls(func, fields):
-    """NumPy, and array_api_strict where installed."""
+    """NumPy, and array_api_strict, JAX (float64) and PyTorch where
+    installed."""
     out = {"array-api-numpy": (func, np.asarray, fields)}
     if array_api_strict is not None:
         out["array-api-strict"] = (func, array_api_strict.asarray, fields)
+    if jax is not None:
+        out["array-api-jax"] = (func, jax.numpy.asarray, fields)
+    if torch is not None:
+        out["array-api-torch"] = (func, lambda a: torch.asarray(np.array(a)), fields)
     return out
 
 
@@ -285,3 +301,71 @@ def test_relation(name, relation, impl):
         total = total + (w @ f if w.ndim else w * f)
     atol = [relation["atol"]]
     _within(total, _decode(relation["target"]), doc["rtol"], atol, relation["why"])
+
+
+def _grad_jax(f, args):
+    """Under ``jax.jit``: a sheet's triangle without area is dropped by a
+    shape that depends on values, and XLA's CPU fusion rounds a quantity on
+    a branch's boundary to either side."""
+    return jax.jit(jax.grad(f, argnums=(0, 1, 2)))(*map(jax.numpy.asarray, args))
+
+
+def _grad_torch(f, args):
+    args = [torch.asarray(np.array(a)).requires_grad_() for a in args]
+    f(*args).backward()
+    return [a.grad for a in args]
+
+
+GRADS = {"jax": (jax, _grad_jax), "torch": (torch, _grad_torch)}
+# a sheet of four triangles in z = 0, one without area among them, and one
+# tilted above
+SHEET = np.array(
+    [
+        [[0, 0, 0], [1, 0, 0], [1, 1, 0]],
+        [[0, 0, 0], [1, 1, 0], [0, 1, 0]],
+        [[1, 0, 0], [2, 0, 0], [2, 1, 0]],
+        [[1, 0, 0], [3, 0, 0], [2, 0, 0]],
+        [[0, 0, 1], [1, 0.2, 1.1], [0.3, 1, 0.9]],
+    ]
+)
+SHEET_DENSITIES = np.random.default_rng(0).normal(size=(5, 3))
+
+
+@pytest.mark.parametrize("library", GRADS)
+@pytest.mark.parametrize(
+    "observer",
+    [
+        pytest.param([0.4, 0.3, 0.5], id="above"),
+        pytest.param([0.4, 0.3, 1e-3], id="just-above"),
+        pytest.param([3.0, 0.5, 0.0], id="in-plane"),  # w lifted off 0
+        pytest.param([-1.0, 0.0, 0.0], id="edge-line"),  # R - l = 0
+        pytest.param([0.0, 0.0, 0.3], id="above-corner"),  # l = 0
+        pytest.param([200.0, 100.0, 300.0], id="far-rule"),
+    ],
+)
+def test_sheet_gradient(library, observer):
+    """The sheet's field differentiates by observer, corners and densities as
+    central differences do, where it is smooth."""
+    lib, grad = GRADS[library]
+    if lib is None:
+        pytest.skip(f"{library} not installed")
+    weights = np.array([1.0, -2.0, 0.7])
+
+    def f(x, v, q):
+        H = T.charge_sheet_corners_field("H", x, v, q, tolerance=1e-6)
+        return (H @ namespace(H).asarray(weights, dtype=H.dtype))[0]
+
+    args = [np.array([observer]), SHEET, SHEET_DENSITIES]
+    got = [np.asarray(g) for g in grad(f, args)]
+    for k, a in enumerate(args):
+        expected = np.zeros_like(a)
+        for i in np.ndindex(a.shape):
+            if k == 1 and i[0] == 3:  # dropped: differences would give it an area
+                continue
+            h = 1e-6 * max(1.0, abs(a[i]))
+            up, down = [b.copy() for b in args], [b.copy() for b in args]
+            up[k][i] += h
+            down[k][i] -= h
+            expected[i] = (f(*up) - f(*down)) / (2 * h)
+        atol = 1e-6 * np.abs(expected).max()
+        np.testing.assert_allclose(got[k], expected, rtol=0, atol=atol)

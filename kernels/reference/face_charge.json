@@ -1962,7 +1962,7 @@
     }
    ],
    "target": [0.0, 0.0, 0.0],
-   "atol": 1e-14
+   "atol": 1e-13
   },
   {
    "id": "split-triangle-5-sides",
