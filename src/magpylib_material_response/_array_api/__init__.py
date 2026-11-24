@@ -4,16 +4,35 @@ where infinities are expected."""
 
 import numpy as np
 
+try:
+    from array_api_compat import array_namespace as _compat_namespace
+except ImportError:  # only for arrays without __array_namespace__ (PyTorch)
+    _compat_namespace = None
+
 
 def namespace(*arrays):
     """The arrays' namespace, from their own ``__array_namespace__``: NumPy 2
-    arrays, any array API library's, and the 50-digit reference arrays."""
-    spaces = {a.__array_namespace__() for a in arrays}
+    arrays, any array API library's, and the 50-digit reference arrays; for a
+    library whose arrays lack it (PyTorch), ``array_api_compat``'s, where
+    installed."""
+    spaces = {_namespace(a) for a in arrays}
     if len(spaces) > 1:
         names = sorted(xp.__name__ for xp in spaces)
         msg = f"arrays of one library expected; received {names}"
         raise TypeError(msg)
     return spaces.pop()
+
+
+def _namespace(a):
+    if hasattr(a, "__array_namespace__"):
+        return a.__array_namespace__()
+    if _compat_namespace is None:
+        msg = (
+            f"{type(a).__name__} has no __array_namespace__; "
+            "install array-api-compat to use it"
+        )
+        raise TypeError(msg)
+    return _compat_namespace(a)
 
 
 def quiet(*warnings):

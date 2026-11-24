@@ -118,9 +118,24 @@ _MID_WEIGHTS = np.array(
 _MID_WEIGHTS /= _MID_WEIGHTS.sum()
 
 
-def _r_plus_l(R, l, R02):
-    """``R + l``, stable where ``l < 0``: there it is ``R0^2 / (R - l)``."""
-    return namespace(R).where(l >= 0, R + l, R02 / (R - l))
+def _edge_log(R_minus, R_plus, l_minus, l_plus, R02):
+    """An edge's ``f = ln((R+ + l+) / (R- + l-))``, by one of three forms
+    equal by ``R^2 - l^2 = R0^2``, each where none of its sums cancels: R0^2
+    only where the foot of the observer is well inside the edge, so that a
+    gradient never takes the difference of two derivatives of ln R0^2 near
+    the edge's line. The forms switch at ``l = -R/4``, not at ``l = 0``, which
+    an observer above a corner meets exactly: there XLA's CPU fusion rounds
+    ``l`` to either side, and a gradient under ``jax.jit`` took the forward
+    pass's form for one and its backward pass's for another."""
+    xp = namespace(R_minus)
+    ahead, behind = l_minus > -0.25 * R_minus, l_plus < 0.25 * R_plus
+    num = xp.where(
+        ahead,
+        R_plus + l_plus,
+        xp.where(behind, R_minus - l_minus, (R_plus + l_plus) * (R_minus - l_minus)),
+    )
+    den = xp.where(ahead, R_minus + l_minus, xp.where(behind, R_plus - l_plus, R02))
+    return xp.log(num / den)
 
 
 def _dot(a, b):
@@ -142,8 +157,9 @@ def _in_plane(X, V, fr):
     axes = xp.permute_dims(xp.stack([e1, e2, n]), (0, 2, 1))
     origin = xp.stack([_dot(a, e1), _dot(a, e2), _dot(a, n)])[:, None, :]
     u, v, w = xp.unstack(xp.matmul(X, axes) - origin, axis=0)
-    # lifted off the plane as in `normal_field`
-    w = xp.where(w == 0, 1e-12 * s, w)
+    # lifted off the plane as in `normal_field`, by adding, so that a
+    # gradient keeps the derivative along the normal
+    w = w + xp.where(w == 0, 1e-12 * s, 0.0)
     w2 = w * w
     du = [pu - u for pu, _ in corners]
     dv = [pv - v for _, pv in corners]
@@ -166,8 +182,7 @@ def _edge_terms(corners, du, dv, R, w2):
         l_minus = du[i] * tu + dv[i] * tv
         l_plus = du[j] * tu + dv[j] * tv
         P0 = du[i] * tv - dv[i] * tu
-        R02 = P0 * P0 + w2
-        f = xp.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+        f = _edge_log(R[i], R[j], l_minus, l_plus, P0 * P0 + w2)
         yield tu, tv, P0 * f, f, R[j] - R[i]
 
 
@@ -299,6 +314,13 @@ def charge_field_far(X, y, charge, keep=None):
     d = [X[:, k, None, None] - y[..., k] for k in range(3)]
     with quiet("over", "invalid"):
         r2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+        # an observer on a point (a centroid is one) is near, so its pair is
+        # left out, here or by the caller; kept off 0 where a gradient may be
+        # taken (not NumPy's, unchanged to the last bit), for it takes a pair
+        # left out as 0 times its derivative
+        if xp is not np:
+            left_out = (r2 == 0) if keep is None else ~keep[:, None, :]
+            r2 = xp.where(left_out, 1.0, r2)
         scale = charge / (r2 * xp.sqrt(r2))
         if keep is not None:
             scale = xp.where(keep[:, None, :], scale, 0.0)
@@ -372,8 +394,7 @@ def normal_field(X, V, fr, pairs=False):
             l_minus = du[i] * tu + dv[i] * tv
             l_plus = du[j] * tu + dv[j] * tv
             P0 = du[i] * tv - dv[i] * tu
-            R02 = P0 * P0 + w2
-            f = np.log(_r_plus_l(R[j], l_plus, R02) / _r_plus_l(R[i], l_minus, R02))
+            f = _edge_log(R[i], R[j], l_minus, l_plus, P0 * P0 + w2)
             sum_mu = sum_mu + tv * f
             sum_mv = sum_mv - tu * f
     # the densities at the projection, from the centroid (ub + uc, vc) / 3
@@ -442,9 +463,7 @@ def normal_field_far(X, V, fr):
                 R02 = np.maximum(np.sum(foot * foot, axis=1), w[a, b] ** 2)
                 R_minus = np.linalg.norm(x - p, axis=1)
                 R_plus = np.linalg.norm(x - q, axis=1)
-                f[a, b] = np.log(
-                    _r_plus_l(R_plus, l_plus, R02) / _r_plus_l(R_minus, l_minus, R02)
-                )
+                f[a, b] = _edge_log(R_minus, R_plus, l_minus, l_plus, R02)
             m = np.cross(t, n)
             for k, e in enumerate((e1, e2)):
                 sum_mf[k] = sum_mf[k] + (np.sum(e * m, axis=1) / s) * f
@@ -456,6 +475,13 @@ def normal_field_far(X, V, fr):
 
 # The reference kinds of kernels/reference/face_charge.json (#208): H in A/m of
 # charge in A/m, as the array API functions of a source's own parameters.
+
+
+def _data_dependent_shapes(xp):
+    """Whether ``xp`` allows an array whose shape depends on values, as
+    boolean indexing gives (not ``jax.numpy``: ``jax.jit`` traces shapes)."""
+    info = getattr(xp, "__array_namespace_info__", None)
+    return info is None or info().capabilities().get("data-dependent shapes", True)
 
 
 def _check_H(field):
@@ -480,13 +506,14 @@ def beyond_far_from(observers, center, far_from):
 FAR_SIDES = 64.0
 
 
-def sheet_parameters(vertices, charge_densities, fr=None):
+def sheet_parameters(vertices, charge_densities, fr=None, counted=None):
     """A sheet of triangles ``vertices`` (N, 3, 3) with the charge density
     ``charge_densities`` (N, 3) at their corners, in A/m, as
     :func:`charge_sheet_field` takes it: the coefficients (N, 3) of ``1, u, v``
     in each triangle's frame (:func:`frames`, or ``fr``), the center, the mean
     of the centroids (3,), and ``far_from``, the farthest corner from it plus
-    ``FAR_SIDES`` longest edges (0-d; infinite for no triangle)."""
+    ``FAR_SIDES`` longest edges (0-d; infinite for no triangle). ``counted``
+    (N,) of bool, where given: the triangles the center is the mean of."""
     xp = namespace(vertices, charge_densities)
     cen, _, e1, e2, s, _ = frames(vertices) if fr is None else fr
     d = vertices - cen[:, None, :]
@@ -503,7 +530,12 @@ def sheet_parameters(vertices, charge_densities, fr=None):
     c = xp.stack([q[:, 0] - c1 * u[:, 0] - c2 * v[:, 0], c1, c2], axis=1)
     if vertices.shape[0] == 0:
         return c, xp.zeros(3, dtype=vertices.dtype), xp.asarray(float("inf"))
-    center = xp.mean(cen, axis=0)
+    if counted is None:
+        center = xp.mean(cen, axis=0)
+    else:
+        # none counted: the center 0, as for no triangle
+        n = xp.maximum(xp.sum(xp.astype(counted, cen.dtype)), 1.0)
+        center = xp.sum(xp.where(counted[:, None], cen, 0.0), axis=0) / n
     a, b, cc = vertices[:, 0, ...], vertices[:, 1, ...], vertices[:, 2, ...]
     side = xp.max(xp.linalg.vector_norm(xp.stack([b - a, cc - b, a - cc]), axis=2))
     reach = xp.max(xp.linalg.vector_norm(vertices - center, axis=2))
@@ -620,10 +652,26 @@ def charge_sheet_corners_field(
     triangles ``vertices`` (N, 3, 3) and the charge density at their corners
     ``charge_densities`` (N, 3) in A/m, its coefficients, center and
     ``far_from`` by :func:`sheet_parameters`; a triangle without area
-    (:func:`has_area`) dropped first."""
+    (:func:`has_area`) dropped first. Where an array's shape cannot depend on
+    its values (``jax.jit``), such a triangle is not dropped but replaced by
+    the first one with an area, without charge and left out of the center:
+    the same field, as neither the longest edge nor the reach changes."""
+    xp = namespace(vertices, charge_densities)
     keep = has_area(vertices)
-    vertices, charge_densities = vertices[keep], charge_densities[keep]
-    c, center, far_from = sheet_parameters(vertices, charge_densities)
+    if vertices.shape[0] == 0:
+        c, center, far_from = sheet_parameters(vertices, charge_densities)
+    elif _data_dependent_shapes(xp):
+        vertices, charge_densities = vertices[keep], charge_densities[keep]
+        c, center, far_from = sheet_parameters(vertices, charge_densities)
+    else:
+        first = xp.argmax(xp.astype(keep, xp.int8))
+        # no triangle with an area: any stand-in, its charge is 0
+        stand_in = xp.where(
+            xp.any(keep), vertices[first, ...], xp.eye(3, dtype=vertices.dtype)
+        )
+        vertices = xp.where(keep[:, None, None], vertices, stand_in)
+        charge_densities = xp.where(keep[:, None], charge_densities, 0.0)
+        c, center, far_from = sheet_parameters(vertices, charge_densities, counted=keep)
     return charge_sheet_field(
         field, observers, vertices, c, center, far_from, tolerance
     )
