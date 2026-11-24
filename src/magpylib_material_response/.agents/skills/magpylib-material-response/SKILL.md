@@ -8,9 +8,9 @@ description: >-
   choosing between solve_face_charge, solve_cells and solve_fem, setting
   susceptibility and BHCurve, UniformField, reading the solved model, error
   bars, and field_matrix for many solves read at the same points. Names changed
-  in 0.9: code written from memory with apply_demag, H_ext or bh_curve warns or
-  fails, and reading a solved model in the wrong place gives a wrong field, so
-  use this skill before writing the code.
+  in 0.9 and the old ones went in 0.15: code written from memory with
+  apply_demag, H_ext or bh_curve fails, and reading a solved model in the wrong
+  place gives a wrong field, so use this skill before writing the code.
 license: BSD-3-Clause
 ---
 
@@ -18,7 +18,7 @@ license: BSD-3-Clause
 
 Official skill for Magpylib-Material-Response 0.x, shipped inside the package
 and versioned with it. Prefer it over recalled API knowledge: the names in this
-skill are from 0.14, and the package is in alpha. For the field computation
+skill are from 0.15, and the package is in alpha. For the field computation
 itself (`getB`, sources, paths, sensors), use Magpylib's own skill, shipped in
 the `magpylib` package from 6.2.
 
@@ -47,8 +47,10 @@ mmr.__version__
 
 ## Names before 0.9
 
-Old names warn for one release, and go in the next, except the last two rows,
-which change with no warning. Write the new ones.
+The old names warned from 0.9 and are gone since 0.15: they raise an
+`AttributeError` or `ImportError`, and `H_ext`, on a part, a collection or in a
+saved file, a `ValueError` that names `UniformField`. The last two rows changed
+with no warning. Write the new ones.
 
 | Before 0.9                       | Now                                                      |
 | -------------------------------- | -------------------------------------------------------- |
@@ -63,7 +65,8 @@ which change with no warning. Write the new ones.
 
 `H_ext` left its field out of `getB` of the result; `UniformField` includes it.
 It also stayed in the global frame, where a `UniformField` turns with its
-parent. A model with both raises.
+parent, and it could differ between parts, where one `UniformField` acts on
+every part.
 
 ## A model
 

@@ -19,7 +19,6 @@ from magpylib_material_response.cells import (
     _has_path,
     _outside_this_package,
     _report_fixed_magnets,
-    get_H_ext,
     warn_if_solved,
 )
 from magpylib_material_response.face_charge._bodies import (
@@ -42,7 +41,7 @@ from magpylib_material_response.face_charge._tribody import (
     add_triangle_contact_lines,
 )
 from magpylib_material_response.meshing_utils import SOLIDS, detached_copy
-from magpylib_material_response.uniform import refuse_both
+from magpylib_material_response.uniform import refuse_H_ext
 from magpylib_material_response.utils import timelog
 
 MARK = 0.5  # a refinement round splits panels above this share of the largest jump
@@ -151,7 +150,7 @@ def solve_face_charge(
         place in the hierarchy and with its label; the other sources are
         copied as they are. A collection holding a sheet is no longer sealed:
         magpylib-studio lists each sheet. Like a collection solved by ``solve_cells``, its
-        field includes a ``UniformField``, and not an ``H_ext``. Fields hold outside the
+        field includes a ``UniformField``'s. Fields hold outside the
         solved parts: inside one, ``getB`` gives mu0 H, without the part's own
         magnetization, which depends on the field of every source at once, and
         warns; for B inside a part, mesh it and use ``solve_cells``. Its
@@ -222,7 +221,6 @@ def solve_face_charge(
         if isinstance(src, magpy.magnet.Cuboid)
     ]
     boxes = [_box(src) for src in fixed if isinstance(src, BaseMagnet)]
-    applied = get_H_ext(*(obj for obj, _ in solved))
 
     # widened once, whatever level is tried: a mesh's facets are its own
     widened = {
@@ -234,16 +232,7 @@ def solve_face_charge(
     }
 
     def meshed(level):
-        bodies = [
-            _part(
-                obj,
-                chi,
-                np.asarray(h_ext, float) / magpy.mu_0,
-                level,
-                widened.get(id(obj)),
-            )
-            for (obj, chi), h_ext in zip(solved, applied, strict=True)
-        ]
+        bodies = [_part(obj, chi, level, widened.get(id(obj))) for obj, chi in solved]
         add_contact_lines(bodies, outlines)
         add_triangle_contact_lines(bodies, outlines)
         for body in bodies:
@@ -448,7 +437,7 @@ def _split(collection):
     _report_fixed_magnets(
         [src for src in collection.sources_all if isinstance(src, BaseMagnet)]
     )
-    refuse_both(collection.sources_all)
+    refuse_H_ext(collection.sources_all)
     warn_if_solved(collection)
     solved, fixed = [], []
     for src in collection.sources_all:
@@ -502,7 +491,7 @@ def _split(collection):
     return solved, fixed
 
 
-def _part(obj, chi, applied, level, widened=None):
+def _part(obj, chi, level, widened=None):
     """The body that solves ``obj``: a cuboid's panels, or a triangle mesh,
     with `widened` vertices in place of its own if given."""
     J0 = (
@@ -512,9 +501,7 @@ def _part(obj, chi, applied, level, widened=None):
     )
     R = obj.orientation.as_matrix()
     if isinstance(obj, magpy.magnet.Cuboid):
-        return Body(
-            obj.dimension, obj.position, R, chi, J0=J0, applied=applied, m=level
-        )
+        return Body(obj.dimension, obj.position, R, chi, J0=J0, m=level)
     vertices, faces = _closed_surface(obj, level)
     directed = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
     shared = np.unique(np.sort(directed, axis=1), axis=0, return_counts=True)[1]
@@ -534,9 +521,7 @@ def _part(obj, chi, applied, level, widened=None):
         raise ValueError(msg)
     if widened is not None:
         vertices = widened
-    return TriBody(
-        vertices, faces, obj.position, R, chi, J0=J0, applied=applied, m=level
-    )
+    return TriBody(vertices, faces, obj.position, R, chi, J0=J0, m=level)
 
 
 def _closed_surface(src, level=3):
@@ -772,7 +757,7 @@ def _joined_means(sheets, bodies, joined):
 
 def _same_material(a, b):
     """One susceptibility, one remanence in global axes, and one applied
-    field: the per-part H_ext of a sub-collection changes M across them."""
+    field of the body's own (``Body(applied=...)``)."""
     if not np.isclose(a.chi, b.chi, rtol=1e-9, atol=0.0):
         return False
     ja, jb = (np.zeros(3) if p.J0 is None else p.R @ p.J0 for p in (a, b))

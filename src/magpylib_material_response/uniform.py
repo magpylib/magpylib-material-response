@@ -203,18 +203,19 @@ def applied(sources):
     return total
 
 
-def refuse_both(sources):
-    """Raise if `sources` have a UniformField and ``H_ext``: the field would count
-    twice."""
-    if not any(isinstance(s, UniformField) for s in sources):
-        return
+def refuse_H_ext(sources):
+    """Raise if any of `sources`, or a parent of one, has ``H_ext``: the attribute
+    went in 0.15.0, and a model that sets it would solve without its field."""
+    seen = set()
     for source in sources:
         owner = source
-        while owner is not None:
+        while owner is not None and id(owner) not in seen:
+            seen.add(id(owner))
             if getattr(owner, "H_ext", None) is not None:
                 msg = (
-                    f"{owner} has H_ext in a model with a UniformField, and the field "
-                    "would count twice: use the UniformField alone."
+                    f"{owner} has H_ext, which magpylib-material-response reads no "
+                    "more since 0.15.0: add UniformField(B=...) to the model instead. "
+                    "Its field is in getB of the result, which H_ext's was not."
                 )
                 raise ValueError(msg)
             owner = owner.parent

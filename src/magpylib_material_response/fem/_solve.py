@@ -333,7 +333,7 @@ class FemSolution(magpy.misc.CustomSource):
     ``getH``, ``getJ`` and ``getM`` read it, alone or with other sources, as on a
     collection solved by :func:`~magpylib_material_response.cells.solve_cells`:
     the field of the model's magnets, remanent and induced, of its currents, and of a
-    ``UniformField``, without an ``H_ext``. Moving it moves that field as it is,
+    ``UniformField``. Moving it moves that field as it is,
     without solving again. Inside a part with a high susceptibility the values
     are pointwise and show the elements, because H there is small next to its
     error: a part on a curve can read a few percent past its saturation.
@@ -467,7 +467,7 @@ class Model:
     ):
         start = time.perf_counter()
         self.parts, self.B_ext, self.currents = parts_of(collection)
-        # in getB of the solution, as a UniformField's is; H_ext's is not
+        # in getB of the solution
         self.B_shown = uniform_field(
             collection.sources_all
             if hasattr(collection, "sources_all")
@@ -1098,9 +1098,10 @@ def solve_fem(
         takes it before meshing: Cuboid, Cylinder, CylinderSegment, Sphere,
         Tetrahedron and TriangularMesh magnets with their polarization (the
         remanence) and susceptibility, isotropic or along their own axes (none
-        on a magnet or its parents: fixed), in any ``UniformField``, or the older attribute ``H_ext`` (mu0 H in T) and the field of current
-        sources, which are not meshed. The magnets must not overlap; a current
-        must not run through a magnet or through a hole in one.
+        on a magnet or its parents: fixed), in any ``UniformField``, and the
+        field of current sources, which are not meshed. The magnets must not
+        overlap; a current must not run through a magnet or through a hole in
+        one.
     order : int, default 3
         Polynomial order of the elements.
     maxh : float or sequence of float, optional

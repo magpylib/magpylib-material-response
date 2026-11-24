@@ -3,8 +3,10 @@ which B is compared, in named groups.
 
 A case is data only. Its stored reference (``references/``) carries the case's
 hash, so a reference left behind by a changed model is caught instead of
-compared against. Lengths in m, polarizations and applied fields (``H_ext``,
-mu0 H) in T.
+compared against. Lengths in m, polarizations and applied fields (a
+``UniformField``'s B) in T. References and errors leave the applied field out
+(``applied``): they measure the parts' response, which 10 mT would hide 30 mm
+away.
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ from magpylib_material_response.polyline import (
     create_polyline_fillet,
     move_grid_along_polyline,
 )
+from magpylib_material_response.uniform import UniformField
+from magpylib_material_response.uniform import applied as _uniform
 from magpylib_material_response.utils import _serialize_recursive
 
 if TYPE_CHECKING:
@@ -92,6 +96,12 @@ class Case:
         }
         text = json.dumps(_canonical(data), sort_keys=True)
         return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def applied(collection):
+    """The flux density in T, global, of the UniformFields in `collection`: what
+    each reading of B subtracts before it is compared with a reference."""
+    return _uniform(collection.sources_all)
 
 
 def _canonical(value):
@@ -250,12 +260,11 @@ def _concentrator():
     the flux concentrator of docs/examples/mesh_convergence.md. Sensors on the
     axis past its end, where the page reads the gain, and along its top."""
     bar = _soft((16 * MM, 2 * MM, 2 * MM), "bar, χ = 4000", 4000)
-    bar.H_ext = (50e-6, 0, 0)
     groups = {
         "on the axis, past the end": _line((8.5, 0, 0), (10, 0, 0), 4),
         "1 mm above the bar": _line((-8, 0, 2), (8, 0, 2), 9),
     }
-    return magpy.Collection(bar), groups
+    return magpy.Collection(bar, UniformField(B=(50e-6, 0, 0))), groups
 
 
 def _halbach():
@@ -310,12 +319,11 @@ def _cylinder():
         style_label="cylinder, χ = 1000",
     )
     cylinder.susceptibility = 1000
-    cylinder.H_ext = (0.01, 0, 0)
     groups = {
         "1 mm off the surface": np.array([(4, 0, 6), (6, 0, 3)]) * MM,
         "50 mm away": np.array([(0, 0, 50), (50, 0, 0)]) * MM,
     }
-    return magpy.Collection(cylinder), groups
+    return magpy.Collection(cylinder, UniformField(B=(0.01, 0, 0))), groups
 
 
 def _thin_ring():
@@ -405,13 +413,13 @@ def _cad_part():
         style_label="CAD part, χ = 1000",
     )
     part.susceptibility = 1000
-    part.H_ext = tuple(0.01 * np.array([0.8, 0.36, 0.48]))
     near = [(3, 0, 0), (8, 0, 3), (7 + 4 / 2**0.5, 3 + 4 / 2**0.5, 1), (0, 0, 3)]
     groups = {
         "near the part": np.array(near) * MM,
         "60 mm away": np.array([(60, 0, 0), (0, 0, 60)]) * MM,
     }
-    return magpy.Collection(part), groups
+    field = UniformField(B=0.01 * np.array([0.8, 0.36, 0.48]))
+    return magpy.Collection(part, field), groups
 
 
 # ── edge cases ────────────────────────────────────────────────────────────────
@@ -487,7 +495,6 @@ def _layer(sides, label, columns):
     ]
     layer = magpy.Collection(*parts, style_label=f"{len(parts)} {label}s, χ = 100")
     layer.susceptibility = 100
-    layer.H_ext = (0.01, 0, 0)
     return layer
 
 
@@ -499,7 +506,7 @@ def _small_bodies():
         "1 mm above the layer": _line((-8, 0.75, 1.5), (8, 0.75, 1.5), 17),
         "30 mm away": np.array([(30, 0, 0), (0, 0, 30)]) * MM,
     }
-    return magpy.Collection(layer), groups
+    return magpy.Collection(layer, UniformField(B=(0.01, 0, 0))), groups
 
 
 def _many_sizes():
@@ -513,7 +520,7 @@ def _many_sizes():
         "1 mm above the layer": _line((-6, 1, 1.7), (6, 1, 1.7), 13),
         "30 mm away": np.array([(30, 0, 0), (0, 0, 30)]) * MM,
     }
-    return magpy.Collection(layer), groups
+    return magpy.Collection(layer, UniformField(B=(0.01, 0, 0))), groups
 
 
 def _anisotropic():
@@ -543,12 +550,11 @@ def _iron_cube(field):
     """A 10 mm iron cube (chi = 1000) in a uniform field along z, sensors 1 mm
     over its top face and 30 mm above."""
     cube = _soft((10 * MM,) * 3, "iron cube, χ = 1000", 1000)
-    cube.H_ext = (0, 0, field)
     groups = {
         "1 mm above the top": _line((-4, 0, 6), (4, 0, 6), 5),
         "30 mm above": np.array([(0, 0, 30)]) * MM,
     }
-    return magpy.Collection(cube), groups
+    return magpy.Collection(cube, UniformField(B=(0, 0, field))), groups
 
 
 def _magnet_on_path():

@@ -94,15 +94,8 @@ from magpylib_material_response.newell import (
     point_block,
     self_demag_factors,
 )
-from magpylib_material_response.uniform import UniformField, refuse_both
+from magpylib_material_response.uniform import UniformField, refuse_H_ext
 from magpylib_material_response.utils import timelog
-
-#: An applied field ``H_ext`` stronger than this, in tesla, is warned about: it
-#: is most likely H in A/m, magpylib's unit for H, where mu0 * H in T is meant.
-#: 1e5 A/m taken as tesla gives fields of tens of thousands of tesla, silently,
-#: and the Earth's 40 A/m gives 40 T. Iron saturates near 2 T: a linear
-#: susceptibility means little this far above it anyway.
-H_EXT_WARN = 10.0
 
 #: A pair block with more dense entries than this may be stored sparse, with a
 #: rigorous row-sum error budget, when that pays (``SPARSIFY_MIN_DROP``).
@@ -352,86 +345,6 @@ def _get_susceptibility_from_hierarchy(source):
             return susceptibility
         source = source.parent
     return 0.0
-
-
-def get_H_ext(*sources):
-    """Return a list of length (len(sources)) with H_ext values. This reads only
-    the attribute, which goes in the next release, and not a ``UniformField``.
-    It stays in the global frame, where a ``UniformField`` turns with its parent.
-
-    `H_ext` is a uniform applied field given as mu_0 * H in tesla. A source's own
-    value takes priority; otherwise it is searched up the parent tree, and it is
-    zero if no parent sets it. A value that is not three finite numbers, in any
-    layout, raises, and values stronger than ``H_EXT_WARN`` warn once: they are
-    most likely in A/m."""
-    owners = []
-    for src in sources:
-        owner = src
-        while owner is not None and getattr(owner, "H_ext", None) is None:
-            owner = owner.parent
-        owners.append(owner)
-    unique = list({id(o): o for o in owners if o is not None}.values())
-    if not unique:
-        return [(0.0, 0.0, 0.0)] * len(owners)
-    warnings.warn(
-        "H_ext is now UniformField: add UniformField(B=...) to the model. Its field is "
-        "in getB of the result, which H_ext's is not. H_ext goes in the next release.",
-        DeprecationWarning,
-        stacklevel=_outside_this_package(),
-    )
-    values = _checked_H_exts(unique)
-    strength = np.linalg.norm(values, axis=1)
-    strong = np.flatnonzero(strength > H_EXT_WARN)
-    if strong.size:
-        first = unique[strong[0]]
-        name = getattr(first.style, "label", None) or type(first).__name__
-        if strong.size > 1:
-            name = f"{strong.size} objects, such as {name},"
-        warnings.warn(
-            f"H_ext of {name} reaches {strength.max():.3g} T. H_ext is mu0 * H in tesla, "
-            "not H in A/m: multiply a field in A/m by magpylib.mu_0.",
-            stacklevel=_outside_this_package(),
-        )
-    by_id = dict(zip(map(id, unique), values.tolist(), strict=True))
-    return [(0.0, 0.0, 0.0) if o is None else by_id[id(o)] for o in owners]
-
-
-def _checked_H_exts(owners):
-    """The owners' `H_ext` as an (n, 3) float array, or an error naming the
-    first that is not three finite numbers."""
-    try:
-        values = np.asarray([owner.H_ext for owner in owners])
-    except ValueError:  # values of different layouts
-        values = None
-    if (
-        values is not None
-        and values.dtype.kind in "biuf"
-        and values.size == 3 * len(owners)
-    ):
-        values = values.reshape(len(owners), 3).astype(float)
-        if np.isfinite(values).all():
-            return values
-    return np.array([_checked_H_ext(owner) for owner in owners])
-
-
-def _checked_H_ext(owner):
-    """`owner.H_ext` as three floats, or an error that says what is expected."""
-    try:
-        value = np.asarray(owner.H_ext)
-    except ValueError:
-        value = None
-    if (
-        value is None
-        or value.dtype.kind not in "biuf"
-        or value.size != 3
-        or not np.isfinite(value).all()
-    ):
-        msg = (
-            f"H_ext of {owner!r} must be three finite numbers, mu0 * H in tesla, "
-            f"such as (0, 0, 0.01); got {owner.H_ext!r}."
-        )
-        raise ValueError(msg)
-    return value.reshape(3).astype(float)
 
 
 def _report_fixed_magnets(magnets):
@@ -1813,7 +1726,7 @@ def solve_cells(
         raise ValueError(msg)
     magnets_list = [src for src in srcs if isinstance(src, BaseMagnet)]
     originals = [src for src in original.sources_all if isinstance(src, BaseMagnet)]
-    refuse_both(original.sources_all)  # the copy has no parents to read
+    refuse_H_ext(original.sources_all)  # the copy has no parents to read
     warn_if_solved(original)
     currents_list = [src for src in srcs if isinstance(src, BaseCurrent | UniformField)]
     others_list = [
@@ -1878,15 +1791,7 @@ def solve_cells(
                 :, None, None
             ] * np.eye(3)
 
-        # set up H_ext
-        H_ext = get_H_ext(*originals)
-        H_ext = np.array(H_ext)
-        if len(H_ext) != n:
-            msg = "solve_cells input collection and H_ext must have same length."
-            raise ValueError(msg)
-        H_ext = np.reshape(H_ext, (3 * n, 1), order="F")
-
-        drive = H_ext  # the applied field and the currents', shape (3n, 1)
+        drive = np.zeros((3 * n, 1))  # the currents' field, shape (3n, 1)
         if currents_list and chi.any():
             with timelog(
                 "Add current sources contributions", min_log_time=min_log_time

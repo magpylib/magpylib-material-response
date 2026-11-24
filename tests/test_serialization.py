@@ -6,7 +6,7 @@ import magpylib as magpy
 import numpy as np
 import pytest
 
-from magpylib_material_response import from_json, to_json
+from magpylib_material_response import UniformField, from_json, to_json
 from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import mesh_TriangularMesh
@@ -198,10 +198,9 @@ def test_from_json_returns_multiple_objects():
 
 
 def test_material_attributes_round_trip():
-    """susceptibility (any type, any level) and H_ext survive a round-trip."""
+    """susceptibility (any type, any level) survives a round-trip."""
     cube = magpy.magnet.Cuboid(polarization=(0, 0, 1), dimension=(0.001, 0.001, 0.001))
     cube.susceptibility = np.array([1.0, 2.0, 3.0])  # numpy array must serialize
-    cube.H_ext = (0.0, 0.0, 0.1)
     coll = magpy.Collection(cube)
     coll.susceptibility = 0.3  # collection-level value used by hierarchy lookup
 
@@ -209,7 +208,6 @@ def test_material_attributes_round_trip():
     assert out.susceptibility == 0.3
     child = out.children[0]
     np.testing.assert_allclose(child.susceptibility, [1.0, 2.0, 3.0])
-    np.testing.assert_allclose(child.H_ext, [0.0, 0.0, 0.1])
 
 
 def test_roundtrip_susceptibility_array():
@@ -312,21 +310,19 @@ def test_roundtrip_demagnetized_tet_collection():
 
 
 def test_roundtrip_keeps_material_attributes():
-    """A reloaded model solves to the same polarizations: a magnet's H_ext and a
-    Collection's susceptibility and H_ext survive."""
+    """A reloaded model solves to the same polarizations: a Collection's
+    susceptibility and a UniformField survive."""
     magnet = magpy.magnet.Cuboid(polarization=(0, 0, 0), dimension=(0.01,) * 3)
-    magnet.H_ext = (0, 0, 0.01)
     other = magpy.magnet.Cuboid(
         polarization=(0, 0, 0), dimension=(0.01,) * 3, position=(0.02, 0, 0)
     )
-    coll = magpy.Collection(magnet, other)
+    coll = magpy.Collection(magnet, other, UniformField(B=(0.005, 0, 0.01)))
     coll.susceptibility = 100
-    coll.H_ext = (0.005, 0, 0)
 
     out = from_json(to_json(coll))[0]
     np.testing.assert_allclose(
-        [s.polarization for s in solve_cells(out).sources_all],
-        [s.polarization for s in solve_cells(coll).sources_all],
+        [s.polarization for s in solve_cells(out).sources_all[:2]],
+        [s.polarization for s in solve_cells(coll).sources_all[:2]],
     )
 
 

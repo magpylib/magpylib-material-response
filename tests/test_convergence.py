@@ -13,6 +13,7 @@ from magpylib_material_response.convergence import (
     study_cells,
 )
 from magpylib_material_response.meshing import mesh_Cuboid
+from magpylib_material_response.uniform import UniformField
 
 
 @pytest.mark.parametrize(
@@ -77,11 +78,11 @@ def test_estimate_handles_a_limit_of_zero():
     assert study.error == pytest.approx(SAFETY_FACTOR)
 
 
-def _soft_cube():
+def _soft_cube(*others):
+    """A soft cube in 10 mT, with `others` beside it."""
     cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
     cube.susceptibility = 1000
-    cube.H_ext = (0, 0, 0.01)
-    return cube
+    return magpy.Collection(cube, *others, UniformField(B=(0, 0, 0.01)))
 
 
 def test_mesh_study_of_a_soft_cube():
@@ -89,10 +90,10 @@ def test_mesh_study_of_a_soft_cube():
     value, at an order of about 1.5 in the cell size, within a percent or two."""
 
     def moment(solved):
-        cells = solved.sources_all
+        cells = [c for c in solved.sources_all if not isinstance(c, UniformField)]
         return sum(c.polarization[2] * np.prod(c.dimension) for c in cells) / magpy.mu_0
 
-    study = study_cells(magpy.Collection(_soft_cube()), moment, levels=(3, 6, 12))
+    study = study_cells(_soft_cube(), moment, levels=(3, 6, 12))
     np.testing.assert_array_equal(study.cells, [27, 216, 1728])
     assert 0.9 < study.order < 2.1
     assert study.estimate > study.values[-1]
@@ -115,13 +116,13 @@ def test_mesh_study_counts_cells_that_respond_and_errs_per_observer(observers):
         dimension=(0.005,) * 3, position=(0.05, 0, 0), polarization=(0, 0, 1)
     )
     hard.susceptibility = 0
-    study = study_cells(magpy.Collection(_soft_cube(), hard), observers, (3, 6, 12))
+    study = study_cells(_soft_cube(hard), observers, (3, 6, 12))
     np.testing.assert_array_equal(study.cells, [27, 216, 1728])
     assert study.errors.shape == (2,)
 
 
 def test_mesh_study_checks_the_meshes():
-    cube = magpy.Collection(_soft_cube())
+    cube = _soft_cube()
     with pytest.raises(ValueError, match="not more than"):
         study_cells(cube, [(0, 0, 0.01)], levels=(2, 2, 4))
     with pytest.raises(ValueError, match="inplace"):
@@ -136,10 +137,12 @@ def test_mesh_study_checks_the_meshes():
         pytest.warns(UserWarning, match="do not change steadily"),
     ):
         study_cells(
-            magpy.Collection(_soft_cube()),
+            _soft_cube(),
             [(0, 0, 0.01)],
             levels=(8, 9, 10),
-            mesher=lambda coll, n: mesh_Cuboid(coll.sources[0], (n, 1, 1)),
+            mesher=lambda coll, n: magpy.Collection(
+                mesh_Cuboid(coll.sources[0], (n, 1, 1)), coll.sources[1].copy()
+            ),
         )
 
 

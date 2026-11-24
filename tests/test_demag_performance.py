@@ -17,6 +17,7 @@ import pytest
 import scipy.sparse as sp
 from scipy.spatial.transform import Rotation as R
 
+from magpylib_material_response import UniformField
 from magpylib_material_response import cells as cells_module
 from magpylib_material_response.cells import (
     _assemble_T_dense,
@@ -47,15 +48,20 @@ def _build_uniform_collection(target_elems, susceptibility=0.5, polarization=(0,
     return magpy.Collection(mesh_Cuboid(cube, target_elems=target_elems))
 
 
+def _cells(coll):
+    """The cells of `coll`, without its UniformField."""
+    return [s for s in coll.sources_all if not isinstance(s, UniformField)]
+
+
 def _pols(coll):
-    return np.array([s.polarization for s in coll.sources_all])
+    return np.array([s.polarization for s in _cells(coll)])
 
 
 def _interactions(coll):
     """Every rule that applies to these cells: always point, Newell when all
     cells are parallel cuboids."""
     try:
-        _check_interaction("newell", coll.sources_all)
+        _check_interaction("newell", _cells(coll))
     except ValueError:
         return ("point",)
     return ("point", "newell")
@@ -430,8 +436,7 @@ def test_iterative_preconditions_every_cell_type():
     ]
     for src in (cube, *spheres):
         src.susceptibility = 1000.0
-        src.H_ext = (0, 0, 1)
-    coll = magpy.Collection(mesh_Cuboid(cube, 125), *spheres)
+    coll = magpy.Collection(mesh_Cuboid(cube, 125), *spheres, UniformField(B=(0, 0, 1)))
     direct = _pols(solve_cells(coll, solver="direct"))
     iterative = _pols(solve_cells(coll, solver="iterative", max_iter=100))
     np.testing.assert_allclose(iterative, direct, atol=1e-4 * np.abs(direct).max())
@@ -629,12 +634,10 @@ def test_newell_moment_rises_under_refinement(dimension, divisions):
     moments = []
     for div in divisions:
         body = magpy.magnet.Cuboid(dimension=dimension, polarization=(0, 0, 0))
-        body.H_ext = (0.01, 0, 0)
-        res = solve_cells(
-            mesh_Cuboid(body, div), susceptibility=1000.0, interaction="newell"
-        )
+        model = magpy.Collection(mesh_Cuboid(body, div), UniformField(B=(0.01, 0, 0)))
+        res = solve_cells(model, susceptibility=1000.0, interaction="newell")
         moments.append(
-            sum(np.prod(c.dimension) * c.polarization[0] for c in res.sources_all)
+            sum(np.prod(c.dimension) * c.polarization[0] for c in _cells(res))
         )
     assert np.all(np.diff(moments) > 0)
 
@@ -929,7 +932,7 @@ def test_lattice_with_holes_is_one_grid(monkeypatch, make, kinds, labels):
         cells_module, "FFT_CROSS_MIN_ENTRIES", 0
     )  # the test bodies are small
     coll = make()
-    coll.susceptibility, coll.H_ext = 1000.0, (0.002, 0, 0.01)
+    coll.susceptibility = 1000.0
     cells = coll.sources_all
     positions, clusters = analyze_collection(cells)
     if not labels:
@@ -946,6 +949,7 @@ def test_lattice_with_holes_is_one_grid(monkeypatch, make, kinds, labels):
     T = _assemble_T_dense(cells, positions, clusters, "point")
     ref = _T_from_magpylib(cells)
     np.testing.assert_allclose(T, ref, rtol=0, atol=1e-9 * np.abs(ref).max())
+    coll.add(UniformField(B=(0.002, 0, 0.01)))
     _assert_solvers_agree(coll)
 
 

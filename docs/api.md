@@ -135,8 +135,6 @@ beside a soft cube.
 
 .. autofunction:: magpylib_material_response.cells.get_susceptibilities
 
-.. autofunction:: magpylib_material_response.cells.get_H_ext
-
 .. autofunction:: magpylib_material_response.get_dataset
 ```
 

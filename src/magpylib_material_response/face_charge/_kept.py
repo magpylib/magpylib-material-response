@@ -6,8 +6,8 @@ back-substitution. The fingerprint is what the matrix is assembled from, read of
 the meshed bodies rather than the user's input: a magnet that comes close enough
 to change a part's panels changes it by itself. Poses are relative to the first
 body, as each block is in its body's own frame, so parts that move as one keep
-it. What enters only the load stays out: the fixed sources, ``H_ext``, the
-remanence, the finer rule near a magnet.
+it. What enters only the load stays out: the fixed sources, a ``UniformField``,
+the remanence, the finer rule near a magnet.
 
 The caller holds the factorization, on the result: it goes when the result goes,
 and nothing is kept between calls that did not ask.

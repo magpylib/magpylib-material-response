@@ -8,6 +8,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** `H_ext`, and the names that warned since 0.9: the `demag` module
+  (`apply_demag` is `solve_cells`), `apply_face_charge`, `fem_solve`,
+  `fem_study`, `mesh_study` and `study_cells(demag_kwargs=...)`. Use
+  `UniformField(B=...)` in the model for an applied field; its field is in
+  `getB` of the result, which `H_ext`'s was not. An `H_ext` left on a part or a
+  collection, or in a file saved by `to_json`, raises an error that names
+  `UniformField` in every solver, mesher and `from_json`, rather than solving
+  without its field
+  ([#71](https://github.com/magpylib/magpylib-material-response/issues/71)).
+
 ## [0.14.0] - 2026-11-20
 
 ### Added

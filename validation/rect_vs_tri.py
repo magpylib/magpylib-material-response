@@ -20,10 +20,10 @@ import magpylib as magpy
 import numpy as np
 from scipy.spatial import ConvexHull
 
-from magpylib_material_response import solve_face_charge as apply_face_charge
+from magpylib_material_response import solve_face_charge
 
 from . import references
-from .cases import CASES
+from .cases import CASES, applied
 from .methods import METHODS
 
 RECORDS = Path(__file__).with_suffix(".jsonl")
@@ -56,8 +56,6 @@ def as_triangles(collection):
             else (0, 0, 0),
         )
         mesh.susceptibility = float(np.ravel(chi)[0])
-        if getattr(src, "H_ext", None) is not None:
-            mesh.H_ext = src.H_ext
         parent = src.parent
         parent.remove(src)
         parent.add(mesh)
@@ -88,7 +86,7 @@ def measure(path, names=()):
                 sensors = np.concatenate(list(groups.values()))
                 t0 = time.perf_counter()
                 try:
-                    solved = apply_face_charge(
+                    solved = solve_face_charge(
                         collection, level=level, **case.options.get("FaceCharge", {})
                     )
                 except (NotImplementedError, ValueError) as error:
@@ -103,7 +101,7 @@ def measure(path, names=()):
                     print(rec, flush=True)
                     break
                 seconds = time.perf_counter() - t0
-                B = magpy.getB(solved, sensors)
+                B = magpy.getB(solved, sensors) - applied(collection)
                 errors, first = {}, 0
                 for group, points in groups.items():
                     stored = ref["groups"][group]
