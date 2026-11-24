@@ -8,6 +8,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-25
+
+### Added
+
+- Field kernels for magpylib-studio's saved pages, which draw field lines
+  without Python: face charge's sheets and magpylib's cuboid, cylinder, circle,
+  straight wire, sphere and dipole, compiled to WebAssembly and checked, with
+  Rust and Python, against one set of 50-digit reference files. Near the axis
+  and far along it, the cylinder keeps the digits magpylib's formulas lose (off
+  up to 29 % 576 radii up the axis). The charge sheet's Python kernel also runs
+  on JAX and PyTorch, `jax.jit` and gradients included
+  ([#208](https://github.com/magpylib/magpylib-material-response/issues/208),
+  [#215](https://github.com/magpylib/magpylib-material-response/pull/215),
+  [#217](https://github.com/magpylib/magpylib-material-response/pull/217),
+  [#218](https://github.com/magpylib/magpylib-material-response/pull/218),
+  [#219](https://github.com/magpylib/magpylib-material-response/pull/219))
+
+### Changed
+
+- Needs NumPy 2.1 or later (was 2.0.1), for the array API functions the kernels
+  use (`unstack`)
+  ([#215](https://github.com/magpylib/magpylib-material-response/pull/215))
+
 ### Removed
 
 - **Breaking:** `H_ext`, and the names that warned since 0.9: the `demag` module
@@ -20,6 +43,12 @@ and this project adheres to
   without its field
   ([#71](https://github.com/magpylib/magpylib-material-response/issues/71),
   [#221](https://github.com/magpylib/magpylib-material-response/pull/221)).
+
+### Fixed
+
+- A `ChargeSheet` with a face of no area, its corners in a line, gave NaN
+  everywhere; the face is dropped, as it carries no charge
+  ([#215](https://github.com/magpylib/magpylib-material-response/pull/215))
 
 ## [0.14.0] - 2026-11-20
 
@@ -785,7 +814,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.14.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.15.0...HEAD
+[0.15.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.14.0...0.15.0
 [0.14.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.13.0...0.14.0
 [0.13.0]:

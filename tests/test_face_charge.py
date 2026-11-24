@@ -977,18 +977,28 @@ def test_show_colours_the_charge_and_draws_panel_edges():
     ids=["in a line: dropped", "NaN: kept, its NaN in the field"],
 )
 def test_sheet_drops_only_faces_without_area(corner, kept):
+    """A dropped face counts again where its vertices give it area, and its
+    charges are set with a row per face given or per face kept."""
     good = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
     sheet = ChargeSheet.from_triangles(
         [good, [(0, 0, 1), (1, 0, 1), corner]], np.ones((2, 3))
     )
-    H = sheet.getH((0.3, 0.3, 0.5))
+    x = (0.3, 0.3, 0.5)
+    H = sheet.getH(x)
     if kept:
         assert len(sheet.faces) == 2
         assert np.isnan(H).all()
     else:
         alone = ChargeSheet.from_triangles([good], np.ones((1, 3)))
         assert len(sheet.faces) == 1
-        np.testing.assert_array_equal(H, alone.getH((0.3, 0.3, 0.5)))
+        np.testing.assert_array_equal(H, alone.getH(x))
+        sheet.charge_densities = 2 * np.ones((2, 3))
+        sheet.charge_densities = 2 * sheet.charge_densities
+        np.testing.assert_allclose(sheet.getH(x), 4 * alone.getH(x), rtol=1e-12)
+        V = sheet.vertices.copy()
+        V[np.all(corner == V, axis=1)] = (2.0, 1.0, 1.0)
+        sheet.vertices = V
+        assert len(sheet.faces) == 2
 
 
 @pytest.mark.parametrize("name", ["vertices", "faces", "charge_densities"])
