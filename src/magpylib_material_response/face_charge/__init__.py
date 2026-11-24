@@ -29,7 +29,6 @@ On a cube the method reproduces the polarizability of Helsing and Perfekt:
 
 from __future__ import annotations
 
-from magpylib_material_response._renamed import old_names
 from magpylib_material_response.face_charge._apply import solve_face_charge
 from magpylib_material_response.face_charge._matrix import FieldMatrix, field_matrix
 from magpylib_material_response.face_charge._sheet import ChargeSheet
@@ -38,15 +37,11 @@ from magpylib_material_response.face_charge._study import (
     study_face_charge,
 )
 
-# pylint: disable=undefined-all-variable
-__all__ = [  # the old name too, for `import *`, through __getattr__ below
+__all__ = [
     "ChargeSheet",
     "FaceChargeStudy",
     "FieldMatrix",
-    "apply_face_charge",
     "field_matrix",
     "solve_face_charge",
     "study_face_charge",
 ]
-
-__getattr__ = old_names(__name__, {"apply_face_charge": "solve_face_charge"})

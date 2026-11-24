@@ -164,9 +164,6 @@ def _serialize_recursive(obj, parent="warn"):
         }
     elif susceptibility is not None:
         dd["susceptibility"] = {"value": np.asarray(susceptibility).tolist()}
-    h_ext = getattr(obj, "H_ext", None)
-    if h_ext is not None:
-        dd["H_ext"] = {"value": np.asarray(h_ext).tolist(), "unit": "T"}
     # what solve_face_charge solved: numbers only
     info = getattr(obj, "face_charge_info", None)
     if info is not None:
@@ -359,8 +356,13 @@ def _deserialize_recursive(inp):
         else:
             obj.susceptibility = saved["value"]
     if inp.get("H_ext") is not None:
-        _check_unit("H_ext", inp["H_ext"], "T")
-        obj.H_ext = inp["H_ext"]["value"]
+        msg = (
+            f"{obj} has H_ext {inp['H_ext'].get('value')} T in this file, which "
+            "magpylib-material-response reads no more since 0.15.0: load it with "
+            "0.14, or remove H_ext from the file and add UniformField(B=...) to the "
+            "model. Its field is in getB of the result, which H_ext's was not."
+        )
+        raise ValueError(msg)
     if inp.get("face_charge_info") is not None:
         obj.face_charge_info = inp["face_charge_info"]
     if inp.get("solved_by") is not None:

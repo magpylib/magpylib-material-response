@@ -8,7 +8,12 @@ import numpy as np
 import pytest
 
 import magpylib_material_response
-from magpylib_material_response import cells, configure_logging, disable_logging
+from magpylib_material_response import (
+    UniformField,
+    cells,
+    configure_logging,
+    disable_logging,
+)
 from magpylib_material_response.cells import (
     demag_tensor,
     get_susceptibilities,
@@ -245,8 +250,8 @@ def test_current_field_is_taken_at_the_cell_centroid(make):
     J_coil = solve_cells(magpy.Collection(coil, cell), susceptibility=10).sources[1]
     cell = make()
     cell.polarization = (0, 0, 0)
-    cell.H_ext = coil.getB(cell.centroid)
-    J_ext = solve_cells(magpy.Collection(cell), susceptibility=10).sources[0]
+    field = UniformField(B=coil.getB(cell.centroid))
+    J_ext = solve_cells(magpy.Collection(cell, field), susceptibility=10).sources[0]
     np.testing.assert_allclose(J_coil.polarization, J_ext.polarization, rtol=1e-12)
 
 
@@ -274,14 +279,14 @@ def test_per_object_susceptibilities_stay_per_object(values, expected):
 
 def test_copy_keeps_the_parents_material_attributes():
     """With inplace=False, a collection inside another one still sees the outer
-    collection's H_ext and susceptibility, as an in-place solve does."""
+    collection's susceptibility, as an in-place solve does."""
 
     def scene():
         inner = magpy.Collection(
-            magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
+            magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0)),
+            UniformField(B=(0, 0, 0.01)),
         )
         outer = magpy.Collection(inner)
-        outer.H_ext = (0, 0, 0.01)
         outer.susceptibility = 100
         return inner
 
@@ -290,53 +295,6 @@ def test_copy_keeps_the_parents_material_attributes():
     solve_cells(in_place, inplace=True)
     assert copied[2] > 0.01
     np.testing.assert_allclose(copied, in_place.sources_all[0].polarization)
-
-
-@pytest.mark.parametrize("solver", ["cells", "face charge"])
-@pytest.mark.parametrize(
-    ("h_ext", "kind", "match"),
-    [
-        (0.1, ValueError, "three finite numbers"),
-        ((0, 0.1), ValueError, "three finite numbers"),
-        ((0, 0, np.nan), ValueError, "three finite numbers"),
-        (("0", "0", "0.01"), ValueError, "three finite numbers"),
-        ((0, 0, 40), UserWarning, "not H in A/m"),
-        (np.array([[0, 0, 0.01]]), None, None),
-    ],
-    ids=["scalar", "two numbers", "nan", "text", "A/m", "a row"],
-)
-def test_H_ext_is_checked_before_the_solve(solver, h_ext, kind, match):
-    """On every part of two cubes. A scalar failed in solve_cells with a
-    reshape error and passed in solve_face_charge; the Earth's 40 A/m taken as
-    tesla gave 40 T unremarked. A row, as getB gives for one point in a list,
-    is three numbers too. One warning, at the line that called the solver."""
-
-    def solve(value):
-        model = magpy.Collection()
-        for x in (0, 0.02):
-            soft = magpy.magnet.Cuboid(
-                dimension=(0.01,) * 3, polarization=(0, 0, 0), position=(x, 0, 0)
-            )
-            soft.susceptibility = 1000
-            model.add(mesh_Cuboid(soft, (2, 2, 2)) if solver == "cells" else soft)
-        for part in model.sources_all:
-            part.H_ext = value
-        if solver == "cells":
-            return solve_cells(model)
-        return solve_face_charge(model, level=1)
-
-    if kind is None:
-        np.testing.assert_allclose(
-            solve(h_ext).getB((0.01, 0, 0.01)),
-            solve((0, 0, 0.01)).getB((0.01, 0, 0.01)),
-        )
-    elif issubclass(kind, Warning):
-        with pytest.warns(kind, match=match) as caught:
-            solve(h_ext)
-        assert [w.filename for w in caught if match in str(w.message)] == [__file__]
-    else:
-        with pytest.raises(kind, match=match):
-            solve(h_ext)
 
 
 @pytest.mark.parametrize(("chi", "averaged"), [(0.5, False), (1000, True)])
@@ -412,6 +370,11 @@ def test_alike_segment_pairs_share_one_average():
     )
 
 
+def _field():
+    """The tubes' applied field, 10 mT along x."""
+    return UniformField(B=(0.01, 0, 0))
+
+
 def _tube(chi, x=0.0):
     tube = magpy.Collection(
         *(
@@ -424,18 +387,17 @@ def _tube(chi, x=0.0):
         )
     )
     tube.susceptibility = chi
-    tube.H_ext = (0.01, 0, 0)
     return tube
 
 
 def test_cells_are_averaged_by_their_own_susceptibility():
     """A chi = 1000 tube a long way off used to switch a chi = 0.9 tube to the
     other scheme, which moved its field by 0.7 %."""
-    alone = solve_cells(magpy.Collection(_tube(0.9)))
-    with_far = solve_cells(magpy.Collection(_tube(0.9), _tube(1000, x=100.0)))
+    alone = solve_cells(magpy.Collection(_tube(0.9), _field()))
+    with_far = solve_cells(magpy.Collection(_tube(0.9), _tube(1000, x=100.0), _field()))
     np.testing.assert_allclose(
         [c.polarization for c in with_far.sources_all[:6]],
-        [c.polarization for c in alone.sources_all],
+        [c.polarization for c in alone.sources_all[:6]],
         rtol=1e-6,
         atol=1e-9,
     )
@@ -451,11 +413,11 @@ def test_demag_tensor_is_the_one_apply_demag_solves_with(given, chi):
     n = len(cells)
     Q = np.eye(3 * n) - chi * T.swapaxes(2, 3).reshape(3 * n, 3 * n).T
     rhs = chi * np.tile((0.01, 0, 0), n)
-    solved = solve_cells(tube, susceptibility=chi)
+    solved = solve_cells(magpy.Collection(tube, _field()), susceptibility=chi)
     J = np.linalg.solve(Q, np.ravel(rhs.reshape(n, 3), order="F"))
     np.testing.assert_allclose(
         J.reshape(n, 3, order="F"),
-        [c.polarization for c in solved],
+        [c.polarization for c in solved.sources_all[:n]],
         rtol=1e-9,
         atol=1e-12,
     )

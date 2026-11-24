@@ -101,9 +101,9 @@ def test_a_sphere_follows_its_curve(B0):
     sphere = icosphere(0.01, splits=2)
     sphere.susceptibility = table()
     model = mesh_TriangularMesh(sphere, 300)
-    model.H_ext = (0, 0, B0)
+    model.add(UniformField(B=(0, 0, B0)))
     solved = solve_cells(model, solver="direct")
-    cells = solved.sources_all
+    cells = _magnets(solved)
     volumes = np.array([c.volume for c in cells])
     J = np.array([c.polarization for c in cells])
     mean = (J * volumes[:, None]).sum(0) / volumes.sum()
@@ -111,6 +111,11 @@ def test_a_sphere_follows_its_curve(B0):
     assert mean[2] == pytest.approx(exact, rel=0.01)
     assert mean[2] < JS  # saturating, where chi0 alone would give 3 B0 / (1 + 3 / chi0)
     assert abs(mean[:2]).max() < 0.01 * exact
+
+
+def _magnets(collection):
+    """The magnets and cells of `collection`, without its UniformField."""
+    return [c for c in collection.sources_all if not isinstance(c, UniformField)]
 
 
 def _plate(curve=None, chi=None):
@@ -143,24 +148,24 @@ def test_saturation_lowers_the_field_and_the_rest_stays_linear():
     """In a field along the plate, the saturating plate carries less than chi0
     would give, and the fixed magnet stays as given."""
     along = _plate(table())
-    along.H_ext = (0.5, 0, 0)
+    along.add(UniformField(B=(0.5, 0, 0)))
     saturating = solve_cells(along)
     along = _plate(chi=CHI0)
-    along.H_ext = (0.5, 0, 0)
+    along.add(UniformField(B=(0.5, 0, 0)))
     linear = solve_cells(along)
     J_sat = max(
         np.linalg.norm(c.polarization)
-        for c in saturating.sources_all
+        for c in _magnets(saturating)
         if c.dimension[0] < 0.004
     )
     J_lin = max(
         np.linalg.norm(c.polarization)
-        for c in linear.sources_all
+        for c in _magnets(linear)
         if c.dimension[0] < 0.004
     )
     assert J_sat < JS < J_lin
     # the drive magnet itself is fixed: its polarization is as given
-    magnet = next(c for c in saturating.sources_all if c.dimension[0] == 0.005)
+    magnet = next(c for c in _magnets(saturating) if c.dimension[0] == 0.005)
     np.testing.assert_allclose(magnet.polarization, (0, 0, 1))
 
 
@@ -168,11 +173,11 @@ def test_a_curve_set_on_a_parent_reaches_the_cells_and_survives_json():
     plate = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.002), polarization=(0, 0, 0))
     model = magpy.Collection(mesh_Cuboid(plate, (3, 3, 1)))
     model.susceptibility = table(n=30)
-    model.H_ext = (0, 0, 0.5)
-    for cell in model.sources_all:
+    model.add(UniformField(B=(0, 0, 0.5)))
+    for cell in _magnets(model):
         assert curve_of(cell) is not None
     solved = solve_cells(model)
-    assert all(np.linalg.norm(c.polarization) < JS for c in solved.sources_all)
+    assert all(np.linalg.norm(c.polarization) < JS for c in _magnets(solved))
     back = from_json(to_json(model))[0]
     np.testing.assert_array_equal(back.susceptibility.B, model.susceptibility.B)
     np.testing.assert_allclose(
@@ -213,7 +218,7 @@ def test_the_nearest_susceptibility_wins_between_a_number_and_a_table(own):
     part = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
     cells = mesh_Cuboid(part, (2, 2, 2))
     model = magpy.Collection(cells)
-    model.H_ext = (0, 0, 1.0)
+    model.add(UniformField(B=(0, 0, 1.0)))
     if own == "on the part":  # linear: past saturation, as a chi of 1000 goes
         model.susceptibility = table(n=30)
         cells.susceptibility = 1000.0
@@ -224,7 +229,7 @@ def test_the_nearest_susceptibility_wins_between_a_number_and_a_table(own):
         cells.susceptibility = table(n=30)
         assert curve_of(cells.sources_all[0]) is not None
         expected_above = False
-    J = max(np.linalg.norm(c.polarization) for c in solve_cells(model).sources_all)
+    J = max(np.linalg.norm(c.polarization) for c in _magnets(solve_cells(model)))
     assert bool(J > JS) is expected_above
 
 
@@ -233,7 +238,7 @@ def test_a_linear_part_under_a_table_is_solved_by_face_charge():
     part.susceptibility = 1000.0
     model = magpy.Collection(part)
     model.susceptibility = table(n=30)
-    model.H_ext = (0, 0, 0.01)
+    model.add(UniformField(B=(0, 0, 0.01)))
     assert solve_face_charge(model, level=1).solved_by == "face_charge"
 
 
@@ -262,8 +267,8 @@ def test_a_steep_curve_solves():
     sphere = icosphere(0.01, splits=1)
     sphere.susceptibility = BHCurve(H=[0, 100, 1e6], B=[0, 1, 2.5])
     model = mesh_TriangularMesh(sphere, 50)
-    model.H_ext = (0, 0, 1.0)
-    J = [np.linalg.norm(c.polarization) for c in solve_cells(model).sources_all]
+    model.add(UniformField(B=(0, 0, 1.0)))
+    J = [np.linalg.norm(c.polarization) for c in _magnets(solve_cells(model))]
     assert 0.9 < max(J) < 2.5
 
 
@@ -490,11 +495,11 @@ def test_a_curve_that_starts_flat_solves():
     assert curve.chi0 == 1e-6
     assert curve.chi_max > 100
     model = _plate(flat)
-    model.H_ext = (0.5, 0, 0)
+    model.add(UniformField(B=(0.5, 0, 0)))
     solved = solve_cells(model)
     J_cells = [
         np.linalg.norm(c.polarization)
-        for c in solved.sources_all
+        for c in _magnets(solved)
         if c.dimension[0] < 0.004
     ]
     assert 0.5 * JS < max(J_cells) < 1.001 * JS  # the iteration stops at 1e-4
@@ -511,11 +516,11 @@ def test_finite_elements_follow_a_curve(B0):
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
     sphere.susceptibility = table()
     model = magpy.Collection(sphere)
-    model.H_ext = (0, 0, B0)
+    model.add(UniformField(B=(0, 0, B0)))
     solved = solve_fem(model, order=4)
     J = exact_sphere(B0)
-    # B leaves out the applied field: inside, J - J / 3
-    assert solved.getB((0, 0, 0))[2] == pytest.approx(2 * J / 3, rel=5e-3)
+    # B less the applied field: inside, J - J / 3
+    assert solved.getB((0, 0, 0))[2] - B0 == pytest.approx(2 * J / 3, rel=5e-3)
     assert solved.moment[2] == pytest.approx(J * np.pi / 6 * 0.01**3 / MU0, rel=2e-3)
 
 
@@ -535,7 +540,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     )
     tiny.susceptibility = table()
     model = magpy.Collection(big, tiny)
-    model.H_ext = (0, 0, 2.0)
+    model.add(UniformField(B=(0, 0, 2.0)))
     point = np.array([[0.03, 0, 0]])
     solved = solve_fem(
         model, order=3, solver_tol=1e-8, observers=point, observer_maxh=1e-5
@@ -545,7 +550,7 @@ def test_finite_elements_bring_a_tiny_part_onto_its_curve():
     )
     from_big = uniform.getB(point[0])[2]
     expected = from_big + 2 * exact_sphere(2.0 + from_big) / 3
-    assert solved.getB(point)[2] == pytest.approx(expected, rel=5e-3)
+    assert solved.getB(point)[2] - 2.0 == pytest.approx(expected, rel=5e-3)
 
 
 @pytest.mark.filterwarnings("ignore:This B-H curve reaches")
@@ -559,7 +564,7 @@ def test_finite_elements_on_a_straight_curve_match_its_susceptibility():
         for name, value in attributes.items():
             setattr(sphere, name, value)
         model = magpy.Collection(sphere)
-        model.H_ext = (0, 0, 1.0)
+        model.add(UniformField(B=(0, 0, 1.0)))
         return solve_fem(model, order=3, observers=points)
 
     points = np.array([[0, 0, 0], [0.003, 0, 0], [0, 0, 0.012]])
@@ -594,7 +599,7 @@ def test_finite_elements_say_what_to_do_when_a_curve_does_not_settle(monkeypatch
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
     sphere.susceptibility = table(n=30)
     model = magpy.Collection(sphere)
-    model.H_ext = (0, 0, 1.0)
+    model.add(UniformField(B=(0, 0, 1.0)))
     with pytest.raises(RuntimeError, match="higher order"):
         _solve.solve_fem(model, order=1)
 

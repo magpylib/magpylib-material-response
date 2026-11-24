@@ -28,7 +28,7 @@ import numpy as np
 import magpylib_material_response
 
 from . import references
-from .cases import CASES, select
+from .cases import CASES, applied, select
 from .methods import METHODS, TooLarge
 
 PR_CHECK = Path(__file__).parent / "pr_check.json"
@@ -44,10 +44,10 @@ def run(case, method, setting):
     solved = method.solve(
         collection, sensors, setting, **case.options.get(method.name, {})
     )
-    errors, first = {}, 0
+    errors, first, field = {}, 0, applied(collection)
     for group, points in groups.items():
         stored = reference["groups"][group]
-        B = solved.B[first : first + len(points), stored["components"]]
+        B = (solved.B - field)[first : first + len(points), stored["components"]]
         first += len(points)
         if B.shape != stored["B"].shape:
             msg = f"{case.name}, {group}: B is {B.shape}, its reference {stored['B'].shape}."

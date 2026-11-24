@@ -37,8 +37,7 @@ def test_sphere_matches_the_exact_field(chi, polarization, rotvec, field):
         orientation=Rotation.from_rotvec(rotvec),
     )
     sphere.susceptibility = chi
-    model = magpy.Collection(sphere)
-    model.H_ext = field
+    model = magpy.Collection(sphere, UniformField(B=field))
     rot = sphere.orientation.as_matrix()
     chi_global = rot @ np.diag(np.broadcast_to(chi, 3)) @ rot.T
     J = np.linalg.solve(
@@ -57,7 +56,7 @@ def test_sphere_matches_the_exact_field(chi, polarization, rotvec, field):
     study = study_fem(model, observers, (2, 3, 4), maxh=0.35 * a)
 
     exact = dipole.getB(observers)
-    error = np.linalg.norm(study.estimate - exact) / np.linalg.norm(exact)
+    error = np.linalg.norm(study.estimate - field - exact) / np.linalg.norm(exact)
     assert error < study.error < 0.05
     moment_error = np.linalg.norm(study.solution.moment - dipole.moment)
     assert moment_error < 1e-4 * np.linalg.norm(dipole.moment)
@@ -77,8 +76,9 @@ def test_cube_converges_to_the_polarizability_from_above():
         orientation=Rotation.from_rotvec((0.3, -0.2, 0.5)),
     )
     cube.susceptibility = 1e6
-    model = magpy.Collection(cube)
-    model.H_ext = tuple(cube.orientation.apply((0, 0, B_EXT)))
+    model = magpy.Collection(
+        cube, UniformField(B=cube.orientation.apply((0, 0, B_EXT)))
+    )
 
     study = study_fem(model, lambda s: s.moment, (2, 3, 4), edge_layers=3)
 
@@ -143,7 +143,7 @@ def test_every_shape_solves(make):
     soft = make()
     soft.susceptibility = 1000
     model = magpy.Collection(soft)
-    model.H_ext = (0, 0, B_EXT)
+    model.add(UniformField(B=(0, 0, B_EXT)))
 
     with pytest.warns(UserWarning, match="Two orders give no error estimate"):
         study = study_fem(model, lambda s: s.moment, (1, 2))
@@ -175,15 +175,14 @@ def test_sensors_are_read_in_their_own_frames():
     np.testing.assert_allclose(study.values[-1], study.solution.getB(sensor))
 
 
-@pytest.mark.parametrize("driven_by", ["H_ext", "coil"])
+@pytest.mark.parametrize("driven_by", ["uniform field", "coil"])
 def test_a_solution_is_a_magpylib_source(driven_by):
     """magpylib's getB, getH, getJ and getM read it like any solved model, and J
     is the exact one of a sphere, with or without a current in the model."""
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
     sphere.susceptibility = 10.0
-    if driven_by == "H_ext":
-        model, B0 = magpy.Collection(sphere), 0.1
-        model.H_ext = (0, 0, B0)
+    if driven_by == "uniform field":
+        model, B0 = magpy.Collection(sphere, UniformField(B=(0, 0, 0.1))), 0.1
     else:
         coil = magpy.current.Circle(current=2e5, diameter=2.0)
         model, B0 = magpy.Collection(sphere, coil), coil.getB((0, 0, 0))[2]
@@ -238,7 +237,7 @@ def test_edge_layers_match_across_faces(monkeypatch):
     )
     box.susceptibility = 100
     model = magpy.Collection(box)
-    model.H_ext = (B_EXT, 0, 0)
+    model.add(UniformField(B=(B_EXT, 0, 0)))
     observer = np.array([(0, 0, 2e-3)])
 
     solution = solve_fem(model, order=2, observers=observer)
@@ -255,7 +254,7 @@ def test_kept_solutions_stay_valid():
     sphere = magpy.magnet.Sphere(diameter=0.01, polarization=(0, 0, 0))
     sphere.susceptibility = 1000
     model = magpy.Collection(sphere)
-    model.H_ext = (0, 0, B_EXT)
+    model.add(UniformField(B=(0, 0, B_EXT)))
     observers = np.array([(0, 0, 0.008), (0.007, 0, 0.002)])
     kept = []
 
@@ -279,16 +278,6 @@ def test_no_source_gives_no_field():
 
     np.testing.assert_array_equal(solution.moment, 0)
     np.testing.assert_array_equal(solution.getB((0, 0, 0.008)), 0)
-
-
-def _two_fields():
-    soft = [
-        magpy.magnet.Cuboid(dimension=(1, 1, 1), position=(2 * i, 0, 0))
-        for i in range(2)
-    ]
-    for part, field in zip(soft, [(0, 0, 0.1), (0, 0, 0.2)], strict=True):
-        part.susceptibility, part.H_ext = 100, field
-    return magpy.Collection(soft)
 
 
 def _overlapping():
@@ -487,7 +476,7 @@ def test_magnet_faces_know_their_outward_normal(air_first):
 def test_a_far_coil_acts_as_a_uniform_field():
     """A loop of 1 m round a model of 10 mm drives it as a uniform field does,
     to its own unevenness over the model, about 1e-5. With the currents the
-    magnets take the total potential, with the field as H_ext the reduced one.
+    magnets take the total potential, with a UniformField the reduced one.
     Two soft cubes touch across the field's direction, a magnet sits beside
     them, and the field is read outside and inside them."""
     loop = magpy.current.Circle(current=B_EXT / magpy.mu_0, diameter=1.0)
@@ -510,20 +499,19 @@ def test_a_far_coil_acts_as_a_uniform_field():
     # above the cubes, 0.1 mm inside the upper one, where the lift of the
     # applied potential lives, and in the magnet
     observers = np.array([(0, 0, 0.008), (0, 0, 0.0049), (0, 0.006, 0)])
-    plain = model()
-    plain.H_ext = tuple(magpy.getB(loop, np.zeros(3)))
+    field = UniformField(B=magpy.getB(loop, np.zeros(3)))
     driven = solve_fem(model(loop), order=2, observers=observers)
-    reference = solve_fem(plain, order=2, observers=observers)
+    reference = solve_fem(model(field), order=2, observers=observers)
 
     scale = np.abs(reference.getB(observers)).max()
     np.testing.assert_allclose(
         driven.getB(observers) - loop.getB(observers),
-        reference.getB(observers),
+        reference.getB(observers) - field.getB(observers),
         atol=2e-5 * scale,
     )
     np.testing.assert_allclose(
         driven.getH(observers) - loop.getH(observers),
-        reference.getH(observers),
+        reference.getH(observers) - field.getH(observers),
         atol=2e-5 * scale / magpy.mu_0,
     )
     np.testing.assert_allclose(
@@ -543,7 +531,6 @@ def test_a_far_coil_acts_as_a_uniform_field():
         (_linked_ring, {}, ValueError, "links a magnet"),
         (_lead_beside_a_coil, {}, ValueError, "1 A"),
         (_closed_core, {}, ValueError, "links a magnet"),
-        (_two_fields, {}, ValueError, "different applied fields"),
         (
             lambda: magpy.Collection(magpy.misc.Dipole(moment=(0, 0, 1))),
             {},
@@ -580,7 +567,6 @@ def test_a_far_coil_acts_as_a_uniform_field():
         "current-through-a-ring",
         "lead-beside-a-strong-coil",
         "coil-round-a-closed-core",
-        "two-applied-fields",
         "dipole",
         "triangle",
         "overlap",

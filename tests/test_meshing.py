@@ -8,7 +8,7 @@ import magpylib as magpy
 import numpy as np
 import pytest
 
-from magpylib_material_response import from_json, to_json
+from magpylib_material_response import UniformField, from_json, to_json
 from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.face_charge import solve_face_charge
 from magpylib_material_response.meshing import (
@@ -637,74 +637,41 @@ def test_cells_match_magpylib_force_mesh(magnet, target_elems):
     np.testing.assert_allclose(dims, expected, atol=1e-12 * scale)
 
 
-def test_H_ext_set_before_meshing_reaches_the_cells():
-    """The applied field moves to the meshed collection, where a later change
-    still reaches the cells."""
-
-    def soft(H_ext=None):
-        obj = magpy.magnet.Cuboid(dimension=(0.01, 0.01, 0.01), polarization=(0, 0, 0))
-        obj.susceptibility = 1000
-        if H_ext is not None:
-            obj.H_ext = H_ext
-        return obj
-
-    obj = soft(np.array([0, 0, 0.01]))
-    mesh = mesh_Cuboid(obj, 8)
-    mesh.H_ext *= 1  # an in-place edit of the mesh leaves the magnet alone
-    assert mesh.H_ext is not obj.H_ext
-    before = solve_cells(mesh)
-    after = mesh_Cuboid(soft(), 8)
-    after.H_ext = (0, 0, 0.01)
-    after = solve_cells(after)
-    J = np.array([c.polarization for c in before.sources_all])
-    assert np.all(J[:, 2] > 0.01)
-    np.testing.assert_allclose(J, [c.polarization for c in after.sources_all])
-
-    changed = mesh_Cuboid(soft((0, 0, 0.01)), 8)
-    changed.H_ext = (0, 0, 0.02)
-    J2 = np.array([c.polarization for c in solve_cells(changed).sources_all])
-    np.testing.assert_allclose(J2, 2 * J)
-
-
-@pytest.mark.parametrize("name", ["H_ext", "susceptibility"])
-def test_a_mesh_inherits_as_its_magnet_did(name):
-    """Meshed on its own it has no parent, so it holds what the magnet inherited:
-    without it, the part did not respond, silently. In the magnet's place it
-    still inherits, so a later change above reaches the cells."""
-    value = (0, 0, 0.01) if name == "H_ext" else 100
+def test_a_mesh_inherits_as_its_magnet_did():
+    """Meshed on its own it has no parent, so it holds the susceptibility the
+    magnet inherited: without it, the part did not respond, silently. In the
+    magnet's place it still inherits, so a later change above reaches the cells."""
     cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
     parent = magpy.Collection(cube)
-    setattr(parent, name, value)
-    assert getattr(mesh_Cuboid(cube, 8), name) == value
+    parent.susceptibility = 100
+    assert mesh_Cuboid(cube, 8).susceptibility == 100
     mesh_all(parent, 8, inplace=True)
-    assert not hasattr(parent.children[0], name)
+    assert not hasattr(parent.children[0], "susceptibility")
 
 
 @pytest.mark.parametrize("mesher", [mesh_all, mesh_uniform])
-@pytest.mark.parametrize("on_parent", ["H_ext", "susceptibility"])
-def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher, on_parent):
-    """A copy has no parent: the applied field or the susceptibility set on the
-    model around the meshed collection was lost, and the part did not respond,
-    silently, where solve_face_charge and solve_fem read it."""
+def test_meshing_a_sub_collection_keeps_what_it_inherits(mesher):
+    """A copy has no parent: the susceptibility set on the model around the
+    meshed collection was lost, and the part did not respond, silently, where
+    solve_face_charge and solve_fem read it."""
 
     def model(on_parent):
         cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
-        inner = magpy.Collection(cube)
+        inner = magpy.Collection(cube, UniformField(B=(0, 0, 0.01)))
         outer = magpy.Collection(inner)
-        cube.H_ext, cube.susceptibility = (0, 0, 0.01), 100
-        if on_parent:
-            setattr(outer, on_parent, getattr(cube, on_parent))
-            setattr(cube, on_parent, None)
+        (outer if on_parent else cube).susceptibility = 100
         return inner
 
     cells = 64 if mesher is mesh_all else 4
-    inner = model(on_parent)
+    inner = model(on_parent=True)
     B = solve_cells(mesher(inner, cells)).getB((0, 0, 0.006))
     assert inner.parent is not None  # left as it was
-    assert len(inner.children) == 1
-    assert B[2] > 1e-3
+    assert len(inner.children) == 2
+    assert B[2] > 0.01 + 1e-3
     np.testing.assert_allclose(
-        B, solve_cells(mesher(model(None), cells)).getB((0, 0, 0.006)), atol=1e-12
+        B,
+        solve_cells(mesher(model(on_parent=False), cells)).getB((0, 0, 0.006)),
+        atol=1e-12,
     )
 
 

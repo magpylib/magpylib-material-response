@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import pickle
 
 import magpylib as magpy
@@ -41,24 +42,6 @@ IDS = ["cells", "face charge", "fem"]
 
 
 @pytest.mark.parametrize("solve", SOLVERS, ids=IDS)
-def test_it_drives_a_part_as_h_ext_does_and_shows_in_get_b(solve):
-    with_field = magpy.Collection(_soft(), UniformField(B=B0))
-    with_attribute = magpy.Collection(_soft())
-    with_attribute.H_ext = tuple(B0)
-    new, old = solve(with_field), solve(with_attribute)
-    scale = np.abs(magpy.getB(old, POINTS)).max()
-    atol = 1e-3 * scale  # fem's mesh is its own at each solve
-    np.testing.assert_allclose(
-        magpy.getB(new, POINTS) - B0, magpy.getB(old, POINTS), atol=atol
-    )
-    np.testing.assert_allclose(
-        magpy.getH(new, POINTS) - B0 / magpy.mu_0,
-        magpy.getH(old, POINTS),
-        atol=atol / magpy.mu_0,
-    )
-
-
-@pytest.mark.parametrize("solve", SOLVERS, ids=IDS)
 def test_several_fields_add_up_also_turned_and_nested(solve):
     turned = UniformField(B=(0, 0, 0.1))
     turned.rotate_from_angax(90, "x")  # (0, -0.1, 0) in the global frame
@@ -72,14 +55,36 @@ def test_several_fields_add_up_also_turned_and_nested(solve):
     )
 
 
-@pytest.mark.parametrize("solve", SOLVERS, ids=IDS)
+def _saved_with_h_ext(model):
+    """`model` saved by to_json and read back, with an H_ext written in as 0.14
+    wrote it: on the collection where one is above it, else on the part."""
+    above = model.parent
+    data = json.loads(to_json(above or model))
+    saved = data[0] if above else data[0]["children"][0]
+    saved["H_ext"] = {"value": list(B0), "unit": "T"}
+    return from_json(json.dumps(data))
+
+
+@pytest.mark.parametrize(
+    "act",
+    [
+        *SOLVERS,
+        lambda model: mesh_Cuboid(model.children[0], (2, 2, 2)),
+        lambda model: mesh_all(model, target_elems=8),
+        lambda model: mesh_uniform(model, 2),
+        _saved_with_h_ext,
+    ],
+    ids=[*IDS, "mesh_Cuboid", "mesh_all", "mesh_uniform", "from_json"],
+)
 @pytest.mark.parametrize("above", [False, True], ids=["on it", "above it"])
-def test_a_field_and_h_ext_together_are_refused(solve, above):
-    model = magpy.Collection(_soft(), UniformField(B=B0))
-    holder = magpy.Collection(model) if above else model
+def test_h_ext_is_refused_where_it_was_read(act, above):
+    """Gone in 0.15.0: set on a part or a collection above it, or in a saved
+    file, it raises and names its replacement, rather than solving without it."""
+    model = magpy.Collection(_soft())
+    holder = magpy.Collection(model) if above else model.children[0]
     holder.H_ext = tuple(B0)
-    with pytest.raises(ValueError, match="count twice"):
-        solve(model)
+    with pytest.raises(ValueError, match=r"H_ext.*UniformField"):
+        act(model)
 
 
 def test_it_turns_and_takes_h_and_is_kept_through_copy_and_json():
@@ -185,14 +190,6 @@ def test_meshers_and_reuse_keep_it():
         2 * (magpy.getB(first, POINTS) - B0),
         rtol=1e-9,
     )
-
-
-def test_h_ext_warns_that_it_goes():
-    part = _soft()
-    model = magpy.Collection(mesh_Cuboid(part, (2, 2, 2)))
-    model.H_ext = tuple(B0)
-    with pytest.warns(DeprecationWarning, match="UniformField"):
-        solve_cells(model)
 
 
 @pytest.mark.parametrize("box", [None, [[-1, 1], [-2, 2], [-3, 3]]])

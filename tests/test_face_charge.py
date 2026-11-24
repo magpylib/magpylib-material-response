@@ -106,6 +106,14 @@ def _relative(a, b):
     return np.abs(a - b).max() / np.abs(b).max()
 
 
+def _response(solved):
+    """`solved` without its UniformFields: getB reads the parts' own field, which
+    a uniform field of the size of theirs would otherwise swamp far off."""
+    for field in [s for s in solved.sources_all if isinstance(s, UniformField)]:
+        field.parent.remove(field)
+    return solved
+
+
 def test_uniform_charge_is_magpylib_triangle():
     J = np.array([0.3, -0.2, 0.9])
     sheet = _one_face([J @ NORMAL / magpy.mu_0] * 3)
@@ -173,9 +181,9 @@ def _solved_bars():
         )
         for i in range(3)
     ]
-    coll = magpy.Collection(*bars)
-    coll.susceptibility, coll.H_ext = 999.0, (0.002, 0.001, 0.01)
-    return solve_face_charge(coll, level=1)
+    coll = magpy.Collection(*bars, UniformField(B=(0.002, 0.001, 0.01)))
+    coll.susceptibility = 999.0
+    return _response(solve_face_charge(coll, level=1))
 
 
 def test_field_far_from_a_solved_model_falls_as_a_dipole():
@@ -264,8 +272,8 @@ def test_far_panels_leave_the_answer_and_threads_do_not_change_it(monkeypatch):
             for i in range(3)
         ]
         bars[2].rotate_from_angax(30, "z")
-        coll = magpy.Collection(*bars)
-        coll.susceptibility, coll.H_ext = 999.0, (0.002, 0.001, 0.01)
+        coll = magpy.Collection(*bars, UniformField(B=(0.002, 0.001, 0.01)))
+        coll.susceptibility = 999.0
         return solve_face_charge(coll, level=2).getB(
             [(0.008, 0.002, 0.003), (0, 0, 0.02)]
         )
@@ -460,8 +468,8 @@ def test_triangle_mesh_part_couples_as_a_cuboid():
             first, _cuboid(position=(0.015, 0, 0), orientation=turned)
         )
         coll.susceptibility = 100.0
-        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
-        solved = solve_face_charge(coll, level=3)
+        coll.add(UniformField(B=(8e-3, 2.4e-3, 4e-3)))
+        solved = _response(solve_face_charge(coll, level=3))
         assert all(isinstance(s, ChargeSheet) for s in solved.sources_all)
         fields.append(solved.getB(sensors))
     assert _relative(*fields) < 5e-4
@@ -499,8 +507,8 @@ def test_triangle_mesh_touching_a_cuboid_solves_as_two_cuboids(turn, offset):
         )
         coll = magpy.Collection(first, side)
         coll.susceptibility = 100.0
-        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
-        fields.append(solve_face_charge(coll, level=3).getB(sensors))
+        coll.add(UniformField(B=(8e-3, 2.4e-3, 4e-3)))
+        fields.append(_response(solve_face_charge(coll, level=3)).getB(sensors))
     assert _relative(*fields) < 3e-4
     part = _mesh_cube()
     part.susceptibility = 100.0
@@ -585,10 +593,12 @@ def test_touching_shells_of_one_mesh_solve_as_two_meshes():
     ]
     fields = []
     for parts in ([one], two):
-        coll = magpy.Collection(*parts)
-        coll.susceptibility, coll.H_ext = 100.0, (0.004, 0, 0.008)
+        coll = magpy.Collection(*parts, UniformField(B=(0.004, 0, 0.008)))
+        coll.susceptibility = 100.0
         fields.append(
-            solve_face_charge(coll, level=2).getB([(0, 0, 0.012), (0.009, 0, 0.004)])
+            _response(solve_face_charge(coll, level=2)).getB(
+                [(0, 0, 0.012), (0.009, 0, 0.004)]
+            )
         )
     assert _relative(*fields) < 1e-4
 
@@ -610,8 +620,9 @@ def test_a_part_inside_parts_of_its_material_keeps_no_faces():
     models = [magpy.Collection(*block), magpy.Collection(cube(3 * a))]
     solved = []
     for model, level in zip(models, (1, 4), strict=True):
-        model.susceptibility, model.H_ext = 1000, (0.002, 0, 0.01)
-        solved.append(solve_face_charge(model, level=level))
+        model.susceptibility = 1000
+        model.add(UniformField(B=(0.002, 0, 0.01)))
+        solved.append(_response(solve_face_charge(model, level=level)))
     centre, whole = solved[0].children[13], solved[1].children[0]
     assert len(centre.faces) == 0
     assert centre.get_trace() == []
@@ -648,8 +659,8 @@ def test_a_gap_below_the_panels_moves_the_field_as_little(mesh, gap, rtol):
     for z in (0.008, 0.008 + gap):
         coll = magpy.Collection(cube(0.01, (0, 0, 0)), cube(0.006, (0.001, 0.0015, z)))
         coll.susceptibility = 100.0
-        coll.H_ext = (8e-3, 2.4e-3, 4e-3)
-        fields.append(solve_face_charge(coll, level=2).getB(sensors))
+        coll.add(UniformField(B=(8e-3, 2.4e-3, 4e-3)))
+        fields.append(_response(solve_face_charge(coll, level=2)).getB(sensors))
     assert _relative(*fields) < rtol
 
 
@@ -818,8 +829,8 @@ def test_cube_polarizability_converges_from_below():
     for level in (3, 4):
         cube = magpy.magnet.Cuboid(dimension=(0.01,) * 3, polarization=(0, 0, 0))
         cube.susceptibility = 1e6
-        cube.H_ext = (0.0, 0.0, 1e-3)
-        sheet = solve_face_charge(magpy.Collection(cube), level=level).sources_all[0]
+        model = magpy.Collection(cube, UniformField(B=(0.0, 0.0, 1e-3)))
+        sheet = solve_face_charge(model, level=level).sources_all[0]
         alphas.append(sheet.mean_polarization[2] / 1e-3)
     assert alphas[0] < alphas[1] < 3.644305
     assert abs(alphas[1] / 3.644305 - 1) < 6e-4
@@ -854,17 +865,18 @@ def test_turned_collection_turns_the_field():
 def test_returns_a_solved_copy():
     coll = _plate_under_magnet()
     plate, _ = coll.sources_all
-    plate.H_ext = (0.0, 0.0, 0.005)
+    coll.add(UniformField(B=(0.0, 0.0, 0.005)))
     solved = solve_face_charge(coll, level=2)
-    sheet, kept = solved.sources_all
+    sheet, kept, field = solved.sources_all
     assert isinstance(sheet, ChargeSheet)
     assert sheet.style.label == "plate"
     assert isinstance(
         kept, magpy.magnet.Cuboid
     )  # susceptibility 0: magpylib's own magnet
+    assert isinstance(field, UniformField)
     assert coll.sources_all[0] is plate  # the input is untouched
-    far = [0.0, 0.0, -0.1]  # the applied field (5 mT) is left out, as by solve_cells
-    assert np.linalg.norm(solved.getB(far)) < 1e-4
+    far = [0.0, 0.0, -0.1]  # the applied field (5 mT) is in, as in solve_cells
+    assert np.linalg.norm(solved.getB(far) - field.B) < 1e-4
 
 
 @pytest.mark.slow
@@ -927,11 +939,10 @@ def test_soft_sphere_gives_the_exact_dipole():
     a, chi, B0 = 0.005, 1000.0, 0.01
     sphere = magpy.magnet.Sphere(diameter=2 * a, polarization=(0, 0, 0))
     sphere.susceptibility = chi
-    model = magpy.Collection(sphere)
-    model.H_ext = (0, 0, B0)
+    model = magpy.Collection(sphere, UniformField(B=(0, 0, B0)))
     m = np.array([0, 0, 4 * np.pi * a**3 * chi / (chi + 3) * B0 / magpy.mu_0])
     dipole = magpy.misc.Dipole(moment=m)
-    solved = solve_face_charge(model, level=1)
+    solved = _response(solve_face_charge(model, level=1))
     for points, rtol in (
         ([(0, 0, 0.006), (0.006, 0, 0)], 5e-3),
         ([(0, 0, 0.05)], 1e-3),
@@ -1138,18 +1149,20 @@ def test_too_many_unknowns_raise_before_assembly():
     with pytest.raises(ValueError, match="max_unknowns"):
         solve_face_charge(magpy.Collection(cube), max_unknowns=10)
     cube = _cuboid()
-    cube.susceptibility, cube.H_ext = 10, (0, 0, 0.01)
+    cube.susceptibility = 10
+
+    def model():
+        return magpy.Collection(cube.copy(), UniformField(B=(0, 0, 0.01)))
+
     # by default the highest level that fits; a level asked for raises
     with pytest.warns(UserWarning, match="solved at level 2"):
-        solved = solve_face_charge(magpy.Collection(cube.copy()), max_unknowns=300)
+        solved = solve_face_charge(model(), max_unknowns=300)
     assert solved.face_charge_info["level"] == 2
     with pytest.raises(ValueError, match="max_unknowns"):
-        solve_face_charge(magpy.Collection(cube.copy()), level=3, max_unknowns=300)
+        solve_face_charge(model(), level=3, max_unknowns=300)
     # a refinement round over the limit is skipped: the round before is kept
     with pytest.warns(UserWarning, match="round 0's"):
-        solved = solve_face_charge(
-            magpy.Collection(cube), level=2, refine=1, max_unknowns=300
-        )
+        solved = solve_face_charge(model(), level=2, refine=1, max_unknowns=300)
     assert np.isfinite(solved.getB((0, 0, 0.01))).all()
     info = solved.face_charge_info  # the solve that was kept, not the skipped one
     assert (info["level"], info["rounds"]) == (2, 0)
@@ -1290,9 +1303,10 @@ def test_parts_a_hair_apart_solve_as_touching(offset):
             )
             for x in (-0.0025, 0.0025 + shift)
         ]
-        coll = magpy.Collection(plate, *blocks)
-        coll.susceptibility, coll.H_ext = 1000, (0, 0, 0.01)
-        return solve_face_charge(coll, level=2).getB([(0, 0, 0.004), (0.008, 0, 0)])
+        coll = magpy.Collection(plate, *blocks, UniformField(B=(0, 0, 0.01)))
+        coll.susceptibility = 1000
+        solved = _response(solve_face_charge(coll, level=2))
+        return solved.getB([(0, 0, 0.004), (0.008, 0, 0)])
 
     # the block moved by the offset itself: 2e-8 of its size
     np.testing.assert_allclose(solve(offset), solve(0.0), rtol=1e-6, atol=1e-9)
@@ -1343,8 +1357,8 @@ def test_sheet_is_closed_finite_at_its_corners_and_read_only():
         polarization=(0, 0, 0),
         position=(0.003 - 3e-9, 0, 0.0015),
     )
-    coll = magpy.Collection(plate, block)
-    coll.susceptibility, coll.H_ext = 1000, (0, 0, 0.01)
+    coll = magpy.Collection(plate, block, UniformField(B=(0, 0, 0.01)))
+    coll.susceptibility = 1000
     sheet = solve_face_charge(coll, level=2).sources_all[0]
     np.testing.assert_allclose(np.ptp(sheet.vertices, axis=0), plate.dimension)
     assert np.isfinite(sheet.getB(sheet.vertices + sheet.position)).all()
@@ -1440,9 +1454,7 @@ def _scaled(k):
 
 
 def _with_field(field):
-    model = magpy.Collection(_drive(), _soft())
-    model.H_ext = (field, -field, 0)
-    return model
+    return magpy.Collection(_drive(), _soft(), UniformField(B=(field, -field, 0)))
 
 
 def _turned(k):
@@ -1488,7 +1500,7 @@ REUSED = {
         4,
         SAME,
     ),
-    "H_ext changes": (_models(_with_field, 0.0, 5e-3, -0.2, 1.0), 2, SAME),
+    "the applied field changes": (_models(_with_field, 0.0, 5e-3, -0.2, 1.0), 2, SAME),
     "the part's remanence changes": (
         _models(
             lambda j: magpy.Collection(_drive(), _soft(chi=0.05, J=(0, 0, j))),
@@ -2643,7 +2655,7 @@ def _soft_body(x, level, small=False, turned=False):
         )
         if turned:
             part.rotate_from_angax(90, "y")
-    body = _part(part, 1000.0, np.zeros(3), level)
+    body = _part(part, 1000.0, level)
     body.mesh()
     return body
 

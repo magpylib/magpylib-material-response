@@ -21,11 +21,12 @@ from magpylib_material_response.meshing_utils import (
     set_values,
     take_place,
 )
-from magpylib_material_response.uniform import UniformField
+from magpylib_material_response.uniform import UniformField, refuse_H_ext
 
 
 def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
     refuse_bh_curve(obj)
+    refuse_H_ext([obj])
     coll = magpy.Collection(cells)
     value = getattr(obj, "susceptibility", None)
     if value is not None:
@@ -48,11 +49,6 @@ def _collection_from_obj_and_cells(obj, cells, *, sealed=True, **style_kwargs):
         coll.set_children_styles(style)
     coll.position = obj.position
     coll.orientation = obj.orientation
-    # The applied field is uniform over the object, so it belongs to the meshed
-    # collection: the cells find it there, and a later change still reaches them.
-    h_ext = inherited(obj, "H_ext")
-    if h_ext is not None:
-        coll.H_ext = copy.deepcopy(h_ext)
     if sealed:
         coll.sealed = True  # one object made of cells, to magpylib-studio
     return coll
@@ -818,6 +814,8 @@ def mesh_all(
         magpy.magnet.TriangularMesh,
     )
     allowed = (*supported, BaseCurrent, UniformField)
+    # before the copy loses the parents
+    refuse_H_ext([obj, *getattr(obj, "sources_all", ())])
     if not inplace:
         obj = detached_copy(obj, **kwargs)
     children = [obj]
@@ -970,6 +968,8 @@ def mesh_uniform(obj, cells_across, inplace=False, max_cells=1_000_000, **kwargs
             "that part with its own mesher."
         )
         raise ValueError(msg)
+    # before the copy loses the parents
+    refuse_H_ext([obj, *getattr(obj, "sources_all", ())])
     if not inplace:
         obj = detached_copy(obj, **kwargs)
     for child in parts(obj):

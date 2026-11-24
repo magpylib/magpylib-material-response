@@ -41,7 +41,7 @@ import numpy as np
 
 from magpylib_material_response.convergence import SAFETY_FACTOR
 
-from .cases import CASES, select
+from .cases import CASES, applied, select
 
 FOLDER = Path(__file__).parent / "references"
 #: element size at the sensors against the default, for the reference mesh
@@ -115,14 +115,14 @@ def _solve(case):
         raise RuntimeError(msg)
     coarse = solve_fem(collection, order=orders[-1], observers=sensors, **options).getB(
         sensors
-    )
+    ) - applied(collection)
     seconds = time.perf_counter() - start
     change = study.values[-1] - study.values[-2]
     stored, first = {}, 0
     for group, points in groups.items():
         rows = slice(first, first + len(points))
         first += len(points)
-        B = study.estimate[rows]
+        B = study.estimate[rows] - applied(collection)
         size = np.linalg.norm(B)
         if size == 0:
             msg = f"{case.name}, {group}: B is zero there; nothing to compare."

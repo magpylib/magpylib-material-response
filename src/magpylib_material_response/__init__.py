@@ -41,7 +41,6 @@ _FUNCTIONS = {
 _MODULES = (
     "cells",
     "convergence",
-    "demag",
     "demag_fft",
     "face_charge",
     "fem",

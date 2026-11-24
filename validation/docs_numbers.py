@@ -530,14 +530,14 @@ def fc_sphere():
 def hundred_cubes_l2():
     """The validation's 100 small bodies at face-charge level 2, max_unknowns raised."""
     from . import references  # noqa: PLC0415
-    from .cases import CASES  # noqa: PLC0415
+    from .cases import CASES, applied  # noqa: PLC0415
 
     case = CASES["small_bodies"]
     ref = references.load(case)
     collection, groups = case.model()
     sensors = np.concatenate(list(groups.values()))
     s, t = timed(solve_face_charge, collection, level=2, max_unknowns=40_000)
-    B = magpy.getB(s, sensors)
+    B = magpy.getB(s, sensors) - applied(collection)
     group = {}
     first = 0
     for g, pts in groups.items():

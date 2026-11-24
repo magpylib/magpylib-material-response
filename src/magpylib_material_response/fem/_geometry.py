@@ -18,14 +18,13 @@ from magpylib_material_response._saturation import BHCurve, curve_of
 from magpylib_material_response.cells import (
     _cell_susceptibilities,
     _has_path,
-    get_H_ext,
     get_susceptibilities,
     warn_if_solved,
 )
 from magpylib_material_response.fem._step import exact_box, exact_inside, exact_solid
 from magpylib_material_response.meshing import _thinnest as _thinnest_part
 from magpylib_material_response.meshing_utils import SOLIDS, mask_inside
-from magpylib_material_response.uniform import UniformField, refuse_both
+from magpylib_material_response.uniform import UniformField, refuse_H_ext
 from magpylib_material_response.uniform import applied as uniform_field
 
 #: More sharp edges than this meeting at a corner break netgen's geometric
@@ -92,7 +91,7 @@ def parts_of(collection):
             "TriangleStrip (last two vertices on the first two)."
         )
         raise ValueError(msg)
-    refuse_both(sources)
+    refuse_H_ext(sources)
     warn_if_solved(collection)
     others = [
         s
@@ -136,16 +135,7 @@ def parts_of(collection):
             )
         )
 
-    applied = np.array(get_H_ext(*magnets), dtype=float)
-    responding = np.array([np.any(p.chi != 0) for p in parts])
-    applied = applied[responding] if responding.any() else applied[:1]
-    if np.ptp(applied, axis=0).max() > 1e-12 * max(np.abs(applied).max(), 1e-300):
-        msg = (
-            "The magnets that respond see different applied fields (H_ext); a "
-            "finite-element model has one field in all space."
-        )
-        raise ValueError(msg)
-    return parts, applied[0] + uniform_field(sources), currents
+    return parts, uniform_field(sources), currents
 
 
 def _closed(current):

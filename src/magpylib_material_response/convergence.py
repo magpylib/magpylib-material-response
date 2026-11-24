@@ -20,7 +20,6 @@ import magpylib as magpy
 import numpy as np
 from magpylib._src.obj_classes.class_BaseExcitations import BaseMagnet
 
-from magpylib_material_response._renamed import old_names
 from magpylib_material_response.cells import solve_cells
 from magpylib_material_response.meshing import _responds, mesh_uniform
 
@@ -37,9 +36,7 @@ if TYPE_CHECKING:
 PLAUSIBLE_ORDERS = (0.3, 3.0)
 #: Roache's factor of safety for an error estimated from three meshes (Roache
 #: 1994; Celik et al. 2008, Eq. 7).
-# the old name too, for `import *`, through __getattr__ at the end
-# pylint: disable=undefined-all-variable
-__all__ = ["Comparison", "MeshStudy", "compare", "mesh_study", "study_cells"]  # noqa: F822
+__all__ = ["Comparison", "MeshStudy", "compare", "study_cells"]
 
 SAFETY_FACTOR = 1.25
 #: Share of the last change that entries moving against the trend may carry
@@ -283,8 +280,6 @@ def study_cells(
     levels: Sequence,
     mesher: Callable | None = None,
     solve_kwargs: dict | None = None,
-    *,
-    demag_kwargs: dict | None = None,
 ) -> MeshStudy:
     """Solve `collection` on meshes of increasing resolution and estimate the
     error of the finest.
@@ -358,16 +353,6 @@ def study_cells(
     if len(levels) < 2:
         msg = "levels must hold at least two values."
         raise ValueError(msg)
-    if demag_kwargs is not None:
-        if solve_kwargs is not None:
-            msg = "Give solve_kwargs alone: demag_kwargs is its old name."
-            raise ValueError(msg)
-        warnings.warn(
-            "demag_kwargs is now solve_kwargs; the old name goes in the next release.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        solve_kwargs = demag_kwargs
     solve_kwargs = dict(solve_kwargs or {})
     clash = sorted({"inplace", "susceptibility"} & set(solve_kwargs))
     if clash:
@@ -511,6 +496,3 @@ def compare(a, b) -> Comparison:
         agreement=float(agree[known].mean()) if known.any() else np.nan,
         relative_difference=float(_relative(np.linalg.norm(step), np.linalg.norm(vb))),
     )
-
-
-__getattr__ = old_names(__name__, {"mesh_study": "study_cells"})
