@@ -147,7 +147,9 @@ class ChargeSheet(magpy.misc.CustomSource):
         Triplets of vertex indices, one per triangle. A face without area (its
         corners in a line) is dropped, with its charge: it carries none. The
         sheet's ``faces``, ``charge_densities``, ``triangles`` and ``panels``
-        then have fewer rows than given.
+        then have fewer rows than given. Setting ``charge_densities`` takes a
+        row per face given or per face kept, and setting ``vertices`` checks
+        every face given again.
     charge_densities : array-like, shape (m, 3)
         Surface charge density in A/m at each face's three corners, in the
         order of its vertex indices.
@@ -221,7 +223,7 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @vertices.setter
     def vertices(self, value):
-        self._set(value, self._faces, self._q, self._panels)
+        self._set(value, *self._given)  # a face dropped may have area again
         self.style.charge.level = None
 
     @property
@@ -232,7 +234,7 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @faces.setter
     def faces(self, value):
-        self._set(self._vertices, value, self._q)  # new faces, so no panels
+        self._set(self._vertices, value, self._given[1])  # new faces, so no panels
         self.style.charge.level = None
 
     @property
@@ -243,7 +245,12 @@ class ChargeSheet(magpy.misc.CustomSource):
 
     @charge_densities.setter
     def charge_densities(self, value):
-        self._set(self._vertices, self._faces, value, self._panels)
+        faces, given, panels = self._given
+        value = np.asarray(value, float)
+        if value.shape == self._q.shape != given.shape:  # one row per face kept
+            value, kept = given.copy(), value
+            value[self._kept] = kept
+        self._set(self._vertices, faces, value, panels)
         self.style.charge.level = None  # the solve's, of the charge it had
 
     @property
@@ -275,7 +282,9 @@ class ChargeSheet(magpy.misc.CustomSource):
             if len(panels) != len(F):
                 msg = f"panels needs one element per face, shape ({len(F)},); got {np.shape(panels)}."
                 raise ValueError(msg)
-        keep = has_area(P[F])
+        # as given, for the setters: a face dropped below may count again
+        self._given = (F, q, panels)
+        keep = self._kept = has_area(P[F])
         if not keep.all():  # its frame would make the whole field NaN
             F, q = F[keep], q[keep]
             panels = None if panels is None else panels[keep]

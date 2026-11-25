@@ -72,6 +72,8 @@ docs/_build/
 
 # the browser's field kernels, built from kernels/rust by CD (#208)
 src/magpylib_material_response/kernels/
+# wasm-pack's output, which hatch would ship in the sdist: it reads only this file
+kernels/rust/pkg/
 
 # PyBuilder
 .pybuilder/
