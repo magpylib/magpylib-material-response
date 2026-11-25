@@ -548,7 +548,10 @@ def coupling_block(a, b):
     per_panel = len(y) // (b.n_dofs // 3)  # points of one source panel
     G, normals = contact_block(a, b, tol)
     ny = np.repeat(normals, per_panel, axis=0) @ a.R
-    panels = max(1, CHUNK // (max(a.n_dofs, 1) * 8 * per_panel * threads()))
+    # CHUNK counts kernel evaluations, shared by the threads: an extra factor of
+    # 8 here left one source panel per call, and 8 threads ran 2.5 times slower
+    # than one
+    panels = max(1, CHUNK // (max(a.n_dofs, 1) * per_panel * threads()))
 
     def chunk(p0):  # whole source panels: their own columns of G
         rows = slice(p0 * per_panel, (p0 + panels) * per_panel)
