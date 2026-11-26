@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-27
+
 ### Changed
 
 - Face charge takes the field of Polyline coils on its parts from this package's
@@ -843,7 +845,9 @@ can change or stop existing code.
   ([#4](https://github.com/magpylib/magpylib-material-response/pull/4))
 
 [Unreleased]:
-  https://github.com/magpylib/magpylib-material-response/compare/0.15.0...HEAD
+  https://github.com/magpylib/magpylib-material-response/compare/0.16.0...HEAD
+[0.16.0]:
+  https://github.com/magpylib/magpylib-material-response/compare/0.15.0...0.16.0
 [0.15.0]:
   https://github.com/magpylib/magpylib-material-response/compare/0.14.0...0.15.0
 [0.14.0]:
