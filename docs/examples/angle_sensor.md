@@ -131,7 +131,7 @@ A soft ring around the chip, 6 to 16 mm across and 4 mm tall, cuts the error
 twenty- to fortyfold: to 0.06° at 1.5 mm and 0.04° at 2.5 mm.
 
 It costs solve time. With the ring the shaft turns against a second solved part,
-which changes the matrix at every angle: 20 to 23 s for the 12 angles, where the
+which changes the matrix at every angle: about 14 s for the 12 angles, where the
 shaft alone, keeping one factorization, takes under a second.
 
 ## The answers

@@ -102,14 +102,6 @@ shared edge. Panels on one face give each other no flux.
   apart take 3 Gauss points per side instead of the closed form, and pairs 16
   sides apart take 2 points per side. This moves answers by under 1e-6 and makes
   assembly up to 1.55 times faster on 8 threads.
-- **Separate curved or meshed parts**: the block coupling two triangle meshes
-  apart is of low rank, and adaptive cross approximation builds it from a few
-  hundred of its rows and columns {cite}`bebendorf2000`, to 1e-8 of the block.
-  Whole solves are up to 10 times faster: the pole pieces 1.9 times at level 3,
-  eight discs in a row 10 times at level 2, with fields within 1e-8 of the dense
-  blocks'. A block keeps the dense path where that does not pay: parts under
-  2,000 unknowns, parts closer than 5 % of the smaller one's size, and a rank
-  above a third of the block. The system stays dense.
 
 On a cube of infinite susceptibility the method reproduces the known
 polarizability, 3.6443 times the volume {cite}`helsing2013`, from below, as a
@@ -188,6 +180,5 @@ above 2,000 unknowns, and can be kept for a loop. The
 Code, in `src/magpylib_material_response/face_charge/`: panels in `_panels.py`
 and `_bodies.py` (cuboids), `_mesh.py` and `_tribody.py` (triangle meshes) and
 `_apply.py` (curved faces); closed forms in `_rectangle.py` and `_triangle.py`;
-contacts in `_contact.py`; cross approximation in `_aca.py`; the kept
-factorization in `_kept.py`; the result in `_sheet.py` and `_matrix.py`; threads
-in `_parallel.py`.
+contacts in `_contact.py`; the kept factorization in `_kept.py`; the result in
+`_sheet.py` and `_matrix.py`; threads in `_parallel.py`.
