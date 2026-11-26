@@ -113,6 +113,16 @@ def segments_field(segments, points):
     return B
 
 
+def complete_polyline(source):
+    """Whether ``source`` is a Polyline with its vertices and current set, for
+    :func:`polylines_field`; magpylib's getB says what an incomplete one lacks."""
+    return (
+        isinstance(source, magpy.current.Polyline)
+        and source.vertices is not None
+        and source.current is not None
+    )
+
+
 def polylines_field(polylines, points):
     """B in T of ``polylines`` at ``points`` (n, 3), summed: every straight
     segment at every point, by this package's kernel, on the threads. It is

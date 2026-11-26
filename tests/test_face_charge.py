@@ -36,7 +36,7 @@ from magpylib_material_response.face_charge import (
     solve_face_charge,
     study_face_charge,
 )
-from magpylib_material_response.face_charge._apply import _closed_surface
+from magpylib_material_response.face_charge._apply import _closed_surface, _part
 from magpylib_material_response.face_charge._bodies import _solve, solve_system
 from magpylib_material_response.face_charge._kept import _factor
 from magpylib_material_response.face_charge._mesh import (
@@ -1675,6 +1675,72 @@ REUSED = {
         (False, False),
     ),
 }
+
+
+@pytest.mark.filterwarnings("ignore:A magnet has no susceptibility and no polarization")
+@pytest.mark.parametrize("case", ["first solve undriven", "a fixed sheet first"])
+def test_a_reused_solve_keeps_the_level_its_earlier_solve_set(case):
+    """Not a level of 0, from a solve nothing drove, at which every colour
+    would be full, and not a level of a sheet given to the solve."""
+
+    def model(J):
+        plate = magpy.magnet.Cuboid(
+            dimension=(0.02, 0.02, 0.004), polarization=(0, 0, 0)
+        )
+        plate.susceptibility = 100
+        magnet = magpy.magnet.Cuboid(
+            dimension=(0.005,) * 3, polarization=(0, 0, J), position=(0, 0, 0.006)
+        )
+        given = ChargeSheet.from_triangles(
+            [[(0, 0, 0.03), (0.01, 0, 0.03), (0, 0.01, 0.03)]],
+            np.full((1, 3), 1e3),
+            style_charge_level=777.0,
+        )
+        return magpy.Collection(
+            *(given, plate, magnet)
+            if case == "a fixed sheet first"
+            else (plate, magnet)
+        )
+
+    plate = 1 if case == "a fixed sheet first" else 0
+    first = solve_face_charge(
+        model(0.0 if case == "first solve undriven" else 1.0), level=1, reuse=True
+    )
+    again = solve_face_charge(model(1.2), level=1, reuse=first)
+    assert again.face_charge_info["reused"]
+    expected = (
+        (
+            solve_face_charge(model(1.2), level=1)
+            if case == "first solve undriven"
+            else first
+        )
+        .children[plate]
+        .style.charge.level
+    )
+    assert again.children[plate].style.charge.level == pytest.approx(expected)
+
+
+def test_parts_apart_couple_alike_in_any_chunks_on_any_threads(monkeypatch):
+    """The block between two curved parts, in chunks of whole source panels, at
+    one panel per call or all at once, on one thread or several."""
+    from magpylib_material_response.face_charge import _bodies  # noqa: PLC0415
+
+    def body(x):
+        part = magpy.magnet.Cylinder(
+            dimension=(0.02, 0.01), position=(x, 0, 0), polarization=(0, 0, 0)
+        )
+        body = _part(part, 1000.0, 1)
+        body.mesh()
+        return body
+
+    a, b = body(0.0), body(0.03)
+    blocks = []
+    for chunk, threads in ((1, 1), (1, 4), (10**12, 4)):
+        monkeypatch.setattr(_bodies, "CHUNK", chunk)
+        monkeypatch.setattr(magpy.defaults, "threads", threads)
+        blocks.append(_bodies.coupling_block(a, b))
+    np.testing.assert_array_equal(blocks[0], blocks[1])
+    np.testing.assert_array_equal(blocks[0], blocks[2])
 
 
 @pytest.mark.filterwarnings("ignore:Observers inside a solved part")

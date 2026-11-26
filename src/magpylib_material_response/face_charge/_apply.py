@@ -33,6 +33,7 @@ from magpylib_material_response.face_charge._bodies import (
 from magpylib_material_response.face_charge._kept import solve_kept
 from magpylib_material_response.face_charge._mesh import widened_vertices
 from magpylib_material_response.face_charge._segments import (
+    complete_polyline,
     polylines_field,
     segments_field,
 )
@@ -198,6 +199,7 @@ def solve_face_charge(
     solved, fixed = _split(collection)
     out = detached_copy(collection)  # keeps what it inherits from above
     out._kept_matrix = None  # a copy of an earlier result's is not this solve's
+    out._colour_level = None
     info = {"unknowns": 0, "level": level, "rounds": 0, "reused": False}
     if not solved:
         logger.info("Face charge: no part with a susceptibility to solve")
@@ -276,10 +278,10 @@ def solve_face_charge(
             return np.zeros((len(points), 3))
         # one call: magpylib computes many segments at many points in chunks;
         # these two kinds have kernels of their own (_segments.py)
-        apart = (magpy.magnet.CylinderSegment, magpy.current.Polyline)
-        others = [src for src in fixed if not isinstance(src, apart)]
         segments = [s for s in fixed if isinstance(s, magpy.magnet.CylinderSegment)]
-        polylines = [s for s in fixed if isinstance(s, magpy.current.Polyline)]
+        polylines = [s for s in fixed if complete_polyline(s)]
+        apart = {id(s) for s in segments + polylines}
+        others = [src for src in fixed if id(src) not in apart]
         with np.errstate(invalid="ignore", divide="ignore"):
             B = np.zeros((len(points), 3))
             if others:
@@ -385,6 +387,7 @@ def solve_face_charge(
         )
     for sheet in sheets:
         sheet.style.charge.level = full
+    out._colour_level = full  # what a solve on this one's matrix keeps
 
     # each solved cuboid's copy gives way to its sheet, in the same place among
     # its parent's children
@@ -428,12 +431,12 @@ def solve_face_charge(
 
 
 def _kept_level(reuse):
-    """The colour level of the sheets of ``reuse``, the result whose matrix a
-    solve used, or None where it has none."""
-    for source in reuse.sources_all:
-        if isinstance(source, ChargeSheet) and source.style.charge.level is not None:
-            return source.style.charge.level
-    return None
+    """The colour level ``reuse``'s solve gave its sheets, for a solve on its
+    matrix; None where there is none to keep: a sheet given to that solve has a
+    level of its own, and a solve that nothing drove has 0, at which every
+    colour would be full."""
+    level = getattr(reuse, "_colour_level", None)
+    return level if level is not None and level > 0 else None
 
 
 def _kept_by(reuse):
