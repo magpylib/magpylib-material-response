@@ -25,8 +25,9 @@ and this project adheres to
 - Face charge builds the coupling between separate curved parts in full again,
   on all threads, instead of by adaptive cross approximation: with the chunk fix
   below, that is up to 2.2 times faster at the default threads (eight discs in a
-  row 18.8 → 8.5 s, the shield tube 5.1 → 3.5 s), and at most 1.2 times slower
-  (two cylinders 20 mm apart). Fields move by at most 2e-7, to the exact blocks
+  row 18.8 → 8.5 s, the validation's shield tube at level 3 5.1 → 3.5 s), and at
+  most 1.2 times slower (two cylinders 20 mm apart). Fields move by at most
+  3e-7, to the exact blocks
   ([#224](https://github.com/magpylib/magpylib-material-response/pull/224))
 
 ### Fixed
