@@ -203,7 +203,7 @@ within 0.05 % and the variation is 30 ppm instead of 88; with 37,000, 60 ppm. It
 does not converge.
 
 For one design, finite elements are the fastest: within 0.1 ppm in 5 s, where
-face charge needs 11 s at level 3 for 2 ppm. `solve_fem` keeps nothing between
+face charge needs 12 s at level 3 for 2 ppm. `solve_fem` keeps nothing between
 solves, though, so every design is a new solve, even one that changes only the
 magnets. Face charge factors its matrix once and keeps it while only the magnets
 change, which is the next question.
@@ -219,7 +219,7 @@ it:
 :pyobject: sweep
 ```
 
-The sweep takes about 9 s on an Apple M4 Pro, so `pole_pieces_study.py` runs it
+The sweep takes about 8 s on an Apple M4 Pro, so `pole_pieces_study.py` runs it
 and stores the fields; the magnets alone need no solve.
 
 ```{code-cell} ipython3

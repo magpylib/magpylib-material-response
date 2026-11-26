@@ -87,7 +87,7 @@ than half.
 
 ## Which solve can be trusted there?
 
-The finer face-charge solves take 5 and 12 s here, so
+The finer face-charge solves take 5 and 9 s here, so
 [`shield_tube_study.py`](shield_tube_study.py) stores them; the cells run on
 this page.
 
@@ -197,4 +197,4 @@ fig
   falling with distance; on the axis in front of it, under a fourth at 70 mm,
   less toward the open end.
 - **Which solve:** face charge with `refine=1`, within 1.0 % of finite elements
-  outside the tube in 12 s. Cells converge inside the tube and fail outside it.
+  outside the tube in 9 s. Cells converge inside the tube and fail outside it.
