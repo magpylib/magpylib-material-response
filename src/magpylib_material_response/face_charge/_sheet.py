@@ -170,7 +170,9 @@ class ChargeSheet(magpy.misc.CustomSource):
         draws the edges. ``style.charge.level`` is the charge in A/m at which
         the colours are full, by default the charge 95 % of the sheet's area
         stays below; :func:`solve_face_charge` gives the sheets it solves one
-        level, so that their colours compare.
+        level, so that their colours compare, and a solve on the matrix of an
+        earlier one (``reuse=``) keeps that one's level, so that colours compare
+        along a loop.
     """
 
     _style_class = ChargeSheetStyle

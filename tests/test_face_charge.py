@@ -1653,13 +1653,21 @@ REUSED = {
 @pytest.mark.parametrize("case", REUSED)
 def test_reuse_serves_only_its_own_matrix(case):
     """A fingerprint that misses what makes the matrix would give wrong fields
-    silently, so every call is checked against a solve without ``reuse``."""
+    silently, so every call is checked against a solve without ``reuse``. A
+    solve on another's matrix keeps its colour level; one that is not, its own."""
+
+    def colour(result):
+        sheets = [s for s in result.sources_all if isinstance(s, ChargeSheet)]
+        return sheets[0].style.charge.level
+
     models, level, reused = REUSED[case]
     observers = np.array([[0.012, 0, 0], [0, 0.012, 0.001], [0.007, 0.007, 0.007]])
     solved, seen = True, []
     for model in models:
+        previous = solved
         solved = solve_face_charge(model(), level=level, reuse=solved)
-        fresh = magpy.getB(solve_face_charge(model(), level=level), observers)
+        alone = solve_face_charge(model(), level=level)
+        fresh = magpy.getB(alone, observers)
         np.testing.assert_allclose(
             magpy.getB(solved, observers),
             fresh,
@@ -1667,6 +1675,8 @@ def test_reuse_serves_only_its_own_matrix(case):
             atol=1e-11 * np.abs(fresh).max(),
         )
         seen.append(solved.face_charge_info["reused"])
+        kept = seen[-1] and colour(previous)
+        assert colour(solved) == pytest.approx(kept or colour(alone), rel=1e-9)
     assert tuple(seen) == reused
 
 
