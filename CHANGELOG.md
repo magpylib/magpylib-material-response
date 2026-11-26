@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Face charge coupled separate curved parts slower on more threads: each call
+  built one source panel's block. Two soft cylinders solve in 0.36 s on 8
+  threads where they took 1.17 s (0.76 s on one), with the same fields
+  ([#223](https://github.com/magpylib/magpylib-material-response/pull/223))
+
 ## [0.15.0] - 2026-11-25
 
 ### Added
