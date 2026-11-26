@@ -336,15 +336,21 @@ def solve_face_charge(
             _sheet_of(b, c, ~shared)
             for b, c, shared in zip(bodies, coefs, joined[0], strict=True)
         ]
+        if rnd == refine:  # the indicator only for a log that takes it
+            logger.opt(lazy=True).info(
+                "Face charge: largest jump indicator {jump}{note}",
+                jump=lambda sheets=sheets: (
+                    f"{_largest_jump([s._panel_jumps() for s in sheets]):.2%}"
+                ),
+                note=lambda note=note: note,
+            )
+            break
         jumps = [s._panel_jumps() for s in sheets]
-        top = max(
-            w.max(initial=0.0) / (peak * np.sqrt(total)) if peak else 0.0
-            for w, peak, total in jumps
-        )
+        top = _largest_jump(jumps)
         logger.info(
             "Face charge: largest jump indicator {jump:.2%}{note}", jump=top, note=note
         )
-        if rnd == refine or not top:
+        if not top:
             break
         # marked by the jump itself, not its share of each sheet's peak, so that
         # a weakly driven part is not split as much as the one that matters
@@ -362,11 +368,17 @@ def solve_face_charge(
         "Face charge: average polarization up to {J:.3g} T; above the material's knee, saturation matters",
         J=max(np.linalg.norm(s.mean_polarization) for s in sheets),
     )
-    # one colour scale for all, so that colours compare between parts
-    full = saturation(
-        sheets,
-        [_hidden(s, b, bodies, outlines) for s, b in zip(sheets, bodies, strict=True)],
-    )
+    # one colour scale for all, so that colours compare between parts; a solve
+    # on another's matrix keeps that one's, so that colours compare along a loop
+    full = _kept_level(reuse) if info["reused"] else None
+    if full is None:
+        full = saturation(
+            sheets,
+            [
+                _hidden(s, b, bodies, outlines)
+                for s, b in zip(sheets, bodies, strict=True)
+            ],
+        )
     for sheet in sheets:
         sheet.style.charge.level = full
 
@@ -409,6 +421,15 @@ def solve_face_charge(
     out.face_charge_info = {**info, "seconds": time.perf_counter() - start}
     out.solved_by = "face_charge"
     return out
+
+
+def _kept_level(reuse):
+    """The colour level of the sheets of ``reuse``, the result whose matrix a
+    solve used, or None where it has none."""
+    for source in reuse.sources_all:
+        if isinstance(source, ChargeSheet) and source.style.charge.level is not None:
+            return source.style.charge.level
+    return None
 
 
 def _kept_by(reuse):
@@ -489,6 +510,15 @@ def _split(collection):
             stacklevel=_outside_this_package(),
         )
     return solved, fixed
+
+
+def _largest_jump(jumps):
+    """The largest jump indicator of the sheets' ``_panel_jumps``, against each
+    sheet's peak and area: what a refinement round compares."""
+    return max(
+        (w.max(initial=0.0) / (peak * np.sqrt(total)) if peak else 0.0)
+        for w, peak, total in jumps
+    )
 
 
 def _part(obj, chi, level, widened=None):

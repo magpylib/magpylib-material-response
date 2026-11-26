@@ -10,6 +10,13 @@ and this project adheres to
 
 ### Changed
 
+- A face-charge solve on a kept matrix (`reuse=`) is 1.65 times faster: a magnet
+  moved over a plate takes 14 ms per pose instead of 24 at level 2. It keeps the
+  colour level of the solve it reuses, so colours compare along a drag or a
+  sweep, and computes the refinement indicator only when it refines or a log
+  takes it
+  ([#203](https://github.com/magpylib/magpylib-material-response/issues/203),
+  [#225](https://github.com/magpylib/magpylib-material-response/pull/225))
 - Face charge builds the coupling between separate curved parts in full again,
   on all threads, instead of by adaptive cross approximation: with the chunk fix
   below, that is up to 2.2 times faster at the default threads (eight discs in a
