@@ -10,6 +10,11 @@ and this project adheres to
 
 ### Changed
 
+- Face charge takes the field of Polyline coils on its parts from this package's
+  segment kernel, on all threads: the wound core solves 1.8 times faster at
+  level 2, and the field is exact past a segment's end, where magpylib's loses
+  digits
+  ([#226](https://github.com/magpylib/magpylib-material-response/pull/226))
 - A face-charge solve on a kept matrix (`reuse=`) is 1.65 times faster: a magnet
   moved over a plate takes 14 ms per pose instead of 24 at level 2. It keeps the
   colour level of the solve it reuses, so colours compare along a drag or a

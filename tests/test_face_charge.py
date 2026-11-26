@@ -1322,6 +1322,34 @@ def test_parts_a_hair_apart_solve_as_touching(offset):
     np.testing.assert_allclose(solve(offset), solve(0.0), rtol=1e-6, atol=1e-9)
 
 
+def test_coils_load_the_parts_as_magpylib_gives_their_field():
+    """The package's segment kernel, on the threads, as magpylib's getB: a coil
+    moved and turned, at points around it, on a segment's line and at a vertex,
+    where both give 0."""
+    from magpylib_material_response.face_charge._segments import (  # noqa: PLC0415
+        polylines_field,
+    )
+
+    turns = np.linspace(0, 6 * np.pi, 61)
+    coil = magpy.current.Polyline(
+        current=3.0,
+        vertices=np.c_[0.01 * np.cos(turns), 0.01 * np.sin(turns), 0.0005 * turns],
+        position=(0.002, -0.001, 0.003),
+    )
+    coil.rotate_from_angax(30, (1, 1, 0))
+    square = magpy.current.Polyline(
+        current=-2.0, vertices=[(0, 0, 0), (0.01, 0, 0), (0.01, 0.01, 0), (0, 0, 0)]
+    )
+    rng = np.random.default_rng(0)
+    points = np.r_[rng.normal(size=(500, 3)) * 0.02, [[0.005, 0, 0], [0.01, 0, 0]]]
+    np.testing.assert_allclose(
+        polylines_field([coil, square], points),
+        magpy.getB([coil, square], points, sumup=True),
+        rtol=1e-10,
+        atol=1e-12 * np.abs(magpy.getB(coil, points)).max(),
+    )
+
+
 def test_currents_take_no_susceptibility():
     """A susceptibility set on the collection reaches its magnets, not a coil in
     it, as with solve_cells."""

@@ -32,7 +32,10 @@ from magpylib_material_response.face_charge._bodies import (
 )
 from magpylib_material_response.face_charge._kept import solve_kept
 from magpylib_material_response.face_charge._mesh import widened_vertices
-from magpylib_material_response.face_charge._segments import segments_field
+from magpylib_material_response.face_charge._segments import (
+    polylines_field,
+    segments_field,
+)
 from magpylib_material_response.face_charge._sheet import ChargeSheet, saturation
 from magpylib_material_response.face_charge._triangle import frames
 from magpylib_material_response.face_charge._tribody import (
@@ -271,13 +274,12 @@ def solve_face_charge(
         # magnet, which is (B - J) / mu0
         if not fixed:
             return np.zeros((len(points), 3))
-        # one call: magpylib computes many segments at many points in chunks
-        others = [
-            src for src in fixed if not isinstance(src, magpy.magnet.CylinderSegment)
-        ]
-        segments = [
-            src for src in fixed if isinstance(src, magpy.magnet.CylinderSegment)
-        ]
+        # one call: magpylib computes many segments at many points in chunks;
+        # these two kinds have kernels of their own (_segments.py)
+        apart = (magpy.magnet.CylinderSegment, magpy.current.Polyline)
+        others = [src for src in fixed if not isinstance(src, apart)]
+        segments = [s for s in fixed if isinstance(s, magpy.magnet.CylinderSegment)]
+        polylines = [s for s in fixed if isinstance(s, magpy.current.Polyline)]
         with np.errstate(invalid="ignore", divide="ignore"):
             B = np.zeros((len(points), 3))
             if others:
@@ -292,6 +294,8 @@ def solve_face_charge(
                     B[bad] = magpy.getB(others, points[bad] + step, sumup=True)
             if segments:
                 B = B + segments_field(segments, points)
+            if polylines:
+                B = B + polylines_field(polylines, points)
         return B / magpy.mu_0
 
     for rnd in range(refine + 1):

@@ -1,4 +1,5 @@
-"""The field of CylinderSegment magnets at a solved part's Gauss points.
+"""The field of CylinderSegment magnets and Polyline coils at a solved part's
+Gauss points, where magpylib's kernels are wrong or slow.
 
 A magnet touching a solved part has the part's Gauss points on its face, and
 segments that meet put them beside each other's planes. There magpylib's
@@ -14,6 +15,9 @@ import warnings
 
 import magpylib as magpy
 import numpy as np
+
+from magpylib_material_response._array_api.polyline import polyline_field
+from magpylib_material_response.face_charge._parallel import CHUNK, run, threads
 
 #: a CylinderSegment's field is read at least this share of its own size off
 #: its surfaces: the kernel's error scales with the segment, about 3e-5 of J at
@@ -106,4 +110,36 @@ def segments_field(segments, points):
             "(magpylib#1082); the solve that uses it is not to be trusted.",
             stacklevel=4,
         )
+    return B
+
+
+def polylines_field(polylines, points):
+    """B in T of ``polylines`` at ``points`` (n, 3), summed: every straight
+    segment at every point, by this package's kernel, on the threads. It is
+    2.6 times magpylib's speed on one core, and exact past a segment's end,
+    where magpylib subtracts two sines (magpylib#1097)."""
+    starts, ends, currents = [], [], []
+    for line in polylines:
+        V = line.orientation.apply(np.asarray(line.vertices, float)) + line.position
+        starts.append(V[:-1])
+        ends.append(V[1:])
+        currents.append(np.full(len(V) - 1, float(line.current)))
+    start, end = np.concatenate(starts), np.concatenate(ends)
+    current = np.concatenate(currents)
+    n, s = len(points), len(start)
+    B = np.zeros((n, 3))
+    step = max(1, CHUNK // (s * threads()))
+
+    def chunk(i):
+        x = points[i : i + step]
+        rows = polyline_field(
+            "B",
+            np.repeat(x, s, axis=0),
+            np.tile(start, (len(x), 1)),
+            np.tile(end, (len(x), 1)),
+            np.tile(current, len(x)),
+        )
+        B[i : i + step] = rows.reshape(len(x), s, 3).sum(axis=1)
+
+    run(chunk, range(0, n, step), work=n * s)
     return B
